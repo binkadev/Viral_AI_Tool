@@ -41,7 +41,7 @@ function parseTimecode(value) {
 function makeOutputPath(tempRoot, jobId) {
   const dir = path.join(tempRoot, "viral-ai-tool", "speech-cloud");
   fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, jobId + ".flac");
+  return path.join(dir, jobId + ".mp3");
 }
 
 async function prepareCloudAudio({ jobId, inputPath, tempRoot, onProgress }) {
@@ -70,8 +70,8 @@ async function prepareCloudAudio({ jobId, inputPath, tempRoot, onProgress }) {
       "-vn",
       "-ac", "1",
       "-ar", "16000",
-      "-c:a", "flac",
-      "-compression_level", "8",
+      "-c:a", "libmp3lame",
+      "-b:a", "48k",
       "-progress", "pipe:1",
       "-nostats",
       outputPath
@@ -168,7 +168,7 @@ async function prepareCloudAudio({ jobId, inputPath, tempRoot, onProgress }) {
         outputPath,
         duration,
         sizeBytes: stat.size,
-        contentType: "audio/flac",
+        contentType: "audio/mpeg",
         sampleRate: 16000,
         channels: 1
       });
