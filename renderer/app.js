@@ -163,31 +163,77 @@ function dashboard() {
     [t("dashboard.completed"), "218", t("dashboard.completedFoot"), ""],
     [t("dashboard.aiMinutes"), "1,482", t("dashboard.aiMinutesFoot"), ""]
   ];
+
   const tools = [
     ["↯", t("dashboard.translate"), t("dashboard.translateDesc"), "ai-video"],
     ["◖", t("dashboard.aiVoice"), t("dashboard.aiVoiceDesc"), "voice"],
     ["▤", t("dashboard.subtitle"), t("dashboard.subtitleDesc"), "editor"],
     ["⇩", t("dashboard.download"), t("dashboard.downloadDesc"), "download"]
   ];
-  return '<div class="hero"><div class="hero-copy">' +
-    '<div class="eyebrow">' + t("dashboard.eyebrow") + "</div>" +
-    "<h2>" + t("dashboard.title") + "</h2>" +
-    "<p>" + t("dashboard.desc") + "</p>" +
-    '<div class="hero-actions">' +
-    '<button class="button primary" data-page="ai-video" type="button">✦ ' + t("dashboard.createAi") + "</button>" +
-    '<button class="button ghost" data-page="download" type="button">⇩ ' + t("dashboard.importVideo") + "</button>" +
-    "</div></div></div>" +
-    '<div class="stat-grid">' + stats.map((x) =>
-      '<div class="stat-card"><div class="stat-label">' + x[0] + '</div><div class="stat-value">' + x[1] +
-      '</div><div class="stat-foot ' + x[3] + '">' + x[2] + "</div></div>"
-    ).join("") + "</div>" +
-    '<div class="section-head"><div><h3>' + t("dashboard.quickTools") + "</h3><p>" + t("dashboard.quickToolsDesc") + "</p></div></div>" +
-    '<div class="tool-grid">' + tools.map((x) =>
-      '<div class="tool-card" data-page="' + x[3] + '"><div class="tool-icon">' + x[0] +
-      "</div><h4>" + x[1] + "</h4><p>" + x[2] + "</p></div>"
-    ).join("") + "</div>" +
-    '<div class="section-head"><div><h3>' + t("dashboard.recentJobs") + "</h3><p>" + t("dashboard.recentJobsDesc") + "</p></div></div>" +
-    jobsTable();
+
+  return '<div class="dashboard-shell">' +
+    '<div class="dashboard-main">' +
+      '<div class="hero dashboard-hero"><div class="hero-copy">' +
+        '<div class="eyebrow">' + t("dashboard.eyebrow") + '</div>' +
+        '<h2>' + t("dashboard.title") + '</h2>' +
+        '<p>' + t("dashboard.desc") + '</p>' +
+        '<div class="hero-actions">' +
+          '<button class="button primary" data-page="ai-video" type="button">✦ ' + t("dashboard.createAi") + '</button>' +
+          '<button class="button ghost" data-page="download" type="button">⇩ ' + t("dashboard.importVideo") + '</button>' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div class="stat-grid dashboard-stats">' +
+        stats.map((x) =>
+          '<div class="stat-card">' +
+            '<div class="stat-label">' + x[0] + '</div>' +
+            '<div class="stat-value">' + x[1] + '</div>' +
+            '<div class="stat-foot ' + x[3] + '">' + x[2] + '</div>' +
+          '</div>'
+        ).join("") +
+      '</div>' +
+
+      '<div class="section-head dashboard-section-head"><div><h3>' + t("dashboard.quickTools") + '</h3><p>' + t("dashboard.quickToolsDesc") + '</p></div></div>' +
+      '<div class="tool-grid dashboard-tools">' +
+        tools.map((x) =>
+          '<div class="tool-card" data-page="' + x[3] + '">' +
+            '<div class="tool-icon">' + x[0] + '</div>' +
+            '<div class="tool-copy"><h4>' + x[1] + '</h4><p>' + x[2] + '</p></div>' +
+          '</div>'
+        ).join("") +
+      '</div>' +
+
+      '<div class="section-head dashboard-section-head"><div><h3>' + t("dashboard.recentJobs") + '</h3><p>' + t("dashboard.recentJobsDesc") + '</p></div></div>' +
+      jobsTable() +
+    '</div>' +
+
+    '<aside class="dashboard-side">' +
+      '<div class="dashboard-side-card focus-card">' +
+        '<div class="side-card-head"><div><span class="side-kicker">' + t("dashboard.today") + '</span><h4>' + t("dashboard.activityTitle") + '</h4></div><span class="live-dot"><i></i>' + t("dashboard.live") + '</span></div>' +
+        '<p class="side-intro">' + t("dashboard.activityDesc") + '</p>' +
+        '<div class="activity-list">' +
+          '<div class="activity-row"><span class="activity-icon purple">↻</span><div><b>' + t("dashboard.activityProcessing") + '</b><span>3 ' + t("dashboard.videos") + '</span></div><strong>73%</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon blue">▶</span><div><b>' + t("dashboard.activityRendering") + '</b><span>2 ' + t("dashboard.videos") + '</span></div><strong>~8m</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon amber">◷</span><div><b>' + t("dashboard.activityQueued") + '</b><span>1 ' + t("dashboard.video") + '</span></div><strong>1</strong></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="dashboard-side-card usage-card">' +
+        '<div class="side-card-head"><div><span class="side-kicker">' + t("dashboard.monthlyLimit") + '</span><h4>2,480</h4></div><span class="usage-percent">66%</span></div>' +
+        '<div class="bar animated-progress"><i style="width:66%"></i></div>' +
+        '<p class="side-intro">' + t("dashboard.monthlyLimitDesc") + '</p>' +
+      '</div>' +
+
+      '<div class="dashboard-side-card">' +
+        '<div class="side-card-head"><div><span class="side-kicker">' + t("dashboard.next") + '</span><h4>' + t("dashboard.suggestions") + '</h4></div></div>' +
+        '<div class="suggestion-list">' +
+          '<button class="suggestion-row" data-page="ai-video" type="button"><span class="suggestion-icon purple">✦</span><span><b>' + t("dashboard.suggestTranslate") + '</b><small>' + t("dashboard.suggestTranslateDesc") + '</small></span><i>›</i></button>' +
+          '<button class="suggestion-row" data-page="voice" type="button"><span class="suggestion-icon pink">◖</span><span><b>' + t("dashboard.suggestVoice") + '</b><small>' + t("dashboard.suggestVoiceDesc") + '</small></span><i>›</i></button>' +
+          '<button class="suggestion-row" data-page="accounts" type="button"><span class="suggestion-icon blue">◎</span><span><b>' + t("dashboard.suggestAccount") + '</b><small>' + t("dashboard.suggestAccountDesc") + '</small></span><i>›</i></button>' +
+        '</div>' +
+      '</div>' +
+    '</aside>' +
+  '</div>';
 }
 
 function downloadPage() {
