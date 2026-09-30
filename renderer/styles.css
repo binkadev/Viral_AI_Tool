@@ -2111,3 +2111,31 @@ html[data-scale="compact"] .hero p{font-size:13px}
 @media(max-width:600px){
   .model-summary{grid-template-columns:1fr}
 }
+
+
+.speech-progress.indeterminate{
+  position:relative;
+}
+.speech-progress.indeterminate i{
+  width:36%!important;
+  animation:speechIndeterminate 1.35s var(--ease) infinite;
+}
+.transcript-plain{
+  margin-top:10px;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--surface-solid);
+}
+.transcript-plain p{
+  margin:0;
+  color:var(--text);
+  font-size:13px;
+  line-height:1.65;
+  white-space:pre-wrap;
+}
+@keyframes speechIndeterminate{
+  0%{transform:translateX(-115%)}
+  55%{transform:translateX(105%)}
+  100%{transform:translateX(285%)}
+}
