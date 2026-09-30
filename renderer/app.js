@@ -1391,7 +1391,7 @@ async function cancelLocalModelInstall() {
     title: t("speech.modelCancelTitle"),
     body: t("speech.modelCancelBody"),
     confirmLabel: t("speech.modelCancel"),
-    cancelLabel: t("speech.keepGoing"),
+    cancelLabel: t("speech.modelKeepDownloading"),
     danger: true
   });
   if (!confirmed) return;
