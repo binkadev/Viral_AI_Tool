@@ -22,6 +22,17 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
   setLocale: locale => ipcRenderer.invoke('app:set-locale', locale),
 
+  getSpeechProviderStatus: () => ipcRenderer.invoke('speech:provider-status'),
+  preflightSpeech: payload => ipcRenderer.invoke('speech:preflight', payload),
+  startSpeech: payload => ipcRenderer.invoke('speech:start', payload),
+  cancelSpeech: jobId => ipcRenderer.invoke('speech:cancel', jobId),
+  onSpeechProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('speech:progress', listener);
+    return () => ipcRenderer.removeListener('speech:progress', listener);
+  },
+
   onRenderProgress: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);
