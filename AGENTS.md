@@ -140,3 +140,10 @@ User-facing copy must:
 - use "Xuất video" / "Export video" for customer-facing processing language unless a more specific action is clearer;
 - distinguish clearly between "Xóa khỏi thư viện" and "Chuyển vào Thùng rác";
 - prefer recoverable actions such as relinking a missing file before destructive actions.
+
+
+## Mandatory feature guardrails
+
+Before implementing or modifying any production-facing feature, read and follow `docs/PRODUCT_GUARDRAILS.md`.
+
+A feature is not considered complete from its happy path alone. Its validation, duplicate protection, cancellation, recovery, destructive actions, resource failures, localization, persistence, and user-facing error behavior must be considered explicitly.
