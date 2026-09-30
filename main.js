@@ -24,6 +24,7 @@ const {
   serializeSpeechError
 } = require('./services/speech');
 const { createSessionStore } = require('./services/auth/session-store');
+const { AuthClient } = require('./services/auth/auth-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
 
 let mainWindow;
@@ -59,6 +60,49 @@ function getActiveWorkCount() {
     speechModelManager.activeDownloadCount();
 }
 
+function authClient() {
+  const cloudConfig = cloudConfigStore?.read() || { backendUrl: '' };
+  return new AuthClient({
+    backendUrl: cloudConfig.backendUrl || '',
+    appVersion: app.getVersion()
+  });
+}
+
+async function refreshSessionIfNeeded({ force = false } = {}) {
+  if (!sessionStore) return false;
+
+  const status = sessionStore.status();
+  if (!status.authenticated) return false;
+
+  const needsRefresh = force || !status.accessReady || sessionStore.needsRefresh(60000);
+  if (!needsRefresh) return true;
+
+  const refreshToken = sessionStore.getRefreshToken();
+  if (!refreshToken) {
+    sessionStore.clear();
+    return false;
+  }
+
+  try {
+    const session = await authClient().refresh(refreshToken);
+    sessionStore.setSession(session);
+    return true;
+  } catch (error) {
+    if (["AUTH_REQUIRED", "AUTH_EXPIRED", "AUTH_INVALID_CREDENTIALS"].includes(error?.code)) {
+      sessionStore.clear();
+      return false;
+    }
+    throw error;
+  }
+}
+
+function publicAuthError(error) {
+  return {
+    code: error?.code || "AUTH_REQUEST_FAILED",
+    details: {}
+  };
+}
+
 function speechProviders() {
   const cloudConfig = cloudConfigStore?.read() || {
     backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
@@ -88,6 +132,8 @@ async function testCloudConnection(backendUrl) {
   try {
     const url = new URL(validated.backendUrl);
     url.pathname = (url.pathname.replace(/\/+$/, '') + '/v1/speech/status').replace(/\/+/g, '/');
+
+    try { await refreshSessionIfNeeded(); } catch {}
 
     const headers = {
       accept: 'application/json',
@@ -244,12 +290,98 @@ ipcMain.handle('window:maximize-toggle', () => {
 ipcMain.handle('window:close', () => mainWindow?.close());
 
 ipcMain.handle('auth:status', async () => {
+  try {
+    await refreshSessionIfNeeded();
+  } catch (error) {
+    console.error('[AuthRefreshStatus]', error?.code || error?.message);
+  }
+
   return sessionStore?.status() || {
     authenticated: false,
+    accessReady: false,
+    refreshReady: false,
     userId: null,
-    expiresAt: null,
+    email: null,
+    name: null,
+    plan: null,
     secureStorage: false
   };
+});
+
+ipcMain.handle('auth:login', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    const session = await authClient().login({
+      email: safePayload.email,
+      password: safePayload.password
+    });
+
+    sessionStore.setSession(session);
+
+    let account = null;
+    try {
+      account = await authClient().me(session.accessToken);
+    } catch (error) {
+      console.error('[AuthMeAfterLogin]', error?.code || error?.message);
+    }
+
+    return {
+      ok: true,
+      data: {
+        status: sessionStore.status(),
+        account
+      }
+    };
+  } catch (error) {
+    console.error('[AuthLogin]', error?.code || error?.message);
+    return { ok: false, error: publicAuthError(error) };
+  }
+});
+
+ipcMain.handle('auth:me', async () => {
+  try {
+    const ready = await refreshSessionIfNeeded();
+    if (!ready) {
+      return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+    }
+
+    const accessToken = sessionStore.getAccessToken();
+    if (!accessToken) {
+      return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+    }
+
+    const account = await authClient().me(accessToken);
+    return {
+      ok: true,
+      data: {
+        status: sessionStore.status(),
+        account
+      }
+    };
+  } catch (error) {
+    console.error('[AuthMe]', error?.code || error?.message);
+    return { ok: false, error: publicAuthError(error) };
+  }
+});
+
+ipcMain.handle('auth:logout', async () => {
+  const refreshToken = sessionStore?.getRefreshToken() || null;
+  let remotePending = false;
+
+  try {
+    if (refreshToken) {
+      const result = await authClient().logout(refreshToken);
+      remotePending = result?.remotePending === true;
+    }
+  } catch (error) {
+    remotePending = true;
+    console.error('[AuthLogout]', error?.code || error?.message);
+  } finally {
+    sessionStore?.clear();
+  }
+
+  return { ok: true, remotePending };
 });
 
 ipcMain.handle('cloud:config-get', async () => {
@@ -452,6 +584,7 @@ ipcMain.handle('speech:model-remove', async (_event, modelId) => {
 });
 
 ipcMain.handle('speech:provider-status', async () => {
+  try { await refreshSessionIfNeeded(); } catch {}
   const providers = speechProviders();
   const [local, cloud] = await Promise.all([
     providers.local.status(),
@@ -463,6 +596,7 @@ ipcMain.handle('speech:provider-status', async () => {
 ipcMain.handle('speech:preflight', async (_event, payload) => {
   const safePayload = payload && typeof payload === 'object' ? payload : {};
   try {
+    if (safePayload.mode === 'cloud') await refreshSessionIfNeeded();
     const data = await preflightSpeech({
       inputPath: safePayload.inputPath,
       mode: safePayload.mode,
@@ -486,6 +620,7 @@ ipcMain.handle('speech:preflight', async (_event, payload) => {
 ipcMain.handle('speech:start', async (event, payload) => {
   const safePayload = payload && typeof payload === 'object' ? payload : {};
   try {
+    if (safePayload.mode === 'cloud') await refreshSessionIfNeeded();
     const data = await startSpeech({
       jobId: safePayload.jobId,
       inputPath: safePayload.inputPath,
