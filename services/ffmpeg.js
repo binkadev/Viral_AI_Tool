@@ -6,6 +6,7 @@ const ffmpegStatic = require("ffmpeg-static");
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"]);
 const activeRenders = new Map();
+const reservedRenders = new Map();
 const cancelledRenders = new Set();
 
 const MIN_FREE_BYTES = 512 * 1024 * 1024;
@@ -97,7 +98,11 @@ function availableDiskBytes(directory) {
 
 function activeRenderForInput(inputPath) {
   const resolved = path.resolve(inputPath);
-  return [...activeRenders.values()].find(item => item.inputPath === resolved) || null;
+  const active = [...activeRenders.values()].find(item => item.inputPath === resolved);
+  if (active) return active;
+
+  const reserved = [...reservedRenders.entries()].find(([, reservedPath]) => reservedPath === resolved);
+  return reserved ? { jobId: reserved[0], inputPath: reserved[1], reserved: true } : null;
 }
 
 function validateJobId(jobId) {
@@ -311,9 +316,25 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
   validateJobId(jobId);
   const preflight = preflightExport({ inputPath, outputDir });
   const safeInput = preflight.inputPath;
-  const metadata = await probeVideo(safeInput);
-  const outputPath = makeOutputPath(safeInput, preflight.outputDir);
+  reservedRenders.set(jobId, safeInput);
+
+  let metadata;
+  let outputPath;
   const progressState = { buffer: "", outTime: 0, speed: "", fps: 0, frame: 0 };
+
+  try {
+    metadata = await probeVideo(safeInput);
+
+    if (cancelledRenders.has(jobId)) {
+      return { cancelled: true, outputPath: null, metadata };
+    }
+
+    outputPath = makeOutputPath(safeInput, preflight.outputDir);
+  } catch (error) {
+    reservedRenders.delete(jobId);
+    cancelledRenders.delete(jobId);
+    throw error;
+  }
 
   const args = [
     "-n",
@@ -377,6 +398,7 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
     });
   } finally {
     activeRenders.delete(jobId);
+    reservedRenders.delete(jobId);
     cancelledRenders.delete(jobId);
   }
 
@@ -392,9 +414,15 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
 
 function cancelRender(jobId) {
   const active = activeRenders.get(jobId);
-  if (!active) return false;
+  const reserved = reservedRenders.has(jobId);
+  if (!active && !reserved) return false;
 
   cancelledRenders.add(jobId);
+
+  if (!active?.child) {
+    return true;
+  }
+
   try {
     active.child.kill("SIGTERM");
     return true;
@@ -406,14 +434,15 @@ function cancelRender(jobId) {
 
 function cancelAllRenders() {
   let cancelled = 0;
-  for (const jobId of [...activeRenders.keys()]) {
+  const ids = new Set([...activeRenders.keys(), ...reservedRenders.keys()]);
+  for (const jobId of ids) {
     if (cancelRender(jobId)) cancelled++;
   }
   return cancelled;
 }
 
 function getActiveRenderCount() {
-  return activeRenders.size;
+  return new Set([...activeRenders.keys(), ...reservedRenders.keys()]).size;
 }
 
 function serializeProcessingError(error) {
