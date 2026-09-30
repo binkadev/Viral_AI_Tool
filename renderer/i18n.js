@@ -263,6 +263,16 @@ window.I18N = (() => {
         sizeComfortable: "Dễ nhìn",
         sizeLarge: "Lớn"
       },
+      media: {
+        readingInfo: "Đang đọc thông tin video...",
+        readError: "Không đọc được thông tin video này.",
+        desktopOnly: "Tính năng này chỉ chạy trong ứng dụng desktop.",
+        chooseOutput: "Hãy chọn thư mục lưu video trước.",
+        renderStarted: "Đã bắt đầu render bằng FFmpeg.",
+        renderDone: "Render xong. Video đã được lưu vào thư mục bạn chọn.",
+        renderFailed: "Render chưa thành công. Hãy kiểm tra video hoặc cài đặt FFmpeg.",
+        showFile: "Mở thư mục"
+      },
       modal: { brand: "Viral AI Tool" }
     },
 
@@ -528,6 +538,16 @@ window.I18N = (() => {
         sizeCompact: "Compact",
         sizeComfortable: "Comfortable",
         sizeLarge: "Large"
+      },
+      media: {
+        readingInfo: "Reading video details...",
+        readError: "Could not read this video.",
+        desktopOnly: "This feature is available in the desktop app.",
+        chooseOutput: "Choose an output folder first.",
+        renderStarted: "FFmpeg render started.",
+        renderDone: "Render complete. The video was saved to your output folder.",
+        renderFailed: "Render failed. Check the source video or FFmpeg setup.",
+        showFile: "Show file"
       },
       modal: { brand: "Viral AI Tool" }
     }
