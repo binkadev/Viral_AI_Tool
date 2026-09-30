@@ -62,7 +62,8 @@ function speechProviders() {
     userDataPath: app.getPath('userData'),
     tempPath: app.getPath('temp'),
     backendUrl: process.env.VIRAL_AI_CLOUD_URL || '',
-    getAccessToken: () => sessionStore?.getAccessToken() || null
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion()
   });
 }
 
@@ -156,6 +157,15 @@ ipcMain.handle('window:maximize-toggle', () => {
   return mainWindow.isMaximized();
 });
 ipcMain.handle('window:close', () => mainWindow?.close());
+
+ipcMain.handle('auth:status', async () => {
+  return sessionStore?.status() || {
+    authenticated: false,
+    userId: null,
+    expiresAt: null,
+    secureStorage: false
+  };
+});
 
 ipcMain.handle('files:select-videos', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
