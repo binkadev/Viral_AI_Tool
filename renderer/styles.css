@@ -1605,3 +1605,18 @@ html[data-scale="compact"] .hero p{font-size:13px}
   height:100%;
   object-fit:cover;
 }
+
+
+.preview-real{
+  padding:0;
+  background:#0e1320;
+}
+.preview-real::before{display:none}
+.preview-video{
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  background:#0e1320;
+}
