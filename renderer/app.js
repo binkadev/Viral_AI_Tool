@@ -425,29 +425,142 @@ function monitorPage() {
     ).join("") + "</div>";
 }
 
+function speechProviderStatusLabel(status) {
+  const code = status?.code || "CHECKING";
+  const map = {
+    READY: "speech.ready",
+    LOCAL_MODEL_REQUIRED: "speech.localModelRequired",
+    LOCAL_MODEL_INCOMPLETE: "speech.localModelIncomplete",
+    LOCAL_MODEL_INVALID: "speech.localModelInvalid",
+    CLOUD_NOT_CONFIGURED: "speech.cloudNotConfigured",
+    CLOUD_CONFIG_INVALID: "speech.cloudConfigInvalid",
+    CLOUD_HTTPS_REQUIRED: "speech.cloudHttpsRequired",
+    CHECKING: "speech.checking"
+  };
+  return t(map[code] || "speech.providerUnavailable");
+}
+
+function speechProviderBadge(mode) {
+  const status = state.speech.providerStatus?.[mode];
+  const ready = status?.ready === true;
+  const checking = !status;
+  return '<span class="speech-provider-badge ' + (ready ? "ready" : checking ? "checking" : "warning") + '">' +
+    '<i></i>' + escapeHtml(speechProviderStatusLabel(status)) + '</span>';
+}
+
+function speechJobForSource(source) {
+  return source && state.speech.job?.sourcePath === source.sourcePath ? state.speech.job : null;
+}
+
+function speechResultForSource(source) {
+  return source && state.speech.result?.sourcePath === source.sourcePath ? state.speech.result : null;
+}
+
+function speechStatusCopy(job) {
+  if (!job) return "";
+  const key = {
+    validating: "speech.preparing",
+    preparing: "speech.preparing",
+    processing: "speech.processing",
+    cancelling: "speech.cancelling",
+    completed: "speech.completed",
+    cancelled: "speech.cancelled",
+    failed: "speech.failed",
+    interrupted: "speech.interrupted"
+  }[job.status] || "speech.processing";
+  return t(key);
+}
+
+function speechTranscriptView(result) {
+  if (!result) return "";
+  const segments = Array.isArray(result.segments) ? result.segments : [];
+  return '<div class="speech-result">' +
+    '<div class="speech-result-head"><div><span class="side-kicker">' + t("speech.resultTitle") + '</span>' +
+      '<h4>' + escapeHtml(t("speech.resultDesc", { count: segments.length, duration: formatDuration(result.duration || 0) })) + '</h4></div>' +
+      '<span class="speech-provider-badge ready"><i></i>' + t("speech.completed") + '</span></div>' +
+    (segments.length
+      ? '<div class="transcript-list">' + segments.slice(0, 12).map(segment =>
+          '<div class="transcript-row"><time>' + formatDuration(segment.start) + '</time><p>' + escapeHtml(segment.text) + '</p></div>'
+        ).join("") + '</div>'
+      : '<div class="speech-empty">' + t("speech.emptyResult") + '</div>') +
+    '<p class="speech-result-note">' + t("speech.transcriptReady") + '</p>' +
+  '</div>';
+}
+
 function aiVideoPage() {
+  const source = latestSourceJob();
+  const speechJob = speechJobForSource(source);
+  const speechResult = speechResultForSource(source);
+  const speechStep = speechResult
+    ? t("aiVideo.steps.detected")
+    : speechJob
+      ? speechStatusCopy(speechJob)
+      : t("aiVideo.steps.pending");
+
   const steps = [
-    ["1", t("aiVideo.steps.import"), t("aiVideo.steps.ready")],
-    ["2", t("aiVideo.steps.speech"), t("aiVideo.steps.detected")],
-    ["3", t("aiVideo.steps.translate"), languageName("vi")],
-    ["4", t("aiVideo.steps.voices"), t("aiVideo.steps.speakers")],
-    ["5", t("aiVideo.steps.subtitles"), t("aiVideo.steps.styled")],
+    ["1", t("aiVideo.steps.import"), source ? t("aiVideo.steps.ready") : t("aiVideo.steps.pending")],
+    ["2", t("aiVideo.steps.speech"), speechStep],
+    ["3", t("aiVideo.steps.translate"), speechResult ? t("aiVideo.steps.pending") : "—"],
+    ["4", t("aiVideo.steps.voices"), t("aiVideo.steps.pending")],
+    ["5", t("aiVideo.steps.subtitles"), t("aiVideo.steps.pending")],
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
 
-  const source = latestSourceJob();
   const sourceName = source?.name || t("media.noVideo");
   const sourceMeta = source ? mediaMetaText(source) : "";
   const preview = source?.previewUrl
     ? '<div class="preview preview-real"><video class="preview-video" controls preload="metadata" src="' + source.previewUrl + '"></video></div>'
     : '<div class="preview"><div class="preview-center"><div class="preview-play">▶</div><div class="preview-label">' + t("media.previewHint") + '</div></div></div>';
 
+  const localSelected = state.speech.mode === "local";
+  const cloudMinutes = Math.max(1, Math.ceil(Number(source?.meta?.duration || 0) / 60));
+  const speechBusy = speechJob && ["validating", "preparing", "processing", "cancelling"].includes(speechJob.status);
+  const interrupted = speechJob?.status === "interrupted";
+  const speechAction = speechBusy
+    ? '<button id="speechStop" class="button danger" type="button"' + (speechJob.status === "cancelling" ? " disabled" : "") + '>' + t("speech.stop") + '</button>'
+    : '<button id="speechStart" class="button primary" type="button">' + (interrupted ? t("speech.retry") : t("speech.start")) + '</button>';
+
+  const speechProgress = speechBusy
+    ? '<div class="speech-job-state"><div class="speech-job-head"><div><b id="speechStateLabel">' + escapeHtml(speechStatusCopy(speechJob)) + '</b>' +
+        '<span>' + escapeHtml(sourceName) + '</span></div><strong id="speechPercent">' + Math.round(Number(speechJob.progress || 0)) + '%</strong></div>' +
+        '<div class="speech-progress"><i id="speechProgressBar" style="width:' + Math.round(Number(speechJob.progress || 0)) + '%"></i></div></div>'
+    : interrupted
+      ? '<div class="speech-alert warning"><b>' + t("speech.interruptedTitle") + '</b><span>' + t("speech.interruptedBody") + '</span></div>'
+      : "";
+
   return '<div class="section-head"><div><h3>' + t("aiVideo.workflow") + "</h3><p>" + t("aiVideo.workflowDesc") +
     '</p></div><button id="render" class="button primary" type="button">' + t("aiVideo.renderFinal") + "</button></div>" +
     '<div class="workflow">' + steps.map((x, i) =>
-      '<div class="wf-step ' + (i === 3 ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
+      '<div class="wf-step ' + (i === (speechResult ? 2 : source ? 1 : 0) ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
       (i < steps.length - 1 ? '<div class="wf-arrow">→</div>' : "")
     ).join("") + "</div>" +
+
+    '<div class="card speech-card"><div class="speech-card-head"><div><div class="eyebrow">' + t("aiVideo.steps.speech") + '</div>' +
+      '<h3>' + t("speech.title") + '</h3><p>' + t("speech.desc") + '</p></div>' + speechAction + '</div>' +
+      '<div class="speech-controls">' +
+        '<div class="speech-field"><label class="label" for="speechMode">' + t("speech.mode") + '</label>' +
+          '<select id="speechMode" class="select">' +
+            '<option value="local"' + (localSelected ? " selected" : "") + '>' + t("speech.local") + '</option>' +
+            '<option value="cloud"' + (!localSelected ? " selected" : "") + '>' + t("speech.cloud") + '</option>' +
+          '</select>' +
+          '<div class="speech-choice-help"><span>' + (localSelected ? t("speech.localDesc") : t("speech.cloudDesc")) + '</span>' +
+            (localSelected ? speechProviderBadge("local") : speechProviderBadge("cloud")) + '</div>' +
+        '</div>' +
+        '<div class="speech-field"><label class="label" for="speechLanguage">' + t("speech.language") + '</label>' +
+          '<select id="speechLanguage" class="select">' +
+            '<option value="auto"' + (state.speech.language === "auto" ? " selected" : "") + '>' + t("speech.autoLanguage") + '</option>' +
+            '<option value="vi"' + (state.speech.language === "vi" ? " selected" : "") + '>' + languageName("vi") + '</option>' +
+            '<option value="en"' + (state.speech.language === "en" ? " selected" : "") + '>English</option>' +
+            '<option value="ko"' + (state.speech.language === "ko" ? " selected" : "") + '>' + languageName("ko") + '</option>' +
+            '<option value="ja"' + (state.speech.language === "ja" ? " selected" : "") + '>' + languageName("ja") + '</option>' +
+          '</select>' +
+          '<div class="speech-choice-help"><span>' + (localSelected ? t("speech.noCloudCost") : t("speech.estimate", { minutes: cloudMinutes })) + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      speechProgress +
+      speechTranscriptView(speechResult) +
+    '</div>' +
+
     '<div class="section-head"><div><h3>' + t("aiVideo.editor") + '</h3><p>' + escapeHtml(sourceName) +
       (sourceMeta ? ' · ' + escapeHtml(sourceMeta) : '') + "</p></div></div>" +
     '<div class="editor-grid">' + preview +
