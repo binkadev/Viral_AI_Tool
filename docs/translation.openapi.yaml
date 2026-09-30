@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: Viral AI Tool Translation API
+  version: 1.0.0
+  description: |
+    Contract between Viral AI Tool Desktop and Viral AI Backend for timed transcript translation.
+    Translation providers remain server-side.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/translation/status:
+    get:
+      summary: Read translation availability
+      responses:
+        "200":
+          description: Translation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationStatus"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+
+  /v1/translation/jobs:
+    post:
+      summary: Create or recover an idempotent translation job
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTranslationJob"
+      responses:
+        "200":
+          description: Existing job recovered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationJob"
+        "201":
+          description: New translation job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "409":
+          description: Idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Transcript exceeds translation limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/translation/jobs/{jobId}:
+    get:
+      summary: Get translation job state or result
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Translation job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslationJob"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+  /v1/translation/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel an owned translation job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Cancellation acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cancelled]
+                properties:
+                  cancelled:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-access-token
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 160
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+
+  responses:
+    AuthRequired:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    BadRequest:
+      description: Invalid translation request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    JobNotFound:
+      description: Job does not exist or is not owned by the authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ServiceUnavailable:
+      description: Translation service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    TranslationStatus:
+      type: object
+      additionalProperties: false
+      required: [ready, code]
+      properties:
+        ready:
+          type: boolean
+        code:
+          type: string
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            maxSegments:
+              type: integer
+            maxCharacters:
+              type: integer
+            batchSize:
+              type: integer
+
+    CreateTranslationJob:
+      type: object
+      additionalProperties: false
+      required:
+        - clientJobId
+        - sourceLanguage
+        - targetLanguage
+        - preserveTone
+        - segments
+      properties:
+        clientJobId:
+          type: string
+        sourceLanguage:
+          type: string
+        targetLanguage:
+          type: string
+        preserveTone:
+          type: boolean
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceSegment"
+
+    SourceSegment:
+      type: object
+      additionalProperties: false
+      required: [id, start, end, text]
+      properties:
+        id:
+          type: string
+        start:
+          type: number
+          minimum: 0
+        end:
+          type: number
+          minimum: 0
+        text:
+          type: string
+          minLength: 1
+
+    TranslationJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, state]
+      properties:
+        jobId:
+          type: string
+        state:
+          type: string
+          enum: [queued, processing, cancelling, cancelled, completed, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        result:
+          $ref: "#/components/schemas/TranslationResult"
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+
+    TranslationResult:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - sourceLanguage
+        - targetLanguage
+        - text
+        - segments
+        - meta
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        sourceLanguage:
+          type: string
+        targetLanguage:
+          type: string
+        text:
+          type: string
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TranslatedSegment"
+        meta:
+          type: object
+          additionalProperties: true
+          properties:
+            providerMode:
+              type: string
+              enum: [cloud, local]
+            timingPreserved:
+              type: boolean
+            warningCount:
+              type: integer
+              minimum: 0
+            createdAt:
+              type: string
+              format: date-time
+
+    TranslatedSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - start
+        - end
+        - sourceText
+        - text
+        - lengthRatio
+        - timingRisk
+      properties:
+        id:
+          type: string
+        start:
+          type: number
+        end:
+          type: number
+        sourceText:
+          type: string
+        text:
+          type: string
+        lengthRatio:
+          type: number
+        timingRisk:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
