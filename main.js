@@ -367,11 +367,12 @@ ipcMain.handle('auth:me', async () => {
 
 ipcMain.handle('auth:logout', async () => {
   const refreshToken = sessionStore?.getRefreshToken() || null;
+  const accessToken = sessionStore?.getAccessToken() || null;
   let remotePending = false;
 
   try {
-    if (refreshToken) {
-      const result = await authClient().logout(refreshToken);
+    if (refreshToken || accessToken) {
+      const result = await authClient().logout(refreshToken, accessToken);
       remotePending = result?.remotePending === true;
     }
   } catch (error) {
