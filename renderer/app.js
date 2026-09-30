@@ -30,7 +30,7 @@ function makeJobId(prefix = "job") {
   return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
 }
 
-if (state.speech.job && ["validating", "preparing", "processing", "cancelling"].includes(state.speech.job.status)) {
+if (state.speech.job && ["validating", "preparing", "uploading", "queued", "processing", "cancelling"].includes(state.speech.job.status)) {
   state.speech.job = {
     ...state.speech.job,
     status: "interrupted",
@@ -439,6 +439,12 @@ function speechProviderStatusLabel(status) {
     CLOUD_NOT_CONFIGURED: "speech.cloudNotConfigured",
     CLOUD_CONFIG_INVALID: "speech.cloudConfigInvalid",
     CLOUD_HTTPS_REQUIRED: "speech.cloudHttpsRequired",
+    CLOUD_AUTH_REQUIRED: "speech.cloudAuthRequired",
+    CLOUD_QUOTA_EXCEEDED: "speech.cloudQuotaExceeded",
+    CLOUD_PLAN_REQUIRED: "speech.cloudPlanRequired",
+    CLOUD_UNAVAILABLE: "speech.cloudUnavailable",
+    CLOUD_NETWORK: "speech.cloudUnavailable",
+    CLOUD_TIMEOUT: "speech.cloudUnavailable",
     CHECKING: "speech.checking"
   };
   return t(map[code] || "speech.providerUnavailable");
@@ -472,6 +478,8 @@ function speechStatusCopy(job) {
   const key = {
     validating: "speech.preparing",
     preparing: "speech.preparing",
+    uploading: "speech.uploading",
+    queued: "speech.queued",
     processing: "speech.processing",
     cancelling: "speech.cancelling",
     completed: "speech.completed",
@@ -529,7 +537,7 @@ function aiVideoPage() {
 
   const localSelected = state.speech.mode === "local";
   const cloudMinutes = Math.max(1, Math.ceil(Number(source?.meta?.duration || 0) / 60));
-  const speechBusy = speechJob && ["validating", "preparing", "processing", "cancelling"].includes(speechJob.status);
+  const speechBusy = speechJob && ["validating", "preparing", "uploading", "queued", "processing", "cancelling"].includes(speechJob.status);
   const interrupted = speechJob?.status === "interrupted";
   const speechAction = speechBusy
     ? '<button id="speechStop" class="button danger" type="button"' + (speechJob.status === "cancelling" ? " disabled" : "") + '>' + t("speech.stop") + '</button>'
@@ -1552,6 +1560,42 @@ async function handleSpeechBlock(response, source) {
     return;
   }
 
+  if (code === "CLOUD_AUTH_REQUIRED") {
+    await showNotice({
+      title: t("speech.cloudAuthTitle"),
+      body: t("speech.cloudAuthBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["CLOUD_QUOTA_EXCEEDED", "CLOUD_PLAN_REQUIRED"].includes(code)) {
+    await showNotice({
+      title: t("speech.cloudQuotaTitle"),
+      body: t("speech.cloudQuotaBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["CLOUD_UPLOAD_FAILED", "CLOUD_NETWORK", "CLOUD_TIMEOUT", "CLOUD_UNAVAILABLE"].includes(code)) {
+    await showNotice({
+      title: t("speech.cloudConnectionTitle"),
+      body: t("speech.cloudConnectionBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "CLOUD_FILE_TOO_LARGE") {
+    await showNotice({
+      title: t("speech.cloudFileTitle"),
+      body: t("speech.cloudFileBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   await showNotice({
     title: t("speech.failedTitle"),
     body: t("speech.failedBody"),
@@ -1580,7 +1624,7 @@ async function startSpeechRecognition() {
   }
 
   const currentJob = speechJobForSource(source);
-  if (currentJob && ["validating", "preparing", "processing", "cancelling"].includes(currentJob.status)) {
+  if (currentJob && ["validating", "preparing", "uploading", "queued", "processing", "cancelling"].includes(currentJob.status)) {
     toast(t("speech.duplicate"));
     return;
   }
@@ -1678,7 +1722,7 @@ async function startSpeechRecognition() {
 
 async function cancelSpeechRecognition() {
   const job = state.speech.job;
-  if (!job || !["preparing", "processing", "validating"].includes(job.status)) return;
+  if (!job || !["validating", "preparing", "uploading", "queued", "processing"].includes(job.status)) return;
 
   const confirmed = await confirmAction({
     title: t("speech.stopTitle"),
@@ -1709,7 +1753,7 @@ function updateSpeechProgress(payload) {
   const job = state.speech.job;
   if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
 
-  const allowedStates = new Set(["validating", "preparing", "processing"]);
+  const allowedStates = new Set(["validating", "preparing", "uploading", "queued", "processing"]);
   if (allowedStates.has(payload.state)) job.status = payload.state;
 
   job.indeterminate = payload.indeterminate === true;
