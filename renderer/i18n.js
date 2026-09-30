@@ -248,7 +248,8 @@ window.I18N = (() => {
         resultTitle: "Nội dung đã nhận diện",
         resultDesc: "{count} đoạn lời nói · {duration}",
         emptyResult: "Không phát hiện được lời nói rõ ràng trong video này.",
-        transcriptReady: "Nội dung lời nói đã sẵn sàng để làm phụ đề hoặc dịch."
+        transcriptReady: "Nội dung lời nói và mốc thời gian đã sẵn sàng để làm phụ đề hoặc dịch.",
+        timingUnavailable: "Đã nhận diện được nội dung, nhưng video này chưa có mốc thời gian đủ tin cậy để tạo phụ đề tự động."
       },
       voice: {
         breadcrumb: "Khu làm việc / Giọng AI",
@@ -669,7 +670,8 @@ window.I18N = (() => {
         resultTitle: "Recognized speech",
         resultDesc: "{count} speech segment(s) · {duration}",
         emptyResult: "No clear speech was detected in this video.",
-        transcriptReady: "The transcript is ready for subtitles or translation."
+        transcriptReady: "The transcript and timing are ready for subtitles or translation.",
+        timingUnavailable: "Speech was recognized, but reliable timing is not available yet for automatic subtitles."
       },
       voice: {
         breadcrumb: "Workspace / Voice studio",
