@@ -27,10 +27,21 @@ function validateMode(mode) {
   return mode;
 }
 
-function createProviders({ userDataPath, tempPath, backendUrl }) {
+function createProviders({
+  userDataPath,
+  tempPath,
+  backendUrl,
+  getAccessToken,
+  appVersion
+}) {
   return {
     local: new LocalSpeechProvider({ userDataPath, tempPath }),
-    cloud: new CloudSpeechProvider({ backendUrl })
+    cloud: new CloudSpeechProvider({
+      backendUrl,
+      tempPath,
+      getAccessToken,
+      appVersion
+    })
   };
 }
 
@@ -134,7 +145,7 @@ async function startSpeech({ jobId, inputPath, mode, consent = false, language =
       }
     });
 
-    if (cancelledJobs.has(jobId)) {
+    if (cancelledJobs.has(jobId) || raw?.cancelled === true) {
       return { cancelled: true, result: null };
     }
 
