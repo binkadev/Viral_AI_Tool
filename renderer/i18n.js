@@ -310,7 +310,7 @@ window.I18N = (() => {
         trashBusyTitle: "Video này đang được xử lý",
         trashBusyBody: "Để chuyển {name} vào Thùng rác, Viral AI Tool cần dừng {count} tiến trình đang dùng video này.",
         stopAndTrash: "Dừng và chuyển vào Thùng rác",
-        trashed: "Đã chuyển video vào Thùng rác.",
+        trashDone: "Đã chuyển video vào Thùng rác.",
         trashFailed: "Chưa thể chuyển video vào Thùng rác. Hãy thử lại."
       },
       modal: { brand: "Viral AI Tool" }
@@ -626,7 +626,7 @@ window.I18N = (() => {
         trashBusyTitle: "This video is being processed",
         trashBusyBody: "To move {name} to the Recycle Bin, Viral AI Tool needs to stop {count} process(es) using it.",
         stopAndTrash: "Stop and move to Recycle Bin",
-        trashed: "Video moved to the Recycle Bin.",
+        trashDone: "Video moved to the Recycle Bin.",
         trashFailed: "We could not move this video to the Recycle Bin. Try again."
       },
       modal: { brand: "Viral AI Tool" }
