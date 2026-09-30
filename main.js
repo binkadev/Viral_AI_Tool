@@ -100,7 +100,7 @@ function createWindow() {
       if (result.response === 1) {
         forceClose = true;
         cancelAllRenders();
-        await Promise.allSettled([]);
+        await cancelAllSpeech();
         await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
       }
