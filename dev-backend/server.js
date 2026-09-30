@@ -4,6 +4,8 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const speechProvider = require("./providers");
+const translationProvider = require("./providers/translation");
+const translationJobs = require("./translation-jobs");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
@@ -11,7 +13,7 @@ const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const UPLOAD_TTL_MS = 10 * 60 * 1000;
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 256 * 1024;
 const MAX_LOGIN_ATTEMPTS = 8;
 const RATE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_AUDIO_BYTES = Math.max(
@@ -535,7 +537,8 @@ async function handle(req, res) {
     return json(res, 200, {
       ok: true,
       service: "viral-ai-dev-backend",
-      speechProviderConfigured: speechProvider.isConfigured()
+      speechProviderConfigured: speechProvider.isConfigured(),
+      translationProviderConfigured: translationProvider.isConfigured()
     });
   }
 
@@ -602,6 +605,62 @@ async function handle(req, res) {
       },
       quota: user.quota
     });
+  }
+
+  if (method === "GET" && url.pathname === "/v1/translation/status") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    return json(res, 200, translationJobs.status());
+  }
+
+  if (method === "POST" && url.pathname === "/v1/translation/jobs") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const key = idempotencyKey(req);
+    if (!key) return error(res, 400, "BAD_REQUEST");
+
+    const body = await readJson(req);
+
+    try {
+      const result = translationJobs.create(user.id, key, body);
+      return json(res, result.created ? 201 : 200, result.job);
+    } catch (err) {
+      const code = err?.code || "TRANSLATION_FAILED";
+      const status =
+        code === "TRANSLATION_TOO_LARGE" ? 413 :
+        code === "JOB_CONFLICT" ? 409 :
+        code === "SERVICE_UNAVAILABLE" ? 503 :
+        code === "JOB_NOT_FOUND" ? 404 :
+        400;
+      return error(res, status, code);
+    }
+  }
+
+  const translationCancelMatch = url.pathname.match(/^\/v1\/translation\/jobs\/([^/]+)\/cancel$/);
+  if (method === "POST" && translationCancelMatch) {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      const result = translationJobs.cancel(user.id, decodeURIComponent(translationCancelMatch[1]));
+      return json(res, 200, result);
+    } catch (err) {
+      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TRANSLATION_FAILED");
+    }
+  }
+
+  const translationJobMatch = url.pathname.match(/^\/v1\/translation\/jobs\/([^/]+)$/);
+  if (method === "GET" && translationJobMatch) {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      return json(res, 200, translationJobs.get(user.id, decodeURIComponent(translationJobMatch[1])));
+    } catch (err) {
+      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TRANSLATION_FAILED");
+    }
   }
 
   if (method === "GET" && url.pathname === "/v1/speech/status") {
@@ -793,6 +852,12 @@ server.listen(PORT, HOST, () => {
     console.log("Speech model: " + provider.model);
   } else {
     console.log("Set OPENAI_API_KEY before starting the backend to enable Cloud Speech.");
+  }
+
+  const translation = translationProvider.config();
+  console.log("Cloud translation: " + (translationProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
+  if (translationProvider.isConfigured()) {
+    console.log("Translation model: " + translation.model);
   }
   console.log("");
   console.log("Development only. Do not expose this server to the public Internet.");
