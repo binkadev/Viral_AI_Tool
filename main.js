@@ -121,6 +121,59 @@ ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
   return true;
 });
 
+ipcMain.handle('file:status', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return { exists: false, reason: 'invalid' };
+  }
+
+  const resolved = path.resolve(filePath);
+  try {
+    const stat = fs.statSync(resolved);
+    return {
+      exists: stat.isFile(),
+      path: resolved,
+      sizeBytes: stat.size,
+      modifiedAt: stat.mtimeMs
+    };
+  } catch {
+    return { exists: false, path: resolved, reason: 'missing' };
+  }
+});
+
+ipcMain.handle('file:trash', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return { ok: false, reason: 'invalid' };
+  }
+
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    return { ok: false, reason: 'missing' };
+  }
+
+  await shell.trashItem(resolved);
+  return { ok: true };
+});
+
+ipcMain.handle('files:select-replacement-video', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Chọn lại video',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'] },
+      { name: 'All files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const filePath = result.filePaths[0];
+  return {
+    path: filePath,
+    name: path.basename(filePath),
+    ext: path.extname(filePath).slice(1).toUpperCase()
+  };
+});
+
 
 ipcMain.handle('video:file-url', async (_event, inputPath) => {
   const safePath = assertVideoPath(inputPath);
