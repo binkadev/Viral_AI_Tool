@@ -48,6 +48,7 @@ function getActiveWorkCount() {
 function speechProviders() {
   return createSpeechProviders({
     userDataPath: app.getPath('userData'),
+    tempPath: app.getPath('temp'),
     backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
   });
 }
