@@ -225,7 +225,22 @@ window.I18N = (() => {
         notSelected: "Chưa chọn",
         outputSaved: "Đã lưu thư mục xuất",
         interfaceLanguage: "Ngôn ngữ giao diện",
-        languageDesc: "Chuyển tức thì giữa Tiếng Việt và English"
+        languageDesc: "Chọn ngôn ngữ hiển thị từ danh sách",
+        appearance: "Giao diện",
+        appearanceDesc: "Chọn phong cách màu phù hợp với mắt và môi trường làm việc",
+        appearanceAurora: "Aurora Light — sáng dịu, nhiều màu",
+        appearancePearl: "Pearl Light — tối giản, nhẹ mắt",
+        appearanceMidnight: "Midnight — nền tối",
+        motion: "Chuyển động",
+        motionDesc: "Điều chỉnh mức animation của giao diện",
+        motionBalanced: "Cân bằng",
+        motionExpressive: "Sinh động",
+        motionReduced: "Giảm chuyển động",
+        interfaceSize: "Kích thước giao diện",
+        interfaceSizeDesc: "Điều chỉnh mật độ và cỡ chữ",
+        sizeCompact: "Gọn",
+        sizeComfortable: "Thoải mái",
+        sizeLarge: "Lớn"
       },
       modal: { brand: "Viral AI Tool" }
     },
@@ -455,7 +470,22 @@ window.I18N = (() => {
         notSelected: "Not selected",
         outputSaved: "Output folder saved",
         interfaceLanguage: "Interface language",
-        languageDesc: "Switch instantly between Vietnamese and English"
+        languageDesc: "Choose the display language from a list",
+        appearance: "Appearance",
+        appearanceDesc: "Choose a color style that fits your eyes and workspace",
+        appearanceAurora: "Aurora Light — soft and colorful",
+        appearancePearl: "Pearl Light — minimal and calm",
+        appearanceMidnight: "Midnight — dark theme",
+        motion: "Motion",
+        motionDesc: "Choose how animated the interface feels",
+        motionBalanced: "Balanced",
+        motionExpressive: "Expressive",
+        motionReduced: "Reduced motion",
+        interfaceSize: "Interface size",
+        interfaceSizeDesc: "Adjust density and text size",
+        sizeCompact: "Compact",
+        sizeComfortable: "Comfortable",
+        sizeLarge: "Large"
       },
       modal: { brand: "Viral AI Tool" }
     }
