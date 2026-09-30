@@ -20,7 +20,7 @@ function createWindow() {
     minHeight: 700,
     show: false,
     frame: false,
-    backgroundColor: '#09090d',
+    backgroundColor: '#f4f7fc',
     title: 'Viral AI Tool',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
