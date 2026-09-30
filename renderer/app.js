@@ -12,6 +12,8 @@ const state = {
     config: null,
     auth: null,
     test: null,
+    draftBackendUrl: null,
+    draftEnvironment: null,
     loading: false,
     statusCheckedAt: 0
   },
@@ -844,12 +846,12 @@ function settingsPage() {
         '<div class="developer-cloud-grid">' +
           '<div class="speech-field"><label class="label" for="cloudEnvironment">' + t("settings.environment") + '</label>' +
             '<select id="cloudEnvironment" class="select"' + (cloudConfig.source === "environment" ? " disabled" : "") + '>' +
-              option("development", t("settings.environmentDevelopment"), cloudConfig.environment || "development") +
-              option("production", t("settings.environmentProduction"), cloudConfig.environment || "development") +
+              option("development", t("settings.environmentDevelopment"), state.cloud.draftEnvironment || cloudConfig.environment || "development") +
+              option("production", t("settings.environmentProduction"), state.cloud.draftEnvironment || cloudConfig.environment || "development") +
             '</select></div>' +
           '<div class="speech-field cloud-url-field"><label class="label" for="cloudBackendUrl">' + t("settings.backendUrl") + '</label>' +
             '<input id="cloudBackendUrl" class="input" type="url" spellcheck="false" autocomplete="off" placeholder="http://localhost:3000" value="' +
-              escapeHtml(cloudConfig.backendUrl || "") + '"' + (cloudConfig.source === "environment" ? " readonly" : "") + '>' +
+              escapeHtml(state.cloud.draftBackendUrl ?? cloudConfig.backendUrl ?? "") + '"' + (cloudConfig.source === "environment" ? " readonly" : "") + '>' +
             '<small>' + escapeHtml(cloudConfig.source === "environment" ? t("settings.cloudEnvLocked") : t("settings.backendUrlHelp")) + '</small></div>' +
         '</div>' +
         '<div class="cloud-test-strip ' + testClass + '"><span class="cloud-test-dot"></span><div><b>' + escapeHtml(testLabel) + '</b><span>' +
@@ -965,7 +967,7 @@ function activeRenderJobsForPath(filePath) {
 function activeSpeechJobForPath(filePath) {
   const job = state.speech.job;
   if (!filePath || !job || job.sourcePath !== filePath) return null;
-  return ["validating", "preparing", "processing", "cancelling"].includes(job.status) ? job : null;
+  return ["validating", "preparing", "uploading", "queued", "processing", "cancelling"].includes(job.status) ? job : null;
 }
 
 function activeWorkCountForPath(filePath) {
@@ -2176,6 +2178,8 @@ function openCloudDeveloperSettings() {
 async function saveDeveloperCloudConfig() {
   const environment = $("cloudEnvironment")?.value || "development";
   const backendUrl = $("cloudBackendUrl")?.value?.trim() || "";
+  state.cloud.draftEnvironment = environment;
+  state.cloud.draftBackendUrl = backendUrl;
   if (!window.desktopAPI?.saveCloudConfig) return;
 
   const response = await window.desktopAPI.saveCloudConfig({ environment, backendUrl });
@@ -2195,6 +2199,8 @@ async function saveDeveloperCloudConfig() {
 
   state.cloud.config = response.data;
   state.cloud.test = null;
+  state.cloud.draftEnvironment = null;
+  state.cloud.draftBackendUrl = null;
   state.speech.providerStatus = null;
   toast(t("settings.cloudSaved"));
   render();
@@ -2209,6 +2215,8 @@ async function testDeveloperCloudConnection() {
   }
 
   const backendUrl = $("cloudBackendUrl")?.value?.trim() || state.cloud.config?.backendUrl || "";
+  state.cloud.draftBackendUrl = backendUrl;
+  state.cloud.draftEnvironment = $("cloudEnvironment")?.value || state.cloud.config?.environment || "development";
   const response = await window.desktopAPI.testCloudConnection(backendUrl);
   state.cloud.test = response || { ok: false, code: "CLOUD_NETWORK" };
 
@@ -2388,6 +2396,16 @@ function bind() {
 
   const testCloudConnection = $("testCloudConnection");
   if (testCloudConnection) testCloudConnection.onclick = testDeveloperCloudConnection;
+
+  const cloudBackendUrl = $("cloudBackendUrl");
+  if (cloudBackendUrl) cloudBackendUrl.oninput = (event) => {
+    state.cloud.draftBackendUrl = event.target.value;
+  };
+
+  const cloudEnvironment = $("cloudEnvironment");
+  if (cloudEnvironment) cloudEnvironment.onchange = (event) => {
+    state.cloud.draftEnvironment = event.target.value;
+  };
 }
 
 function render() {
