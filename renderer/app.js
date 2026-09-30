@@ -2389,6 +2389,14 @@ async function startSpeechRecognition() {
 
   state.speech.job = speechJob;
   state.speech.result = null;
+
+  if (state.translation.job?.sourcePath === source.sourcePath) {
+    state.translation.job = null;
+  }
+  if (state.translation.result?.sourcePath === source.sourcePath) {
+    state.translation.result = null;
+  }
+
   save();
   render();
   toast(t("speech.started"));
@@ -2998,6 +3006,38 @@ function bind() {
   const speechStop = $("speechStop");
   if (speechStop) speechStop.onclick = cancelSpeechRecognition;
 
+  const translationMode = $("translationMode");
+  if (translationMode) {
+    translationMode.onchange = () => {
+      state.translation.mode = translationMode.value === "local" ? "local" : "cloud";
+      save();
+      render();
+    };
+  }
+
+  const translationTarget = $("translationTarget");
+  if (translationTarget) {
+    translationTarget.onchange = () => {
+      state.translation.targetLanguage = translationTarget.value || "en";
+      save();
+      render();
+    };
+  }
+
+  const translationPreserveTone = $("translationPreserveTone");
+  if (translationPreserveTone) {
+    translationPreserveTone.onchange = () => {
+      state.translation.preserveTone = translationPreserveTone.checked;
+      save();
+    };
+  }
+
+  const translationStart = $("translationStart");
+  if (translationStart) translationStart.onclick = startTranslation;
+
+  const translationStop = $("translationStop");
+  if (translationStop) translationStop.onclick = cancelTranslation;
+
   const renderButton = $("render");
   if (renderButton) renderButton.onclick = startRealRender;
 
@@ -3095,6 +3135,16 @@ function render() {
       await loadSpeechModelInfo();
       if (state.page === "ai-video") render();
     }, 0);
+  }
+
+  if (state.page === "ai-video" && state.translation.mode === "cloud" && window.desktopAPI?.getTranslationStatus) {
+    const translationStale = !state.translation.cloudStatus ||
+      !state.translation.statusCheckedAt ||
+      Date.now() - state.translation.statusCheckedAt > 30000;
+
+    if (translationStale && !state.translation.statusCheckPending) {
+      setTimeout(() => refreshTranslationStatus({ rerender: true }), 0);
+    }
   }
 
   if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getSpeechProviderStatus) {
@@ -3207,6 +3257,9 @@ if (window.desktopAPI) {
   }
   if (window.desktopAPI.onSpeechProgress) {
     window.desktopAPI.onSpeechProgress(updateSpeechProgress);
+  }
+  if (window.desktopAPI.onTranslationProgress) {
+    window.desktopAPI.onTranslationProgress(updateTranslationProgress);
   }
   if (window.desktopAPI.onSpeechModelProgress) {
     window.desktopAPI.onSpeechModelProgress(updateSpeechModelProgress);
