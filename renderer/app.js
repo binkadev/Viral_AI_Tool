@@ -687,8 +687,11 @@ function speechTranscriptView(result) {
 }
 
 function translationJobForSource(source) {
-  return source && state.translation.job?.sourcePath === source.sourcePath
-    ? state.translation.job
+  const job = state.translation.job;
+  return source &&
+    job?.sourcePath === source.sourcePath &&
+    job?.targetLanguage === state.translation.targetLanguage
+    ? job
     : null;
 }
 
@@ -914,7 +917,7 @@ async function startTranslation() {
   if (!confirmed) return;
 
   const reuse = existingJob &&
-    existingJob.status === "interrupted" &&
+    (existingJob.status === "interrupted" || existingJob.retrySameId === true) &&
     existingJob.targetLanguage === state.translation.targetLanguage;
 
   const job = {
