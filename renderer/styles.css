@@ -2550,3 +2550,205 @@ html[data-scale="compact"] .hero p{font-size:13px}
     flex-direction:column;
   }
 }
+
+
+/* Translation workflow */
+.translation-card{
+  margin-top:14px;
+}
+.translation-controls{
+  display:grid;
+  grid-template-columns:minmax(170px,.75fr) minmax(170px,.75fr) minmax(200px,1fr);
+  gap:12px;
+  margin-top:14px;
+}
+.translation-readonly{
+  min-height:40px;
+  display:flex;
+  align-items:center;
+  padding:0 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+  color:var(--text);
+  font-size:13px;
+  font-weight:650;
+}
+.translation-check{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:30px;
+  margin-top:7px;
+  color:var(--text-soft);
+  font-size:12px;
+  cursor:pointer;
+}
+.translation-check input{
+  width:16px;
+  height:16px;
+  accent-color:var(--accent);
+}
+.translation-connection{
+  margin-top:12px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.translation-connection.is-ready{
+  border-color:color-mix(in srgb,var(--success) 22%,var(--line));
+  background:color-mix(in srgb,var(--success) 5%,var(--surface-solid));
+}
+.translation-connection.needs-action{
+  border-color:color-mix(in srgb,var(--warning) 20%,var(--line));
+}
+.translation-connection b{
+  display:block;
+  font-size:13px;
+}
+.translation-connection p{
+  margin:3px 0 0;
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.5;
+}
+.translation-result{
+  margin-top:14px;
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.translation-result-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.translation-result-head h4{
+  margin:3px 0 0;
+  font-size:14px;
+}
+.translation-warning{
+  margin-top:10px;
+  padding:9px 10px;
+  border:1px solid color-mix(in srgb,var(--warning) 24%,var(--line));
+  border-radius:10px;
+  background:color-mix(in srgb,var(--warning) 6%,var(--surface-solid));
+}
+.translation-warning b,
+.translation-warning span{
+  display:block;
+}
+.translation-warning b{
+  color:#94651e;
+  font-size:12px;
+}
+.translation-warning span{
+  margin-top:2px;
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.45;
+}
+.translation-list{
+  margin-top:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+}
+.translation-row{
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr) 24px;
+  gap:10px;
+  align-items:start;
+  padding:10px 11px;
+  background:var(--surface-solid);
+}
+.translation-row+.translation-row{
+  border-top:1px solid var(--line);
+}
+.translation-row.has-warning{
+  background:color-mix(in srgb,var(--warning) 3%,var(--surface-solid));
+}
+.translation-row time{
+  padding-top:2px;
+  color:var(--text-faint);
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+}
+.translation-pair{
+  min-width:0;
+}
+.translation-pair p{
+  margin:0;
+  overflow-wrap:anywhere;
+}
+.translation-source{
+  color:var(--text-faint);
+  font-size:11px;
+  line-height:1.45;
+}
+.translation-target{
+  margin-top:4px!important;
+  color:var(--text);
+  font-size:13px;
+  font-weight:600;
+  line-height:1.5;
+}
+.translation-risk{
+  width:20px;
+  height:20px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:color-mix(in srgb,var(--warning) 13%,var(--surface-solid));
+  color:#9a6719;
+  font-size:10px;
+  font-weight:900;
+}
+.translation-summary-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 0;
+  border-bottom:1px solid var(--line);
+}
+.translation-summary-row:last-child{
+  border-bottom:0;
+}
+.translation-summary-row span{
+  color:var(--text-soft);
+  font-size:12px;
+}
+.translation-summary-row b{
+  font-size:12px;
+  text-align:right;
+}
+.translation-job-state{
+  margin-top:12px;
+}
+
+@media(max-width:980px){
+  .translation-controls{
+    grid-template-columns:1fr 1fr;
+  }
+  .translation-controls>.speech-field:last-child{
+    grid-column:1 / -1;
+  }
+}
+@media(max-width:720px){
+  .translation-controls{
+    grid-template-columns:1fr;
+  }
+  .translation-controls>.speech-field:last-child{
+    grid-column:auto;
+  }
+  .translation-connection,
+  .translation-result-head{
+    flex-direction:column;
+  }
+}
