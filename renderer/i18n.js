@@ -463,7 +463,13 @@ window.I18N = (() => {
         cloudSaveFailedTitle: "Chưa thể lưu cấu hình",
         cloudSaveFailedBody: "Địa chỉ Backend chưa hợp lệ. Hãy kiểm tra lại rồi thử lại.",
         cloudHttpsBody: "Máy chủ Production phải dùng HTTPS. HTTP chỉ được phép với localhost khi phát triển.",
-        devAccountHint: "Tài khoản dev: demo@viral-ai.local · Mật khẩu: ViralAI123!"
+        devAccountHint: "Tài khoản dev: demo@viral-ai.local · Mật khẩu: ViralAI123!",
+        speechProvider: "Speech AI phía backend",
+        providerReady: "Đã cấu hình và sẵn sàng",
+        providerNotConfigured: "Chưa cấu hình API phía server",
+        providerUnavailable: "Đã cấu hình nhưng hiện chưa sẵn sàng",
+        providerNeedsLogin: "Đăng nhập để kiểm tra trạng thái",
+        providerSetupHint: "API key chỉ được đặt ở backend bằng biến môi trường; không nhập key vào ứng dụng desktop."
       },
       media: {
         readingInfo: "Đang đọc thông tin video...",
@@ -995,7 +1001,13 @@ window.I18N = (() => {
         cloudSaveFailedTitle: "Configuration could not be saved",
         cloudSaveFailedBody: "The Backend URL is not valid. Check it and try again.",
         cloudHttpsBody: "Production servers must use HTTPS. HTTP is allowed only for localhost during development.",
-        devAccountHint: "Dev account: demo@viral-ai.local · Password: ViralAI123!"
+        devAccountHint: "Dev account: demo@viral-ai.local · Password: ViralAI123!",
+        speechProvider: "Backend Speech AI",
+        providerReady: "Configured and ready",
+        providerNotConfigured: "Server API is not configured",
+        providerUnavailable: "Configured but currently unavailable",
+        providerNeedsLogin: "Sign in to check provider status",
+        providerSetupHint: "The provider API key is set only on the backend through environment variables; never enter the key in the desktop app."
       },
       media: {
         readingInfo: "Reading video details...",
