@@ -23,6 +23,12 @@ const {
   activeSpeechCount,
   serializeSpeechError
 } = require('./services/speech');
+const {
+  createService: createTranslationService,
+  activeTranslationCount,
+  cancelAllTranslations,
+  serializeTranslationError
+} = require('./services/translation');
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
@@ -57,6 +63,7 @@ function closeCopy() {
 function getActiveWorkCount() {
   return getActiveRenderCount() +
     activeSpeechCount() +
+    activeTranslationCount() +
     speechModelManager.activeDownloadCount();
 }
 
@@ -111,6 +118,18 @@ function speechProviders() {
   return createSpeechProviders({
     userDataPath: app.getPath('userData'),
     tempPath: app.getPath('temp'),
+    backendUrl: cloudConfig.backendUrl || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion()
+  });
+}
+
+function translationService() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+
+  return createTranslationService({
     backendUrl: cloudConfig.backendUrl || '',
     getAccessToken: () => sessionStore?.getAccessToken() || null,
     appVersion: app.getVersion()
@@ -245,6 +264,7 @@ function createWindow() {
         forceClose = true;
         cancelAllRenders();
         await cancelAllSpeech();
+        await cancelAllTranslations();
         speechModelManager.cancelAll();
         await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
@@ -697,6 +717,65 @@ ipcMain.handle('speech:start', async (event, payload) => {
 ipcMain.handle('speech:cancel', async (_event, jobId) => {
   if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false, cancelled: false };
   return { ok: true, cancelled: await cancelSpeech(jobId) };
+});
+
+ipcMain.handle('translation:status', async () => {
+  try {
+    await refreshSessionIfNeeded();
+    return await translationService().status();
+  } catch (error) {
+    const serialized = serializeTranslationError(error);
+    console.error('[TranslationStatus]', serialized.code, serialized.technicalMessage);
+    return { ready: false, code: serialized.code };
+  }
+});
+
+ipcMain.handle('translation:start', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    await refreshSessionIfNeeded();
+
+    const data = await translationService().start({
+      jobId: safePayload.jobId,
+      sourceLanguage: typeof safePayload.sourceLanguage === 'string' ? safePayload.sourceLanguage : 'auto',
+      targetLanguage: safePayload.targetLanguage,
+      preserveTone: safePayload.preserveTone !== false,
+      segments: Array.isArray(safePayload.segments) ? safePayload.segments : [],
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('translation:progress', progress);
+        }
+      }
+    });
+
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeTranslationError(error);
+    console.error('[Translation]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('translation:cancel', async (_event, jobId) => {
+  if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false, cancelled: false };
+
+  try {
+    return {
+      ok: true,
+      cancelled: await translationService().cancel(jobId)
+    };
+  } catch (error) {
+    const serialized = serializeTranslationError(error);
+    console.error('[TranslationCancel]', serialized.code, serialized.technicalMessage);
+    return { ok: false, cancelled: false, error: { code: serialized.code } };
+  }
 });
 
 ipcMain.handle('app:set-locale', async (_event, locale) => {
