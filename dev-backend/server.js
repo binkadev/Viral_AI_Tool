@@ -287,13 +287,13 @@ function publicJob(job, { createResponse = false } = {}) {
   const payload = {
     jobId: job.id,
     state: job.state,
-    progress: Number(job.progress || 0),
     estimate: {
       minutes: job.estimatedMinutes,
       units: job.estimatedMinutes
     }
   };
 
+  if (Number.isFinite(job.progress)) payload.progress = Number(job.progress);
   if (job.chargedMinutes > 0) payload.chargedMinutes = job.chargedMinutes;
   if (job.result) payload.result = job.result;
   if (job.errorCode) payload.error = { code: job.errorCode };
@@ -478,7 +478,7 @@ async function processSpeechJob(job) {
     }
 
     job.state = "processing";
-    job.progress = 10;
+    job.progress = null;
     job.controller = new AbortController();
 
     try {
