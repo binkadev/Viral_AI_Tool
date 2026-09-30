@@ -16,6 +16,26 @@ const state = {
   ]
 };
 
+function makeJobId(prefix = "job") {
+  return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+state.jobs = state.jobs.map((job, index) => ({
+  ...job,
+  id: job.id || ("saved-" + index + "-" + Date.now()),
+  status: normalizeSavedStatus(job.status),
+  progress: Number(job.progress || 0)
+}));
+
+function normalizeSavedStatus(value) {
+  const v = String(value || "").toLowerCase();
+  if (v.includes("complete") || v.includes("hoàn") || v.includes("xong")) return "completed";
+  if (v.includes("process") || v.includes("xử lý") || v.includes("render")) return "processing";
+  if (v.includes("queue") || v.includes("chờ")) return "queued";
+  if (v.includes("fail") || v.includes("lỗi") || v.includes("thất")) return "failed";
+  return v || "queued";
+}
+
 function t(key, vars) {
   return I18N.t(state.locale, key, vars);
 }
@@ -28,7 +48,7 @@ function save() {
     scale: state.scale,
     page: state.page,
     output: state.output,
-    jobs: state.jobs.slice(0, 50)
+    jobs: state.jobs.slice(0, 50).map(({ thumbnail, ...job }) => job)
   }));
 }
 
@@ -63,6 +83,44 @@ function languageName(code) {
     ja: state.locale === "vi" ? "Tiếng Nhật" : "Japanese"
   };
   return map[code] || (code ? code : t("common.notSet"));
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds || 0)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return (h ? String(h).padStart(2, "0") + ":" : "") +
+    String(m).padStart(2, "0") + ":" +
+    String(s).padStart(2, "0");
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  return (size >= 100 || unit === 0 ? Math.round(size) : size.toFixed(1)) + " " + units[unit];
+}
+
+function mediaMetaText(job) {
+  const meta = job.meta;
+  if (!meta) return job.sourcePath ? t("media.readingInfo") : "";
+  const parts = [];
+  if (meta.width && meta.height) parts.push(meta.width + "×" + meta.height);
+  if (meta.duration) parts.push(formatDuration(meta.duration));
+  if (meta.videoCodec) parts.push(String(meta.videoCodec).toUpperCase());
+  if (meta.sizeBytes) parts.push(formatBytes(meta.sizeBytes));
+  return parts.join(" · ");
+}
+
+function latestSourceJob() {
+  return state.jobs.find(job => job.sourcePath && !job.isRenderOutput);
 }
 
 const navItems = [
@@ -146,13 +204,25 @@ function jobsTable(rows) {
     "<th>" + t("common.progress") + "</th>" +
     "<th>" + t("common.updated") + "</th>" +
     "</tr></thead><tbody>" +
-    data.map((job) => '<tr>' +
-      '<td><div class="video-cell"><div class="thumb">▶</div><div>' + job.name + "</div></div></td>" +
-      "<td>" + languageName(job.lang) + "</td>" +
-      "<td>" + statusBadge(job.status) + "</td>" +
-      "<td>" + Number(job.progress || 0) + "%</td>" +
-      "<td>" + (job.time || t("common.now")) + "</td>" +
-      "</tr>").join("") +
+    data.map((job) => {
+      const thumb = job.thumbnail
+        ? '<div class="thumb thumb-image" style="background-image:url(' + JSON.stringify(job.thumbnail) + ')"><span>▶</span></div>'
+        : '<div class="thumb"><span>▶</span></div>';
+      const meta = mediaMetaText(job);
+      return '<tr data-job-id="' + job.id + '">' +
+        '<td><div class="video-cell">' + thumb + '<div class="video-copy"><b>' + job.name + '</b>' +
+        (meta ? '<small>' + meta + '</small>' : '') + '</div></div></td>' +
+        "<td>" + languageName(job.lang) + "</td>" +
+        "<td>" + statusBadge(job.status) + "</td>" +
+        '<td><div class="job-progress"><div class="job-progress-head"><span data-progress-label="' + job.id + '">' +
+          Number(job.progress || 0) + '%</span>' +
+          (job.renderSpeed ? '<small data-progress-speed="' + job.id + '">' + job.renderSpeed + '</small>' : '') +
+        '</div><div class="mini-progress"><i data-progress-bar="' + job.id + '" style="width:' + Number(job.progress || 0) + '%"></i></div></div></td>' +
+        '<td><div class="updated-cell"><span>' + (job.time || t("common.now")) + '</span>' +
+          (job.outputPath ? '<button class="reveal-output" data-output-path="' + encodeURIComponent(job.outputPath) + '" type="button">' + t("media.showFile") + '</button>' : '') +
+        '</div></td>' +
+      "</tr>";
+    }).join("") +
     "</tbody></table></div>";
 }
 
@@ -459,46 +529,124 @@ function modal(title, body) {
   };
 }
 
+async function enrichJob(job) {
+  if (!window.desktopAPI || !job?.sourcePath) return;
+  try {
+    job.mediaState = "reading";
+    const result = await window.desktopAPI.createThumbnail(job.sourcePath);
+    job.meta = result?.metadata || null;
+    job.thumbnail = result?.dataUrl || "";
+    job.mediaState = "ready";
+    save();
+    if (["dashboard", "download", "library"].includes(state.page)) render();
+  } catch (error) {
+    job.mediaState = "error";
+    job.mediaError = error?.message || String(error);
+    save();
+    toast(t("media.readError"));
+  }
+}
+
 async function addFiles() {
-  if (!window.desktopAPI) return;
+  if (!window.desktopAPI) return [];
   const files = await window.desktopAPI.selectVideos();
-  if (!files.length) return;
-  files.forEach((file) => state.jobs.unshift({
+  if (!files.length) return [];
+
+  const jobs = files.map((file) => ({
+    id: makeJobId("source"),
     name: file.name,
     lang: "",
     status: "queued",
     progress: 0,
     time: t("common.now"),
-    sourcePath: file.path
+    sourcePath: file.path,
+    mediaState: "reading"
   }));
+
+  jobs.slice().reverse().forEach(job => state.jobs.unshift(job));
   render();
   toast(t("download.added", { count: files.length }));
+
+  jobs.forEach(enrichJob);
+  return jobs;
 }
 
-function simulateRender() {
-  const job = {
-    name: "viral_ai_output_" + Date.now() + ".mp4",
-    lang: "vi",
-    status: "processing",
-    progress: 5,
-    time: t("common.now")
-  };
-  state.jobs.unshift(job);
-  toast(t("aiVideo.renderStarted"));
-  render();
-  let progress = 5;
-  const timer = setInterval(() => {
-    progress += Math.floor(Math.random() * 13) + 5;
-    job.progress = Math.min(100, progress);
-    if (job.progress >= 100) {
-      job.status = "completed";
-      clearInterval(timer);
-      toast(t("aiVideo.renderDone"));
-    }
-    save();
-    if (["library", "dashboard", "download"].includes(state.page)) render();
-  }, 850);
+function updateProgressElements(job) {
+  document.querySelectorAll('[data-progress-label="' + job.id + '"]').forEach(node => {
+    node.textContent = Math.round(Number(job.progress || 0)) + "%";
+  });
+  document.querySelectorAll('[data-progress-bar="' + job.id + '"]').forEach(node => {
+    node.style.width = Math.round(Number(job.progress || 0)) + "%";
+  });
+  document.querySelectorAll('[data-progress-speed="' + job.id + '"]').forEach(node => {
+    node.textContent = job.renderSpeed || "";
+  });
 }
+
+async function startRealRender() {
+  if (!window.desktopAPI?.renderVideo) {
+    toast(t("media.desktopOnly"));
+    return;
+  }
+
+  let source = latestSourceJob();
+  if (!source) {
+    const added = await addFiles();
+    source = added[0];
+  }
+  if (!source) return;
+
+  if (!state.output) {
+    state.output = await window.desktopAPI.selectOutputFolder();
+    if (!state.output) {
+      toast(t("media.chooseOutput"));
+      return;
+    }
+  }
+
+  const renderJob = {
+    id: makeJobId("render"),
+    name: source.name.replace(/\.[^.]+$/, "") + "_rendered.mp4",
+    lang: source.lang || "vi",
+    status: "processing",
+    progress: 0,
+    time: t("common.now"),
+    sourcePath: source.sourcePath,
+    isRenderOutput: true,
+    meta: source.meta || null,
+    thumbnail: source.thumbnail || ""
+  };
+
+  state.jobs.unshift(renderJob);
+  save();
+  render();
+  toast(t("media.renderStarted"));
+
+  try {
+    const result = await window.desktopAPI.renderVideo({
+      jobId: renderJob.id,
+      inputPath: source.sourcePath,
+      outputDir: state.output
+    });
+
+    renderJob.status = "completed";
+    renderJob.progress = 100;
+    renderJob.outputPath = result.outputPath;
+    renderJob.outputSizeBytes = result.sizeBytes || 0;
+    renderJob.time = t("common.now");
+    save();
+    render();
+    toast(t("media.renderDone"));
+  } catch (error) {
+    renderJob.status = "failed";
+    renderJob.renderError = error?.message || String(error);
+    renderJob.time = t("common.now");
+    save();
+    render();
+    toast(t("media.renderFailed"));
+  }
+}
+
 
 function setLocale(locale) {
   if (!I18N.supported.includes(locale) || locale === state.locale) return;
@@ -530,6 +678,14 @@ function bind() {
     node.onclick = () => toast(node.dataset.connected === "1" ? t("accounts.already") : t("accounts.next"));
   });
 
+  document.querySelectorAll(".reveal-output").forEach((node) => {
+    node.onclick = (event) => {
+      event.stopPropagation();
+      const filePath = decodeURIComponent(node.dataset.outputPath || "");
+      if (filePath) window.desktopAPI?.showFile(filePath);
+    };
+  });
+
   const dropzone = $("dropzone");
   if (dropzone) {
     dropzone.onclick = addFiles;
@@ -544,13 +700,13 @@ function bind() {
   }
 
   const renderButton = $("render");
-  if (renderButton) renderButton.onclick = simulateRender;
+  if (renderButton) renderButton.onclick = startRealRender;
 
   const tts = $("tts");
   if (tts) tts.onclick = () => toast(t("voice.generated"));
 
   const exportButton = $("export");
-  if (exportButton) exportButton.onclick = simulateRender;
+  if (exportButton) exportButton.onclick = startRealRender;
 
   const addChannel = $("addChannel");
   if (addChannel) addChannel.onclick = () => modal(t("monitor.modalTitle"), t("monitor.modalBody"));
@@ -669,17 +825,32 @@ if (window.desktopAPI) {
     document.body.classList.remove("dragging");
     const files = [...(event.dataTransfer?.files || [])].filter((file) => /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(file.name));
     if (!files.length) return;
-    files.forEach((file) => state.jobs.unshift({
+    const jobs = files.map((file) => ({
+      id: makeJobId("source"),
       name: file.name,
       lang: "",
       status: "queued",
       progress: 0,
       time: t("common.now"),
-      sourcePath: file.path
+      sourcePath: file.path,
+      mediaState: "reading"
     }));
+    jobs.slice().reverse().forEach(job => state.jobs.unshift(job));
     render();
     toast(t("download.dropped", { count: files.length }));
+    jobs.forEach(enrichJob);
   });
+  if (window.desktopAPI.onRenderProgress) {
+    window.desktopAPI.onRenderProgress((payload) => {
+      const job = state.jobs.find(item => item.id === payload?.jobId);
+      if (!job) return;
+      job.progress = Math.max(0, Math.min(100, Number(payload.percent || 0)));
+      job.renderSpeed = payload.speed || "";
+      job.status = job.progress >= 100 ? "completed" : "processing";
+      updateProgressElements(job);
+      save();
+    });
+  }
 }
 
 render();
