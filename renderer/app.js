@@ -1127,6 +1127,236 @@ function showNotice({ title, body, buttonLabel }) {
   });
 }
 
+async function refreshSpeechProviderStatus({ rerender = true } = {}) {
+  if (!window.desktopAPI?.getSpeechProviderStatus) return null;
+  try {
+    const status = await window.desktopAPI.getSpeechProviderStatus();
+    state.speech.providerStatus = status || null;
+    if (rerender && state.page === "ai-video") render();
+    return status;
+  } catch {
+    state.speech.providerStatus = null;
+    return null;
+  }
+}
+
+async function handleSpeechBlock(response, source) {
+  const code = response?.error?.code || "SPEECH_FAILED";
+
+  if (code === "SOURCE_MISSING") {
+    if (source) {
+      source.fileState = "missing";
+      save();
+      render();
+      showMissingFileDialog(source);
+    }
+    return;
+  }
+
+  if (code === "NO_AUDIO") {
+    await showNotice({
+      title: t("speech.noAudioTitle"),
+      body: t("speech.noAudioBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "DUPLICATE_ACTIVE") {
+    toast(t("speech.duplicate"));
+    return;
+  }
+
+  if (["LOCAL_MODEL_REQUIRED", "LOCAL_MODEL_INCOMPLETE", "LOCAL_MODEL_INVALID", "LOCAL_ENGINE_NOT_CONFIGURED"].includes(code)) {
+    await showNotice({
+      title: t("speech.modelTitle"),
+      body: t("speech.modelBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["CLOUD_NOT_CONFIGURED", "CLOUD_CONFIG_INVALID", "CLOUD_HTTPS_REQUIRED", "CLOUD_BACKEND_NOT_CONNECTED"].includes(code)) {
+    await showNotice({
+      title: t("speech.cloudSetupTitle"),
+      body: t("speech.cloudSetupBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("speech.failedTitle"),
+    body: t("speech.failedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function startSpeechRecognition() {
+  if (!window.desktopAPI?.preflightSpeech || !window.desktopAPI?.startSpeech) {
+    toast(t("media.desktopOnly"));
+    return;
+  }
+
+  let source = latestSourceJob();
+  if (!source) {
+    const added = await addFiles();
+    source = added[0];
+  }
+  if (!source) return;
+
+  const sourceAvailable = await checkJobFile(source);
+  if (!sourceAvailable) {
+    render();
+    showMissingFileDialog(source);
+    return;
+  }
+
+  const currentJob = speechJobForSource(source);
+  if (currentJob && ["validating", "preparing", "processing", "cancelling"].includes(currentJob.status)) {
+    toast(t("speech.duplicate"));
+    return;
+  }
+
+  const statuses = state.speech.providerStatus || await refreshSpeechProviderStatus({ rerender: false });
+  const selectedStatus = statuses?.[state.speech.mode];
+
+  if (selectedStatus && selectedStatus.ready === false) {
+    await handleSpeechBlock({ error: { code: selectedStatus.code } }, source);
+    return;
+  }
+
+  let consent = false;
+  if (state.speech.mode === "cloud") {
+    const minutes = Math.max(1, Math.ceil(Number(source?.meta?.duration || 0) / 60));
+    consent = await confirmAction({
+      title: t("speech.consentTitle"),
+      body: t("speech.consentBody") + " " + t("speech.estimate", { minutes }),
+      confirmLabel: t("speech.consentConfirm"),
+      cancelLabel: t("common.cancel")
+    });
+    if (!consent) return;
+  }
+
+  const preflight = await window.desktopAPI.preflightSpeech({
+    inputPath: source.sourcePath,
+    mode: state.speech.mode,
+    language: state.speech.language,
+    consent
+  });
+
+  if (!preflight?.ok) {
+    await handleSpeechBlock(preflight, source);
+    return;
+  }
+
+  const speechJob = {
+    id: makeJobId("speech"),
+    sourcePath: source.sourcePath,
+    sourceName: source.name,
+    mode: state.speech.mode,
+    language: state.speech.language,
+    status: "preparing",
+    progress: 0,
+    startedAt: Date.now()
+  };
+
+  state.speech.job = speechJob;
+  state.speech.result = null;
+  save();
+  render();
+  toast(t("speech.started"));
+
+  const response = await window.desktopAPI.startSpeech({
+    jobId: speechJob.id,
+    inputPath: source.sourcePath,
+    mode: speechJob.mode,
+    language: speechJob.language,
+    consent
+  });
+
+  if (!response?.ok) {
+    speechJob.status = "failed";
+    speechJob.failureCode = response?.error?.code || "SPEECH_FAILED";
+    save();
+    render();
+    await handleSpeechBlock(response, source);
+    return;
+  }
+
+  if (response.data?.cancelled || speechJob.status === "cancelling") {
+    speechJob.status = "cancelled";
+    save();
+    render();
+    toast(t("speech.stopped"));
+    return;
+  }
+
+  const result = response.data?.result || null;
+  speechJob.status = "completed";
+  speechJob.progress = 100;
+  speechJob.completedAt = Date.now();
+  state.speech.result = result
+    ? {
+        ...result,
+        sourcePath: source.sourcePath,
+        sourceName: source.name
+      }
+    : null;
+
+  save();
+  render();
+  toast(t("speech.transcriptReady"));
+}
+
+async function cancelSpeechRecognition() {
+  const job = state.speech.job;
+  if (!job || !["preparing", "processing", "validating"].includes(job.status)) return;
+
+  const confirmed = await confirmAction({
+    title: t("speech.stopTitle"),
+    body: t("speech.stopBody"),
+    confirmLabel: t("speech.stop"),
+    cancelLabel: t("speech.keepGoing"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  job.status = "cancelling";
+  save();
+  render();
+
+  const response = await window.desktopAPI?.cancelSpeech?.(job.id);
+  if (!response?.cancelled) {
+    job.status = "processing";
+    save();
+    render();
+    toast(t("speech.stopFailed"));
+    return;
+  }
+
+  toast(t("speech.stopping"));
+}
+
+function updateSpeechProgress(payload) {
+  const job = state.speech.job;
+  if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
+
+  const allowedStates = new Set(["validating", "preparing", "processing"]);
+  if (allowedStates.has(payload.state)) job.status = payload.state;
+  if (Number.isFinite(Number(payload.percent))) {
+    job.progress = Math.max(0, Math.min(99, Number(payload.percent)));
+  }
+
+  const label = $("speechStateLabel");
+  const percent = $("speechPercent");
+  const bar = $("speechProgressBar");
+  if (label) label.textContent = speechStatusCopy(job);
+  if (percent) percent.textContent = Math.round(job.progress || 0) + "%";
+  if (bar) bar.style.width = Math.round(job.progress || 0) + "%";
+  save();
+}
+
 async function handleExportBlock(response, source) {
   const code = response?.error?.code || "PROCESSING_FAILED";
   const details = response?.error?.details || {};
