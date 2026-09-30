@@ -201,3 +201,17 @@ Cloud speech is not production-ready until:
 - provider outages have customer-safe messaging;
 - telemetry avoids storing transcript content by default;
 - legal/provider license terms have been reviewed.
+
+
+## Backend contract
+
+The executable desktop contract is documented in:
+
+`docs/cloud-speech.openapi.yaml`
+
+Idempotent recovery requirement:
+- retrying an uncertain Cloud job must reuse the same client job id;
+- the backend may return an existing job in `awaiting_upload`, `uploaded`, `queued`, `processing`, `completed`, `cancelled`, or `failed` state;
+- if audio was already uploaded, the backend must not require a second upload;
+- if recognition already completed, the existing result may be returned immediately;
+- this behavior is required to prevent accidental duplicate billing.
