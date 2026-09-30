@@ -286,6 +286,16 @@ ipcMain.handle('speech:model-cancel', async (_event, jobId) => {
 
 ipcMain.handle('speech:model-remove', async (_event, modelId) => {
   try {
+    if (activeSpeechCount() > 0) {
+      return {
+        ok: false,
+        error: {
+          code: 'MODEL_IN_USE',
+          details: {}
+        }
+      };
+    }
+
     const data = await speechModelManager.remove(
       app.getPath('userData'),
       typeof modelId === 'string' ? modelId : undefined
