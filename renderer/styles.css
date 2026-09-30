@@ -1596,3 +1596,12 @@ html[data-scale="compact"] .hero p{font-size:13px}
 .data-table tbody tr[data-job-id]{
   cursor:default;
 }
+
+
+.thumb-image img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
