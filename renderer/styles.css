@@ -1499,3 +1499,100 @@ html[data-scale="compact"] .hero p{font-size:13px}
   .dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dashboard-tools{grid-template-columns:1fr}
 }
+
+
+/* Real media processing UI */
+.video-copy{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.video-copy b{
+  max-width:360px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:13px;
+  font-weight:650;
+}
+.video-copy small{
+  color:var(--text-faint);
+  font-size:11px;
+  line-height:1.35;
+}
+.thumb{
+  flex:0 0 auto;
+  overflow:hidden;
+  background-size:cover;
+  background-position:center;
+}
+.thumb span{
+  position:relative;
+  z-index:1;
+}
+.thumb-image{
+  position:relative;
+  color:white;
+}
+.thumb-image::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,rgba(15,20,35,.05),rgba(15,20,35,.28));
+}
+.job-progress{
+  min-width:110px;
+}
+.job-progress-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:5px;
+}
+.job-progress-head span{
+  font-size:12px;
+  font-weight:650;
+}
+.job-progress-head small{
+  color:var(--text-faint);
+  font-size:10px;
+}
+.mini-progress{
+  width:100%;
+  height:5px;
+  overflow:hidden;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--text) 7%,transparent);
+}
+.mini-progress i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2),var(--accent-3));
+  transition:width .22s var(--ease);
+}
+.updated-cell{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.reveal-output{
+  padding:4px 7px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface-soft);
+  color:var(--accent);
+  font-size:10px;
+  font-weight:650;
+  cursor:pointer;
+}
+.reveal-output:hover{
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface-solid));
+  border-color:color-mix(in srgb,var(--accent) 18%,var(--line));
+}
+.data-table tbody tr[data-job-id]{
+  cursor:default;
+}
