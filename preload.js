@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
 
   probeVideo: inputPath => ipcRenderer.invoke('video:probe', inputPath),
   createThumbnail: inputPath => ipcRenderer.invoke('video:thumbnail', inputPath),
+  getVideoUrl: inputPath => ipcRenderer.invoke('video:file-url', inputPath),
   renderVideo: payload => ipcRenderer.invoke('video:render', payload),
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
 
