@@ -6,22 +6,136 @@ const ffmpegStatic = require("ffmpeg-static");
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"]);
 const activeRenders = new Map();
+const cancelledRenders = new Set();
+
+const MIN_FREE_BYTES = 512 * 1024 * 1024;
+const OUTPUT_MULTIPLIER = 2.25;
+
+class ProcessingError extends Error {
+  constructor(code, message, details = {}) {
+    super(message);
+    this.name = "ProcessingError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+function processingError(code, message, details) {
+  return new ProcessingError(code, message, details);
+}
 
 function resolveBinaryPath() {
-  if (!ffmpegStatic) throw new Error("FFmpeg binary was not found.");
+  if (!ffmpegStatic) {
+    throw processingError("ENGINE_UNAVAILABLE", "Video processing binary was not found.");
+  }
   return ffmpegStatic.replace("app.asar", "app.asar.unpacked");
 }
 
 function assertVideoPath(inputPath) {
   if (typeof inputPath !== "string" || !inputPath.trim()) {
-    throw new Error("Invalid video path.");
+    throw processingError("SOURCE_INVALID", "Invalid video path.");
   }
+
   const resolved = path.resolve(inputPath);
-  if (!fs.existsSync(resolved)) throw new Error("Video file does not exist.");
-  if (!VIDEO_EXTENSIONS.has(path.extname(resolved).toLowerCase())) {
-    throw new Error("Unsupported video format.");
+  if (!fs.existsSync(resolved)) {
+    throw processingError("SOURCE_MISSING", "Source video does not exist.", { inputPath: resolved });
   }
+
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) {
+    throw processingError("SOURCE_INVALID", "Source path is not a file.", { inputPath: resolved });
+  }
+
+  if (!VIDEO_EXTENSIONS.has(path.extname(resolved).toLowerCase())) {
+    throw processingError("SOURCE_UNSUPPORTED", "Unsupported video format.", {
+      extension: path.extname(resolved).toLowerCase()
+    });
+  }
+
+  if (stat.size <= 0) {
+    throw processingError("SOURCE_INVALID", "Source video is empty.", { inputPath: resolved });
+  }
+
   return resolved;
+}
+
+function assertOutputDirectory(outputDir) {
+  if (typeof outputDir !== "string" || !outputDir.trim()) {
+    throw processingError("OUTPUT_REQUIRED", "Missing output folder.");
+  }
+
+  const resolved = path.resolve(outputDir);
+
+  try {
+    fs.mkdirSync(resolved, { recursive: true });
+    const stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      throw processingError("OUTPUT_UNAVAILABLE", "Output path is not a directory.", { outputDir: resolved });
+    }
+    fs.accessSync(resolved, fs.constants.W_OK);
+  } catch (error) {
+    if (error instanceof ProcessingError) throw error;
+    throw processingError("OUTPUT_UNAVAILABLE", "Output folder is not writable.", { outputDir: resolved });
+  }
+
+  return resolved;
+}
+
+function availableDiskBytes(directory) {
+  if (typeof fs.statfsSync !== "function") return null;
+
+  try {
+    const stat = fs.statfsSync(directory);
+    const availableBlocks = Number(stat.bavail ?? stat.bfree ?? 0);
+    const blockSize = Number(stat.bsize ?? 0);
+    const bytes = availableBlocks * blockSize;
+    return Number.isFinite(bytes) && bytes >= 0 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+function activeRenderForInput(inputPath) {
+  const resolved = path.resolve(inputPath);
+  return [...activeRenders.values()].find(item => item.inputPath === resolved) || null;
+}
+
+function validateJobId(jobId) {
+  if (typeof jobId !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(jobId)) {
+    throw processingError("JOB_INVALID", "Invalid processing job id.");
+  }
+  return jobId;
+}
+
+function preflightExport({ inputPath, outputDir }) {
+  const safeInput = assertVideoPath(inputPath);
+  const safeOutputDir = assertOutputDirectory(outputDir);
+
+  if (activeRenderForInput(safeInput)) {
+    throw processingError("DUPLICATE_ACTIVE", "This source is already being processed.");
+  }
+
+  const sourceStat = fs.statSync(safeInput);
+  const requiredFreeBytes = Math.max(
+    MIN_FREE_BYTES,
+    Math.ceil(sourceStat.size * OUTPUT_MULTIPLIER)
+  );
+  const freeBytes = availableDiskBytes(safeOutputDir);
+
+  if (freeBytes !== null && freeBytes < requiredFreeBytes) {
+    throw processingError("LOW_DISK_SPACE", "Not enough free disk space.", {
+      freeBytes,
+      requiredFreeBytes
+    });
+  }
+
+  return {
+    inputPath: safeInput,
+    outputDir: safeOutputDir,
+    sourceSizeBytes: sourceStat.size,
+    freeBytes,
+    requiredFreeBytes
+  };
 }
 
 function parseTimecode(value) {
@@ -56,12 +170,17 @@ function parseProbeOutput(stderr, stat) {
 
 function run(args, options = {}) {
   return new Promise((resolve, reject) => {
-    const ffmpegPath = resolveBinaryPath();
-    const child = spawn(ffmpegPath, args, {
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      ...options.spawnOptions
-    });
+    let child;
+    try {
+      child = spawn(resolveBinaryPath(), args, {
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        ...options.spawnOptions
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
 
     let stdout = "";
     let stderr = "";
@@ -83,7 +202,9 @@ function run(args, options = {}) {
       if (options.acceptNonZero || code === 0) {
         resolve({ code, stdout, stderr });
       } else {
-        reject(new Error(stderr.trim() || `FFmpeg exited with code ${code}`));
+        const error = new Error(stderr.trim() || `Video process exited with code ${code}`);
+        error.exitCode = code;
+        reject(error);
       }
     });
 
@@ -114,7 +235,7 @@ async function createThumbnail(inputPath, cacheRoot) {
 
   if (!fs.existsSync(outputPath)) {
     const seek = metadata.duration > 3 ? Math.min(1.5, metadata.duration * 0.12) : 0;
-    const args = [
+    await run([
       "-y",
       "-ss", String(seek),
       "-i", safePath,
@@ -122,8 +243,7 @@ async function createThumbnail(inputPath, cacheRoot) {
       "-vf", "scale=480:-2",
       "-q:v", "4",
       outputPath
-    ];
-    await run(args);
+    ]);
   }
 
   const data = fs.readFileSync(outputPath);
@@ -133,23 +253,32 @@ async function createThumbnail(inputPath, cacheRoot) {
   };
 }
 
-function makeOutputPath(inputPath, outputDir) {
-  const safeInput = assertVideoPath(inputPath);
-  const resolvedDir = path.resolve(outputDir);
-  fs.mkdirSync(resolvedDir, { recursive: true });
-
-  const base = path
-    .basename(safeInput, path.extname(safeInput))
+function sanitizeBaseName(inputPath) {
+  return path
+    .basename(inputPath, path.extname(inputPath))
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .slice(0, 90);
+    .replace(/[. ]+$/g, "")
+    .trim()
+    .slice(0, 90) || "video";
+}
 
+function makeOutputPath(inputPath, outputDir) {
+  const base = sanitizeBaseName(inputPath);
   const stamp = new Date()
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}Z$/, "")
     .replace("T", "_");
 
-  return path.join(resolvedDir, `${base}_rendered_${stamp}.mp4`);
+  const first = path.join(outputDir, `${base}_exported_${stamp}.mp4`);
+  if (!fs.existsSync(first)) return first;
+
+  for (let index = 2; index <= 999; index++) {
+    const candidate = path.join(outputDir, `${base}_exported_${stamp}_${index}.mp4`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+
+  throw processingError("OUTPUT_NAME_UNAVAILABLE", "Could not allocate a unique output name.");
 }
 
 function parseProgressChunk(chunk, state) {
@@ -166,21 +295,28 @@ function parseProgressChunk(chunk, state) {
     if (key === "speed") state.speed = value;
     if (key === "fps") state.fps = Number(value) || 0;
     if (key === "frame") state.frame = Number(value) || 0;
-    if (key === "progress") state.progressState = value;
+  }
+}
+
+function removePartialFile(outputPath) {
+  if (!outputPath) return;
+  try {
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+  } catch {
+    // Cleanup failure should never replace the original processing result.
   }
 }
 
 async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
-  if (!jobId || typeof jobId !== "string") throw new Error("Missing render job id.");
-  const safeInput = assertVideoPath(inputPath);
-  if (typeof outputDir !== "string" || !outputDir.trim()) throw new Error("Missing output folder.");
-
+  validateJobId(jobId);
+  const preflight = preflightExport({ inputPath, outputDir });
+  const safeInput = preflight.inputPath;
   const metadata = await probeVideo(safeInput);
-  const outputPath = makeOutputPath(safeInput, outputDir);
-  const progressState = { buffer: "", outTime: 0, speed: "", fps: 0, frame: 0, progressState: "" };
+  const outputPath = makeOutputPath(safeInput, preflight.outputDir);
+  const progressState = { buffer: "", outTime: 0, speed: "", fps: 0, frame: 0 };
 
   const args = [
-    "-y",
+    "-n",
     "-i", safeInput,
     "-map", "0:v:0",
     "-map", "0:a?",
@@ -196,32 +332,58 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
     outputPath
   ];
 
-  await run(args, {
-    onStart(child) {
-      activeRenders.set(jobId, child);
-    },
-    onStdout(chunk) {
-      parseProgressChunk(chunk, progressState);
-      const duration = metadata.duration || 0;
-      const percent = duration > 0
-        ? Math.max(0, Math.min(99, Math.round((progressState.outTime / duration) * 100)))
-        : 0;
+  try {
+    await run(args, {
+      onStart(child) {
+        activeRenders.set(jobId, {
+          child,
+          jobId,
+          inputPath: safeInput,
+          outputPath,
+          startedAt: Date.now()
+        });
+      },
+      onStdout(chunk) {
+        parseProgressChunk(chunk, progressState);
+        const duration = metadata.duration || 0;
+        const percent = duration > 0
+          ? Math.max(0, Math.min(99, Math.round((progressState.outTime / duration) * 100)))
+          : 0;
 
-      onProgress?.({
-        jobId,
-        percent,
-        speed: progressState.speed,
-        fps: progressState.fps,
-        frame: progressState.frame
-      });
+        onProgress?.({
+          jobId,
+          percent,
+          speed: progressState.speed,
+          fps: progressState.fps,
+          frame: progressState.frame
+        });
+      }
+    });
+  } catch (error) {
+    const wasCancelled = cancelledRenders.has(jobId);
+    removePartialFile(outputPath);
+
+    if (wasCancelled) {
+      return {
+        cancelled: true,
+        outputPath: null,
+        metadata
+      };
     }
-  }).finally(() => {
+
+    if (error instanceof ProcessingError) throw error;
+    throw processingError("PROCESSING_FAILED", "Video processing failed.", {
+      technicalMessage: error?.message || String(error)
+    });
+  } finally {
     activeRenders.delete(jobId);
-  });
+    cancelledRenders.delete(jobId);
+  }
 
   onProgress?.({ jobId, percent: 100, speed: "", fps: 0, frame: 0 });
 
   return {
+    cancelled: false,
     outputPath,
     metadata,
     sizeBytes: fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0
@@ -229,22 +391,47 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
 }
 
 function cancelRender(jobId) {
-  const child = activeRenders.get(jobId);
-  if (!child) return false;
+  const active = activeRenders.get(jobId);
+  if (!active) return false;
 
+  cancelledRenders.add(jobId);
   try {
-    child.kill("SIGTERM");
-    activeRenders.delete(jobId);
+    active.child.kill("SIGTERM");
     return true;
   } catch {
+    cancelledRenders.delete(jobId);
     return false;
   }
+}
+
+function cancelAllRenders() {
+  let cancelled = 0;
+  for (const jobId of [...activeRenders.keys()]) {
+    if (cancelRender(jobId)) cancelled++;
+  }
+  return cancelled;
+}
+
+function getActiveRenderCount() {
+  return activeRenders.size;
+}
+
+function serializeProcessingError(error) {
+  return {
+    code: error?.code || "PROCESSING_FAILED",
+    details: error?.details || {},
+    technicalMessage: error?.message || String(error)
+  };
 }
 
 module.exports = {
   probeVideo,
   createThumbnail,
+  preflightExport,
   renderVideo,
   cancelRender,
+  cancelAllRenders,
+  getActiveRenderCount,
+  serializeProcessingError,
   assertVideoPath
 };
