@@ -2172,3 +2172,194 @@ html[data-scale="compact"] .hero p{font-size:13px}
 .model-summary{
   margin-top:14px;
 }
+
+
+/* AI connection center */
+.ai-connection-panel{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  align-items:start;
+  gap:12px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:color-mix(in srgb,var(--surface-solid) 88%,transparent);
+}
+.ai-connection-panel.is-ready{
+  border-color:color-mix(in srgb,var(--success) 22%,var(--line));
+  background:color-mix(in srgb,var(--success) 4%,var(--surface-solid));
+}
+.ai-connection-panel.needs-action{
+  border-color:color-mix(in srgb,var(--warning) 20%,var(--line));
+}
+.ai-connection-icon{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  font-size:17px;
+  font-weight:800;
+}
+.ai-connection-icon.local{
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface-solid));
+}
+.ai-connection-icon.cloud{
+  color:var(--accent-2);
+  background:color-mix(in srgb,var(--accent-2) 11%,var(--surface-solid));
+}
+.ai-connection-copy{min-width:0}
+.ai-connection-title-row{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.ai-connection-title-row>b{
+  font-size:14px;
+  line-height:1.35;
+}
+.ai-connection-copy p{
+  margin:5px 0 0;
+  color:var(--text-soft);
+  font-size:13px;
+  line-height:1.5;
+}
+.ai-connection-meta{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.ai-connection-meta span{
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:3px 7px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--surface-soft);
+  color:var(--text-faint);
+  font-size:11px;
+  font-weight:650;
+}
+.ai-connection-actions{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.ai-connection-actions .button{
+  min-height:36px;
+}
+
+/* Developer Cloud settings */
+.developer-cloud-card{
+  grid-column:1 / -1;
+}
+.developer-card-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:16px;
+}
+.developer-card-head h3{
+  margin:4px 0 5px;
+  font-size:17px;
+}
+.developer-card-head p{
+  margin:0;
+  max-width:760px;
+  color:var(--text-soft);
+  font-size:13px;
+  line-height:1.55;
+}
+.dev-badge{
+  flex:0 0 auto;
+  padding:5px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--warning) 10%,var(--surface-solid));
+  color:#9a6719;
+  font-size:11px;
+  font-weight:800;
+}
+.developer-cloud-grid{
+  display:grid;
+  grid-template-columns:minmax(180px,.45fr) minmax(320px,1.55fr);
+  gap:12px;
+}
+.cloud-url-field small{
+  display:block;
+  margin-top:6px;
+  color:var(--text-faint);
+  font-size:11px;
+  line-height:1.45;
+}
+.cloud-test-strip{
+  margin-top:14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.cloud-test-strip.success{
+  border-color:color-mix(in srgb,var(--success) 22%,var(--line));
+  background:color-mix(in srgb,var(--success) 5%,var(--surface-solid));
+}
+.cloud-test-strip.warning{
+  border-color:color-mix(in srgb,var(--warning) 22%,var(--line));
+  background:color-mix(in srgb,var(--warning) 5%,var(--surface-solid));
+}
+.cloud-test-dot{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:var(--text-faint);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--text-faint) 9%,transparent);
+}
+.cloud-test-strip.success .cloud-test-dot{
+  background:var(--success);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--success) 10%,transparent);
+}
+.cloud-test-strip.warning .cloud-test-dot{
+  background:var(--warning);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--warning) 10%,transparent);
+}
+.cloud-test-strip b,
+.cloud-test-strip span{
+  display:block;
+}
+.cloud-test-strip b{
+  font-size:13px;
+}
+.cloud-test-strip div>span{
+  margin-top:2px;
+  color:var(--text-faint);
+  font-size:11px;
+}
+.developer-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:12px;
+}
+
+@media(max-width:900px){
+  .ai-connection-panel{
+    grid-template-columns:42px minmax(0,1fr);
+  }
+  .ai-connection-actions{
+    grid-column:2;
+    justify-content:flex-start;
+  }
+  .developer-cloud-grid{
+    grid-template-columns:1fr;
+  }
+}
