@@ -1620,3 +1620,194 @@ html[data-scale="compact"] .hero p{font-size:13px}
   object-fit:contain;
   background:#0e1320;
 }
+
+
+/* Commercial file recovery and delete controls */
+.file-state-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  width:max-content;
+  margin-top:2px;
+  padding:3px 7px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  line-height:1.25;
+}
+.file-state-badge span{
+  display:grid;
+  place-items:center;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  font-size:9px;
+  font-weight:900;
+}
+.file-state-badge.missing{
+  color:#a86612;
+  background:color-mix(in srgb,var(--warning) 12%,var(--surface-solid));
+}
+.file-state-badge.missing span{
+  background:color-mix(in srgb,var(--warning) 18%,var(--surface-solid));
+}
+.file-state-badge.trashed{
+  color:var(--text-soft);
+  background:var(--surface-strong);
+}
+.file-state-badge.trashed span{
+  background:var(--surface-solid);
+}
+
+.file-unavailable-row{
+  background:color-mix(in srgb,var(--warning) 2.5%,transparent);
+}
+.file-unavailable-row .video-copy b{
+  color:var(--text-soft);
+}
+.thumb.is-unavailable{
+  opacity:.52;
+  filter:grayscale(.55);
+}
+
+.badge.neutral{
+  background:var(--surface-strong);
+  color:var(--text-soft);
+}
+
+.actions-head{
+  width:48px;
+}
+.job-actions-cell{
+  width:48px;
+  text-align:right;
+}
+.job-menu{
+  position:relative;
+  display:inline-flex;
+}
+.job-menu-button{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:9px;
+  background:transparent;
+  color:var(--text-soft);
+  font-size:15px;
+  font-weight:800;
+  letter-spacing:1px;
+  cursor:pointer;
+}
+.job-menu-button:hover{
+  background:var(--surface-strong);
+  color:var(--text);
+}
+.job-menu-popover{
+  position:absolute;
+  z-index:75;
+  right:0;
+  top:calc(100% + 6px);
+  width:230px;
+  padding:6px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface-solid);
+  box-shadow:var(--shadow-lg);
+  text-align:left;
+  animation:popoverIn .16s var(--ease);
+}
+.job-menu-popover.hidden{display:none}
+.job-menu-popover button{
+  width:100%;
+  min-height:40px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:8px 10px;
+  border-radius:9px;
+  background:transparent;
+  color:var(--text);
+  text-align:left;
+  font-size:12px;
+  cursor:pointer;
+}
+.job-menu-popover button:hover{
+  background:color-mix(in srgb,var(--accent) 5%,var(--surface-solid));
+}
+.job-menu-popover button.danger-action{
+  color:var(--danger);
+}
+.job-menu-popover button.danger-action:hover{
+  background:color-mix(in srgb,var(--danger) 7%,var(--surface-solid));
+}
+.job-menu-separator{
+  height:1px;
+  margin:5px 4px;
+  background:var(--line);
+}
+
+.commercial-modal{
+  position:relative;
+  padding-top:24px;
+}
+.commercial-modal .modal-icon{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  margin-bottom:12px;
+  border-radius:13px;
+  font:800 16px/1 var(--font-display);
+}
+.modal-icon.info{
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface-solid));
+}
+.modal-icon.warning{
+  color:#a86612;
+  background:color-mix(in srgb,var(--warning) 14%,var(--surface-solid));
+}
+.modal-icon.danger{
+  color:var(--danger);
+  background:color-mix(in srgb,var(--danger) 11%,var(--surface-solid));
+}
+.commercial-modal h3{
+  font-size:18px;
+  margin:0 0 8px;
+}
+.commercial-modal p{
+  margin:0;
+  font-size:13px;
+  line-height:1.6;
+}
+.button.solid-danger{
+  color:#fff;
+  border-color:transparent;
+  background:linear-gradient(135deg,#ea6178,#d84f69);
+  box-shadow:0 10px 24px rgba(216,79,105,.18);
+}
+.missing-file-name{
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+  color:var(--text);
+  font-size:12px;
+  font-weight:650;
+  overflow-wrap:anywhere;
+}
+.split-actions{
+  flex-wrap:wrap;
+}
+.split-actions .button:first-child{
+  margin-right:auto;
+}
+
+@media(max-width:760px){
+  .job-menu-popover{
+    right:-4px;
+    width:210px;
+  }
+}
