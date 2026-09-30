@@ -67,6 +67,7 @@ function normalizeStatus(value) {
   if (v.includes("complete") || v.includes("hoàn") || v.includes("xong")) return "completed";
   if (v.includes("process") || v.includes("xử lý") || v.includes("xuất")) return "processing";
   if (v.includes("queue") || v.includes("chờ")) return "queued";
+  if (v.includes("cancelling") || v.includes("đang dừng")) return "cancelling";
   if (v.includes("cancel") || v.includes("hủy") || v.includes("dừng")) return "cancelled";
   if (v.includes("fail") || v.includes("lỗi") || v.includes("thất")) return "failed";
   return v || "queued";
@@ -80,7 +81,7 @@ function statusBadge(value) {
       ? "processing"
       : code === "queued"
         ? "warn"
-        : code === "cancelled"
+        : (code === "cancelled" || code === "cancelling")
           ? "neutral"
           : "error";
   return '<span class="badge ' + cls + '">' + t("common." + code) + "</span>";
@@ -207,6 +208,7 @@ function applyChromeLocale() {
   document.documentElement.dataset.scale = state.scale;
   document.body.dataset.locale = state.locale;
   document.body.dataset.dropLabel = t("download.dropOverlay");
+  window.desktopAPI?.setLocale?.(state.locale);
 
   $("desktopPill").textContent = t("app.desktop");
   $("workspaceLabel").textContent = t("app.workspace");
@@ -255,6 +257,9 @@ function jobsTable(rows) {
           (!job.isRenderOutput
             ? '<button type="button" data-job-action="relink" data-job-id="' + escapeHtml(job.id) + '">↻ <span>' + t("file.relink") + '</span></button>'
             : '') +
+          (job.isRenderOutput && normalizeStatus(job.status) === "processing"
+            ? '<button type="button" data-job-action="cancel-export" data-job-id="' + escapeHtml(job.id) + '">■ <span>' + t("export.stop") + '</span></button>'
+            : '') +
           '<div class="job-menu-separator"></div>' +
           '<button type="button" data-job-action="remove" data-job-id="' + escapeHtml(job.id) + '">− <span>' + t(job.isRenderOutput ? "file.removeHistory" : "file.removeLibrary") + '</span></button>' +
           ((jobFilePath(job) && job.fileState === "available")
@@ -270,7 +275,6 @@ function jobsTable(rows) {
         "<td>" + statusBadge(job.status) + "</td>" +
         '<td><div class="job-progress"><div class="job-progress-head"><span data-progress-label="' + job.id + '">' +
           Number(job.progress || 0) + '%</span>' +
-          (job.renderSpeed ? '<small data-progress-speed="' + job.id + '">' + job.renderSpeed + '</small>' : '') +
         '</div><div class="mini-progress"><i data-progress-bar="' + job.id + '" style="width:' + Number(job.progress || 0) + '%"></i></div></div></td>' +
         '<td><div class="updated-cell"><span>' + (job.time || t("common.now")) + '</span>' +
           (job.outputPath && job.fileState === "available" ? '<button class="reveal-output" data-output-path="' + encodeURIComponent(job.outputPath) + '" type="button">' + t("media.showFile") + '</button>' : '') +
@@ -301,7 +305,7 @@ function dashboard() {
   const renderJobs = processingJobs.filter(job => job.isRenderOutput);
   const focusJob = processingJobs[0];
   const focusPercent = focusJob ? Math.round(Number(focusJob.progress || 0)) + "%" : "—";
-  const renderSpeed = renderJobs[0]?.renderSpeed || "—";
+  const renderState = renderJobs.length ? t("dashboard.running") : "—";
 
   return '<div class="dashboard-shell">' +
     '<div class="dashboard-main">' +
@@ -345,7 +349,7 @@ function dashboard() {
         '<p class="side-intro">' + t("dashboard.activityDesc") + '</p>' +
         '<div class="activity-list">' +
           '<div class="activity-row"><span class="activity-icon purple">↻</span><div><b>' + t("dashboard.activityProcessing") + '</b><span>' + processingJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong data-activity-progress>' + focusPercent + '</strong></div>' +
-          '<div class="activity-row"><span class="activity-icon blue">▶</span><div><b>' + t("dashboard.activityRendering") + '</b><span>' + renderJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong data-activity-speed>' + renderSpeed + '</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon blue">▶</span><div><b>' + t("dashboard.activityRendering") + '</b><span>' + renderJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong>' + renderState + '</strong></div>' +
           '<div class="activity-row"><span class="activity-icon amber">◷</span><div><b>' + t("dashboard.activityQueued") + '</b><span>' + queuedJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong>' + queuedJobs.length + '</strong></div>' +
         '</div>' +
       '</div>' +
@@ -741,6 +745,16 @@ async function relinkJob(job) {
 
 function removeJobFromLibrary(job) {
   if (!job) return;
+
+  const active = job.isRenderOutput
+    ? normalizeStatus(job.status) === "processing"
+    : activeRenderJobsForPath(job.sourcePath).length > 0;
+
+  if (active) {
+    toast(t("file.removeBusy"));
+    return;
+  }
+
   state.jobs = state.jobs.filter(item => item.id !== job.id);
   save();
   render();
@@ -859,6 +873,7 @@ async function handleJobAction(action, jobId) {
   if (action === "relink") return relinkJob(job);
   if (action === "remove") return removeJobFromLibrary(job);
   if (action === "trash") return trashJobFile(job);
+  if (action === "cancel-export") return cancelExportJob(job);
 }
 
 async function refreshFileStates({ notify = true } = {}) {
@@ -952,19 +967,117 @@ function updateProgressElements(job) {
   document.querySelectorAll('[data-progress-bar="' + job.id + '"]').forEach(node => {
     node.style.width = Math.round(Number(job.progress || 0)) + "%";
   });
-  document.querySelectorAll('[data-progress-speed="' + job.id + '"]').forEach(node => {
-    node.textContent = job.renderSpeed || "";
-  });
   const activityProgress = document.querySelector("[data-activity-progress]");
   if (activityProgress && normalizeStatus(job.status) === "processing") {
     activityProgress.textContent = Math.round(Number(job.progress || 0)) + "%";
   }
-  const activitySpeed = document.querySelector("[data-activity-speed]");
-  if (activitySpeed && job.renderSpeed) activitySpeed.textContent = job.renderSpeed;
+}
+
+function showNotice({ title, body, buttonLabel }) {
+  return new Promise(resolve => {
+    const root = $("modal");
+    root.classList.remove("hidden");
+    root.innerHTML =
+      '<div class="modal commercial-modal">' +
+        '<div class="modal-icon info">i</div>' +
+        '<h3>' + escapeHtml(title) + '</h3>' +
+        '<p>' + escapeHtml(body) + '</p>' +
+        '<div class="modal-actions">' +
+          '<button id="noticeOk" class="button primary" type="button">' + escapeHtml(buttonLabel || t("common.close")) + '</button>' +
+        '</div>' +
+      '</div>';
+    $("noticeOk").onclick = () => {
+      root.classList.add("hidden");
+      resolve(true);
+    };
+  });
+}
+
+async function handleExportBlock(response, source) {
+  const code = response?.error?.code || "PROCESSING_FAILED";
+  const details = response?.error?.details || {};
+
+  if (code === "SOURCE_MISSING") {
+    source.fileState = "missing";
+    save();
+    render();
+    showMissingFileDialog(source);
+    return;
+  }
+
+  if (code === "DUPLICATE_ACTIVE") {
+    toast(t("export.duplicate"));
+    return;
+  }
+
+  if (code === "LOW_DISK_SPACE") {
+    await showNotice({
+      title: t("export.lowSpaceTitle"),
+      body: t("export.lowSpaceBody", {
+        free: formatBytes(details.freeBytes || 0),
+        needed: formatBytes(details.requiredFreeBytes || 0)
+      }),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "OUTPUT_UNAVAILABLE" || code === "OUTPUT_REQUIRED") {
+    await showNotice({
+      title: t("export.folderTitle"),
+      body: t("export.folderBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "SOURCE_UNSUPPORTED" || code === "SOURCE_INVALID") {
+    await showNotice({
+      title: t("export.sourceTitle"),
+      body: t("export.sourceBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("export.failedTitle"),
+    body: t("export.failedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function cancelExportJob(job) {
+  if (!job || !job.isRenderOutput || normalizeStatus(job.status) !== "processing") return;
+
+  const confirmed = await confirmAction({
+    title: t("export.stopTitle"),
+    body: t("export.stopBody", { name: job.name }),
+    confirmLabel: t("export.stop"),
+    cancelLabel: t("export.keepGoing"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  job.status = "cancelling";
+  job.time = t("common.now");
+  save();
+  render();
+
+  const result = await window.desktopAPI?.cancelRender?.(job.id);
+  if (!result?.cancelled) {
+    job.status = "processing";
+    save();
+    render();
+    toast(t("export.stopFailed"));
+    return;
+  }
+
+  toast(t("export.stopping"));
 }
 
 async function startRealRender() {
-  if (!window.desktopAPI?.renderVideo) {
+  if (!window.desktopAPI?.renderVideo || !window.desktopAPI?.preflightExport) {
     toast(t("media.desktopOnly"));
     return;
   }
@@ -983,6 +1096,16 @@ async function startRealRender() {
     return;
   }
 
+  const frontendDuplicate = state.jobs.some(job =>
+    job.isRenderOutput &&
+    job.sourcePath === source.sourcePath &&
+    ["processing", "cancelling"].includes(normalizeStatus(job.status))
+  );
+  if (frontendDuplicate) {
+    toast(t("export.duplicate"));
+    return;
+  }
+
   if (!state.output) {
     state.output = await window.desktopAPI.selectOutputFolder();
     if (!state.output) {
@@ -991,9 +1114,19 @@ async function startRealRender() {
     }
   }
 
+  const preflight = await window.desktopAPI.preflightExport({
+    inputPath: source.sourcePath,
+    outputDir: state.output
+  });
+
+  if (!preflight?.ok) {
+    await handleExportBlock(preflight, source);
+    return;
+  }
+
   const renderJob = {
     id: makeJobId("render"),
-    name: source.name.replace(/\.[^.]+$/, "") + "_rendered.mp4",
+    name: source.name.replace(/\.[^.]+$/, "") + "_exported.mp4",
     lang: source.lang || "vi",
     status: "processing",
     fileState: "available",
@@ -1010,25 +1143,15 @@ async function startRealRender() {
   render();
   toast(t("media.exportStarted"));
 
-  try {
-    const result = await window.desktopAPI.renderVideo({
-      jobId: renderJob.id,
-      inputPath: source.sourcePath,
-      outputDir: state.output
-    });
+  const response = await window.desktopAPI.renderVideo({
+    jobId: renderJob.id,
+    inputPath: source.sourcePath,
+    outputDir: state.output
+  });
 
-    renderJob.status = "completed";
-    renderJob.progress = 100;
-    renderJob.outputPath = result.outputPath;
-    renderJob.outputSizeBytes = result.sizeBytes || 0;
-    renderJob.time = t("common.now");
-    save();
-    render();
-    renderJob.fileState = "available";
-    toast(t("media.exportDone"));
-  } catch (error) {
+  if (!response?.ok) {
     renderJob.status = "failed";
-    renderJob.renderError = error?.message || String(error);
+    renderJob.failureCode = response?.error?.code || "PROCESSING_FAILED";
     renderJob.time = t("common.now");
 
     const sourceStillAvailable = await checkJobFile(source);
@@ -1043,8 +1166,33 @@ async function startRealRender() {
 
     save();
     render();
-    toast(t("media.exportFailed"));
+    await handleExportBlock(response, source);
+    return;
   }
+
+  const result = response.data || {};
+
+  if (result.cancelled || normalizeStatus(renderJob.status) === "cancelling") {
+    renderJob.status = "cancelled";
+    renderJob.progress = Math.min(99, Number(renderJob.progress || 0));
+    renderJob.outputPath = "";
+    renderJob.fileState = "unknown";
+    renderJob.time = t("common.now");
+    save();
+    render();
+    toast(t("export.stopped"));
+    return;
+  }
+
+  renderJob.status = "completed";
+  renderJob.progress = 100;
+  renderJob.outputPath = result.outputPath;
+  renderJob.outputSizeBytes = result.sizeBytes || 0;
+  renderJob.fileState = "available";
+  renderJob.time = t("common.now");
+  save();
+  render();
+  toast(t("media.exportDone"));
 }
 
 
@@ -1270,7 +1418,7 @@ if (window.desktopAPI) {
   if (window.desktopAPI.onRenderProgress) {
     window.desktopAPI.onRenderProgress((payload) => {
       const job = state.jobs.find(item => item.id === payload?.jobId);
-      if (!job) return;
+      if (!job || ["cancelling", "cancelled"].includes(normalizeStatus(job.status))) return;
       job.progress = Math.max(0, Math.min(100, Number(payload.percent || 0)));
       job.renderSpeed = payload.speed || "";
       job.status = job.progress >= 100 ? "completed" : "processing";
