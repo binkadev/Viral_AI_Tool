@@ -20,10 +20,19 @@ function providerError(code, message, details = {}) {
 
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    const abort = () => {
+    let settled = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      reject(providerError("CLOUD_CANCELLED", "Cloud speech was cancelled."));
+      if (signal) signal.removeEventListener("abort", abort);
+      fn(value);
+    };
+
+    const timer = setTimeout(() => finish(resolve), ms);
+    const abort = () => {
+      finish(reject, providerError("CLOUD_CANCELLED", "Cloud speech was cancelled."));
     };
 
     if (signal) {
@@ -192,33 +201,35 @@ class CloudSpeechProvider {
         signal: controller.signal
       });
 
-      if (!created?.jobId || !created?.upload?.url) {
+      if (!created?.jobId) {
         throw providerError("CLOUD_PROTOCOL_INVALID", "Cloud backend returned an invalid job contract.");
       }
 
       state.serverJobId = String(created.jobId);
+      const createdState = String(created.state || "awaiting_upload").toLowerCase();
 
       onProgress?.({
         jobId,
-        state: "uploading",
-        percent: 0,
+        state: createdState === "awaiting_upload" ? "uploading" :
+          createdState === "queued" ? "queued" : "processing",
+        percent: Number.isFinite(Number(created.progress)) ? Number(created.progress) : 0,
+        indeterminate: ["queued", "processing"].includes(createdState) && !Number.isFinite(Number(created.progress)),
+        serverJobId: state.serverJobId,
         estimatedMinutes: created?.estimate?.minutes ?? null
       });
 
-      await this.client.uploadFile({
-        upload: created.upload,
-        filePath: prepared.outputPath,
-        signal: controller.signal,
-        onProgress: progress => {
-          onProgress?.({
-            jobId,
-            state: "uploading",
-            percent: Math.max(0, Math.min(99, Number(progress.percent || 0)))
-          });
-        }
-      });
+      if (createdState === "completed" && created.result) {
+        return {
+          ...created.result,
+          duration: Number(created.result.duration || prepared.duration || 0),
+          meta: {
+            ...(created.result.meta || {}),
+            timingAvailable: created.result?.meta?.timingAvailable === true
+          }
+        };
+      }
 
-      if (controller.signal.aborted) {
+      if (createdState === "cancelled") {
         return {
           cancelled: true,
           language: language === "auto" ? "unknown" : language,
@@ -229,9 +240,46 @@ class CloudSpeechProvider {
         };
       }
 
-      await this.client.commitJob(state.serverJobId, {
-        signal: controller.signal
-      });
+      if (createdState === "failed") {
+        throw providerError(created?.error?.code || "CLOUD_PROCESSING_FAILED", "Cloud speech processing failed.");
+      }
+
+      if (createdState === "awaiting_upload" || createdState === "uploaded") {
+        if (createdState === "awaiting_upload") {
+          if (!created?.upload?.url) {
+            throw providerError("CLOUD_PROTOCOL_INVALID", "Cloud backend did not provide an upload target.");
+          }
+
+          await this.client.uploadFile({
+            upload: created.upload,
+            filePath: prepared.outputPath,
+            signal: controller.signal,
+            onProgress: progress => {
+              onProgress?.({
+                jobId,
+                state: "uploading",
+                percent: Math.max(0, Math.min(99, Number(progress.percent || 0))),
+                serverJobId: state.serverJobId
+              });
+            }
+          });
+        }
+
+        if (controller.signal.aborted) {
+          return {
+            cancelled: true,
+            language: language === "auto" ? "unknown" : language,
+            duration: prepared.duration || 0,
+            text: "",
+            segments: [],
+            meta: { timingAvailable: false }
+          };
+        }
+
+        await this.client.commitJob(state.serverJobId, {
+          signal: controller.signal
+        });
+      }
 
       const started = Date.now();
       const maxWaitMs = 2 * 60 * 60 * 1000;
@@ -289,12 +337,14 @@ class CloudSpeechProvider {
           onProgress?.({
             jobId,
             state: "queued",
-            indeterminate: true
+            indeterminate: true,
+            serverJobId: state.serverJobId
           });
         } else {
           onProgress?.({
             jobId,
             state: "processing",
+            serverJobId: state.serverJobId,
             indeterminate: !Number.isFinite(Number(remote?.progress)),
             percent: Number.isFinite(Number(remote?.progress))
               ? Math.max(0, Math.min(99, Number(remote.progress)))
