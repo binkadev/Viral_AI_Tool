@@ -1,10 +1,10 @@
-# Development Auth Backend
+# Development Cloud Backend
 
-This server exists only so the Viral AI Tool desktop app can test the real account/session flow before a production backend is deployed.
+This server exists so Viral AI Tool Desktop can test the real account/session and Cloud Speech workflow before a production backend is deployed.
 
-It is **not** a production server and is intentionally excluded from the Electron build files.
+It is **development only** and is intentionally excluded from the Electron build files.
 
-## Start the development backend
+## Start the backend without Speech AI
 
 Open terminal 1:
 
@@ -19,14 +19,49 @@ The server binds only to:
 127.0.0.1:3000
 ```
 
-It does not listen on the public network.
-
 Development account:
 
 ```text
 Email:    demo@viral-ai.local
 Password: ViralAI123!
 ```
+
+Without a provider API key, account/login works but Cloud Speech correctly reports that the backend AI provider is not configured.
+
+## Enable real Cloud Speech in development
+
+Do **not** paste an API key into the desktop app and do not commit it to Git.
+
+In terminal 1, set the provider key only for that terminal session:
+
+```powershell
+cd C:\Users\haiho\Desktop\Viral_AI_Tool
+
+$env:OPENAI_API_KEY="YOUR_PRIVATE_API_KEY"
+$env:VIRAL_AI_SPEECH_PROVIDER="openai"
+$env:VIRAL_AI_OPENAI_TRANSCRIBE_MODEL="whisper-1"
+
+npm run dev:backend
+```
+
+Default model:
+
+```text
+whisper-1
+```
+
+The development backend uses this default because it can return segment timestamps needed by the subtitle workflow.
+
+Optional provider model examples supported by the adapter can be selected with `VIRAL_AI_OPENAI_TRANSCRIBE_MODEL`. The product UI must not depend on the provider-specific model name.
+
+The backend console should show:
+
+```text
+Cloud speech: READY
+Speech model: whisper-1
+```
+
+Never send or paste a real provider API key into chat, screenshots, source files, issue descriptions, or commits.
 
 ## Start the desktop app
 
@@ -45,23 +80,71 @@ In the app:
 4. Set Backend URL to `http://127.0.0.1:3000`.
 5. Save.
 6. Test the connection.
-7. Open **Video AI**.
-8. Choose **Cloud**.
-9. Choose **Đăng nhập**.
-10. Use the development account above.
+7. Sign in with the development account.
+8. Open **Video AI**.
+9. Import a short video that contains speech.
+10. Choose **Cloud**.
+11. Choose the spoken language or automatic detection.
+12. Start speech recognition.
+13. Confirm the Cloud consent dialog.
 
-Expected result after login:
+Expected Cloud flow:
 
-- account identity is visible;
-- plan is `Creator Pro`;
-- Cloud allowance is 500 AI minutes;
-- authentication/session refresh works;
-- Speech Cloud remains marked as not configured because this development backend intentionally has no third-party speech provider.
+```text
+Video
+  -> local audio extraction
+  -> FLAC
+  -> authenticated job creation
+  -> one-time upload token
+  -> SHA-256 validation
+  -> job commit
+  -> provider transcription
+  -> normalized transcript + timestamps
+  -> desktop subtitle transcript
+```
 
-## Security behavior being tested
+## Development job guarantees
+
+The dev backend now implements:
+
+- authenticated job ownership;
+- idempotency by client job ID;
+- duplicate retry recovery;
+- quota reservation before processing;
+- one-time expiring upload tokens;
+- exact upload size validation;
+- SHA-256 validation before processing;
+- FLAC-only Cloud Speech uploads;
+- maximum audio size and duration limits;
+- queued / processing / completed / cancelling / cancelled / failed states;
+- cancellation;
+- temporary file cleanup;
+- normalized Viral AI Tool speech result;
+- quota charge only after successful completion.
+
+The same idempotency key cannot be reused with different audio metadata.
+
+## Default development limits
+
+Unless overridden by environment variables:
+
+```text
+Maximum prepared audio: 24 MiB
+Maximum duration:       120 minutes
+Temporary upload TTL:   10 minutes
+```
+
+Optional overrides:
+
+```powershell
+$env:VIRAL_AI_PROVIDER_MAX_AUDIO_BYTES="25165824"
+$env:VIRAL_AI_MAX_AUDIO_SECONDS="7200"
+```
+
+## Account/session security behavior
 
 - password is never persisted by the desktop renderer;
-- access and refresh tokens are stored via Electron `safeStorage`;
+- access and refresh tokens are stored through Electron `safeStorage`;
 - renderer never receives token values;
 - access tokens expire after 15 minutes in the dev server;
 - refresh tokens are rotated;
@@ -71,16 +154,24 @@ Expected result after login:
 - login attempts are rate-limited;
 - the dev backend binds to loopback only.
 
-## What this backend deliberately does not implement
+## What remains development-only
 
-- production database;
+This backend intentionally does **not** provide the production guarantees required for a public commercial service:
+
+- persistent database storage;
+- durable jobs across backend restarts;
+- distributed job workers;
+- production object storage / signed uploads;
 - email verification;
 - password reset;
 - MFA;
 - subscription payments;
-- production billing ledger;
-- third-party Speech AI;
-- horizontal scaling;
-- persistent sessions across server restarts.
+- durable billing ledger;
+- provider failover;
+- production observability;
+- abuse controls;
+- persistent rate limiting;
+- production secrets manager;
+- horizontal scaling.
 
-These belong to the production backend milestone and must not be simulated as complete.
+In particular, provider-side billing may already occur after a provider request has been accepted even if the user cancels immediately afterward. Production billing/cancellation policy must account for this explicitly.
