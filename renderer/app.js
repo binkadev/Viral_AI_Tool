@@ -1661,14 +1661,24 @@ async function startSpeechRecognition() {
     return;
   }
 
+  const canReuseCloudJob = currentJob &&
+    currentJob.mode === "cloud" &&
+    currentJob.sourcePath === source.sourcePath &&
+    (
+      currentJob.status === "interrupted" ||
+      currentJob.retrySameId === true
+    );
+
   const speechJob = {
-    id: makeJobId("speech"),
+    id: canReuseCloudJob ? currentJob.id : makeJobId("speech"),
     sourcePath: source.sourcePath,
     sourceName: source.name,
     mode: state.speech.mode,
     language: state.speech.language,
     status: "preparing",
     progress: 0,
+    cloudJobId: canReuseCloudJob ? (currentJob.cloudJobId || null) : null,
+    retrySameId: false,
     startedAt: Date.now()
   };
 
@@ -1689,6 +1699,13 @@ async function startSpeechRecognition() {
   if (!response?.ok) {
     speechJob.status = "failed";
     speechJob.failureCode = response?.error?.code || "SPEECH_FAILED";
+    speechJob.retrySameId = speechJob.mode === "cloud" && [
+      "CLOUD_NETWORK",
+      "CLOUD_TIMEOUT",
+      "CLOUD_UPLOAD_FAILED",
+      "CLOUD_UNAVAILABLE",
+      "CLOUD_REQUEST_FAILED"
+    ].includes(speechJob.failureCode);
     save();
     render();
     await handleSpeechBlock(response, source);
@@ -1755,6 +1772,7 @@ function updateSpeechProgress(payload) {
 
   const allowedStates = new Set(["validating", "preparing", "uploading", "queued", "processing"]);
   if (allowedStates.has(payload.state)) job.status = payload.state;
+  if (payload.serverJobId) job.cloudJobId = String(payload.serverJobId);
 
   job.indeterminate = payload.indeterminate === true;
   if (!job.indeterminate && Number.isFinite(Number(payload.percent))) {
