@@ -60,7 +60,7 @@ async function preflightSpeech({ inputPath, mode, consent = false, providers, ig
   }
 
   const provider = providers[safeMode];
-  const providerStatus = provider.status();
+  const providerStatus = await provider.status();
 
   if (!providerStatus.ready) {
     throw speechError(providerStatus.code, "Speech provider is not ready.", {
