@@ -1,5 +1,13 @@
-const fs = require("fs");
-const path = require("path");
+const modelManager = require("./model-manager");
+
+function runtimeAvailable() {
+  try {
+    require.resolve("sherpa-onnx-node");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 class LocalSpeechProvider {
   constructor({ userDataPath }) {
@@ -7,66 +15,61 @@ class LocalSpeechProvider {
     this.userDataPath = userDataPath;
   }
 
-  modelDirectory() {
-    return path.join(this.userDataPath, "models", "speech");
-  }
+  async status() {
+    const modelStatus = await modelManager.status(this.userDataPath);
 
-  modelManifestPath() {
-    return path.join(this.modelDirectory(), "model.json");
-  }
+    if (!modelStatus.ready) {
+      const code = modelStatus.state === "invalid"
+        ? "LOCAL_MODEL_INVALID"
+        : modelStatus.state === "partial" || modelStatus.state === "downloading"
+          ? "LOCAL_MODEL_INCOMPLETE"
+          : "LOCAL_MODEL_REQUIRED";
 
-  status() {
-    const directory = this.modelDirectory();
-    const manifestPath = this.modelManifestPath();
-
-    if (!fs.existsSync(manifestPath)) {
       return {
         mode: this.mode,
         ready: false,
-        code: "LOCAL_MODEL_REQUIRED",
-        modelInstalled: false
+        code,
+        modelInstalled: false,
+        modelStatus
       };
     }
 
-    try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-      const modelFile = typeof manifest.file === "string"
-        ? path.join(directory, manifest.file)
-        : null;
-
-      if (!modelFile || !fs.existsSync(modelFile)) {
-        return {
-          mode: this.mode,
-          ready: false,
-          code: "LOCAL_MODEL_INCOMPLETE",
-          modelInstalled: false
-        };
-      }
-
+    if (!runtimeAvailable()) {
       return {
         mode: this.mode,
-        ready: true,
-        code: "READY",
+        ready: false,
+        code: "LOCAL_RUNTIME_REQUIRED",
         modelInstalled: true,
-        model: {
-          id: String(manifest.id || "local-speech"),
-          version: String(manifest.version || "1"),
-          sizeBytes: fs.statSync(modelFile).size
-        }
-      };
-    } catch {
-      return {
-        mode: this.mode,
-        ready: false,
-        code: "LOCAL_MODEL_INVALID",
-        modelInstalled: false
+        modelStatus
       };
     }
+
+    return {
+      mode: this.mode,
+      ready: true,
+      code: "READY",
+      modelInstalled: true,
+      modelStatus
+    };
   }
 
   async transcribe() {
-    const error = new Error("Local speech engine is not configured.");
-    error.code = "LOCAL_ENGINE_NOT_CONFIGURED";
+    const status = await this.status();
+
+    if (!status.modelInstalled) {
+      const error = new Error("Local speech model is not installed.");
+      error.code = status.code;
+      throw error;
+    }
+
+    if (!status.ready) {
+      const error = new Error("Local speech runtime is not configured.");
+      error.code = status.code;
+      throw error;
+    }
+
+    const error = new Error("Local speech adapter is not connected yet.");
+    error.code = "LOCAL_ADAPTER_NOT_CONFIGURED";
     throw error;
   }
 
