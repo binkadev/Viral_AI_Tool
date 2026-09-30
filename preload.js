@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
   setLocale: locale => ipcRenderer.invoke('app:set-locale', locale),
   getAuthStatus: () => ipcRenderer.invoke('auth:status'),
+  getCloudConfig: () => ipcRenderer.invoke('cloud:config-get'),
+  saveCloudConfig: payload => ipcRenderer.invoke('cloud:config-save', payload),
+  clearCloudConfig: () => ipcRenderer.invoke('cloud:config-clear'),
+  testCloudConnection: backendUrl => ipcRenderer.invoke('cloud:test-connection', backendUrl),
 
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
