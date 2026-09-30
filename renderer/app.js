@@ -561,7 +561,9 @@ function aiVideoPage() {
             '<option value="cloud"' + (!localSelected ? " selected" : "") + '>' + t("speech.cloud") + '</option>' +
           '</select>' +
           '<div class="speech-choice-help"><span>' + (localSelected ? t("speech.localDesc") : t("speech.cloudDesc")) + '</span>' +
-            (localSelected ? speechProviderBadge("local") : speechProviderBadge("cloud")) + '</div>' +
+            (localSelected ? speechProviderBadge("local") : speechProviderBadge("cloud")) +
+            (localSelected ? '<button id="manageLocalAi" class="speech-manage-link" type="button">' + t("speech.manageLocal") + '</button>' : '') +
+          '</div>' +
         '</div>' +
         '<div class="speech-field"><label class="label" for="speechLanguage">' + t("speech.language") + '</label>' +
           '<select id="speechLanguage" class="select">' +
@@ -1249,7 +1251,8 @@ function localModelSetupHtml(model, status) {
       (downloading
         ? '<button id="modelCancelDownload" class="button danger" type="button">' + t("speech.modelCancel") + '</button>'
         : installed
-          ? '<button id="modelDone" class="button primary" type="button">' + t("common.close") + '</button>'
+          ? '<button id="modelRemove" class="button danger" type="button">' + t("speech.modelRemove") + '</button>' +
+            '<button id="modelDone" class="button primary" type="button">' + t("common.close") + '</button>'
           : '<button id="modelInstall" class="button primary" type="button">' +
               t(partial ? "speech.modelResume" : "speech.modelDownload") + '</button>') +
     '</div>' +
@@ -1287,6 +1290,12 @@ async function openLocalModelSetup() {
 
   const cancel = $("modelCancelDownload");
   if (cancel) cancel.onclick = cancelLocalModelInstall;
+
+  const remove = $("modelRemove");
+  if (remove) remove.onclick = async () => {
+    root.classList.add("hidden");
+    await removeLocalSpeechModel(info.model);
+  };
 }
 
 async function handleModelInstallError(response) {
@@ -1387,6 +1396,46 @@ async function startLocalModelInstall(model) {
   } else {
     toast(t("speech.modelReady"));
   }
+}
+
+async function removeLocalSpeechModel(model) {
+  if (!model || !window.desktopAPI?.removeSpeechModel) return;
+
+  const confirmed = await confirmAction({
+    title: t("speech.modelRemoveTitle"),
+    body: t("speech.modelRemoveBody"),
+    confirmLabel: t("speech.modelRemove"),
+    cancelLabel: t("common.cancel"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI.removeSpeechModel(model.id);
+
+  if (!response?.ok) {
+    const code = response?.error?.code || "MODEL_REMOVE_FAILED";
+    if (code === "MODEL_IN_USE" || code === "MODEL_BUSY") {
+      await showNotice({
+        title: t("speech.modelBusyTitle"),
+        body: t("speech.modelBusyBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
+    await showNotice({
+      title: t("speech.modelRemoveFailedTitle"),
+      body: t("speech.modelRemoveFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  state.speech.modelStatus = null;
+  await loadSpeechModelInfo();
+  await refreshSpeechProviderStatus({ rerender: false });
+  if (state.page === "ai-video") render();
+  toast(t("speech.modelRemoved"));
 }
 
 async function cancelLocalModelInstall() {
@@ -1969,6 +2018,9 @@ function bind() {
       save();
     };
   }
+
+  const manageLocalAi = $("manageLocalAi");
+  if (manageLocalAi) manageLocalAi.onclick = openLocalModelSetup;
 
   const speechStart = $("speechStart");
   if (speechStart) speechStart.onclick = startSpeechRecognition;
