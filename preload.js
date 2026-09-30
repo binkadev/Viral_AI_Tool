@@ -5,7 +5,21 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:maximize-toggle'),
   close: () => ipcRenderer.invoke('window:close'),
+
   selectVideos: () => ipcRenderer.invoke('files:select-videos'),
   selectOutputFolder: () => ipcRenderer.invoke('folder:select-output'),
-  showFolder: targetPath => ipcRenderer.invoke('folder:show', targetPath)
+  showFolder: targetPath => ipcRenderer.invoke('folder:show', targetPath),
+  showFile: filePath => ipcRenderer.invoke('file:show-in-folder', filePath),
+
+  probeVideo: inputPath => ipcRenderer.invoke('video:probe', inputPath),
+  createThumbnail: inputPath => ipcRenderer.invoke('video:thumbnail', inputPath),
+  renderVideo: payload => ipcRenderer.invoke('video:render', payload),
+  cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
+
+  onRenderProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('video:render-progress', listener);
+    return () => ipcRenderer.removeListener('video:render-progress', listener);
+  }
 });
