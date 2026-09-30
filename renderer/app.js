@@ -11,6 +11,7 @@ const state = {
   cloud: {
     config: null,
     auth: null,
+    account: null,
     test: null,
     draftBackendUrl: null,
     draftEnvironment: null,
@@ -495,6 +496,20 @@ async function refreshCloudUiState({ rerender = false } = {}) {
     ]);
     state.cloud.config = config || null;
     state.cloud.auth = auth || null;
+
+    if (auth?.authenticated && window.desktopAPI.getAccount) {
+      const accountResponse = await window.desktopAPI.getAccount();
+      if (accountResponse?.ok) {
+        state.cloud.auth = accountResponse.data?.status || auth;
+        state.cloud.account = accountResponse.data?.account || null;
+      } else if (accountResponse?.error?.code === "AUTH_REQUIRED") {
+        state.cloud.auth = { ...auth, authenticated: false, accessReady: false, refreshReady: false };
+        state.cloud.account = null;
+      }
+    } else {
+      state.cloud.account = null;
+    }
+
     state.cloud.statusCheckedAt = Date.now();
   } catch {
     state.cloud.config = null;
@@ -538,13 +553,17 @@ function cloudConnectionPanel() {
   const status = state.speech.providerStatus?.cloud;
   const config = state.cloud.config;
   const auth = state.cloud.auth;
+  const account = state.cloud.account;
   const configured = Boolean(config?.backendUrl);
   const devVisible = config?.developerSettingsVisible === true;
   const authenticated = auth?.authenticated === true;
   const ready = status?.ready === true;
   const host = cloudHostLabel(config?.backendUrl || "");
-  const quota = status?.quota;
+
+  const quota = account?.quota || status?.quota || null;
+  const user = account?.user || null;
   const remaining = Number(quota?.remainingMinutes);
+  const plan = user?.plan || auth?.plan || quota?.plan || null;
 
   let title = t("speech.cloudSetupTitleShort");
   let body = t("speech.cloudSetupBodyShort");
@@ -561,23 +580,29 @@ function cloudConnectionPanel() {
   } else if (configured && authenticated && ready) {
     title = t("speech.cloudReadyTitle");
     body = t("speech.cloudReadyBody");
-    action = devVisible
-      ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>'
-      : "";
-  } else if (configured && authenticated && status && !ready) {
-    title = speechProviderStatusLabel(status);
-    body = t("speech.cloudUnavailableBody");
-    action = devVisible
-      ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>'
-      : "";
+    action =
+      '<button id="cloudLogoutAction" class="button ghost" type="button">' + escapeHtml(t("account.signOut")) + '</button>' +
+      (devVisible ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>' : '');
+  } else if (configured && authenticated) {
+    title = status?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
+      ? t("speech.cloudProviderPending")
+      : speechProviderStatusLabel(status);
+    body = status?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
+      ? t("speech.cloudProviderPendingBody")
+      : t("speech.cloudUnavailableBody");
+    action =
+      '<button id="cloudLogoutAction" class="button ghost" type="button">' + escapeHtml(t("account.signOut")) + '</button>' +
+      (devVisible ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>' : '');
   }
 
-  return '<div class="ai-connection-panel ' + (ready ? "is-ready" : "needs-action") + '">' +
+  return '<div class="ai-connection-panel ' + (ready ? "is-ready" : authenticated ? "is-connected" : "needs-action") + '">' +
     '<div class="ai-connection-icon cloud">☁</div>' +
     '<div class="ai-connection-copy"><div class="ai-connection-title-row"><b>' + escapeHtml(title) + '</b>' +
       speechProviderBadge("cloud") + '</div>' +
       '<p>' + escapeHtml(body) + '</p>' +
       '<div class="ai-connection-meta">' +
+        (user?.email ? '<span>' + escapeHtml(user.email) + '</span>' : '') +
+        (plan ? '<span>' + escapeHtml(t("account.plan", { plan })) + '</span>' : '') +
         (host ? '<span>' + escapeHtml(t("speech.cloudServer", { host })) + '</span>' : '') +
         (Number.isFinite(remaining) ? '<span>' + escapeHtml(t("speech.cloudRemaining", { minutes: Math.max(0, Math.floor(remaining)) })) + '</span>' : '') +
         '<span>' + escapeHtml(t("speech.cloudConsentNote")) + '</span>' +
@@ -838,6 +863,30 @@ function settingsPage() {
       ? t("settings.cloudTestFailed")
       : t("settings.cloudNotTested");
 
+  const accountUser = state.cloud.account?.user || null;
+  const accountQuota = state.cloud.account?.quota || null;
+  const accountAuthenticated = state.cloud.auth?.authenticated === true;
+  const accountRemaining = Number(accountQuota?.remainingMinutes);
+
+  const accountCard =
+    '<div class="card card-pad account-settings-card">' +
+      '<div class="eyebrow">' + t("account.title") + '</div>' +
+      (accountAuthenticated
+        ? '<div class="account-settings-profile"><div class="account-avatar">' +
+            escapeHtml((accountUser?.name || accountUser?.email || "V").slice(0,1).toUpperCase()) +
+          '</div><div><h3>' + escapeHtml(accountUser?.name || t("account.connectedAccount")) + '</h3><p>' +
+            escapeHtml(accountUser?.email || "") + '</p></div></div>' +
+          '<div class="account-facts">' +
+            '<div><span>' + t("account.planLabel") + '</span><b>' + escapeHtml(accountUser?.plan || state.cloud.auth?.plan || "—") + '</b></div>' +
+            '<div><span>' + t("account.cloudAllowance") + '</span><b>' +
+              (Number.isFinite(accountRemaining) ? escapeHtml(t("account.minutes", { minutes: Math.max(0, Math.floor(accountRemaining)) })) : "—") +
+            '</b></div>' +
+          '</div>' +
+          '<button id="settingsLogout" class="button ghost" type="button">' + t("account.signOut") + '</button>'
+        : '<div class="account-empty"><h3>' + t("account.notSignedIn") + '</h3><p>' + t("account.notSignedInDesc") + '</p>' +
+          '<button id="settingsLogin" class="button primary" type="button">' + t("account.signIn") + '</button></div>') +
+    '</div>';
+
   const developerCard = devVisible
     ? '<div id="developerCloudSettings" class="card card-pad developer-cloud-card">' +
         '<div class="eyebrow">' + t("settings.developer") + '</div>' +
@@ -897,6 +946,7 @@ function settingsPage() {
     '"><button id="chooseOutput" class="button ghost" type="button">' + t("common.choose") + '</button></div>' +
     '<div style="margin-top:14px"><label class="label">' + t("common.resolution") + '</label><select class="select"><option>1080p</option><option>4K</option></select></div>' +
     '</div>' +
+    accountCard +
     developerCard +
     '</div>';
 }
@@ -2231,12 +2281,119 @@ async function testDeveloperCloudConnection() {
   if (state.page === "settings") render();
 }
 
-function openCloudAccountNotice() {
-  showNotice({
-    title: t("speech.cloudAuthTitle"),
-    body: t("speech.cloudAccountComing"),
-    buttonLabel: t("common.close")
+function authErrorCopy(code) {
+  const map = {
+    AUTH_INVALID_CREDENTIALS: ["account.invalidTitle", "account.invalidBody"],
+    AUTH_EMAIL_INVALID: ["account.emailInvalidTitle", "account.emailInvalidBody"],
+    AUTH_PASSWORD_INVALID: ["account.passwordInvalidTitle", "account.passwordInvalidBody"],
+    AUTH_RATE_LIMITED: ["account.rateTitle", "account.rateBody"],
+    AUTH_TIMEOUT: ["account.networkTitle", "account.networkBody"],
+    AUTH_NETWORK: ["account.networkTitle", "account.networkBody"],
+    AUTH_SERVICE_UNAVAILABLE: ["account.serviceTitle", "account.serviceBody"],
+    SECURE_STORAGE_UNAVAILABLE: ["account.storageTitle", "account.storageBody"],
+    CLOUD_NOT_CONFIGURED: ["account.cloudMissingTitle", "account.cloudMissingBody"]
+  };
+  return map[code] || ["account.failedTitle", "account.failedBody"];
+}
+
+function openLoginModal() {
+  if (!state.cloud.config?.backendUrl) {
+    showNotice({
+      title: t("account.cloudMissingTitle"),
+      body: t("account.cloudMissingBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  const root = $("modal");
+  root.classList.remove("hidden");
+  root.innerHTML =
+    '<div class="modal commercial-modal auth-modal">' +
+      '<div class="modal-icon info">◎</div>' +
+      '<h3>' + escapeHtml(t("account.signInTitle")) + '</h3>' +
+      '<p>' + escapeHtml(t("account.signInBody")) + '</p>' +
+      '<form id="loginForm" class="auth-form">' +
+        '<label class="label" for="loginEmail">' + t("account.email") + '</label>' +
+        '<input id="loginEmail" class="input" type="email" autocomplete="username" spellcheck="false" required>' +
+        '<label class="label" for="loginPassword">' + t("account.password") + '</label>' +
+        '<input id="loginPassword" class="input" type="password" autocomplete="current-password" minlength="6" required>' +
+        '<div id="loginInlineError" class="auth-inline-error hidden" role="alert"></div>' +
+        '<div class="modal-actions">' +
+          '<button id="loginCancel" class="button ghost" type="button">' + t("common.cancel") + '</button>' +
+          '<button id="loginSubmit" class="button primary" type="submit">' + t("account.signIn") + '</button>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
+
+  $("loginCancel").onclick = () => root.classList.add("hidden");
+  $("loginForm").onsubmit = async event => {
+    event.preventDefault();
+    const email = $("loginEmail").value.trim();
+    const password = $("loginPassword").value;
+    const submit = $("loginSubmit");
+    const inline = $("loginInlineError");
+
+    submit.disabled = true;
+    submit.textContent = t("account.signingIn");
+    inline.classList.add("hidden");
+    inline.textContent = "";
+
+    const response = await window.desktopAPI?.login?.({ email, password });
+
+    // Password must not remain in renderer memory/UI after the request finishes.
+    $("loginPassword").value = "";
+
+    if (!response?.ok) {
+      const [titleKey, bodyKey] = authErrorCopy(response?.error?.code);
+      inline.textContent = t(bodyKey);
+      inline.classList.remove("hidden");
+      submit.disabled = false;
+      submit.textContent = t("account.signIn");
+
+      if (response?.error?.code === "CLOUD_NOT_CONFIGURED") {
+        root.classList.add("hidden");
+        await showNotice({
+          title: t(titleKey),
+          body: t(bodyKey),
+          buttonLabel: t("common.close")
+        });
+      }
+      return;
+    }
+
+    root.classList.add("hidden");
+    state.cloud.auth = response.data?.status || null;
+    state.cloud.account = response.data?.account || null;
+    state.cloud.statusCheckedAt = Date.now();
+    state.speech.providerStatus = null;
+    state.speech.statusCheckedAt = 0;
+    await refreshSpeechProviderStatus({ rerender: false });
+    toast(t("account.signedIn"));
+    render();
+  };
+
+  setTimeout(() => $("loginEmail")?.focus(), 20);
+}
+
+async function logoutAccount() {
+  const confirmed = await confirmAction({
+    title: t("account.signOutTitle"),
+    body: t("account.signOutBody"),
+    confirmLabel: t("account.signOut"),
+    cancelLabel: t("common.cancel")
   });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI?.logout?.();
+  state.cloud.auth = null;
+  state.cloud.account = null;
+  state.cloud.test = null;
+  state.cloud.statusCheckedAt = 0;
+  state.speech.providerStatus = null;
+  state.speech.statusCheckedAt = 0;
+  toast(response?.remotePending ? t("account.signedOutPending") : t("account.signedOut"));
+  render();
 }
 
 function bind() {
@@ -2327,7 +2484,16 @@ function bind() {
   if (openCloudSettings) openCloudSettings.onclick = openCloudDeveloperSettings;
 
   const cloudAccountAction = $("cloudAccountAction");
-  if (cloudAccountAction) cloudAccountAction.onclick = openCloudAccountNotice;
+  if (cloudAccountAction) cloudAccountAction.onclick = openLoginModal;
+
+  const cloudLogoutAction = $("cloudLogoutAction");
+  if (cloudLogoutAction) cloudLogoutAction.onclick = logoutAccount;
+
+  const settingsLogin = $("settingsLogin");
+  if (settingsLogin) settingsLogin.onclick = openLoginModal;
+
+  const settingsLogout = $("settingsLogout");
+  if (settingsLogout) settingsLogout.onclick = logoutAccount;
 
   const speechStart = $("speechStart");
   if (speechStart) speechStart.onclick = startSpeechRecognition;
