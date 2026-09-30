@@ -83,3 +83,18 @@ A UI change is done when:
 - no essential control relies on hover only;
 - no user-facing string is hard-coded outside the locale layer;
 - app still starts with `npm start`.
+
+
+## Selection controls
+
+Do not replace multi-choice settings with hidden binary toggles.
+
+When a control has more than two meaningful options:
+- show the current value;
+- show a downward chevron;
+- open an explicit option list;
+- preserve keyboard focus and selected state.
+
+This applies to language, appearance, motion, interface size, model, voice, target language, export format, and other configuration controls.
+
+The default visual direction is **Aurora Light**: bright glass surfaces with colorful creator-tool accents. Large visual-direction changes require explicit user approval before implementation.
