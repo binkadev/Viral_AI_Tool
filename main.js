@@ -1,5 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const {
+  probeVideo,
+  createThumbnail,
+  renderVideo,
+  cancelRender
+} = require('./services/ffmpeg');
 
 let mainWindow;
 
@@ -77,4 +84,37 @@ ipcMain.handle('folder:show', async (_event, targetPath) => {
   if (!targetPath) return false;
   const error = await shell.openPath(targetPath);
   return !error;
+});
+
+
+ipcMain.handle('video:probe', async (_event, inputPath) => {
+  return probeVideo(inputPath);
+});
+
+ipcMain.handle('video:thumbnail', async (_event, inputPath) => {
+  return createThumbnail(inputPath, app.getPath('temp'));
+});
+
+ipcMain.handle('video:render', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  return renderVideo({
+    jobId: safePayload.jobId,
+    inputPath: safePayload.inputPath,
+    outputDir: safePayload.outputDir,
+    onProgress: progress => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('video:render-progress', progress);
+      }
+    }
+  });
+});
+
+ipcMain.handle('video:cancel-render', async (_event, jobId) => {
+  return cancelRender(jobId);
+});
+
+ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath.trim() || !fs.existsSync(filePath)) return false;
+  shell.showItemInFolder(path.resolve(filePath));
+  return true;
 });
