@@ -12,6 +12,9 @@ const state = {
     mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
     language: saved.speech?.language || "auto",
     providerStatus: null,
+    modelCatalog: null,
+    modelStatus: null,
+    modelDownload: null,
     job: saved.speech?.job || null,
     result: saved.speech?.result || null
   },
@@ -432,6 +435,7 @@ function speechProviderStatusLabel(status) {
     LOCAL_MODEL_REQUIRED: "speech.localModelRequired",
     LOCAL_MODEL_INCOMPLETE: "speech.localModelIncomplete",
     LOCAL_MODEL_INVALID: "speech.localModelInvalid",
+    LOCAL_RUNTIME_REQUIRED: "speech.runtimeRequired",
     CLOUD_NOT_CONFIGURED: "speech.cloudNotConfigured",
     CLOUD_CONFIG_INVALID: "speech.cloudConfigInvalid",
     CLOUD_HTTPS_REQUIRED: "speech.cloudHttpsRequired",
@@ -444,6 +448,13 @@ function speechProviderBadge(mode) {
   const status = state.speech.providerStatus?.[mode];
   const ready = status?.ready === true;
   const checking = !status;
+
+  if (mode === "local" && state.speech.modelDownload) {
+    return '<span class="speech-provider-badge checking"><i></i>' +
+      escapeHtml(t("speech.modelDownloading")) + ' ' +
+      Math.round(Number(state.speech.modelDownload.percent || 0)) + '%</span>';
+  }
+
   return '<span class="speech-provider-badge ' + (ready ? "ready" : checking ? "checking" : "warning") + '">' +
     '<i></i>' + escapeHtml(speechProviderStatusLabel(status)) + '</span>';
 }
@@ -1171,6 +1182,271 @@ async function refreshSpeechProviderStatus({ rerender = true } = {}) {
   }
 }
 
+async function loadSpeechModelInfo() {
+  if (!window.desktopAPI?.getSpeechModelCatalog || !window.desktopAPI?.getSpeechModelStatus) return null;
+
+  try {
+    if (!state.speech.modelCatalog) {
+      state.speech.modelCatalog = await window.desktopAPI.getSpeechModelCatalog();
+    }
+
+    const model = Array.isArray(state.speech.modelCatalog)
+      ? state.speech.modelCatalog[0]
+      : null;
+    if (!model) return null;
+
+    const response = await window.desktopAPI.getSpeechModelStatus(model.id);
+    if (response?.ok) state.speech.modelStatus = response.data;
+    return {
+      model,
+      status: response?.ok ? response.data : null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function localModelSetupHtml(model, status) {
+  const active = state.speech.modelDownload;
+  const downloading = Boolean(active);
+  const partial = status?.state === "partial";
+  const installed = status?.state === "installed";
+  const size = formatBytes(model?.downloadSizeBytes || status?.totalBytes || 0);
+  const installedSize = formatBytes(model?.installedSizeBytes || model?.downloadSizeBytes || 0);
+  const downloaded = formatBytes(active?.downloadedBytes ?? status?.downloadedBytes ?? 0);
+  const total = formatBytes(active?.totalBytes ?? status?.totalBytes ?? model?.downloadSizeBytes ?? 0);
+  const percent = Math.max(0, Math.min(100, Math.round(Number(active?.percent ?? status?.percent ?? 0))));
+
+  return '<div class="modal commercial-modal model-setup-modal">' +
+    '<div class="modal-icon info">✦</div>' +
+    '<h3>' + escapeHtml(t("speech.modelTitle")) + '</h3>' +
+    '<p>' + escapeHtml(t("speech.modelBody")) + '</p>' +
+    '<div class="model-summary">' +
+      '<div><span>' + t("speech.modelStandard") + '</span><b>' + escapeHtml(t("speech.modelDownloadSize", { size })) + '</b></div>' +
+      '<div><span>' + t("speech.local") + '</span><b>' + escapeHtml(t("speech.modelInstalledSize", { size: installedSize })) + '</b></div>' +
+    '</div>' +
+    ((downloading || partial)
+      ? '<div class="model-download-state">' +
+          '<div class="model-download-head"><span id="modelProgressLabel">' +
+            escapeHtml(downloading && active?.state === "verifying"
+              ? t("speech.modelVerifying")
+              : t("speech.modelDownloaded", { downloaded, total })) +
+          '</span><strong id="modelProgressPercent">' + percent + '%</strong></div>' +
+          '<div class="speech-progress model-progress"><i id="modelProgressBar" style="width:' + percent + '%"></i></div>' +
+        '</div>'
+      : '') +
+    (installed
+      ? '<div class="speech-alert success"><b>' + t("speech.modelReady") + '</b></div>'
+      : '') +
+    '<div class="modal-actions">' +
+      '<button id="modelClose" class="button ghost" type="button">' + t("speech.modelLater") + '</button>' +
+      (downloading
+        ? '<button id="modelCancelDownload" class="button danger" type="button">' + t("speech.modelCancel") + '</button>'
+        : installed
+          ? '<button id="modelDone" class="button primary" type="button">' + t("common.close") + '</button>'
+          : '<button id="modelInstall" class="button primary" type="button">' +
+              t(partial ? "speech.modelResume" : "speech.modelDownload") + '</button>') +
+    '</div>' +
+  '</div>';
+}
+
+async function openLocalModelSetup() {
+  const info = await loadSpeechModelInfo();
+  if (!info?.model) {
+    await showNotice({
+      title: t("speech.modelFailedTitle"),
+      body: t("speech.modelFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  const root = $("modal");
+  root.classList.remove("hidden");
+  root.innerHTML = localModelSetupHtml(info.model, info.status);
+
+  const close = $("modelClose");
+  if (close) close.onclick = () => root.classList.add("hidden");
+
+  const done = $("modelDone");
+  if (done) done.onclick = () => root.classList.add("hidden");
+
+  const install = $("modelInstall");
+  if (install) {
+    install.onclick = async () => {
+      root.classList.add("hidden");
+      await startLocalModelInstall(info.model);
+    };
+  }
+
+  const cancel = $("modelCancelDownload");
+  if (cancel) cancel.onclick = cancelLocalModelInstall;
+}
+
+async function handleModelInstallError(response) {
+  const code = response?.error?.code || "MODEL_DOWNLOAD_FAILED";
+  const details = response?.error?.details || {};
+
+  if (code === "MODEL_LOW_DISK_SPACE") {
+    await showNotice({
+      title: t("speech.modelLowSpaceTitle"),
+      body: t("speech.modelLowSpaceBody", {
+        free: formatBytes(details.freeBytes || 0),
+        needed: formatBytes(details.requiredFreeBytes || 0)
+      }),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "MODEL_CHECKSUM_FAILED" || code === "MODEL_DOWNLOAD_SIZE") {
+    await showNotice({
+      title: t("speech.modelIntegrityTitle"),
+      body: t("speech.modelIntegrityBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["MODEL_DOWNLOAD_NETWORK", "MODEL_DOWNLOAD_HTTP", "MODEL_DOWNLOAD_REDIRECT"].includes(code)) {
+    await showNotice({
+      title: t("speech.modelNetworkTitle"),
+      body: t("speech.modelNetworkBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("speech.modelFailedTitle"),
+    body: t("speech.modelFailedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function startLocalModelInstall(model) {
+  if (!model || !window.desktopAPI?.installSpeechModel) return;
+  if (state.speech.modelDownload) {
+    await openLocalModelSetup();
+    return;
+  }
+
+  const job = {
+    id: makeJobId("model"),
+    modelId: model.id,
+    state: "downloading",
+    downloadedBytes: Number(state.speech.modelStatus?.downloadedBytes || 0),
+    totalBytes: Number(model.downloadSizeBytes || 0),
+    percent: Number(state.speech.modelStatus?.percent || 0)
+  };
+  state.speech.modelDownload = job;
+  render();
+  await openLocalModelSetup();
+
+  const response = await window.desktopAPI.installSpeechModel({
+    jobId: job.id,
+    modelId: job.modelId
+  });
+
+  const wasCurrent = state.speech.modelDownload?.id === job.id;
+  if (wasCurrent) state.speech.modelDownload = null;
+
+  if (!response?.ok) {
+    await loadSpeechModelInfo();
+    await refreshSpeechProviderStatus({ rerender: false });
+    if (state.page === "ai-video") render();
+    await handleModelInstallError(response);
+    return;
+  }
+
+  if (response.data?.cancelled) {
+    await loadSpeechModelInfo();
+    await refreshSpeechProviderStatus({ rerender: false });
+    if (state.page === "ai-video") render();
+    toast(t("speech.modelCancelled"));
+    return;
+  }
+
+  await loadSpeechModelInfo();
+  await refreshSpeechProviderStatus({ rerender: false });
+  if (state.page === "ai-video") render();
+
+  const local = state.speech.providerStatus?.local;
+  if (local?.code === "LOCAL_RUNTIME_REQUIRED") {
+    await showNotice({
+      title: t("speech.runtimeTitle"),
+      body: t("speech.runtimeBody"),
+      buttonLabel: t("common.close")
+    });
+  } else {
+    toast(t("speech.modelReady"));
+  }
+}
+
+async function cancelLocalModelInstall() {
+  const job = state.speech.modelDownload;
+  if (!job || !window.desktopAPI?.cancelSpeechModelInstall) return;
+
+  const confirmed = await confirmAction({
+    title: t("speech.modelCancelTitle"),
+    body: t("speech.modelCancelBody"),
+    confirmLabel: t("speech.modelCancel"),
+    cancelLabel: t("speech.keepGoing"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI.cancelSpeechModelInstall(job.id);
+  if (response?.cancelled) {
+    const root = $("modal");
+    root.classList.add("hidden");
+  }
+}
+
+function updateSpeechModelProgress(payload) {
+  if (!payload?.jobId) return;
+
+  if (!state.speech.modelDownload || state.speech.modelDownload.id !== payload.jobId) {
+    state.speech.modelDownload = {
+      id: payload.jobId,
+      modelId: payload.modelId,
+      state: payload.state,
+      downloadedBytes: Number(payload.downloadedBytes || 0),
+      totalBytes: Number(payload.totalBytes || 0),
+      percent: Number(payload.percent || 0)
+    };
+  } else {
+    Object.assign(state.speech.modelDownload, {
+      state: payload.state,
+      downloadedBytes: Number(payload.downloadedBytes || 0),
+      totalBytes: Number(payload.totalBytes || 0),
+      percent: Number(payload.percent || 0)
+    });
+  }
+
+  const label = $("modelProgressLabel");
+  const percent = $("modelProgressPercent");
+  const bar = $("modelProgressBar");
+  if (label) {
+    label.textContent = payload.state === "verifying"
+      ? t("speech.modelVerifying")
+      : t("speech.modelDownloaded", {
+          downloaded: formatBytes(payload.downloadedBytes || 0),
+          total: formatBytes(payload.totalBytes || 0)
+        });
+  }
+  if (percent) percent.textContent = Math.round(Number(payload.percent || 0)) + "%";
+  if (bar) bar.style.width = Math.round(Number(payload.percent || 0)) + "%";
+
+  if (state.page === "ai-video") {
+    const badge = document.querySelector(".speech-provider-badge.checking");
+    if (badge && state.speech.mode === "local") {
+      badge.innerHTML = '<i></i>' + escapeHtml(t("speech.modelDownloading")) + ' ' +
+        Math.round(Number(payload.percent || 0)) + '%';
+    }
+  }
+}
+
 async function handleSpeechBlock(response, source) {
   const code = response?.error?.code || "SPEECH_FAILED";
 
@@ -1199,9 +1475,14 @@ async function handleSpeechBlock(response, source) {
   }
 
   if (["LOCAL_MODEL_REQUIRED", "LOCAL_MODEL_INCOMPLETE", "LOCAL_MODEL_INVALID", "LOCAL_ENGINE_NOT_CONFIGURED"].includes(code)) {
+    await openLocalModelSetup();
+    return;
+  }
+
+  if (["LOCAL_RUNTIME_REQUIRED", "LOCAL_ADAPTER_NOT_CONFIGURED"].includes(code)) {
     await showNotice({
-      title: t("speech.modelTitle"),
-      body: t("speech.modelBody"),
+      title: t("speech.runtimeTitle"),
+      body: t("speech.runtimeBody"),
       buttonLabel: t("common.close")
     });
     return;
@@ -1862,6 +2143,9 @@ if (window.desktopAPI) {
   }
   if (window.desktopAPI.onSpeechProgress) {
     window.desktopAPI.onSpeechProgress(updateSpeechProgress);
+  }
+  if (window.desktopAPI.onSpeechModelProgress) {
+    window.desktopAPI.onSpeechModelProgress(updateSpeechModelProgress);
   }
 }
 
