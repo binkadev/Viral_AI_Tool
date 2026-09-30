@@ -8,6 +8,13 @@ const state = {
   scale: saved.scale || "comfortable",
   page: saved.page || "dashboard",
   output: saved.output || "",
+  cloud: {
+    config: null,
+    auth: null,
+    test: null,
+    loading: false,
+    statusCheckedAt: 0
+  },
   speech: {
     mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
     language: saved.speech?.language || "auto",
@@ -465,6 +472,122 @@ function speechProviderBadge(mode) {
     '<i></i>' + escapeHtml(speechProviderStatusLabel(status)) + '</span>';
 }
 
+function cloudHostLabel(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    return parsed.host;
+  } catch {
+    return url;
+  }
+}
+
+async function refreshCloudUiState({ rerender = false } = {}) {
+  if (!window.desktopAPI || state.cloud.loading) return state.cloud;
+  state.cloud.loading = true;
+
+  try {
+    const [config, auth] = await Promise.all([
+      window.desktopAPI.getCloudConfig?.(),
+      window.desktopAPI.getAuthStatus?.()
+    ]);
+    state.cloud.config = config || null;
+    state.cloud.auth = auth || null;
+    state.cloud.statusCheckedAt = Date.now();
+  } catch {
+    state.cloud.config = null;
+    state.cloud.auth = null;
+  } finally {
+    state.cloud.loading = false;
+  }
+
+  if (rerender && ["ai-video", "settings"].includes(state.page)) render();
+  return state.cloud;
+}
+
+function localConnectionPanel() {
+  const status = state.speech.providerStatus?.local;
+  const model = Array.isArray(state.speech.modelCatalog) ? state.speech.modelCatalog[0] : null;
+  const modelStatus = state.speech.modelStatus;
+  const installed = modelStatus?.state === "installed";
+  const downloading = Boolean(state.speech.modelDownload);
+  const ready = status?.ready === true;
+  const size = formatBytes(model?.installedSizeBytes || model?.downloadSizeBytes || modelStatus?.totalBytes || 0);
+
+  return '<div class="ai-connection-panel ' + (ready ? "is-ready" : "needs-action") + '">' +
+    '<div class="ai-connection-icon local">◈</div>' +
+    '<div class="ai-connection-copy"><div class="ai-connection-title-row"><b>' +
+      escapeHtml(ready ? t("speech.localReadyTitle") : downloading ? t("speech.localDownloadingTitle") : t("speech.localSetupTitle")) +
+      '</b>' + speechProviderBadge("local") + '</div>' +
+      '<p>' + escapeHtml(ready ? t("speech.localReadyBody") : downloading ? t("speech.localDownloadingBody") : t("speech.localSetupBody")) + '</p>' +
+      '<div class="ai-connection-meta">' +
+        (size ? '<span>' + escapeHtml(t("speech.localSize", { size })) + '</span>' : '') +
+        '<span>' + escapeHtml(t("speech.localPrivacy")) + '</span>' +
+      '</div></div>' +
+    '<div class="ai-connection-actions">' +
+      '<button id="manageLocalAiPanel" class="button ' + (ready ? "ghost" : "primary") + '" type="button">' +
+        escapeHtml(ready ? t("speech.manageLocal") : downloading ? t("speech.viewDownload") : t("speech.prepareLocal")) +
+      '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function cloudConnectionPanel() {
+  const status = state.speech.providerStatus?.cloud;
+  const config = state.cloud.config;
+  const auth = state.cloud.auth;
+  const configured = Boolean(config?.backendUrl);
+  const devVisible = config?.developerSettingsVisible === true;
+  const authenticated = auth?.authenticated === true;
+  const ready = status?.ready === true;
+  const host = cloudHostLabel(config?.backendUrl || "");
+  const quota = status?.quota;
+  const remaining = Number(quota?.remainingMinutes);
+
+  let title = t("speech.cloudSetupTitleShort");
+  let body = t("speech.cloudSetupBodyShort");
+  let action = devVisible
+    ? '<button id="openCloudSettings" class="button primary" type="button">' + escapeHtml(t("speech.configureCloud")) + '</button>'
+    : "";
+
+  if (configured && !authenticated) {
+    title = t("speech.cloudLoginTitle");
+    body = t("speech.cloudLoginBody");
+    action =
+      '<button id="cloudAccountAction" class="button primary" type="button">' + escapeHtml(t("speech.signIn")) + '</button>' +
+      (devVisible ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>' : '');
+  } else if (configured && authenticated && ready) {
+    title = t("speech.cloudReadyTitle");
+    body = t("speech.cloudReadyBody");
+    action = devVisible
+      ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>'
+      : "";
+  } else if (configured && authenticated && status && !ready) {
+    title = speechProviderStatusLabel(status);
+    body = t("speech.cloudUnavailableBody");
+    action = devVisible
+      ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>'
+      : "";
+  }
+
+  return '<div class="ai-connection-panel ' + (ready ? "is-ready" : "needs-action") + '">' +
+    '<div class="ai-connection-icon cloud">☁</div>' +
+    '<div class="ai-connection-copy"><div class="ai-connection-title-row"><b>' + escapeHtml(title) + '</b>' +
+      speechProviderBadge("cloud") + '</div>' +
+      '<p>' + escapeHtml(body) + '</p>' +
+      '<div class="ai-connection-meta">' +
+        (host ? '<span>' + escapeHtml(t("speech.cloudServer", { host })) + '</span>' : '') +
+        (Number.isFinite(remaining) ? '<span>' + escapeHtml(t("speech.cloudRemaining", { minutes: Math.max(0, Math.floor(remaining)) })) + '</span>' : '') +
+        '<span>' + escapeHtml(t("speech.cloudConsentNote")) + '</span>' +
+      '</div></div>' +
+    '<div class="ai-connection-actions">' + action + '</div>' +
+  '</div>';
+}
+
+function speechConnectionPanel() {
+  return state.speech.mode === "local" ? localConnectionPanel() : cloudConnectionPanel();
+}
+
 function speechJobForSource(source) {
   return source && state.speech.job?.sourcePath === source.sourcePath ? state.speech.job : null;
 }
@@ -584,6 +707,7 @@ function aiVideoPage() {
           '<div class="speech-choice-help"><span>' + (localSelected ? t("speech.noCloudCost") : t("speech.estimate", { minutes: cloudMinutes })) + '</span></div>' +
         '</div>' +
       '</div>' +
+      speechConnectionPanel() +
       speechProgress +
       speechTranscriptView(speechResult) +
     '</div>' +
@@ -702,6 +826,42 @@ function settingsPage() {
   const option = (value, label, selected) =>
     '<option value="' + value + '"' + (selected === value ? ' selected' : '') + '>' + label + '</option>';
 
+  const cloudConfig = state.cloud.config || {};
+  const devVisible = cloudConfig.developerSettingsVisible === true;
+  const test = state.cloud.test;
+  const testClass = test?.ok ? "success" : test ? "warning" : "neutral";
+  const testLabel = test?.ok
+    ? (test.authenticated === false ? t("settings.cloudReachableLogin") : t("settings.cloudConnected"))
+    : test
+      ? t("settings.cloudTestFailed")
+      : t("settings.cloudNotTested");
+
+  const developerCard = devVisible
+    ? '<div id="developerCloudSettings" class="card card-pad developer-cloud-card">' +
+        '<div class="eyebrow">' + t("settings.developer") + '</div>' +
+        '<div class="developer-card-head"><div><h3>' + t("settings.cloudBackend") + '</h3><p>' + t("settings.cloudBackendDesc") + '</p></div>' +
+          '<span class="dev-badge">' + t("settings.developmentOnly") + '</span></div>' +
+        '<div class="developer-cloud-grid">' +
+          '<div class="speech-field"><label class="label" for="cloudEnvironment">' + t("settings.environment") + '</label>' +
+            '<select id="cloudEnvironment" class="select"' + (cloudConfig.source === "environment" ? " disabled" : "") + '>' +
+              option("development", t("settings.environmentDevelopment"), cloudConfig.environment || "development") +
+              option("production", t("settings.environmentProduction"), cloudConfig.environment || "development") +
+            '</select></div>' +
+          '<div class="speech-field cloud-url-field"><label class="label" for="cloudBackendUrl">' + t("settings.backendUrl") + '</label>' +
+            '<input id="cloudBackendUrl" class="input" type="url" spellcheck="false" autocomplete="off" placeholder="http://localhost:3000" value="' +
+              escapeHtml(cloudConfig.backendUrl || "") + '"' + (cloudConfig.source === "environment" ? " readonly" : "") + '>' +
+            '<small>' + escapeHtml(cloudConfig.source === "environment" ? t("settings.cloudEnvLocked") : t("settings.backendUrlHelp")) + '</small></div>' +
+        '</div>' +
+        '<div class="cloud-test-strip ' + testClass + '"><span class="cloud-test-dot"></span><div><b>' + escapeHtml(testLabel) + '</b><span>' +
+          escapeHtml(test?.status ? t("settings.cloudHttpStatus", { status: test.status }) : t("settings.cloudTestHint")) + '</span></div></div>' +
+        '<div class="developer-actions">' +
+          '<button id="testCloudConnection" class="button ghost" type="button">' + t("settings.testConnection") + '</button>' +
+          (cloudConfig.source === "environment" ? "" :
+            '<button id="saveCloudConfig" class="button primary" type="button">' + t("settings.saveCloudConfig") + '</button>') +
+        '</div>' +
+      '</div>'
+    : "";
+
   return '<div class="grid-2">' +
     '<div class="card card-pad preference-card"><div class="eyebrow">' + t("settings.general") + '</div>' +
     '<div class="settings-select-row"><div class="setting-copy"><b>' + t("settings.interfaceLanguage") + '</b><span>' + t("settings.languageDesc") + '</span></div>' +
@@ -731,10 +891,12 @@ function settingsPage() {
       '</span></div><div class="switch ' + (x[2] ? "on" : "") + '"></div></div>').join("") +
     '</div>' +
     '<div class="card card-pad"><div class="eyebrow">' + t("settings.output") + '</div><label class="label">' + t("common.outputFolder") +
-    '</label><div class="row"><input id="outputPath" class="input" readonly value="' + (state.output || t("settings.notSelected")) +
+    '</label><div class="row"><input id="outputPath" class="input" readonly value="' + escapeHtml(state.output || t("settings.notSelected")) +
     '"><button id="chooseOutput" class="button ghost" type="button">' + t("common.choose") + '</button></div>' +
     '<div style="margin-top:14px"><label class="label">' + t("common.resolution") + '</label><select class="select"><option>1080p</option><option>4K</option></select></div>' +
-    '</div></div>';
+    '</div>' +
+    developerCard +
+    '</div>';
 }
 
 const pages = {
@@ -2003,6 +2165,72 @@ function toggleLocale() {
   setLocale(state.locale === "vi" ? "en" : "vi");
 }
 
+function openCloudDeveloperSettings() {
+  state.page = "settings";
+  render();
+  setTimeout(() => {
+    document.getElementById("developerCloudSettings")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 40);
+}
+
+async function saveDeveloperCloudConfig() {
+  const environment = $("cloudEnvironment")?.value || "development";
+  const backendUrl = $("cloudBackendUrl")?.value?.trim() || "";
+  if (!window.desktopAPI?.saveCloudConfig) return;
+
+  const response = await window.desktopAPI.saveCloudConfig({ environment, backendUrl });
+  if (!response?.ok) {
+    const code = response?.code || "CLOUD_CONFIG_INVALID";
+    await showNotice({
+      title: t("settings.cloudSaveFailedTitle"),
+      body: code === "CLOUD_HTTPS_REQUIRED"
+        ? t("settings.cloudHttpsBody")
+        : code === "CLOUD_CONFIG_ENV_LOCKED"
+          ? t("settings.cloudEnvLocked")
+          : t("settings.cloudSaveFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  state.cloud.config = response.data;
+  state.cloud.test = null;
+  state.speech.providerStatus = null;
+  toast(t("settings.cloudSaved"));
+  render();
+}
+
+async function testDeveloperCloudConnection() {
+  if (!window.desktopAPI?.testCloudConnection) return;
+  const button = $("testCloudConnection");
+  if (button) {
+    button.disabled = true;
+    button.textContent = t("settings.testingConnection");
+  }
+
+  const backendUrl = $("cloudBackendUrl")?.value?.trim() || state.cloud.config?.backendUrl || "";
+  const response = await window.desktopAPI.testCloudConnection(backendUrl);
+  state.cloud.test = response || { ok: false, code: "CLOUD_NETWORK" };
+
+  if (response?.ok) {
+    toast(response.authenticated === false
+      ? t("settings.cloudReachableLogin")
+      : t("settings.cloudConnected"));
+  } else {
+    toast(t("settings.cloudTestFailed"));
+  }
+
+  if (state.page === "settings") render();
+}
+
+function openCloudAccountNotice() {
+  showNotice({
+    title: t("speech.cloudAuthTitle"),
+    body: t("speech.cloudAccountComing"),
+    buttonLabel: t("common.close")
+  });
+}
+
 function bind() {
   document.querySelectorAll("[data-page]").forEach((node) => {
     node.onclick = () => {
@@ -2084,6 +2312,15 @@ function bind() {
   const manageLocalAi = $("manageLocalAi");
   if (manageLocalAi) manageLocalAi.onclick = openLocalModelSetup;
 
+  const manageLocalAiPanel = $("manageLocalAiPanel");
+  if (manageLocalAiPanel) manageLocalAiPanel.onclick = openLocalModelSetup;
+
+  const openCloudSettings = $("openCloudSettings");
+  if (openCloudSettings) openCloudSettings.onclick = openCloudDeveloperSettings;
+
+  const cloudAccountAction = $("cloudAccountAction");
+  if (cloudAccountAction) cloudAccountAction.onclick = openCloudAccountNotice;
+
   const speechStart = $("speechStart");
   if (speechStart) speechStart.onclick = startSpeechRecognition;
 
@@ -2145,6 +2382,12 @@ function bind() {
     state.scale = event.target.value;
     render();
   };
+
+  const saveCloudConfig = $("saveCloudConfig");
+  if (saveCloudConfig) saveCloudConfig.onclick = saveDeveloperCloudConfig;
+
+  const testCloudConnection = $("testCloudConnection");
+  if (testCloudConnection) testCloudConnection.onclick = testDeveloperCloudConnection;
 }
 
 function render() {
@@ -2156,6 +2399,22 @@ function render() {
   $("page").innerHTML = (pages[state.page] || pages.dashboard)();
   bind();
   save();
+
+  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
+    const cloudStale = !state.cloud.config ||
+      !state.cloud.statusCheckedAt ||
+      Date.now() - state.cloud.statusCheckedAt > 30000;
+    if (cloudStale && !state.cloud.loading) {
+      setTimeout(() => refreshCloudUiState({ rerender: true }), 0);
+    }
+  }
+
+  if (state.page === "ai-video" && !state.speech.modelCatalog && window.desktopAPI?.getSpeechModelCatalog) {
+    setTimeout(async () => {
+      await loadSpeechModelInfo();
+      if (state.page === "ai-video") render();
+    }, 0);
+  }
 
   if (state.page === "ai-video" && window.desktopAPI?.getSpeechProviderStatus) {
     const stale = !state.speech.providerStatus ||
