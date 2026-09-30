@@ -125,7 +125,8 @@ function createService({ backendUrl, getAccessToken, appVersion }) {
       const state = {
         jobId,
         controller,
-        serverJobId: null
+        serverJobId: null,
+        client
       };
       active.set(jobId, state);
 
@@ -228,8 +229,17 @@ async function cancelAllTranslations() {
   const entries = [...active.entries()];
   let cancelled = 0;
 
-  for (const [jobId, state] of entries) {
+  for (const [, state] of entries) {
     state.controller.abort();
+
+    if (state.serverJobId && state.client) {
+      try {
+        await state.client.cancelJob(state.serverJobId);
+      } catch {
+        // Shutdown must continue even if the remote service cannot be reached.
+      }
+    }
+
     cancelled++;
   }
 
