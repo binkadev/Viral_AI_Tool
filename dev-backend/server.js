@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
-const speechProvider = require("./providers/openai-transcription");
+const speechProvider = require("./providers");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
@@ -632,7 +632,6 @@ async function handle(req, res) {
   if (method === "POST" && url.pathname === "/v1/speech/jobs") {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
-    if (!speechProvider.isConfigured()) return error(res, 503, "SERVICE_UNAVAILABLE");
 
     const key = idempotencyKey(req);
     if (!key) return error(res, 400, "BAD_REQUEST");
@@ -661,6 +660,8 @@ async function handle(req, res) {
         return json(res, 200, publicJob(existing, { createResponse: true }));
       }
     }
+
+    if (!speechProvider.isConfigured()) return error(res, 503, "SERVICE_UNAVAILABLE");
 
     const estimatedMinutes = Math.max(1, Math.ceil(input.audio.durationSeconds / 60));
     const available = Math.max(0, user.quota.remainingMinutes - reservedMinutesForUser(user.id));
