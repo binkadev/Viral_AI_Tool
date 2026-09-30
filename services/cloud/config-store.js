@@ -59,6 +59,7 @@ function createCloudConfigStore({ userDataPath, isPackaged }) {
 
   function write({ environment, backendUrl }) {
     const current = read();
+    const safeEnvironment = normalizeEnvironment(environment);
 
     if (current.source === "environment") {
       return {
@@ -71,9 +72,16 @@ function createCloudConfigStore({ userDataPath, isPackaged }) {
     const validated = validateBackendUrl(backendUrl);
     if (!validated.ok) return validated;
 
+    if (validated.backendUrl && safeEnvironment === "production") {
+      const parsed = new URL(validated.backendUrl);
+      if (parsed.protocol !== "https:") {
+        return { ok: false, code: "CLOUD_HTTPS_REQUIRED" };
+      }
+    }
+
     const next = {
       version: 1,
-      environment: normalizeEnvironment(environment),
+      environment: safeEnvironment,
       backendUrl: validated.backendUrl,
       updatedAt: new Date().toISOString()
     };
