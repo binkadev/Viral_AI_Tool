@@ -40,6 +40,7 @@ cd C:\Users\haiho\Desktop\Viral_AI_Tool
 $env:OPENAI_API_KEY="YOUR_PRIVATE_API_KEY"
 $env:VIRAL_AI_SPEECH_PROVIDER="openai"
 $env:VIRAL_AI_OPENAI_TRANSCRIBE_MODEL="whisper-1"
+$env:VIRAL_AI_OPENAI_TRANSLATION_MODEL="gpt-5-mini"
 
 npm run dev:backend
 ```
@@ -59,6 +60,8 @@ The backend console should show:
 ```text
 Cloud speech: READY
 Speech model: whisper-1
+Cloud translation: READY
+Translation model: gpt-5-mini
 ```
 
 Never send or paste a real provider API key into chat, screenshots, source files, issue descriptions, or commits.
@@ -103,6 +106,43 @@ Video
   -> desktop subtitle transcript
 ```
 
+## Test Cloud translation
+
+After Speech recognition returns a transcript:
+
+1. Stay in **Video AI**.
+2. Go to step **Dịch / Translate**.
+3. Choose **Cloud**.
+4. Choose a target language.
+5. Keep or disable **Giữ cách nói tự nhiên / Preserve tone**.
+6. Start translation.
+7. Confirm that transcript text may be sent to Cloud.
+
+The desktop sends transcript segments only in this step. It does not resend the original video or audio.
+
+Expected flow:
+
+```text
+Timed transcript
+  -> authenticated translation job
+  -> idempotent job recovery
+  -> batched provider translation
+  -> segment ID validation
+  -> original start/end restored
+  -> translation result
+  -> timing-risk hints
+```
+
+Development translation limits:
+
+```text
+Maximum segments:   300
+Maximum characters: 60,000
+Batch size:         30 segments
+```
+
+Changing the target language creates a new translation job. Retrying an interrupted translation for the same input reuses the original client job ID.
+
 ## Development job guarantees
 
 The dev backend now implements:
@@ -120,7 +160,12 @@ The dev backend now implements:
 - cancellation;
 - temporary file cleanup;
 - normalized Viral AI Tool speech result;
-- quota charge only after successful completion.
+- quota charge only after successful speech completion;
+- batched Cloud translation;
+- translation job ownership and idempotency;
+- original transcript timing preserved after translation;
+- cancellation between translation batches;
+- timing-risk hints for significantly longer translated segments.
 
 The same idempotency key cannot be reused with different audio metadata.
 
