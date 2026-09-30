@@ -98,3 +98,31 @@ When a control has more than two meaningful options:
 This applies to language, appearance, motion, interface size, model, voice, target language, export format, and other configuration controls.
 
 The default visual direction is **Aurora Light**: bright glass surfaces with colorful creator-tool accents. Large visual-direction changes require explicit user approval before implementation.
+
+
+## Vietnamese UX copy
+
+Vietnamese copy should sound natural to users in Vietnam:
+- prefer familiar everyday product wording over literal technical translation;
+- avoid stiff terms when a common alternative exists;
+- keep action labels short and concrete;
+- use one term consistently throughout the app;
+- examples: "Đã xong" instead of "Hoàn tất" when space allows, "Chờ xử lý" instead of "Queued", "Giọng AI" instead of "Phòng giọng nói", "Khu làm việc" instead of overly formal wording.
+
+## Readability and layout fit
+
+Default UI density is `comfortable`.
+
+Readability floor:
+- body/control copy should normally be 13px or larger;
+- secondary/meta copy should normally be 12px or larger;
+- tiny helper text should not fall below 11px except truly non-essential technical metadata;
+- descriptive text should use comfortable line-height;
+- Vietnamese diacritics must not clip.
+
+Layout requirements:
+- controls must remain usable when text expands;
+- cards and setting rows must wrap instead of clipping translated text;
+- important pointer targets should comfortably exceed WCAG 2.2's 24x24 CSS px minimum target requirement;
+- layouts should remain usable when text spacing or interface scale increases;
+- do not use fixed text-container heights that can cut off copy.
