@@ -132,12 +132,13 @@ class AuthClient {
     });
   }
 
-  async logout(refreshToken) {
-    if (!refreshToken) return { loggedOut: true };
+  async logout(refreshToken, accessToken) {
+    if (!refreshToken && !accessToken) return { loggedOut: true };
     try {
       return await this.request("/v1/auth/logout", {
         method: "POST",
-        body: { refreshToken }
+        body: { refreshToken: refreshToken || "" },
+        accessToken: accessToken || undefined
       });
     } catch (error) {
       if (["AUTH_NETWORK", "AUTH_TIMEOUT", "AUTH_SERVICE_UNAVAILABLE"].includes(error?.code)) {
