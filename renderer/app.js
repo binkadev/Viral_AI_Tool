@@ -64,9 +64,10 @@ function toast(message) {
 
 function normalizeStatus(value) {
   const v = String(value || "").toLowerCase();
-  if (v.includes("complete") || v.includes("hoàn")) return "completed";
-  if (v.includes("process") || v.includes("xử lý")) return "processing";
+  if (v.includes("complete") || v.includes("hoàn") || v.includes("xong")) return "completed";
+  if (v.includes("process") || v.includes("xử lý") || v.includes("xuất")) return "processing";
   if (v.includes("queue") || v.includes("chờ")) return "queued";
+  if (v.includes("cancel") || v.includes("hủy") || v.includes("dừng")) return "cancelled";
   if (v.includes("fail") || v.includes("lỗi") || v.includes("thất")) return "failed";
   return v || "queued";
 }
@@ -799,7 +800,7 @@ async function trashJobFile(job) {
     state.jobs = state.jobs.filter(item => item.id !== job.id);
     save();
     render();
-    toast(t("file.trashed"));
+    toast(t("file.trashDone"));
   } catch {
     toast(t("file.trashFailed"));
   }
