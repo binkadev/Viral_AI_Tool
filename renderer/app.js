@@ -884,6 +884,15 @@ async function refreshFileStates({ notify = true } = {}) {
 async function enrichJob(job) {
   if (!window.desktopAPI || !job?.sourcePath) return;
   try {
+    const available = await checkJobFile(job);
+    if (!available) {
+      job.mediaState = "missing";
+      save();
+      if (["dashboard", "download", "library", "ai-video"].includes(state.page)) render();
+      return;
+    }
+
+    job.fileState = "available";
     job.mediaState = "reading";
     const [result, previewUrl] = await Promise.all([
       window.desktopAPI.createThumbnail(job.sourcePath),
@@ -896,10 +905,17 @@ async function enrichJob(job) {
     save();
     if (["dashboard", "download", "library", "ai-video"].includes(state.page)) render();
   } catch (error) {
-    job.mediaState = "error";
+    const stillExists = await window.desktopAPI.fileStatus?.(job.sourcePath);
+    job.fileState = stillExists?.exists ? "available" : "missing";
+    job.mediaState = job.fileState === "missing" ? "missing" : "error";
     job.mediaError = error?.message || String(error);
     save();
-    toast(t("media.readError"));
+    if (job.fileState === "missing") {
+      render();
+      toast(t("file.missingToast", { name: job.name }));
+    } else {
+      toast(t("media.readError"));
+    }
   }
 }
 
@@ -916,6 +932,7 @@ async function addFiles() {
     progress: 0,
     time: t("common.now"),
     sourcePath: file.path,
+    fileState: "available",
     mediaState: "reading"
   }));
 
@@ -958,6 +975,13 @@ async function startRealRender() {
   }
   if (!source) return;
 
+  const sourceAvailable = await checkJobFile(source);
+  if (!sourceAvailable) {
+    render();
+    showMissingFileDialog(source);
+    return;
+  }
+
   if (!state.output) {
     state.output = await window.desktopAPI.selectOutputFolder();
     if (!state.output) {
@@ -971,6 +995,7 @@ async function startRealRender() {
     name: source.name.replace(/\.[^.]+$/, "") + "_rendered.mp4",
     lang: source.lang || "vi",
     status: "processing",
+    fileState: "available",
     progress: 0,
     time: t("common.now"),
     sourcePath: source.sourcePath,
@@ -982,7 +1007,7 @@ async function startRealRender() {
   state.jobs.unshift(renderJob);
   save();
   render();
-  toast(t("media.renderStarted"));
+  toast(t("media.exportStarted"));
 
   try {
     const result = await window.desktopAPI.renderVideo({
@@ -998,14 +1023,26 @@ async function startRealRender() {
     renderJob.time = t("common.now");
     save();
     render();
-    toast(t("media.renderDone"));
+    renderJob.fileState = "available";
+    toast(t("media.exportDone"));
   } catch (error) {
     renderJob.status = "failed";
     renderJob.renderError = error?.message || String(error);
     renderJob.time = t("common.now");
+
+    const sourceStillAvailable = await checkJobFile(source);
+    if (!sourceStillAvailable) {
+      source.fileState = "missing";
+      save();
+      render();
+      toast(t("media.sourceMissingDuringExport"));
+      showMissingFileDialog(source);
+      return;
+    }
+
     save();
     render();
-    toast(t("media.renderFailed"));
+    toast(t("media.exportFailed"));
   }
 }
 
@@ -1045,6 +1082,26 @@ function bind() {
       event.stopPropagation();
       const filePath = decodeURIComponent(node.dataset.outputPath || "");
       if (filePath) window.desktopAPI?.showFile(filePath);
+    };
+  });
+
+
+  document.querySelectorAll("[data-job-menu]").forEach((node) => {
+    node.onclick = (event) => {
+      event.stopPropagation();
+      const id = node.dataset.jobMenu;
+      document.querySelectorAll(".job-menu-popover").forEach(popover => {
+        const same = popover.dataset.jobMenuPopover === id;
+        popover.classList.toggle("hidden", !same || !popover.classList.contains("hidden"));
+      });
+    };
+  });
+
+  document.querySelectorAll("[data-job-action]").forEach((node) => {
+    node.onclick = async (event) => {
+      event.stopPropagation();
+      document.querySelectorAll(".job-menu-popover").forEach(popover => popover.classList.add("hidden"));
+      await handleJobAction(node.dataset.jobAction, node.dataset.jobId);
     };
   });
 
@@ -1168,6 +1225,12 @@ if (langMenuButton && langMenu) {
   });
 }
 
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".job-menu")) {
+    document.querySelectorAll(".job-menu-popover").forEach(popover => popover.classList.add("hidden"));
+  }
+});
+
 if (window.desktopAPI) {
   $("winMin").onclick = () => window.desktopAPI.minimize();
   $("winMax").onclick = () => window.desktopAPI.toggleMaximize();
@@ -1195,6 +1258,7 @@ if (window.desktopAPI) {
       progress: 0,
       time: t("common.now"),
       sourcePath: file.path,
+      fileState: "available",
       mediaState: "reading"
     }));
     jobs.slice().reverse().forEach(job => state.jobs.unshift(job));
@@ -1219,8 +1283,9 @@ render();
 
 if (window.desktopAPI?.createThumbnail) {
   setTimeout(() => {
+    refreshFileStates({ notify: true });
     state.jobs
-      .filter(job => job.sourcePath && !job.isRenderOutput && !job.thumbnail)
+      .filter(job => job.sourcePath && !job.isRenderOutput && !job.thumbnail && job.fileState !== "missing")
       .slice(0, 6)
       .forEach(enrichJob);
   }, 250);
