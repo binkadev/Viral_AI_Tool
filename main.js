@@ -1,11 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const {
   probeVideo,
   createThumbnail,
   renderVideo,
-  cancelRender
+  cancelRender,
+  assertVideoPath
 } = require('./services/ffmpeg');
 
 let mainWindow;
@@ -117,4 +119,10 @@ ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
   if (typeof filePath !== 'string' || !filePath.trim() || !fs.existsSync(filePath)) return false;
   shell.showItemInFolder(path.resolve(filePath));
   return true;
+});
+
+
+ipcMain.handle('video:file-url', async (_event, inputPath) => {
+  const safePath = assertVideoPath(inputPath);
+  return pathToFileURL(safePath).href;
 });
