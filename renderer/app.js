@@ -1049,17 +1049,28 @@ function aiVideoPage() {
   const source = latestSourceJob();
   const speechJob = speechJobForSource(source);
   const speechResult = speechResultForSource(source);
+  const translationJob = translationJobForSource(source);
+  const translationResult = translationResultForSource(source);
+
   const speechStep = speechResult
     ? t("aiVideo.steps.detected")
     : speechJob
       ? speechStatusCopy(speechJob)
       : t("aiVideo.steps.pending");
 
+  const translationStep = translationResult
+    ? t("translation.completed")
+    : translationJob
+      ? translationStatusCopy(translationJob)
+      : speechResult
+        ? t("aiVideo.steps.pending")
+        : "—";
+
   const steps = [
     ["1", t("aiVideo.steps.import"), source ? t("aiVideo.steps.ready") : t("aiVideo.steps.pending")],
     ["2", t("aiVideo.steps.speech"), speechStep],
-    ["3", t("aiVideo.steps.translate"), speechResult ? t("aiVideo.steps.pending") : "—"],
-    ["4", t("aiVideo.steps.voices"), t("aiVideo.steps.pending")],
+    ["3", t("aiVideo.steps.translate"), translationStep],
+    ["4", t("aiVideo.steps.voices"), translationResult ? t("aiVideo.steps.pending") : "—"],
     ["5", t("aiVideo.steps.subtitles"), t("aiVideo.steps.pending")],
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
@@ -1088,10 +1099,39 @@ function aiVideoPage() {
       ? '<div class="speech-alert warning"><b>' + t("speech.interruptedTitle") + '</b><span>' + t("speech.interruptedBody") + '</span></div>'
       : "";
 
+  const translationBusy = translationJob &&
+    ["validating", "queued", "translating", "cancelling"].includes(translationJob.status);
+  const translationInterrupted = translationJob?.status === "interrupted";
+  const translationLocal = state.translation.mode === "local";
+
+  const translationAction = translationBusy
+    ? '<button id="translationStop" class="button danger" type="button"' +
+        (translationJob.status === "cancelling" ? " disabled" : "") + '>' + t("translation.stop") + '</button>'
+    : !speechResult
+      ? '<button class="button primary" type="button" disabled>' + t("translation.needTranscriptButton") + '</button>'
+      : translationLocal
+        ? '<button class="button primary" type="button" disabled>' + t("translation.localUnavailableButton") + '</button>'
+        : '<button id="translationStart" class="button primary" type="button">' +
+            (translationInterrupted ? t("translation.retry") : translationResult ? t("translation.translateAgain") : t("translation.start")) +
+          '</button>';
+
+  const translationProgress = translationBusy
+    ? '<div class="speech-job-state translation-job-state"><div class="speech-job-head"><div><b id="translationStateLabel">' +
+        escapeHtml(translationStatusCopy(translationJob)) + '</b><span>' +
+        escapeHtml(languageName(translationJob.targetLanguage)) + '</span></div><strong id="translationPercent">' +
+        (translationJob.indeterminate ? "•••" : Math.round(Number(translationJob.progress || 0)) + "%") + '</strong></div>' +
+        '<div id="translationProgressTrack" class="speech-progress ' + (translationJob.indeterminate ? "indeterminate" : "") +
+        '"><i id="translationProgressBar" style="width:' +
+        (translationJob.indeterminate ? "36" : Math.round(Number(translationJob.progress || 0))) + '%"></i></div></div>'
+    : translationInterrupted
+      ? '<div class="speech-alert warning"><b>' + t("translation.interruptedTitle") + '</b><span>' +
+          t("translation.interruptedBody") + '</span></div>'
+      : "";
+
   return '<div class="section-head"><div><h3>' + t("aiVideo.workflow") + "</h3><p>" + t("aiVideo.workflowDesc") +
     '</p></div><button id="render" class="button primary" type="button">' + t("aiVideo.renderFinal") + "</button></div>" +
     '<div class="workflow">' + steps.map((x, i) =>
-      '<div class="wf-step ' + (i === (speechResult ? 2 : source ? 1 : 0) ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
+      '<div class="wf-step ' + (i === (translationResult ? 3 : speechResult ? 2 : source ? 1 : 0) ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
       (i < steps.length - 1 ? '<div class="wf-arrow">→</div>' : "")
     ).join("") + "</div>" +
 
@@ -1124,14 +1164,43 @@ function aiVideoPage() {
       speechTranscriptView(speechResult) +
     '</div>' +
 
+    '<div class="card speech-card translation-card"><div class="speech-card-head"><div><div class="eyebrow">' +
+      t("aiVideo.steps.translate") + '</div><h3>' + t("translation.title") + '</h3><p>' + t("translation.desc") +
+      '</p></div>' + translationAction + '</div>' +
+      '<div class="translation-controls">' +
+        '<div class="speech-field"><label class="label" for="translationMode">' + t("translation.mode") + '</label>' +
+          '<select id="translationMode" class="select"' + (translationBusy ? " disabled" : "") + '>' +
+            '<option value="cloud"' + (!translationLocal ? " selected" : "") + '>' + t("speech.cloud") + '</option>' +
+            '<option value="local"' + (translationLocal ? " selected" : "") + '>' + t("speech.local") + '</option>' +
+          '</select><div class="speech-choice-help"><span>' +
+            (translationLocal ? t("translation.localDesc") : t("translation.cloudDesc")) + '</span></div></div>' +
+        '<div class="speech-field"><label class="label">' + t("translation.sourceLanguage") + '</label>' +
+          '<div class="translation-readonly">' + escapeHtml(speechResult ? languageName(speechResult.language) : t("translation.waitingTranscript")) + '</div>' +
+          '<div class="speech-choice-help"><span>' + t("translation.sourceLanguageHelp") + '</span></div></div>' +
+        '<div class="speech-field"><label class="label" for="translationTarget">' + t("common.targetLanguage") + '</label>' +
+          '<select id="translationTarget" class="select"' + (translationBusy ? " disabled" : "") + '>' +
+            '<option value="vi"' + (state.translation.targetLanguage === "vi" ? " selected" : "") + '>' + languageName("vi") + '</option>' +
+            '<option value="en"' + (state.translation.targetLanguage === "en" ? " selected" : "") + '>English</option>' +
+            '<option value="ko"' + (state.translation.targetLanguage === "ko" ? " selected" : "") + '>' + languageName("ko") + '</option>' +
+            '<option value="ja"' + (state.translation.targetLanguage === "ja" ? " selected" : "") + '>' + languageName("ja") + '</option>' +
+          '</select><label class="translation-check"><input id="translationPreserveTone" type="checkbox"' +
+            (state.translation.preserveTone ? " checked" : "") + (translationBusy ? " disabled" : "") + '><span>' +
+            t("translation.preserveTone") + '</span></label></div>' +
+      '</div>' +
+      translationConnectionPanel() +
+      translationProgress +
+      translationResultView(translationResult) +
+    '</div>' +
+
     '<div class="section-head"><div><h3>' + t("aiVideo.editor") + '</h3><p>' + escapeHtml(sourceName) +
       (sourceMeta ? ' · ' + escapeHtml(sourceMeta) : '') + "</p></div></div>" +
     '<div class="editor-grid">' + preview +
-    '<div class="stack"><div class="mini-card"><h4>' + t("aiVideo.translation") + "</h4>" +
-    '<label class="label">' + t("common.targetLanguage") + '</label><select class="select"><option>' + languageName("vi") +
-    "</option><option>English</option><option>" + languageName("ko") + "</option><option>" + languageName("ja") + "</option></select>" +
-    '<div class="toggle-row"><span>' + t("aiVideo.preserveTone") + '</span><div class="toggle on"></div></div>' +
-    '<div class="toggle-row"><span>' + t("aiVideo.translateText") + '</span><div class="toggle on"></div></div></div>' +
+    '<div class="stack"><div class="mini-card"><h4>' + t("translation.projectSummary") + '</h4>' +
+    '<div class="translation-summary-row"><span>' + t("common.targetLanguage") + '</span><b>' +
+      escapeHtml(languageName(state.translation.targetLanguage)) + '</b></div>' +
+    '<div class="translation-summary-row"><span>' + t("translation.status") + '</span><b>' +
+      escapeHtml(translationResult ? t("translation.completed") : t("aiVideo.steps.pending")) + '</b></div>' +
+    '</div>' +
     '<div class="mini-card"><h4>' + t("aiVideo.outputFormat") + '</h4><select class="select"><option>9:16 · 1080×1920</option><option>16:9 · 1920×1080</option><option>1:1 · 1080×1080</option></select>' +
     '<div class="toggle-row"><span>' + t("aiVideo.burnSubtitles") + '</span><div class="toggle on"></div></div></div></div></div>';
 }
