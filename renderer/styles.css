@@ -2139,3 +2139,36 @@ html[data-scale="compact"] .hero p{font-size:13px}
   55%{transform:translateX(105%)}
   100%{transform:translateX(285%)}
 }
+
+
+/* Local AI model management */
+.speech-choice-help{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:7px 9px;
+}
+.speech-choice-help>span:first-child{
+  flex:1 1 220px;
+}
+.speech-manage-link{
+  padding:4px 0;
+  background:transparent;
+  color:var(--accent);
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.speech-manage-link:hover{
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.model-setup-modal .modal-actions{
+  align-items:center;
+}
+.model-setup-modal .button.danger{
+  margin-left:auto;
+}
+.model-summary{
+  margin-top:14px;
+}
