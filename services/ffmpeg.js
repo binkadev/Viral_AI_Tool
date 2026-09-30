@@ -326,6 +326,8 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
     metadata = await probeVideo(safeInput);
 
     if (cancelledRenders.has(jobId)) {
+      reservedRenders.delete(jobId);
+      cancelledRenders.delete(jobId);
       return { cancelled: true, outputPath: null, metadata };
     }
 
