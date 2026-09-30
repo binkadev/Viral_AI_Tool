@@ -2494,3 +2494,59 @@ html[data-scale="compact"] .hero p{font-size:13px}
 @media(max-width:720px){
   .account-facts{grid-template-columns:1fr}
 }
+
+
+/* Developer speech provider status */
+.provider-dev-strip{
+  margin-top:12px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.provider-dev-strip.success{
+  border-color:color-mix(in srgb,var(--success) 22%,var(--line));
+  background:color-mix(in srgb,var(--success) 5%,var(--surface-solid));
+}
+.provider-dev-strip>div{
+  min-width:0;
+}
+.provider-dev-kicker{
+  display:block;
+  color:var(--text-faint);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.provider-dev-strip b{
+  display:block;
+  margin-top:3px;
+  font-size:13px;
+}
+.provider-dev-strip p{
+  margin:4px 0 0;
+  max-width:720px;
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.5;
+}
+.provider-dev-strip code{
+  flex:0 0 auto;
+  padding:5px 7px;
+  border-radius:7px;
+  background:var(--surface-solid);
+  color:var(--accent);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:10px;
+  font-weight:700;
+}
+@media(max-width:760px){
+  .provider-dev-strip{
+    flex-direction:column;
+  }
+}
