@@ -112,6 +112,7 @@ function applyChromeLocale() {
   $("newProjectLabel").textContent = t("app.newProject");
   $("langCode").textContent = state.locale.toUpperCase();
   $("langToggle").setAttribute("aria-label", state.locale === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt");
+  document.body.dataset.dropLabel = t("download.dropOverlay");
 }
 
 function jobsTable(rows) {
