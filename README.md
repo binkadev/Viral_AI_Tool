@@ -1,3 +1,5 @@
+[Tiếng Việt](README.vi.md) · [English](README.en.md)
+
 # Viral AI Tool — Desktop prototype
 
 Viral AI Tool là ứng dụng desktop Electron dành cho workflow video AI. App mở thành cửa sổ Windows riêng, không dùng localhost và không cần Python HTTP server.
