@@ -166,13 +166,35 @@ async function status(userDataPath, modelId = MODEL_ID) {
   }
 
   for (const spec of model.files) {
-    const verification = await verifyFile(path.join(dir, spec.name), spec);
-    if (!verification.ok) {
+    const target = path.join(dir, spec.name);
+    try {
+      const stat = fs.statSync(target);
+      const manifestFile = Array.isArray(manifest.files)
+        ? manifest.files.find(file => file.name === spec.name)
+        : null;
+
+      if (
+        !stat.isFile() ||
+        stat.size !== spec.sizeBytes ||
+        manifestFile?.sha256 !== spec.sha256 ||
+        manifestFile?.sizeBytes !== spec.sizeBytes
+      ) {
+        return {
+          modelId,
+          state: "invalid",
+          ready: false,
+          reason: "metadata",
+          downloadedBytes: 0,
+          totalBytes: model.displaySizeBytes,
+          percent: 0
+        };
+      }
+    } catch {
       return {
         modelId,
         state: "invalid",
         ready: false,
-        reason: verification.reason,
+        reason: "missing",
         downloadedBytes: 0,
         totalBytes: model.displaySizeBytes,
         percent: 0
@@ -184,6 +206,8 @@ async function status(userDataPath, modelId = MODEL_ID) {
     modelId,
     state: "installed",
     ready: true,
+    integrityVerified: true,
+    verifiedAt: manifest.verifiedAt || manifest.installedAt || null,
     downloadedBytes: model.displaySizeBytes,
     totalBytes: model.displaySizeBytes,
     percent: 100,
@@ -383,6 +407,7 @@ function writeManifestAtomic(userDataPath, model) {
     version: model.version,
     revision: MODEL_REVISION,
     installedAt: new Date().toISOString(),
+    verifiedAt: new Date().toISOString(),
     files: model.files.map(file => ({
       role: file.role,
       name: file.name,
@@ -561,6 +586,23 @@ function activeDownloadCount() {
   return activeDownloads.size;
 }
 
+async function verifyInstalled(userDataPath, modelId = MODEL_ID) {
+  const model = getCatalogEntry(modelId);
+  const dir = modelDirectory(userDataPath, model.id);
+
+  for (const spec of model.files) {
+    const verification = await verifyFile(path.join(dir, spec.name), spec);
+    if (!verification.ok) {
+      throw modelError("MODEL_CHECKSUM_FAILED", "Installed model failed integrity validation.", {
+        file: spec.name,
+        reason: verification.reason
+      });
+    }
+  }
+
+  return { verified: true, modelId: model.id };
+}
+
 async function remove(userDataPath, modelId = MODEL_ID) {
   const active = [...activeDownloads.values()].find(item => item.modelId === modelId);
   if (active) {
@@ -600,6 +642,7 @@ module.exports = {
   cancel,
   cancelAll,
   activeDownloadCount,
+  verifyInstalled,
   remove,
   paths,
   serializeModelError
