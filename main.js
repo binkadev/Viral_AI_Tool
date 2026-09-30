@@ -5,12 +5,46 @@ const { pathToFileURL } = require('url');
 const {
   probeVideo,
   createThumbnail,
+  preflightExport,
   renderVideo,
   cancelRender,
+  cancelAllRenders,
+  getActiveRenderCount,
+  serializeProcessingError,
   assertVideoPath
 } = require('./services/ffmpeg');
 
 let mainWindow;
+let forceClose = false;
+let closePromptOpen = false;
+let uiLocale = 'vi';
+
+function closeCopy() {
+  if (uiLocale === 'en') {
+    return {
+      title: 'Video is still exporting',
+      message: 'One or more videos are still being exported.',
+      detail: 'Closing now will stop the current export. Your original videos will not be deleted.',
+      keepOpen: 'Keep exporting',
+      stopAndClose: 'Stop and close'
+    };
+  }
+
+  return {
+    title: 'Video vẫn đang được xuất',
+    message: 'Vẫn còn video đang được xuất.',
+    detail: 'Nếu đóng ứng dụng lúc này, tiến trình hiện tại sẽ dừng. Video gốc của bạn vẫn được giữ nguyên.',
+    keepOpen: 'Tiếp tục xuất video',
+    stopAndClose: 'Dừng và đóng'
+  };
+}
+
+async function waitForRendersToStop(timeoutMs = 2500) {
+  const started = Date.now();
+  while (getActiveRenderCount() > 0 && Date.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -32,7 +66,41 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
-  mainWindow.on('closed', () => { mainWindow = null; });
+
+  mainWindow.on('close', async event => {
+    if (forceClose || getActiveRenderCount() === 0) return;
+    event.preventDefault();
+    if (closePromptOpen) return;
+
+    closePromptOpen = true;
+    try {
+      const copy = closeCopy();
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: copy.title,
+        message: copy.message,
+        detail: copy.detail,
+        buttons: [copy.keepOpen, copy.stopAndClose],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
+
+      if (result.response === 1) {
+        forceClose = true;
+        cancelAllRenders();
+        await waitForRendersToStop();
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+      }
+    } finally {
+      closePromptOpen = false;
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    forceClose = false;
+  });
 }
 
 app.whenReady().then(() => {
@@ -97,22 +165,64 @@ ipcMain.handle('video:thumbnail', async (_event, inputPath) => {
   return createThumbnail(inputPath, app.getPath('temp'));
 });
 
+ipcMain.handle('video:preflight-export', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  try {
+    return {
+      ok: true,
+      data: preflightExport({
+        inputPath: safePayload.inputPath,
+        outputDir: safePayload.outputDir
+      })
+    };
+  } catch (error) {
+    const serialized = serializeProcessingError(error);
+    console.error('[ExportPreflight]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
 ipcMain.handle('video:render', async (event, payload) => {
   const safePayload = payload && typeof payload === 'object' ? payload : {};
-  return renderVideo({
-    jobId: safePayload.jobId,
-    inputPath: safePayload.inputPath,
-    outputDir: safePayload.outputDir,
-    onProgress: progress => {
-      if (!event.sender.isDestroyed()) {
-        event.sender.send('video:render-progress', progress);
+  try {
+    const data = await renderVideo({
+      jobId: safePayload.jobId,
+      inputPath: safePayload.inputPath,
+      outputDir: safePayload.outputDir,
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('video:render-progress', progress);
+        }
       }
-    }
-  });
+    });
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeProcessingError(error);
+    console.error('[VideoExport]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
 });
 
 ipcMain.handle('video:cancel-render', async (_event, jobId) => {
-  return cancelRender(jobId);
+  if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false };
+  return { ok: true, cancelled: cancelRender(jobId) };
+});
+
+ipcMain.handle('app:set-locale', async (_event, locale) => {
+  if (locale === 'vi' || locale === 'en') uiLocale = locale;
+  return uiLocale;
 });
 
 ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
