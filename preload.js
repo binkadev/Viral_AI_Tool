@@ -17,8 +17,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   probeVideo: inputPath => ipcRenderer.invoke('video:probe', inputPath),
   createThumbnail: inputPath => ipcRenderer.invoke('video:thumbnail', inputPath),
   getVideoUrl: inputPath => ipcRenderer.invoke('video:file-url', inputPath),
+  preflightExport: payload => ipcRenderer.invoke('video:preflight-export', payload),
   renderVideo: payload => ipcRenderer.invoke('video:render', payload),
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
+  setLocale: locale => ipcRenderer.invoke('app:set-locale', locale),
 
   onRenderProgress: callback => {
     if (typeof callback !== 'function') return () => {};
