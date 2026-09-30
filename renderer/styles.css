@@ -6,7 +6,7 @@
   --shadow:0 20px 70px rgba(0,0,0,.38);--titlebar:38px
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,"Segoe UI",Arial,sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif}
 button,input,select,textarea{font:inherit}
 button{color:inherit}
 body{background:
@@ -41,3 +41,76 @@ radial-gradient(circle at 62% 90%,rgba(236,72,153,.055),transparent 24%),var(--b
 .modal-backdrop{position:fixed;inset:0;z-index:150;background:rgba(0,0,0,.65);backdrop-filter:blur(7px);display:grid;place-items:center}.modal-backdrop.hidden{display:none}.modal{width:min(540px,calc(100vw - 30px));padding:21px;border:1px solid var(--line2);border-radius:18px;background:#111118;box-shadow:var(--shadow)}.modal h3{margin:4px 0 7px}.modal p{font-size:10px;color:var(--muted);line-height:1.6}.modal-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:17px}
 .dragging:after{content:"Thả video để thêm vào queue";position:fixed;z-index:120;inset:50px 18px 18px 278px;border:2px dashed rgba(139,92,246,.55);border-radius:22px;background:rgba(9,9,13,.84);backdrop-filter:blur(12px);display:grid;place-items:center;font-size:18px;font-weight:900;color:#c4b5fd}
 @media(max-width:1180px){.shell{grid-template-columns:220px 1fr}.stat-grid,.tool-grid,.usage-grid{grid-template-columns:repeat(2,1fr)}.voice-grid{grid-template-columns:repeat(2,1fr)}.grid-2,.editor-grid{grid-template-columns:1fr}.dragging:after{inset:50px 18px 18px 238px}}
+
+
+/* Localization, typography and accessibility refinements */
+html{
+  font-synthesis:none;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+}
+.topbar h1,.hero h2,.stat-value{
+  font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Arial,sans-serif;
+}
+.eyebrow{
+  letter-spacing:.035em;
+  text-transform:none;
+  font-weight:650;
+}
+.nav-group{
+  letter-spacing:.07em;
+  text-transform:none;
+  font-weight:700;
+}
+.workspace span{
+  letter-spacing:.03em;
+}
+.language-switch{
+  min-width:68px;
+  height:37px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:0 11px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  color:#ddd9e6;
+  cursor:pointer;
+}
+.language-switch:hover{
+  background:var(--panel2);
+  border-color:rgba(139,92,246,.28);
+}
+.language-switch strong{font-size:10px;letter-spacing:.04em}
+.language-globe{font-size:13px;color:#b9a7ff}
+.button,.nav-item,.language-switch,.icon-button,.window-controls button{
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .16s ease,box-shadow .16s ease;
+}
+button:focus-visible,
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+.dropzone:focus-visible{
+  outline:2px solid #a78bfa;
+  outline-offset:2px;
+}
+.nav-item{text-align:start}
+.data-table th{text-align:start}
+.muted{color:var(--muted);font-size:10px;line-height:1.65}
+html[lang="vi"] body{
+  font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif;
+}
+html[lang="vi"] .brand-name,
+html[lang="vi"] .brand-sub{
+  font-family:"Segoe UI","Noto Sans",Arial,sans-serif;
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
