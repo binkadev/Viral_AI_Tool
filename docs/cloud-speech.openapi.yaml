@@ -322,13 +322,17 @@ components:
     CreateSpeechJobResponse:
       type: object
       additionalProperties: false
-      required: [jobId, state, upload]
+      required: [jobId, state]
       properties:
         jobId:
           type: string
         state:
           type: string
-          enum: [awaiting_upload, uploaded, queued, processing, completed]
+          enum: [awaiting_upload, uploaded, queued, processing, completed, cancelled, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
         estimate:
           type: object
           additionalProperties: false
@@ -340,7 +344,13 @@ components:
               type: number
               minimum: 0
         upload:
+          description: Present only when the job still needs audio upload.
           $ref: "#/components/schemas/UploadTarget"
+        result:
+          description: May be returned immediately when an idempotent retry finds a completed job.
+          $ref: "#/components/schemas/SpeechResult"
+        error:
+          $ref: "#/components/schemas/JobError"
 
     UploadTarget:
       type: object
