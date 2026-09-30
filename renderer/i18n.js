@@ -10,7 +10,9 @@ window.I18N = (() => {
         remaining: "còn lại",
         newProject: "Dự án mới",
         search: "Tìm kiếm",
-        notifications: "Thông báo"
+        notifications: "Thông báo",
+        searchAnything: "Tìm nhanh",
+        language: "Ngôn ngữ"
       },
       nav: {
         workspace: "Không gian làm việc",
@@ -255,7 +257,9 @@ window.I18N = (() => {
         remaining: "remaining",
         newProject: "New project",
         search: "Search",
-        notifications: "Notifications"
+        notifications: "Notifications",
+        searchAnything: "Quick search",
+        language: "Language"
       },
       nav: {
         workspace: "Workspace",
