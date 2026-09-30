@@ -1,0 +1,475 @@
+openapi: 3.1.0
+info:
+  title: Viral AI Tool Cloud Speech API
+  version: 1.0.0
+  description: |
+    Contract between Viral AI Tool Desktop and Viral AI Backend for cloud speech recognition.
+    The desktop application must never call a third-party speech provider directly.
+servers:
+  - url: https://api.example.invalid
+    description: Replace with the production Viral AI Backend URL
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/speech/status:
+    get:
+      summary: Read cloud speech availability for the authenticated account
+      operationId: getSpeechStatus
+      responses:
+        "200":
+          description: Service and account status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeechStatus"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "429":
+          $ref: "#/components/responses/QuotaExceeded"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/speech/jobs:
+    post:
+      summary: Create or recover an idempotent cloud speech job
+      operationId: createSpeechJob
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSpeechJobRequest"
+      responses:
+        "200":
+          description: Existing matching job recovered through idempotency
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSpeechJobResponse"
+        "201":
+          description: New job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSpeechJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "402":
+          $ref: "#/components/responses/QuotaExceeded"
+        "409":
+          description: Conflicting job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Audio is too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/speech/jobs/{jobId}/commit:
+    post:
+      summary: Confirm upload and submit the job for recognition
+      operationId: commitSpeechJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Job committed or already committed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeechJob"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+        "409":
+          description: Upload is incomplete or job cannot be committed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/speech/jobs/{jobId}:
+    get:
+      summary: Get the current state or final result
+      operationId: getSpeechJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Current job state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeechJob"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+  /v1/speech/jobs/{jobId}/cancel:
+    post:
+      summary: Request cancellation for an owned job
+      operationId: cancelSpeechJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Cancellation accepted or job was already cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cancelled]
+                properties:
+                  cancelled:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-access-token
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Client-generated stable key. Repeating the same operation with the same key
+        must not create a second billable provider job.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 160
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+
+  responses:
+    AuthRequired:
+      description: Authentication is missing or expired
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            auth:
+              value:
+                error:
+                  code: AUTH_REQUIRED
+
+    QuotaExceeded:
+      description: Account does not have enough allowance
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            quota:
+              value:
+                error:
+                  code: QUOTA_EXCEEDED
+
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    JobNotFound:
+      description: Job does not exist or is not owned by the authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            notFound:
+              value:
+                error:
+                  code: JOB_NOT_FOUND
+
+    ServiceUnavailable:
+      description: Cloud recognition is temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            unavailable:
+              value:
+                error:
+                  code: SERVICE_UNAVAILABLE
+
+  schemas:
+    SpeechStatus:
+      type: object
+      additionalProperties: false
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+        code:
+          type: string
+        quota:
+          $ref: "#/components/schemas/Quota"
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            maxAudioBytes:
+              type: integer
+              minimum: 1
+            maxDurationSeconds:
+              type: number
+              minimum: 1
+        retention:
+          type: object
+          additionalProperties: false
+          properties:
+            temporaryAudioHours:
+              type: integer
+              minimum: 0
+            transcriptDays:
+              type: integer
+              minimum: 0
+
+    Quota:
+      type: object
+      additionalProperties: false
+      properties:
+        remainingMinutes:
+          type: number
+          minimum: 0
+        resetAt:
+          type: string
+          format: date-time
+        plan:
+          type: string
+
+    CreateSpeechJobRequest:
+      type: object
+      additionalProperties: false
+      required: [clientJobId, language, audio]
+      properties:
+        clientJobId:
+          type: string
+          minLength: 8
+          maxLength: 128
+        language:
+          type: string
+          description: ISO-like language code or "auto"
+        audio:
+          type: object
+          additionalProperties: false
+          required: [durationSeconds, sizeBytes, sha256, contentType]
+          properties:
+            durationSeconds:
+              type: number
+              minimum: 0
+            sizeBytes:
+              type: integer
+              minimum: 1
+            sha256:
+              type: string
+              pattern: "^[a-f0-9]{64}$"
+            contentType:
+              type: string
+              enum: [audio/flac]
+
+    CreateSpeechJobResponse:
+      type: object
+      additionalProperties: false
+      required: [jobId, state, upload]
+      properties:
+        jobId:
+          type: string
+        state:
+          type: string
+          enum: [awaiting_upload, uploaded, queued, processing, completed]
+        estimate:
+          type: object
+          additionalProperties: false
+          properties:
+            minutes:
+              type: number
+              minimum: 0
+            units:
+              type: number
+              minimum: 0
+        upload:
+          $ref: "#/components/schemas/UploadTarget"
+
+    UploadTarget:
+      type: object
+      additionalProperties: false
+      required: [url, method]
+      properties:
+        url:
+          type: string
+          format: uri
+        method:
+          type: string
+          enum: [PUT, POST]
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+
+    SpeechJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, state]
+      properties:
+        jobId:
+          type: string
+        state:
+          type: string
+          enum:
+            - awaiting_upload
+            - uploaded
+            - queued
+            - processing
+            - completed
+            - cancelling
+            - cancelled
+            - failed
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        chargedMinutes:
+          type: number
+          minimum: 0
+        result:
+          $ref: "#/components/schemas/SpeechResult"
+        error:
+          $ref: "#/components/schemas/JobError"
+
+    SpeechResult:
+      type: object
+      additionalProperties: false
+      required: [version, language, duration, text, segments, meta]
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        language:
+          type: string
+        duration:
+          type: number
+          minimum: 0
+        text:
+          type: string
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpeechSegment"
+        meta:
+          type: object
+          additionalProperties: true
+          properties:
+            timingAvailable:
+              type: boolean
+
+    SpeechSegment:
+      type: object
+      additionalProperties: false
+      required: [id, start, end, text]
+      properties:
+        id:
+          type: string
+        start:
+          type: number
+          minimum: 0
+        end:
+          type: number
+          minimum: 0
+        text:
+          type: string
+        speaker:
+          type: [string, "null"]
+        words:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, start, end, text]
+            properties:
+              id:
+                type: string
+              start:
+                type: number
+                minimum: 0
+              end:
+                type: number
+                minimum: 0
+              text:
+                type: string
+
+    JobError:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+            requestId:
+              type: string
