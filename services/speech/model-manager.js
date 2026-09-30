@@ -549,6 +549,18 @@ function cancel(jobId) {
   return true;
 }
 
+function cancelAll() {
+  let cancelled = 0;
+  for (const jobId of [...activeDownloads.keys()]) {
+    if (cancel(jobId)) cancelled++;
+  }
+  return cancelled;
+}
+
+function activeDownloadCount() {
+  return activeDownloads.size;
+}
+
 async function remove(userDataPath, modelId = MODEL_ID) {
   const active = [...activeDownloads.values()].find(item => item.modelId === modelId);
   if (active) {
@@ -586,6 +598,8 @@ module.exports = {
   status,
   install,
   cancel,
+  cancelAll,
+  activeDownloadCount,
   remove,
   paths,
   serializeModelError
