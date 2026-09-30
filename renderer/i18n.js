@@ -101,7 +101,7 @@ window.I18N = (() => {
         suggestTranslate: "Dịch video mới",
         suggestTranslateDesc: "Bắt đầu quy trình dịch bằng AI",
         suggestVoice: "Thử giọng AI",
-        suggestVoiceDesc: "Nghe thử trước khi render",
+        suggestVoiceDesc: "Nghe thử trước khi xuất video",
         suggestAccount: "Kết nối tài khoản",
         suggestAccountDesc: "Chuẩn bị đăng video trực tiếp"
       },
@@ -211,7 +211,7 @@ window.I18N = (() => {
       library: {
         breadcrumb: "Khu làm việc / Thư viện",
         title: "Thư viện video",
-        desc: "Tất cả video gốc, video đang xử lý và video đã render.",
+        desc: "Tất cả video gốc, video đang xử lý và video đã xuất.",
         search: "Tìm video..."
       },
       accounts: {
@@ -239,9 +239,9 @@ window.I18N = (() => {
         autosave: "Tự động lưu",
         autosaveDesc: "Tự động lưu thay đổi",
         gpu: "Tăng tốc bằng GPU",
-        gpuDesc: "Dùng card đồ họa để render nhanh hơn khi máy hỗ trợ",
+        gpuDesc: "Dùng card đồ họa để xuất video nhanh hơn khi máy hỗ trợ",
         email: "Báo qua email",
-        emailDesc: "Gửi email khi render xong",
+        emailDesc: "Gửi email khi xuất video xong",
         compact: "Thanh menu gọn hơn",
         compactDesc: "Giảm khoảng cách điều hướng",
         output: "Lưu video",
