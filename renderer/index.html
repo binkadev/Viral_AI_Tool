@@ -1,13 +1,19 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="aurora-light" data-motion="balanced" data-scale="comfortable">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="dark" />
+  <meta name="color-scheme" content="light dark" />
   <title>Viral AI Tool</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="ambient-layer" aria-hidden="true">
+    <span class="ambient ambient-a"></span>
+    <span class="ambient ambient-b"></span>
+    <span class="ambient ambient-c"></span>
+  </div>
+
   <header class="titlebar">
     <div class="drag">
       <div class="app-icon">V</div>
@@ -27,7 +33,7 @@
         <div class="brand-mark">V</div>
         <div>
           <div class="brand-name">VIRAL AI</div>
-          <div class="brand-sub">TOOL · CREATOR STUDIO</div>
+          <div class="brand-sub">CREATOR STUDIO</div>
         </div>
       </div>
 
@@ -44,7 +50,7 @@
       <div class="sidebar-bottom">
         <div class="credit-card">
           <div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>2,480</b></div>
-          <div class="bar"><i style="width:66%"></i></div>
+          <div class="bar animated-progress"><i style="width:66%"></i></div>
           <small><span>66%</span> <span id="remainingLabel">còn lại</span></small>
         </div>
         <div class="profile">
@@ -56,16 +62,45 @@
 
     <main class="main">
       <header class="topbar">
-        <div>
+        <div class="topbar-heading">
           <div id="breadcrumb" class="breadcrumb"></div>
           <h1 id="pageTitle"></h1>
         </div>
+
         <div class="top-actions">
-          <button id="langToggle" class="language-switch" type="button" aria-label="Switch language">
-            <span class="language-globe">文</span>
-            <strong id="langCode">VI</strong>
+          <button class="command-palette" type="button" aria-label="Quick search">
+            <span class="command-icon">⌕</span>
+            <span class="command-copy">Search anything</span>
+            <kbd>Ctrl K</kbd>
           </button>
-          <button id="quickProject" class="button primary" type="button">＋ <span id="newProjectLabel">Dự án mới</span></button>
+
+          <div class="language-control">
+            <button id="langMenuButton" class="select-trigger language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-leading">文</span>
+              <span class="select-value">
+                <small id="langHint">Language</small>
+                <strong id="langName">Tiếng Việt</strong>
+              </span>
+              <span class="select-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div id="langMenu" class="popover-menu hidden" role="listbox" aria-label="Language">
+              <button class="popover-option" type="button" data-locale="vi" role="option">
+                <span class="option-code">VI</span>
+                <span><b>Tiếng Việt</b><small>Vietnamese</small></span>
+                <span class="option-check">✓</span>
+              </button>
+              <button class="popover-option" type="button" data-locale="en" role="option">
+                <span class="option-code">EN</span>
+                <span><b>English</b><small>English</small></span>
+                <span class="option-check">✓</span>
+              </button>
+            </div>
+          </div>
+
+          <button id="quickProject" class="button primary" type="button">
+            <span class="button-spark" aria-hidden="true">✦</span>
+            <span id="newProjectLabel">Dự án mới</span>
+          </button>
         </div>
       </header>
 
