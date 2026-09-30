@@ -1,7 +1,7 @@
 const http = require("http");
 const crypto = require("crypto");
 
-const HOST = process.env.VIRAL_AI_DEV_HOST || "127.0.0.1";
+const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
