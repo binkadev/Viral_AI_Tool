@@ -485,6 +485,8 @@ function speechStatusCopy(job) {
 function speechTranscriptView(result) {
   if (!result) return "";
   const segments = Array.isArray(result.segments) ? result.segments : [];
+  const timingAvailable = result?.meta?.timingAvailable === true;
+  const plainText = String(result.text || "").trim();
   return '<div class="speech-result">' +
     '<div class="speech-result-head"><div><span class="side-kicker">' + t("speech.resultTitle") + '</span>' +
       '<h4>' + escapeHtml(t("speech.resultDesc", { count: segments.length, duration: formatDuration(result.duration || 0) })) + '</h4></div>' +
@@ -493,8 +495,10 @@ function speechTranscriptView(result) {
       ? '<div class="transcript-list">' + segments.slice(0, 12).map(segment =>
           '<div class="transcript-row"><time>' + formatDuration(segment.start) + '</time><p>' + escapeHtml(segment.text) + '</p></div>'
         ).join("") + '</div>'
-      : '<div class="speech-empty">' + t("speech.emptyResult") + '</div>') +
-    '<p class="speech-result-note">' + t("speech.transcriptReady") + '</p>' +
+      : plainText
+        ? '<div class="transcript-plain"><p>' + escapeHtml(plainText) + '</p></div>'
+        : '<div class="speech-empty">' + t("speech.emptyResult") + '</div>') +
+    '<p class="speech-result-note">' + (timingAvailable ? t("speech.transcriptReady") : t("speech.timingUnavailable")) + '</p>' +
   '</div>';
 }
 
@@ -533,8 +537,10 @@ function aiVideoPage() {
 
   const speechProgress = speechBusy
     ? '<div class="speech-job-state"><div class="speech-job-head"><div><b id="speechStateLabel">' + escapeHtml(speechStatusCopy(speechJob)) + '</b>' +
-        '<span>' + escapeHtml(sourceName) + '</span></div><strong id="speechPercent">' + Math.round(Number(speechJob.progress || 0)) + '%</strong></div>' +
-        '<div class="speech-progress"><i id="speechProgressBar" style="width:' + Math.round(Number(speechJob.progress || 0)) + '%"></i></div></div>'
+        '<span>' + escapeHtml(sourceName) + '</span></div><strong id="speechPercent">' +
+        (speechJob.indeterminate ? "•••" : Math.round(Number(speechJob.progress || 0)) + "%") + '</strong></div>' +
+        '<div id="speechProgressTrack" class="speech-progress ' + (speechJob.indeterminate ? "indeterminate" : "") + '"><i id="speechProgressBar" style="width:' +
+        (speechJob.indeterminate ? "36" : Math.round(Number(speechJob.progress || 0))) + '%"></i></div></div>'
     : interrupted
       ? '<div class="speech-alert warning"><b>' + t("speech.interruptedTitle") + '</b><span>' + t("speech.interruptedBody") + '</span></div>'
       : "";
@@ -1656,16 +1662,20 @@ function updateSpeechProgress(payload) {
 
   const allowedStates = new Set(["validating", "preparing", "processing"]);
   if (allowedStates.has(payload.state)) job.status = payload.state;
-  if (Number.isFinite(Number(payload.percent))) {
+
+  job.indeterminate = payload.indeterminate === true;
+  if (!job.indeterminate && Number.isFinite(Number(payload.percent))) {
     job.progress = Math.max(0, Math.min(99, Number(payload.percent)));
   }
 
   const label = $("speechStateLabel");
   const percent = $("speechPercent");
   const bar = $("speechProgressBar");
+  const track = $("speechProgressTrack");
   if (label) label.textContent = speechStatusCopy(job);
-  if (percent) percent.textContent = Math.round(job.progress || 0) + "%";
-  if (bar) bar.style.width = Math.round(job.progress || 0) + "%";
+  if (percent) percent.textContent = job.indeterminate ? "•••" : Math.round(job.progress || 0) + "%";
+  if (track) track.classList.toggle("indeterminate", job.indeterminate);
+  if (bar) bar.style.width = (job.indeterminate ? 36 : Math.round(job.progress || 0)) + "%";
   save();
 }
 
