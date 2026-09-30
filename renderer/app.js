@@ -568,15 +568,6 @@ async function enrichJob(job) {
     job.mediaState = "ready";
     save();
     if (["dashboard", "download", "library", "ai-video"].includes(state.page)) render();
-
-if (window.desktopAPI?.createThumbnail) {
-  setTimeout(() => {
-    state.jobs
-      .filter(job => job.sourcePath && !job.isRenderOutput && !job.thumbnail)
-      .slice(0, 6)
-      .forEach(enrichJob);
-  }, 250);
-}
   } catch (error) {
     job.mediaState = "error";
     job.mediaError = error?.message || String(error);
@@ -898,3 +889,12 @@ if (window.desktopAPI) {
 }
 
 render();
+
+if (window.desktopAPI?.createThumbnail) {
+  setTimeout(() => {
+    state.jobs
+      .filter(job => job.sourcePath && !job.isRenderOutput && !job.thumbnail)
+      .slice(0, 6)
+      .forEach(enrichJob);
+  }, 250);
+}
