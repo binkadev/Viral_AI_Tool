@@ -145,6 +145,15 @@ async function cancelSpeech(jobId) {
   }
 }
 
+async function cancelAllSpeech() {
+  const ids = new Set([...activeJobs.keys(), ...reservations.keys()]);
+  let cancelled = 0;
+  for (const jobId of ids) {
+    if (await cancelSpeech(jobId)) cancelled++;
+  }
+  return cancelled;
+}
+
 function activeSpeechCount() {
   return new Set([...activeJobs.keys(), ...reservations.keys()]).size;
 }
@@ -162,6 +171,7 @@ module.exports = {
   preflightSpeech,
   startSpeech,
   cancelSpeech,
+  cancelAllSpeech,
   activeSpeechCount,
   serializeSpeechError
 };
