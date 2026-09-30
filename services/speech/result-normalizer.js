@@ -38,6 +38,7 @@ function normalizeSpeechResult(input = {}) {
     segments,
     meta: {
       providerMode: input?.meta?.providerMode === "cloud" ? "cloud" : "local",
+      timingAvailable: input?.meta?.timingAvailable === true,
       createdAt: input?.meta?.createdAt || new Date().toISOString()
     }
   };
