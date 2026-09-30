@@ -686,6 +686,365 @@ function speechTranscriptView(result) {
   '</div>';
 }
 
+function translationJobForSource(source) {
+  return source && state.translation.job?.sourcePath === source.sourcePath
+    ? state.translation.job
+    : null;
+}
+
+function translationResultForSource(source) {
+  const result = state.translation.result;
+  if (!source || result?.sourcePath !== source.sourcePath) return null;
+  if (result?.targetLanguage !== state.translation.targetLanguage) return null;
+  return result;
+}
+
+function translationStatusCopy(job) {
+  if (!job) return "";
+  const key = {
+    validating: "translation.validating",
+    queued: "translation.queued",
+    translating: "translation.translating",
+    cancelling: "translation.cancelling",
+    completed: "translation.completed",
+    cancelled: "translation.cancelled",
+    failed: "translation.failed",
+    interrupted: "translation.interrupted"
+  }[job.status] || "translation.translating";
+  return t(key);
+}
+
+async function refreshTranslationStatus({ rerender = false } = {}) {
+  if (!window.desktopAPI?.getTranslationStatus || state.translation.statusCheckPending) {
+    return state.translation.cloudStatus;
+  }
+
+  state.translation.statusCheckPending = true;
+  try {
+    state.translation.cloudStatus = await window.desktopAPI.getTranslationStatus();
+    state.translation.statusCheckedAt = Date.now();
+  } catch {
+    state.translation.cloudStatus = {
+      ready: false,
+      code: "TRANSLATION_UNAVAILABLE"
+    };
+  } finally {
+    state.translation.statusCheckPending = false;
+  }
+
+  if (rerender && state.page === "ai-video") render();
+  return state.translation.cloudStatus;
+}
+
+function translationConnectionPanel() {
+  if (state.translation.mode === "local") {
+    return '<div class="translation-connection needs-action">' +
+      '<div><b>' + t("translation.localPendingTitle") + '</b><p>' + t("translation.localPendingBody") + '</p></div>' +
+      '<span class="speech-provider-badge pending"><i></i>' + t("translation.notReady") + '</span>' +
+    '</div>';
+  }
+
+  const status = state.translation.cloudStatus;
+  const ready = status?.ready === true;
+  const code = status?.code || "CHECKING";
+
+  let title = t("translation.cloudChecking");
+  let body = t("translation.cloudCheckingBody");
+
+  if (ready) {
+    title = t("translation.cloudReadyTitle");
+    body = t("translation.cloudReadyBody");
+  } else if (code === "TRANSLATION_AUTH_REQUIRED") {
+    title = t("translation.cloudLoginTitle");
+    body = t("translation.cloudLoginBody");
+  } else if (["TRANSLATION_NOT_CONFIGURED", "TRANSLATION_CONFIG_INVALID", "TRANSLATION_HTTPS_REQUIRED"].includes(code)) {
+    title = t("translation.cloudSetupTitle");
+    body = t("translation.cloudSetupBody");
+  } else if (code !== "CHECKING") {
+    title = t("translation.cloudUnavailableTitle");
+    body = t("translation.cloudUnavailableBody");
+  }
+
+  return '<div class="translation-connection ' + (ready ? "is-ready" : "needs-action") + '">' +
+    '<div><b>' + escapeHtml(title) + '</b><p>' + escapeHtml(body) + '</p></div>' +
+    '<span class="speech-provider-badge ' + (ready ? "ready" : "pending") + '"><i></i>' +
+      escapeHtml(ready ? t("translation.ready") : t("translation.notReady")) + '</span>' +
+  '</div>';
+}
+
+function translationResultView(result) {
+  if (!result) return "";
+
+  const segments = Array.isArray(result.segments) ? result.segments : [];
+  const warnings = Number(result?.meta?.warningCount || segments.filter(item => item.timingRisk).length || 0);
+
+  return '<div class="translation-result">' +
+    '<div class="translation-result-head"><div><span class="side-kicker">' + t("translation.resultTitle") + '</span>' +
+      '<h4>' + escapeHtml(t("translation.resultDesc", {
+        source: languageName(result.sourceLanguage),
+        target: languageName(result.targetLanguage),
+        count: segments.length
+      })) + '</h4></div>' +
+      '<span class="speech-provider-badge ready"><i></i>' + t("translation.completed") + '</span></div>' +
+    (warnings
+      ? '<div class="translation-warning"><b>' + t("translation.timingWarningTitle", { count: warnings }) + '</b><span>' +
+          t("translation.timingWarningBody") + '</span></div>'
+      : '') +
+    '<div class="translation-list">' +
+      segments.slice(0, 12).map(segment =>
+        '<div class="translation-row ' + (segment.timingRisk ? "has-warning" : "") + '">' +
+          '<time>' + formatDuration(segment.start) + '</time>' +
+          '<div class="translation-pair"><p class="translation-source">' + escapeHtml(segment.sourceText || "") + '</p>' +
+          '<p class="translation-target">' + escapeHtml(segment.text || "") + '</p></div>' +
+          (segment.timingRisk ? '<span class="translation-risk" title="' + escapeHtml(t("translation.timingRisk")) + '">!</span>' : '') +
+        '</div>'
+      ).join("") +
+    '</div>' +
+    (segments.length > 12 ? '<p class="speech-result-note">' + t("translation.moreSegments", { count: segments.length - 12 }) + '</p>' : '') +
+  '</div>';
+}
+
+async function handleTranslationBlock(response) {
+  const code = response?.error?.code || "TRANSLATION_FAILED";
+
+  if (code === "TRANSLATION_AUTH_REQUIRED") {
+    await showNotice({
+      title: t("translation.authTitle"),
+      body: t("translation.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_SAME_LANGUAGE") {
+    await showNotice({
+      title: t("translation.sameLanguageTitle"),
+      body: t("translation.sameLanguageBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_TOO_LARGE") {
+    await showNotice({
+      title: t("translation.tooLargeTitle"),
+      body: t("translation.tooLargeBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["TRANSLATION_NETWORK", "TRANSLATION_TIMEOUT", "TRANSLATION_UNAVAILABLE", "SERVICE_UNAVAILABLE"].includes(code)) {
+    await showNotice({
+      title: t("translation.connectionTitle"),
+      body: t("translation.connectionBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_JOB_CONFLICT") {
+    await showNotice({
+      title: t("translation.conflictTitle"),
+      body: t("translation.conflictBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("translation.failedTitle"),
+    body: t("translation.failedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function startTranslation() {
+  const source = latestSourceJob();
+  const speechResult = speechResultForSource(source);
+
+  if (!source || !speechResult?.segments?.length) {
+    toast(t("translation.needTranscript"));
+    return;
+  }
+
+  if (state.translation.mode === "local") {
+    await showNotice({
+      title: t("translation.localPendingTitle"),
+      body: t("translation.localPendingBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (!state.cloud.auth?.authenticated) {
+    await showNotice({
+      title: t("translation.authTitle"),
+      body: t("translation.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  const sourceLanguage = speechResult.language && speechResult.language !== "unknown"
+    ? speechResult.language
+    : "auto";
+
+  if (sourceLanguage !== "auto" &&
+      sourceLanguage.toLowerCase() === state.translation.targetLanguage.toLowerCase()) {
+    await handleTranslationBlock({ error: { code: "TRANSLATION_SAME_LANGUAGE" } });
+    return;
+  }
+
+  const existingJob = translationJobForSource(source);
+  if (existingJob && ["validating", "queued", "translating", "cancelling"].includes(existingJob.status)) {
+    toast(t("translation.alreadyRunning"));
+    return;
+  }
+
+  const confirmed = await confirmAction({
+    title: t("translation.cloudConsentTitle"),
+    body: t("translation.cloudConsentBody", {
+      count: speechResult.segments.length,
+      language: languageName(state.translation.targetLanguage)
+    }),
+    confirmLabel: t("translation.start"),
+    cancelLabel: t("common.cancel")
+  });
+  if (!confirmed) return;
+
+  const reuse = existingJob &&
+    existingJob.status === "interrupted" &&
+    existingJob.targetLanguage === state.translation.targetLanguage;
+
+  const job = {
+    id: reuse ? existingJob.id : makeJobId("translation"),
+    sourcePath: source.sourcePath,
+    sourceName: source.name,
+    sourceLanguage,
+    targetLanguage: state.translation.targetLanguage,
+    mode: "cloud",
+    preserveTone: state.translation.preserveTone,
+    status: "validating",
+    progress: 0,
+    indeterminate: false,
+    retrySameId: false,
+    startedAt: Date.now()
+  };
+
+  state.translation.job = job;
+  save();
+  render();
+  toast(t("translation.started"));
+
+  const response = await window.desktopAPI.startTranslation({
+    jobId: job.id,
+    sourceLanguage,
+    targetLanguage: job.targetLanguage,
+    preserveTone: job.preserveTone,
+    segments: speechResult.segments.map(segment => ({
+      id: segment.id,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text
+    }))
+  });
+
+  if (!response?.ok) {
+    job.status = "failed";
+    job.failureCode = response?.error?.code || "TRANSLATION_FAILED";
+    job.retrySameId = [
+      "TRANSLATION_NETWORK",
+      "TRANSLATION_TIMEOUT",
+      "TRANSLATION_UNAVAILABLE",
+      "TRANSLATION_REQUEST_FAILED"
+    ].includes(job.failureCode);
+    save();
+    render();
+    await handleTranslationBlock(response);
+    return;
+  }
+
+  if (response.data?.cancelled || job.status === "cancelling") {
+    job.status = "cancelled";
+    save();
+    render();
+    toast(t("translation.stopped"));
+    return;
+  }
+
+  const result = response.data?.result || null;
+  job.status = "completed";
+  job.progress = 100;
+  job.completedAt = Date.now();
+
+  if (result) {
+    state.translation.result = {
+      ...result,
+      sourcePath: source.sourcePath,
+      sourceName: source.name
+    };
+  }
+
+  save();
+  render();
+  toast(t("translation.done"));
+}
+
+async function cancelTranslation() {
+  const job = state.translation.job;
+  if (!job || !["validating", "queued", "translating"].includes(job.status)) return;
+
+  const confirmed = await confirmAction({
+    title: t("translation.stopTitle"),
+    body: t("translation.stopBody"),
+    confirmLabel: t("translation.stop"),
+    cancelLabel: t("translation.keepGoing"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  job.status = "cancelling";
+  save();
+  render();
+
+  const response = await window.desktopAPI?.cancelTranslation?.(job.id);
+  if (!response?.cancelled) {
+    job.status = "translating";
+    save();
+    render();
+    toast(t("translation.stopFailed"));
+    return;
+  }
+
+  toast(t("translation.stopping"));
+}
+
+function updateTranslationProgress(payload) {
+  const job = state.translation.job;
+  if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
+
+  const allowed = new Set(["validating", "queued", "translating"]);
+  if (allowed.has(payload.state)) job.status = payload.state;
+  if (payload.serverJobId) job.serverJobId = String(payload.serverJobId);
+
+  job.indeterminate = payload.indeterminate === true;
+  if (!job.indeterminate && Number.isFinite(Number(payload.percent))) {
+    job.progress = Math.max(0, Math.min(99, Number(payload.percent)));
+  }
+
+  const label = $("translationStateLabel");
+  const percent = $("translationPercent");
+  const bar = $("translationProgressBar");
+  const track = $("translationProgressTrack");
+
+  if (label) label.textContent = translationStatusCopy(job);
+  if (percent) percent.textContent = job.indeterminate ? "•••" : Math.round(job.progress || 0) + "%";
+  if (track) track.classList.toggle("indeterminate", job.indeterminate);
+  if (bar) bar.style.width = (job.indeterminate ? 36 : Math.round(job.progress || 0)) + "%";
+  save();
+}
+
 function aiVideoPage() {
   const source = latestSourceJob();
   const speechJob = speechJobForSource(source);
