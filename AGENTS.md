@@ -126,3 +126,17 @@ Layout requirements:
 - important pointer targets should comfortably exceed WCAG 2.2's 24x24 CSS px minimum target requirement;
 - layouts should remain usable when text spacing or interface scale increases;
 - do not use fixed text-container heights that can cut off copy.
+
+
+## Commercial product messaging
+
+Viral AI Tool is a commercial-facing product.
+
+User-facing copy must:
+- describe what the user is doing, not which internal library or engine is doing it;
+- never expose implementation names such as FFmpeg in normal UI, toast messages, dialogs, or error messages;
+- explain errors as: what happened -> what it affects -> what the user can do next;
+- keep raw technical errors only for internal diagnostics and development logs;
+- use "Xuất video" / "Export video" for customer-facing processing language unless a more specific action is clearer;
+- distinguish clearly between "Xóa khỏi thư viện" and "Chuyển vào Thùng rác";
+- prefer recoverable actions such as relinking a missing file before destructive actions.
