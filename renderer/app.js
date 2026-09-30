@@ -8,6 +8,13 @@ const state = {
   scale: saved.scale || "comfortable",
   page: saved.page || "dashboard",
   output: saved.output || "",
+  speech: {
+    mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
+    language: saved.speech?.language || "auto",
+    providerStatus: null,
+    job: saved.speech?.job || null,
+    result: saved.speech?.result || null
+  },
   jobs: saved.jobs || [
     { name: "Douyin_Product_042.mp4", lang: "vi", status: "processing", progress: 73, time: "2 min ago" },
     { name: "UGC_Beauty_118.mp4", lang: "ko", status: "completed", progress: 100, time: "18 min ago" },
@@ -18,6 +25,14 @@ const state = {
 
 function makeJobId(prefix = "job") {
   return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+if (state.speech.job && ["validating", "preparing", "processing", "cancelling"].includes(state.speech.job.status)) {
+  state.speech.job = {
+    ...state.speech.job,
+    status: "interrupted",
+    progress: Number(state.speech.job.progress || 0)
+  };
 }
 
 state.jobs = state.jobs.map((job, index) => ({
@@ -50,6 +65,12 @@ function save() {
     scale: state.scale,
     page: state.page,
     output: state.output,
+    speech: {
+      mode: state.speech.mode,
+      language: state.speech.language,
+      job: state.speech.job,
+      result: state.speech.result
+    },
     jobs: state.jobs.slice(0, 50).map(({ thumbnail, previewUrl, ...job }) => job)
   }));
 }
