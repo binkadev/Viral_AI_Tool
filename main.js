@@ -24,9 +24,11 @@ const {
   serializeSpeechError
 } = require('./services/speech');
 const { createSessionStore } = require('./services/auth/session-store');
+const { createCloudConfigStore } = require('./services/cloud/config-store');
 
 let mainWindow;
 let sessionStore;
+let cloudConfigStore;
 let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
@@ -58,13 +60,92 @@ function getActiveWorkCount() {
 }
 
 function speechProviders() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+
   return createSpeechProviders({
     userDataPath: app.getPath('userData'),
     tempPath: app.getPath('temp'),
-    backendUrl: process.env.VIRAL_AI_CLOUD_URL || '',
+    backendUrl: cloudConfig.backendUrl || '',
     getAccessToken: () => sessionStore?.getAccessToken() || null,
     appVersion: app.getVersion()
   });
+}
+
+async function testCloudConnection(backendUrl) {
+  const validated = cloudConfigStore?.validateBackendUrl(backendUrl);
+  if (!validated?.ok || !validated.backendUrl) {
+    return {
+      ok: false,
+      code: validated?.code || 'CLOUD_NOT_CONFIGURED'
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const url = new URL(validated.backendUrl);
+    url.pathname = (url.pathname.replace(/\/+$/, '') + '/v1/speech/status').replace(/\/+/g, '/');
+
+    const headers = {
+      accept: 'application/json',
+      'x-viral-ai-client': 'desktop',
+      'x-viral-ai-version': app.getVersion()
+    };
+
+    const token = sessionStore?.getAccessToken();
+    if (token) headers.authorization = 'Bearer ' + token;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal: controller.signal
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        ok: true,
+        reachable: true,
+        authenticated: false,
+        code: 'CLOUD_AUTH_REQUIRED',
+        status: response.status
+      };
+    }
+
+    if (response.ok) {
+      let payload = null;
+      try { payload = await response.json(); } catch {}
+      return {
+        ok: true,
+        reachable: true,
+        authenticated: Boolean(token),
+        code: payload?.ready === false ? (payload.code || 'CLOUD_UNAVAILABLE') : 'READY',
+        status: response.status,
+        data: {
+          quota: payload?.quota || null,
+          limits: payload?.limits || null,
+          retention: payload?.retention || null
+        }
+      };
+    }
+
+    return {
+      ok: false,
+      reachable: true,
+      code: response.status >= 500 ? 'CLOUD_UNAVAILABLE' : 'CLOUD_REQUEST_FAILED',
+      status: response.status
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reachable: false,
+      code: error?.name === 'AbortError' ? 'CLOUD_TIMEOUT' : 'CLOUD_NETWORK'
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function waitForWorkToStop(timeoutMs = 2500) {
@@ -139,6 +220,10 @@ app.whenReady().then(() => {
     userDataPath: app.getPath('userData'),
     safeStorage
   });
+  cloudConfigStore = createCloudConfigStore({
+    userDataPath: app.getPath('userData'),
+    isPackaged: app.isPackaged
+  });
   createWindow();
 
   app.on('activate', () => {
@@ -165,6 +250,37 @@ ipcMain.handle('auth:status', async () => {
     expiresAt: null,
     secureStorage: false
   };
+});
+
+ipcMain.handle('cloud:config-get', async () => {
+  return cloudConfigStore?.read() || {
+    environment: 'development',
+    backendUrl: '',
+    source: 'unset',
+    developerSettingsVisible: !app.isPackaged
+  };
+});
+
+ipcMain.handle('cloud:config-save', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const result = cloudConfigStore?.write({
+    environment: safePayload.environment,
+    backendUrl: safePayload.backendUrl
+  });
+
+  return result || { ok: false, code: 'CLOUD_CONFIG_UNAVAILABLE' };
+});
+
+ipcMain.handle('cloud:config-clear', async () => {
+  return cloudConfigStore?.clear() || { ok: false, code: 'CLOUD_CONFIG_UNAVAILABLE' };
+});
+
+ipcMain.handle('cloud:test-connection', async (_event, backendUrl) => {
+  const configured = cloudConfigStore?.read();
+  const target = typeof backendUrl === 'string' && backendUrl.trim()
+    ? backendUrl.trim()
+    : configured?.backendUrl || '';
+  return testCloudConnection(target);
 });
 
 ipcMain.handle('files:select-videos', async () => {
