@@ -22,26 +22,37 @@ let uiLocale = 'vi';
 function closeCopy() {
   if (uiLocale === 'en') {
     return {
-      title: 'Video is still exporting',
-      message: 'One or more videos are still being exported.',
-      detail: 'Closing now will stop the current export. Your original videos will not be deleted.',
-      keepOpen: 'Keep exporting',
+      title: 'Work is still in progress',
+      message: 'Viral AI Tool is still processing one or more items.',
+      detail: 'Closing now will stop the active work. Your original videos will not be deleted.',
+      keepOpen: 'Keep working',
       stopAndClose: 'Stop and close'
     };
   }
 
   return {
-    title: 'Video vẫn đang được xuất',
-    message: 'Vẫn còn video đang được xuất.',
-    detail: 'Nếu đóng ứng dụng lúc này, tiến trình hiện tại sẽ dừng. Video gốc của bạn vẫn được giữ nguyên.',
-    keepOpen: 'Tiếp tục xuất video',
+    title: 'Vẫn còn tiến trình đang chạy',
+    message: 'Viral AI Tool vẫn đang xử lý một hoặc nhiều video.',
+    detail: 'Nếu đóng ứng dụng lúc này, các tiến trình đang chạy sẽ dừng. Video gốc của bạn vẫn được giữ nguyên.',
+    keepOpen: 'Tiếp tục xử lý',
     stopAndClose: 'Dừng và đóng'
   };
 }
 
-async function waitForRendersToStop(timeoutMs = 2500) {
+function getActiveWorkCount() {
+  return getActiveRenderCount() + activeSpeechCount();
+}
+
+function speechProviders() {
+  return createSpeechProviders({
+    userDataPath: app.getPath('userData'),
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  });
+}
+
+async function waitForWorkToStop(timeoutMs = 2500) {
   const started = Date.now();
-  while (getActiveRenderCount() > 0 && Date.now() - started < timeoutMs) {
+  while (getActiveWorkCount() > 0 && Date.now() - started < timeoutMs) {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 }
@@ -68,7 +79,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
   mainWindow.on('close', async event => {
-    if (forceClose || getActiveRenderCount() === 0) return;
+    if (forceClose || getActiveWorkCount() === 0) return;
     event.preventDefault();
     if (closePromptOpen) return;
 
@@ -89,7 +100,8 @@ function createWindow() {
       if (result.response === 1) {
         forceClose = true;
         cancelAllRenders();
-        await waitForRendersToStop();
+        await Promise.allSettled([]);
+        await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
       }
     } finally {
@@ -218,6 +230,72 @@ ipcMain.handle('video:render', async (event, payload) => {
 ipcMain.handle('video:cancel-render', async (_event, jobId) => {
   if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false };
   return { ok: true, cancelled: cancelRender(jobId) };
+});
+
+ipcMain.handle('speech:provider-status', async () => {
+  const providers = speechProviders();
+  return {
+    local: providers.local.status(),
+    cloud: providers.cloud.status()
+  };
+});
+
+ipcMain.handle('speech:preflight', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  try {
+    const data = await preflightSpeech({
+      inputPath: safePayload.inputPath,
+      mode: safePayload.mode,
+      consent: safePayload.consent === true,
+      providers: speechProviders()
+    });
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeSpeechError(error);
+    console.error('[SpeechPreflight]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('speech:start', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  try {
+    const data = await startSpeech({
+      jobId: safePayload.jobId,
+      inputPath: safePayload.inputPath,
+      mode: safePayload.mode,
+      consent: safePayload.consent === true,
+      language: typeof safePayload.language === 'string' ? safePayload.language : 'auto',
+      providers: speechProviders(),
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('speech:progress', progress);
+        }
+      }
+    });
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeSpeechError(error);
+    console.error('[SpeechRecognition]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('speech:cancel', async (_event, jobId) => {
+  if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false, cancelled: false };
+  return { ok: true, cancelled: await cancelSpeech(jobId) };
 });
 
 ipcMain.handle('app:set-locale', async (_event, locale) => {
