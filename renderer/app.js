@@ -48,7 +48,7 @@ function save() {
     scale: state.scale,
     page: state.page,
     output: state.output,
-    jobs: state.jobs.slice(0, 50).map(({ thumbnail, ...job }) => job)
+    jobs: state.jobs.slice(0, 50).map(({ thumbnail, previewUrl, ...job }) => job)
   }));
 }
 
@@ -364,15 +364,23 @@ function aiVideoPage() {
     ["5", t("aiVideo.steps.subtitles"), t("aiVideo.steps.styled")],
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
+
+  const source = latestSourceJob();
+  const sourceName = source?.name || t("media.noVideo");
+  const sourceMeta = source ? mediaMetaText(source) : "";
+  const preview = source?.previewUrl
+    ? '<div class="preview preview-real"><video class="preview-video" controls preload="metadata" src="' + source.previewUrl + '"></video></div>'
+    : '<div class="preview"><div class="preview-center"><div class="preview-play">▶</div><div class="preview-label">' + t("media.previewHint") + '</div></div></div>';
+
   return '<div class="section-head"><div><h3>' + t("aiVideo.workflow") + "</h3><p>" + t("aiVideo.workflowDesc") +
     '</p></div><button id="render" class="button primary" type="button">' + t("aiVideo.renderFinal") + "</button></div>" +
     '<div class="workflow">' + steps.map((x, i) =>
       '<div class="wf-step ' + (i === 3 ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
       (i < steps.length - 1 ? '<div class="wf-arrow">→</div>' : "")
     ).join("") + "</div>" +
-    '<div class="section-head"><div><h3>' + t("aiVideo.editor") + "</h3><p>Product_review_042</p></div></div>" +
-    '<div class="editor-grid"><div class="preview"><div class="preview-center"><div class="preview-play">▶</div>' +
-    '<div class="preview-label">00:24 / 01:18 · ' + t("aiVideo.preview") + "</div></div></div>" +
+    '<div class="section-head"><div><h3>' + t("aiVideo.editor") + '</h3><p>' + escapeHtml(sourceName) +
+      (sourceMeta ? ' · ' + escapeHtml(sourceMeta) : '') + "</p></div></div>" +
+    '<div class="editor-grid">' + preview +
     '<div class="stack"><div class="mini-card"><h4>' + t("aiVideo.translation") + "</h4>" +
     '<label class="label">' + t("common.targetLanguage") + '</label><select class="select"><option>' + languageName("vi") +
     "</option><option>English</option><option>" + languageName("ko") + "</option><option>" + languageName("ja") + "</option></select>" +
@@ -550,12 +558,25 @@ async function enrichJob(job) {
   if (!window.desktopAPI || !job?.sourcePath) return;
   try {
     job.mediaState = "reading";
-    const result = await window.desktopAPI.createThumbnail(job.sourcePath);
+    const [result, previewUrl] = await Promise.all([
+      window.desktopAPI.createThumbnail(job.sourcePath),
+      window.desktopAPI.getVideoUrl?.(job.sourcePath)
+    ]);
     job.meta = result?.metadata || null;
     job.thumbnail = result?.dataUrl || "";
+    job.previewUrl = previewUrl || "";
     job.mediaState = "ready";
     save();
-    if (["dashboard", "download", "library"].includes(state.page)) render();
+    if (["dashboard", "download", "library", "ai-video"].includes(state.page)) render();
+
+if (window.desktopAPI?.createThumbnail) {
+  setTimeout(() => {
+    state.jobs
+      .filter(job => job.sourcePath && !job.isRenderOutput && !job.thumbnail)
+      .slice(0, 6)
+      .forEach(enrichJob);
+  }, 250);
+}
   } catch (error) {
     job.mediaState = "error";
     job.mediaError = error?.message || String(error);
