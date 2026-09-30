@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Viral AI Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <div class="drag">
+      <div class="app-icon">V</div>
+      <strong>Viral AI Tool</strong>
+      <span class="desktop-pill">DESKTOP</span>
+    </div>
+    <div class="window-controls">
+      <button id="winMin" aria-label="Thu nhỏ">—</button>
+      <button id="winMax" aria-label="Phóng to">□</button>
+      <button id="winClose" class="close" aria-label="Đóng">×</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">V</div>
+        <div>
+          <div class="brand-name">VIRAL AI</div>
+          <div class="brand-sub">TOOL · CREATOR STUDIO</div>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <div>
+          <span>WORKSPACE</span>
+          <strong>Hoàng Studio</strong>
+        </div>
+        <i></i>
+      </div>
+
+      <nav id="nav"></nav>
+
+      <div class="sidebar-bottom">
+        <div class="credit-card">
+          <div class="credit-head"><span>Monthly credits</span><b>2,480</b></div>
+          <div class="bar"><i style="width:66%"></i></div>
+          <small>66% remaining</small>
+        </div>
+        <div class="profile">
+          <div class="avatar">NH</div>
+          <div><b>Nhựt Hoàng</b><span>Creator Pro</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div id="breadcrumb" class="breadcrumb">Workspace / Dashboard</div>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button">⌕</button>
+          <button class="icon-button">♢</button>
+          <button id="quickProject" class="button primary">＋ New project</button>
+        </div>
+      </header>
+
+      <section id="page" class="page"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <div id="modal" class="modal-backdrop hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
