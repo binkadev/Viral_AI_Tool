@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -13,8 +13,20 @@ const {
   serializeProcessingError,
   assertVideoPath
 } = require('./services/ffmpeg');
+const speechModelManager = require('./services/speech/model-manager');
+const {
+  createProviders: createSpeechProviders,
+  preflightSpeech,
+  startSpeech,
+  cancelSpeech,
+  cancelAllSpeech,
+  activeSpeechCount,
+  serializeSpeechError
+} = require('./services/speech');
+const { createSessionStore } = require('./services/auth/session-store');
 
 let mainWindow;
+let sessionStore;
 let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
@@ -49,7 +61,8 @@ function speechProviders() {
   return createSpeechProviders({
     userDataPath: app.getPath('userData'),
     tempPath: app.getPath('temp'),
-    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null
   });
 }
 
@@ -121,6 +134,10 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.viralai.tool');
+  sessionStore = createSessionStore({
+    userDataPath: app.getPath('userData'),
+    safeStorage
+  });
   createWindow();
 
   app.on('activate', () => {
