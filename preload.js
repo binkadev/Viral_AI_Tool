@@ -46,6 +46,14 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   preflightSpeech: payload => ipcRenderer.invoke('speech:preflight', payload),
   startSpeech: payload => ipcRenderer.invoke('speech:start', payload),
   cancelSpeech: jobId => ipcRenderer.invoke('speech:cancel', jobId),
+  getTranslationStatus: () => ipcRenderer.invoke('translation:status'),
+  startTranslation: payload => ipcRenderer.invoke('translation:start', payload),
+  cancelTranslation: jobId => ipcRenderer.invoke('translation:cancel', jobId),
+  onTranslationProgress: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('translation:progress', listener);
+    return () => ipcRenderer.removeListener('translation:progress', listener);
+  },
   onSpeechProgress: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);
