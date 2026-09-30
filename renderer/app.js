@@ -453,6 +453,7 @@ function speechProviderStatusLabel(status) {
     CLOUD_QUOTA_EXCEEDED: "speech.cloudQuotaExceeded",
     CLOUD_PLAN_REQUIRED: "speech.cloudPlanRequired",
     CLOUD_UNAVAILABLE: "speech.cloudUnavailable",
+    CLOUD_PROVIDER_NOT_CONFIGURED: "speech.cloudProviderPending",
     CLOUD_NETWORK: "speech.cloudUnavailable",
     CLOUD_TIMEOUT: "speech.cloudUnavailable",
     CHECKING: "speech.checking"
