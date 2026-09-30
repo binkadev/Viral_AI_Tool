@@ -1,6 +1,6 @@
 {
   "name": "viral-ai-tool",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Viral AI Tool desktop video automation studio",
   "main": "main.js",
   "author": "Viral AI Tool",
@@ -25,13 +25,16 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "services/**/*"
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -41,6 +44,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Viral AI Tool"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ]
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.3.0"
   }
 }
