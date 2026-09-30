@@ -5,6 +5,7 @@ const { normalizeSpeechResult } = require("./result-normalizer");
 
 const activeJobs = new Map();
 const reservations = new Map();
+const cancelledJobs = new Set();
 
 class SpeechError extends Error {
   constructor(code, message, details = {}) {
@@ -40,11 +41,12 @@ function duplicateForInput(inputPath) {
   return reserved || null;
 }
 
-async function preflightSpeech({ inputPath, mode, consent = false, providers }) {
+async function preflightSpeech({ inputPath, mode, consent = false, providers, ignoreJobId = null }) {
   const safeInput = assertVideoPath(inputPath);
   const safeMode = validateMode(mode);
 
-  if (duplicateForInput(safeInput)) {
+  const duplicate = duplicateForInput(safeInput);
+  if (duplicate && duplicate.jobId !== ignoreJobId) {
     throw speechError("DUPLICATE_ACTIVE", "Speech recognition is already active for this video.");
   }
 
@@ -83,17 +85,35 @@ async function startSpeech({ jobId, inputPath, mode, consent = false, language =
     throw speechError("JOB_INVALID", "Invalid speech job id.");
   }
 
-  const preflight = await preflightSpeech({ inputPath, mode, consent, providers });
+  const safeInput = assertVideoPath(inputPath);
+  const safeMode = validateMode(mode);
+
+  if (duplicateForInput(safeInput)) {
+    throw speechError("DUPLICATE_ACTIVE", "Speech recognition is already active for this video.");
+  }
+
   reservations.set(jobId, {
     jobId,
-    inputPath: preflight.inputPath,
-    mode: preflight.mode,
+    inputPath: safeInput,
+    mode: safeMode,
     createdAt: Date.now()
   });
 
-  const provider = providers[preflight.mode];
-
   try {
+    const preflight = await preflightSpeech({
+      inputPath: safeInput,
+      mode: safeMode,
+      consent,
+      providers,
+      ignoreJobId: jobId
+    });
+
+    if (cancelledJobs.has(jobId) || !reservations.has(jobId)) {
+      return { cancelled: true, result: null };
+    }
+
+    const provider = providers[preflight.mode];
+
     activeJobs.set(jobId, {
       jobId,
       inputPath: preflight.inputPath,
@@ -109,8 +129,14 @@ async function startSpeech({ jobId, inputPath, mode, consent = false, language =
       jobId,
       inputPath: preflight.inputPath,
       language,
-      onProgress: payload => onProgress?.({ jobId, ...payload })
+      onProgress: payload => {
+        if (!cancelledJobs.has(jobId)) onProgress?.({ jobId, ...payload });
+      }
     });
+
+    if (cancelledJobs.has(jobId)) {
+      return { cancelled: true, result: null };
+    }
 
     return {
       cancelled: false,
@@ -123,24 +149,37 @@ async function startSpeech({ jobId, inputPath, mode, consent = false, language =
       })
     };
   } catch (error) {
+    if (cancelledJobs.has(jobId)) {
+      return { cancelled: true, result: null };
+    }
     if (error instanceof SpeechError) throw error;
     throw speechError(error?.code || "SPEECH_FAILED", error?.message || "Speech recognition failed.");
   } finally {
     activeJobs.delete(jobId);
     reservations.delete(jobId);
+    cancelledJobs.delete(jobId);
   }
 }
 
 async function cancelSpeech(jobId) {
   const active = activeJobs.get(jobId);
-  if (!active) {
-    if (reservations.delete(jobId)) return true;
-    return false;
+  const reserved = reservations.has(jobId);
+
+  if (!active && !reserved) return false;
+
+  cancelledJobs.add(jobId);
+
+  if (reserved && !active) {
+    reservations.delete(jobId);
+    return true;
   }
 
   try {
-    return Boolean(await active.provider.cancel(jobId));
+    const cancelled = Boolean(await active.provider.cancel(jobId));
+    if (!cancelled) cancelledJobs.delete(jobId);
+    return cancelled;
   } catch {
+    cancelledJobs.delete(jobId);
     return false;
   }
 }
