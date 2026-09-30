@@ -396,10 +396,26 @@ ipcMain.handle('cloud:config-get', async () => {
 
 ipcMain.handle('cloud:config-save', async (_event, payload) => {
   const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const before = cloudConfigStore?.read() || null;
+
   const result = cloudConfigStore?.write({
     environment: safePayload.environment,
     backendUrl: safePayload.backendUrl
   });
+
+  if (result?.ok) {
+    const after = result.data || cloudConfigStore?.read() || null;
+    const endpointChanged =
+      (before?.backendUrl || '') !== (after?.backendUrl || '') ||
+      (before?.environment || '') !== (after?.environment || '');
+
+    if (endpointChanged) sessionStore?.clear();
+
+    return {
+      ...result,
+      sessionCleared: endpointChanged
+    };
+  }
 
   return result || { ok: false, code: 'CLOUD_CONFIG_UNAVAILABLE' };
 });
