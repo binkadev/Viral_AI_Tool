@@ -1,0 +1,60 @@
+name: Lock and verify dependencies
+
+on:
+  push:
+    paths:
+      - package.json
+      - .github/workflows/lock-dependencies.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lock-dependencies
+  cancel-in-progress: false
+
+jobs:
+  lock-and-verify:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Generate lockfile without lifecycle scripts
+        shell: pwsh
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify pinned runtime integrity
+        shell: pwsh
+        run: |
+          node -e "const l=require('./package-lock.json'); const checks=[['sherpa-onnx-node','1.13.8','sha512-MsDMBdhLFTZ1GwvcGSSQhnS7g/EA8OMH6IYysCVUOM7j8Icty9KRc0E6YT1A5fWBsZwRfKOeh88QC95aRvS8ag=='],['sherpa-onnx-win-x64','1.13.8','sha512-oZF1c9VPOKtMwn83Bboc5XSWL+76BRoyB3eUuVnCknBKxwSULZU2Foia9VHWzU+n4I12rPsP6z6H9Rp1hD9o8g==']]; for (const [name,version,integrity] of checks){const p=l.packages['node_modules/'+name]; if(!p) throw new Error('Missing '+name+' in lockfile'); if(p.version!==version) throw new Error(name+' version mismatch: '+p.version); if(p.integrity!==integrity) throw new Error(name+' integrity mismatch');} console.log('Pinned native runtime integrity verified');"
+
+      - name: Install locked dependencies for smoke test
+        shell: pwsh
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Smoke test local speech runtime
+        shell: pwsh
+        run: |
+          node -e "const runtime=require('sherpa-onnx-node'); if(!runtime || typeof runtime.OfflineRecognizer!=='function' || typeof runtime.readWave!=='function'){throw new Error('Local speech runtime API is incomplete');} console.log('Local speech runtime loaded:', runtime.version || 'version available through native package');"
+
+      - name: Commit lockfile
+        shell: pwsh
+        run: |
+          if (git status --porcelain -- package-lock.json) {
+            git config user.name "viral-ai-tool-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "build: lock verified desktop dependencies"
+            git push
+          } else {
+            Write-Host "package-lock.json is already up to date."
+          }
