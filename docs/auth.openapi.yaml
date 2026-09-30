@@ -1,0 +1,231 @@
+openapi: 3.1.0
+info:
+  title: Viral AI Tool Authentication API
+  version: 1.0.0
+  description: |
+    Authentication contract between Viral AI Tool Desktop and Viral AI Backend.
+    Desktop credentials are sent only to Viral AI Backend. Provider API secrets are never exposed to the desktop app.
+servers:
+  - url: https://api.example.invalid
+
+paths:
+  /v1/auth/login:
+    post:
+      summary: Sign in with a Viral AI Tool account
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 320
+                password:
+                  type: string
+                  minLength: 6
+                  maxLength: 256
+      responses:
+        "200":
+          description: New desktop session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/InvalidCredentials"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token and issue a new session
+      operationId: refreshSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 4096
+      responses:
+        "200":
+          description: Rotated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Refresh session is no longer valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/logout:
+    post:
+      summary: Revoke the current desktop session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [loggedOut]
+                properties:
+                  loggedOut:
+                    type: boolean
+
+  /v1/account/me:
+    get:
+      summary: Get the authenticated account, plan and allowance
+      operationId: getCurrentAccount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-access-token
+
+  responses:
+    InvalidCredentials:
+      description: Email or password is incorrect
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: INVALID_CREDENTIALS
+
+    RateLimited:
+      description: Too many sign-in attempts
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            limited:
+              value:
+                error:
+                  code: RATE_LIMITED
+
+  schemas:
+    Session:
+      type: object
+      additionalProperties: false
+      required:
+        - accessToken
+        - refreshToken
+        - accessExpiresAt
+        - refreshExpiresAt
+        - user
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshExpiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, name, plan]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        plan:
+          type: string
+
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [user, quota]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        quota:
+          type: object
+          additionalProperties: false
+          required: [remainingMinutes]
+          properties:
+            remainingMinutes:
+              type: number
+              minimum: 0
+            resetAt:
+              type: string
+              format: date-time
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
+            requestId:
+              type: string
