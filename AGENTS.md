@@ -147,3 +147,15 @@ User-facing copy must:
 Before implementing or modifying any production-facing feature, read and follow `docs/PRODUCT_GUARDRAILS.md`.
 
 A feature is not considered complete from its happy path alone. Its validation, duplicate protection, cancellation, recovery, destructive actions, resource failures, localization, persistence, and user-facing error behavior must be considered explicitly.
+
+
+## Runtime verification
+
+Syntax checks alone are not sufficient for native/service work.
+
+Before marking a feature complete:
+- verify every local `require("./...")` resolves to a real repository file;
+- verify every external package used by runtime code is declared in `package.json`;
+- verify renderer i18n keys exist in both Vietnamese and English;
+- verify customer-facing copy does not expose internal engine/provider names;
+- distinguish static verification from an actual end-to-end desktop run.
