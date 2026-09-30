@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   renderVideo: payload => ipcRenderer.invoke('video:render', payload),
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
   setLocale: locale => ipcRenderer.invoke('app:set-locale', locale),
+  getAuthStatus: () => ipcRenderer.invoke('auth:status'),
 
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
