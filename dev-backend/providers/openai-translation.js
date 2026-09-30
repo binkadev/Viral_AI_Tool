@@ -110,8 +110,6 @@ async function translate({
     properties: {
       segments: {
         type: "array",
-        minItems: inputSegments.length,
-        maxItems: inputSegments.length,
         items: {
           type: "object",
           additionalProperties: false,
