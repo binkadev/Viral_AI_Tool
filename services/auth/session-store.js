@@ -41,60 +41,121 @@ function createSessionStore({ userDataPath, safeStorage }) {
     );
   }
 
-  function setAccessToken(token, meta = {}) {
-    if (typeof token !== "string" || !token.trim()) {
-      remove();
-      return false;
-    }
-
+  function encrypt(value) {
     if (!canEncrypt()) {
       const error = new Error("Secure local storage is unavailable.");
       error.code = "SECURE_STORAGE_UNAVAILABLE";
       throw error;
     }
+    return safeStorage.encryptString(String(value)).toString("base64");
+  }
 
-    const encrypted = safeStorage.encryptString(token.trim()).toString("base64");
+  function decrypt(value) {
+    if (!value || !canEncrypt()) return null;
+    try {
+      return safeStorage.decryptString(Buffer.from(value, "base64"));
+    } catch {
+      return null;
+    }
+  }
+
+  function setSession(session = {}) {
+    const accessToken = typeof session.accessToken === "string" ? session.accessToken.trim() : "";
+    const refreshToken = typeof session.refreshToken === "string" ? session.refreshToken.trim() : "";
+
+    if (!accessToken || !refreshToken) {
+      const error = new Error("Session tokens are incomplete.");
+      error.code = "SESSION_INVALID";
+      throw error;
+    }
+
     writeRaw({
-      version: 1,
-      encryptedAccessToken: encrypted,
-      expiresAt: meta.expiresAt || null,
-      userId: meta.userId || null,
+      version: 2,
+      encryptedAccessToken: encrypt(accessToken),
+      encryptedRefreshToken: encrypt(refreshToken),
+      accessExpiresAt: session.accessExpiresAt || null,
+      refreshExpiresAt: session.refreshExpiresAt || null,
+      user: session.user && typeof session.user === "object" ? {
+        id: session.user.id || null,
+        email: session.user.email || null,
+        name: session.user.name || null,
+        plan: session.user.plan || null
+      } : null,
       updatedAt: new Date().toISOString()
     });
 
     return true;
   }
 
+  function setAccessToken(token, meta = {}) {
+    const current = readRaw();
+    const refreshToken = decrypt(current?.encryptedRefreshToken);
+    if (!refreshToken) {
+      const error = new Error("Refresh token is required.");
+      error.code = "SESSION_INVALID";
+      throw error;
+    }
+    return setSession({
+      accessToken: token,
+      refreshToken,
+      accessExpiresAt: meta.expiresAt || current?.accessExpiresAt || null,
+      refreshExpiresAt: current?.refreshExpiresAt || null,
+      user: meta.user || current?.user || null
+    });
+  }
+
+  function accessExpired(data) {
+    if (!data?.accessExpiresAt) return false;
+    const expiresAt = Date.parse(data.accessExpiresAt);
+    return Number.isFinite(expiresAt) && Date.now() >= expiresAt;
+  }
+
+  function refreshExpired(data) {
+    if (!data?.refreshExpiresAt) return false;
+    const expiresAt = Date.parse(data.refreshExpiresAt);
+    return Number.isFinite(expiresAt) && Date.now() >= expiresAt;
+  }
+
   function getAccessToken() {
     const data = readRaw();
-    if (!data?.encryptedAccessToken || !canEncrypt()) return null;
+    if (!data?.encryptedAccessToken || accessExpired(data)) return null;
+    return decrypt(data.encryptedAccessToken);
+  }
 
-    if (data.expiresAt) {
-      const expiresAt = Date.parse(data.expiresAt);
-      if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) {
-        remove();
-        return null;
-      }
-    }
+  function getRefreshToken() {
+    const data = readRaw();
+    if (!data?.encryptedRefreshToken || refreshExpired(data)) return null;
+    return decrypt(data.encryptedRefreshToken);
+  }
 
-    try {
-      return safeStorage.decryptString(
-        Buffer.from(data.encryptedAccessToken, "base64")
-      );
-    } catch {
-      remove();
-      return null;
-    }
+  function getUser() {
+    return readRaw()?.user || null;
+  }
+
+  function needsRefresh(skewMs = 60000) {
+    const data = readRaw();
+    if (!data?.encryptedAccessToken) return false;
+    if (!data.accessExpiresAt) return false;
+    const expiresAt = Date.parse(data.accessExpiresAt);
+    return Number.isFinite(expiresAt) && Date.now() + Math.max(0, Number(skewMs || 0)) >= expiresAt;
   }
 
   function status() {
     const data = readRaw();
-    const token = getAccessToken();
+    const accessToken = getAccessToken();
+    const refreshToken = getRefreshToken();
+    const user = data?.user || null;
 
     return {
-      authenticated: Boolean(token),
-      userId: token ? (data?.userId || null) : null,
-      expiresAt: token ? (data?.expiresAt || null) : null,
+      authenticated: Boolean(accessToken || refreshToken),
+      accessReady: Boolean(accessToken),
+      refreshReady: Boolean(refreshToken),
+      userId: user?.id || null,
+      email: user?.email || null,
+      name: user?.name || null,
+      plan: user?.plan || null,
+      accessExpiresAt: data?.accessExpiresAt || null,
+      refreshExpiresAt: data?.refreshExpiresAt || null,
       secureStorage: canEncrypt()
     };
   }
@@ -105,8 +166,12 @@ function createSessionStore({ userDataPath, safeStorage }) {
   }
 
   return {
+    setSession,
     setAccessToken,
     getAccessToken,
+    getRefreshToken,
+    getUser,
+    needsRefresh,
     status,
     clear
   };
