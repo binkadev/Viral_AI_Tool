@@ -24,8 +24,7 @@ class LocalSpeechProvider {
         mode: this.mode,
         ready: false,
         code: "LOCAL_MODEL_REQUIRED",
-        modelInstalled: false,
-        directory
+        modelInstalled: false
       };
     }
 
@@ -40,8 +39,7 @@ class LocalSpeechProvider {
           mode: this.mode,
           ready: false,
           code: "LOCAL_MODEL_INCOMPLETE",
-          modelInstalled: false,
-          directory
+          modelInstalled: false
         };
       }
 
@@ -54,16 +52,14 @@ class LocalSpeechProvider {
           id: String(manifest.id || "local-speech"),
           version: String(manifest.version || "1"),
           sizeBytes: fs.statSync(modelFile).size
-        },
-        directory
+        }
       };
     } catch {
       return {
         mode: this.mode,
         ready: false,
         code: "LOCAL_MODEL_INVALID",
-        modelInstalled: false,
-        directory
+        modelInstalled: false
       };
     }
   }
