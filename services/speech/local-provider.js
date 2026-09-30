@@ -12,8 +12,12 @@ const activeWorkers = new Map();
 
 function runtimeAvailable() {
   try {
-    require.resolve("sherpa-onnx-node");
-    return true;
+    const runtime = require("sherpa-onnx-node");
+    return Boolean(
+      runtime &&
+      typeof runtime.OfflineRecognizer === "function" &&
+      typeof runtime.readWave === "function"
+    );
   } catch {
     return false;
   }
@@ -51,16 +55,27 @@ function startRecognitionWorker({
       worker,
       settled: false,
       ready: false,
-      stderr: ""
+      stderr: "",
+      startupTimer: null
     };
     activeWorkers.set(jobId, state);
 
     const settle = (fn, value) => {
       if (state.settled) return;
       state.settled = true;
+      if (state.startupTimer) clearTimeout(state.startupTimer);
       activeWorkers.delete(jobId);
       fn(value);
     };
+
+    state.startupTimer = setTimeout(() => {
+      if (state.ready || state.settled) return;
+      try { worker.kill("SIGTERM"); } catch {}
+      settle(reject, workerError(
+        "LOCAL_WORKER_TIMEOUT",
+        "Local recognition worker did not start in time."
+      ));
+    }, 15000);
 
     worker.stderr?.on("data", chunk => {
       if (state.stderr.length < 12000) {
@@ -73,6 +88,10 @@ function startRecognitionWorker({
 
       if (message.type === "ready" && !state.ready) {
         state.ready = true;
+        if (state.startupTimer) {
+          clearTimeout(state.startupTimer);
+          state.startupTimer = null;
+        }
         worker.send({
           type: "start",
           payload: {
