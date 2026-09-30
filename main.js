@@ -398,22 +398,51 @@ ipcMain.handle('cloud:config-save', async (_event, payload) => {
   const safePayload = payload && typeof payload === 'object' ? payload : {};
   const before = cloudConfigStore?.read() || null;
 
+  const previewValidation = cloudConfigStore?.validateBackendUrl(safePayload.backendUrl);
+  if (!previewValidation?.ok) return previewValidation;
+
+  const nextEnvironment = safePayload.environment === 'production' ? 'production' : 'development';
+  if (previewValidation.backendUrl && nextEnvironment === 'production') {
+    const parsed = new URL(previewValidation.backendUrl);
+    if (parsed.protocol !== 'https:') return { ok: false, code: 'CLOUD_HTTPS_REQUIRED' };
+  }
+
+  const endpointWillChange =
+    (before?.backendUrl || '') !== (previewValidation.backendUrl || '') ||
+    (before?.environment || 'development') !== nextEnvironment;
+
+  let previousSessionRemotePending = false;
+
+  if (endpointWillChange && before?.backendUrl) {
+    const refreshToken = sessionStore?.getRefreshToken() || null;
+    const accessToken = sessionStore?.getAccessToken() || null;
+
+    if (refreshToken || accessToken) {
+      try {
+        const oldClient = new AuthClient({
+          backendUrl: before.backendUrl,
+          appVersion: app.getVersion()
+        });
+        const logoutResult = await oldClient.logout(refreshToken, accessToken);
+        previousSessionRemotePending = logoutResult?.remotePending === true;
+      } catch {
+        previousSessionRemotePending = true;
+      }
+    }
+  }
+
   const result = cloudConfigStore?.write({
-    environment: safePayload.environment,
-    backendUrl: safePayload.backendUrl
+    environment: nextEnvironment,
+    backendUrl: previewValidation.backendUrl
   });
 
   if (result?.ok) {
-    const after = result.data || cloudConfigStore?.read() || null;
-    const endpointChanged =
-      (before?.backendUrl || '') !== (after?.backendUrl || '') ||
-      (before?.environment || '') !== (after?.environment || '');
-
-    if (endpointChanged) sessionStore?.clear();
+    if (endpointWillChange) sessionStore?.clear();
 
     return {
       ...result,
-      sessionCleared: endpointChanged
+      sessionCleared: endpointWillChange,
+      previousSessionRemotePending
     };
   }
 
