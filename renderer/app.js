@@ -3,6 +3,9 @@ const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
 
 const state = {
   locale: I18N.supported.includes(saved.locale) ? saved.locale : "vi",
+  appearance: saved.appearance || "aurora-light",
+  motion: saved.motion || "balanced",
+  scale: saved.scale || "comfortable",
   page: saved.page || "dashboard",
   output: saved.output || "",
   jobs: saved.jobs || [
@@ -20,6 +23,9 @@ function t(key, vars) {
 function save() {
   localStorage.setItem("viral-ai-tool-state", JSON.stringify({
     locale: state.locale,
+    appearance: state.appearance,
+    motion: state.motion,
+    scale: state.scale,
     page: state.page,
     output: state.output,
     jobs: state.jobs.slice(0, 50)
@@ -104,15 +110,30 @@ function navRender() {
 
 function applyChromeLocale() {
   document.documentElement.lang = state.locale;
+  document.documentElement.dataset.theme = state.appearance;
+  document.documentElement.dataset.motion = state.motion;
+  document.documentElement.dataset.scale = state.scale;
   document.body.dataset.locale = state.locale;
+  document.body.dataset.dropLabel = t("download.dropOverlay");
+
   $("desktopPill").textContent = t("app.desktop");
   $("workspaceLabel").textContent = t("app.workspace");
   $("creditsLabel").textContent = t("app.monthlyCredits");
   $("remainingLabel").textContent = t("app.remaining");
   $("newProjectLabel").textContent = t("app.newProject");
-  $("langCode").textContent = state.locale.toUpperCase();
-  $("langToggle").setAttribute("aria-label", state.locale === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt");
-  document.body.dataset.dropLabel = t("download.dropOverlay");
+
+  const langName = $("langName");
+  const langHint = $("langHint");
+  const commandCopy = document.querySelector(".command-copy");
+  if (langName) langName.textContent = state.locale === "vi" ? "Tiếng Việt" : "English";
+  if (langHint) langHint.textContent = t("app.language");
+  if (commandCopy) commandCopy.textContent = t("app.searchAnything");
+
+  document.querySelectorAll(".popover-option[data-locale]").forEach((node) => {
+    const selected = node.dataset.locale === state.locale;
+    node.classList.toggle("is-selected", selected);
+    node.setAttribute("aria-selected", selected ? "true" : "false");
+  });
 }
 
 function jobsTable(rows) {
@@ -326,16 +347,43 @@ function settingsPage() {
     [t("settings.email"), t("settings.emailDesc"), false],
     [t("settings.compact"), t("settings.compactDesc"), false]
   ];
-  return '<div class="grid-2"><div class="card card-pad"><div class="eyebrow">' + t("settings.general") + "</div>" +
-    settings.map((x) => '<div class="setting-row"><div class="setting-copy"><b>' + x[0] + "</b><span>" + x[1] +
+
+  const option = (value, label, selected) =>
+    '<option value="' + value + '"' + (selected === value ? ' selected' : '') + '>' + label + '</option>';
+
+  return '<div class="grid-2">' +
+    '<div class="card card-pad preference-card"><div class="eyebrow">' + t("settings.general") + '</div>' +
+    '<div class="settings-select-row"><div class="setting-copy"><b>' + t("settings.interfaceLanguage") + '</b><span>' + t("settings.languageDesc") + '</span></div>' +
+    '<select id="settingsLocale" class="select">' +
+      option("vi", "Tiếng Việt", state.locale) +
+      option("en", "English", state.locale) +
+    '</select></div>' +
+    '<div class="settings-select-row"><div class="setting-copy"><b>' + t("settings.appearance") + '</b><span>' + t("settings.appearanceDesc") + '</span></div>' +
+    '<select id="appearanceSelect" class="select">' +
+      option("aurora-light", t("settings.appearanceAurora"), state.appearance) +
+      option("pearl-light", t("settings.appearancePearl"), state.appearance) +
+      option("midnight", t("settings.appearanceMidnight"), state.appearance) +
+    '</select></div>' +
+    '<div class="settings-select-row"><div class="setting-copy"><b>' + t("settings.motion") + '</b><span>' + t("settings.motionDesc") + '</span></div>' +
+    '<select id="motionSelect" class="select">' +
+      option("balanced", t("settings.motionBalanced"), state.motion) +
+      option("expressive", t("settings.motionExpressive"), state.motion) +
+      option("reduced", t("settings.motionReduced"), state.motion) +
+    '</select></div>' +
+    '<div class="settings-select-row"><div class="setting-copy"><b>' + t("settings.interfaceSize") + '</b><span>' + t("settings.interfaceSizeDesc") + '</span></div>' +
+    '<select id="scaleSelect" class="select">' +
+      option("compact", t("settings.sizeCompact"), state.scale) +
+      option("comfortable", t("settings.sizeComfortable"), state.scale) +
+      option("large", t("settings.sizeLarge"), state.scale) +
+    '</select></div>' +
+    settings.map((x) => '<div class="setting-row"><div class="setting-copy"><b>' + x[0] + '</b><span>' + x[1] +
       '</span></div><div class="switch ' + (x[2] ? "on" : "") + '"></div></div>').join("") +
-    '</div><div class="card card-pad"><div class="eyebrow">' + t("settings.output") + '</div><label class="label">' + t("common.outputFolder") +
+    '</div>' +
+    '<div class="card card-pad"><div class="eyebrow">' + t("settings.output") + '</div><label class="label">' + t("common.outputFolder") +
     '</label><div class="row"><input id="outputPath" class="input" readonly value="' + (state.output || t("settings.notSelected")) +
-    '"><button id="chooseOutput" class="button ghost" type="button">' + t("common.choose") + "</button></div>" +
+    '"><button id="chooseOutput" class="button ghost" type="button">' + t("common.choose") + '</button></div>' +
     '<div style="margin-top:14px"><label class="label">' + t("common.resolution") + '</label><select class="select"><option>1080p</option><option>4K</option></select></div>' +
-    '<div style="margin-top:18px" class="setting-row"><div class="setting-copy"><b>' + t("settings.interfaceLanguage") + "</b><span>" +
-    t("settings.languageDesc") + '</span></div><button id="settingsLang" class="language-switch" type="button"><span class="language-globe">文</span><strong>' +
-    state.locale.toUpperCase() + "</strong></button></div></div></div>";
+    '</div></div>';
 }
 
 const pages = {
@@ -406,9 +454,14 @@ function simulateRender() {
   }, 850);
 }
 
-function toggleLocale() {
-  state.locale = state.locale === "vi" ? "en" : "vi";
+function setLocale(locale) {
+  if (!I18N.supported.includes(locale) || locale === state.locale) return;
+  state.locale = locale;
   render();
+}
+
+function toggleLocale() {
+  setLocale(state.locale === "vi" ? "en" : "vi");
 }
 
 function bind() {
@@ -479,8 +532,26 @@ function bind() {
     };
   }
 
-  const settingsLang = $("settingsLang");
-  if (settingsLang) settingsLang.onclick = toggleLocale;
+  const settingsLocale = $("settingsLocale");
+  if (settingsLocale) settingsLocale.onchange = (event) => setLocale(event.target.value);
+
+  const appearanceSelect = $("appearanceSelect");
+  if (appearanceSelect) appearanceSelect.onchange = (event) => {
+    state.appearance = event.target.value;
+    render();
+  };
+
+  const motionSelect = $("motionSelect");
+  if (motionSelect) motionSelect.onchange = (event) => {
+    state.motion = event.target.value;
+    render();
+  };
+
+  const scaleSelect = $("scaleSelect");
+  if (scaleSelect) scaleSelect.onchange = (event) => {
+    state.scale = event.target.value;
+    render();
+  };
 }
 
 function render() {
@@ -499,7 +570,39 @@ $("quickProject").onclick = () => {
   render();
 };
 
-$("langToggle").onclick = toggleLocale;
+const langMenuButton = $("langMenuButton");
+const langMenu = $("langMenu");
+
+function closeLanguageMenu() {
+  if (!langMenu || !langMenuButton) return;
+  langMenu.classList.add("hidden");
+  langMenuButton.setAttribute("aria-expanded", "false");
+}
+
+if (langMenuButton && langMenu) {
+  langMenuButton.onclick = (event) => {
+    event.stopPropagation();
+    const willOpen = langMenu.classList.contains("hidden");
+    langMenu.classList.toggle("hidden", !willOpen);
+    langMenuButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  };
+
+  langMenu.querySelectorAll("[data-locale]").forEach((node) => {
+    node.onclick = (event) => {
+      event.stopPropagation();
+      setLocale(node.dataset.locale);
+      closeLanguageMenu();
+    };
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".language-control")) closeLanguageMenu();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeLanguageMenu();
+  });
+}
 
 if (window.desktopAPI) {
   $("winMin").onclick = () => window.desktopAPI.minimize();
