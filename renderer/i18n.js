@@ -99,7 +99,8 @@ window.I18N = (() => {
         urlMissing: "Hãy dán một liên kết trước.",
         urlAnalyzed: "Đã phân tích liên kết · bộ máy tải sẽ được nối ở bước tiếp theo",
         added: "{count} video đã được thêm",
-        dropped: "Đã thêm {count} video bằng kéo thả"
+        dropped: "Đã thêm {count} video bằng kéo thả",
+        dropOverlay: "Thả video để thêm vào hàng đợi"
       },
       monitor: {
         breadcrumb: "Không gian làm việc / Theo dõi kênh",
@@ -328,7 +329,8 @@ window.I18N = (() => {
         urlMissing: "Paste a URL first.",
         urlAnalyzed: "URL analyzed · downloader engine is next",
         added: "{count} video(s) added",
-        dropped: "{count} dropped video(s) added"
+        dropped: "{count} dropped video(s) added",
+        dropOverlay: "Drop videos to add them to the queue"
       },
       monitor: {
         breadcrumb: "Workspace / Channel monitor",
