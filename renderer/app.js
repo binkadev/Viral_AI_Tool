@@ -888,6 +888,17 @@ function settingsPage() {
           '<button id="settingsLogin" class="button primary" type="button">' + t("account.signIn") + '</button></div>') +
     '</div>';
 
+  const devCloudStatus = state.speech.providerStatus?.cloud || null;
+  const devProviderReady = devCloudStatus?.ready === true;
+  const devProviderConfigured = devCloudStatus?.code !== "CLOUD_PROVIDER_NOT_CONFIGURED";
+  const devProviderLabel = devProviderReady
+    ? t("settings.providerReady")
+    : devCloudStatus?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
+      ? t("settings.providerNotConfigured")
+      : state.cloud.auth?.authenticated
+        ? t("settings.providerUnavailable")
+        : t("settings.providerNeedsLogin");
+
   const developerCard = devVisible
     ? '<div id="developerCloudSettings" class="card card-pad developer-cloud-card">' +
         '<div class="eyebrow">' + t("settings.developer") + '</div>' +
@@ -907,6 +918,11 @@ function settingsPage() {
         '</div>' +
         '<div class="cloud-test-strip ' + testClass + '"><span class="cloud-test-dot"></span><div><b>' + escapeHtml(testLabel) + '</b><span>' +
           escapeHtml(test?.status ? t("settings.cloudHttpStatus", { status: test.status }) : t("settings.cloudTestHint")) + '</span></div></div>' +
+        '<div class="provider-dev-strip ' + (devProviderReady ? "success" : "neutral") + '">' +
+          '<div><span class="provider-dev-kicker">' + t("settings.speechProvider") + '</span><b>' + escapeHtml(devProviderLabel) + '</b>' +
+          '<p>' + escapeHtml(t("settings.providerSetupHint")) + '</p></div>' +
+          '<code>OPENAI_API_KEY</code>' +
+        '</div>' +
         '<div class="developer-actions">' +
           '<button id="testCloudConnection" class="button ghost" type="button">' + t("settings.testConnection") + '</button>' +
           (cloudConfig.source === "environment" ? "" :
@@ -2608,7 +2624,7 @@ function render() {
     }, 0);
   }
 
-  if (state.page === "ai-video" && window.desktopAPI?.getSpeechProviderStatus) {
+  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getSpeechProviderStatus) {
     const stale = !state.speech.providerStatus ||
       !state.speech.statusCheckedAt ||
       Date.now() - state.speech.statusCheckedAt > 30000;
@@ -2619,7 +2635,7 @@ function render() {
         await refreshSpeechProviderStatus({ rerender: false });
         state.speech.statusCheckedAt = Date.now();
         state.speech.statusCheckPending = false;
-        if (state.page === "ai-video") render();
+        if (["ai-video", "settings"].includes(state.page)) render();
       }, 0);
     }
   }
