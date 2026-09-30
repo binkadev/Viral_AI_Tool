@@ -24,6 +24,7 @@ state.jobs = state.jobs.map((job, index) => ({
   ...job,
   id: job.id || ("saved-" + index + "-" + Date.now()),
   status: normalizeSavedStatus(job.status),
+  fileState: job.fileState || ((job.sourcePath || job.outputPath) ? "available" : "unknown"),
   progress: Number(job.progress || 0)
 }));
 
@@ -32,6 +33,7 @@ function normalizeSavedStatus(value) {
   if (v.includes("complete") || v.includes("hoàn") || v.includes("xong")) return "completed";
   if (v.includes("process") || v.includes("xử lý") || v.includes("render")) return "processing";
   if (v.includes("queue") || v.includes("chờ")) return "queued";
+  if (v.includes("cancel") || v.includes("hủy")) return "cancelled";
   if (v.includes("fail") || v.includes("lỗi") || v.includes("thất")) return "failed";
   return v || "queued";
 }
@@ -71,8 +73,22 @@ function normalizeStatus(value) {
 
 function statusBadge(value) {
   const code = normalizeStatus(value);
-  const cls = code === "completed" ? "success" : code === "processing" ? "processing" : code === "queued" ? "warn" : "error";
+  const cls = code === "completed"
+    ? "success"
+    : code === "processing"
+      ? "processing"
+      : code === "queued"
+        ? "warn"
+        : code === "cancelled"
+          ? "neutral"
+          : "error";
   return '<span class="badge ' + cls + '">' + t("common." + code) + "</span>";
+}
+
+function fileStateBadge(job) {
+  if (!job || job.fileState === "available" || job.fileState === "unknown") return "";
+  const code = job.fileState === "trashed" ? "trashed" : "missing";
+  return '<span class="file-state-badge ' + code + '"><span aria-hidden="true">!</span>' + t("file." + code) + '</span>';
 }
 
 function languageName(code) {
@@ -124,13 +140,25 @@ function mediaMetaText(job) {
   const parts = [];
   if (meta.width && meta.height) parts.push(meta.width + "×" + meta.height);
   if (meta.duration) parts.push(formatDuration(meta.duration));
-  if (meta.videoCodec) parts.push(String(meta.videoCodec).toUpperCase());
   if (meta.sizeBytes) parts.push(formatBytes(meta.sizeBytes));
   return parts.join(" · ");
 }
 
 function latestSourceJob() {
-  return state.jobs.find(job => job.sourcePath && !job.isRenderOutput);
+  return state.jobs.find(job =>
+    job.sourcePath &&
+    !job.isRenderOutput &&
+    job.fileState !== "missing" &&
+    job.fileState !== "trashed"
+  );
+}
+
+function jobFilePath(job) {
+  return job?.isRenderOutput ? job.outputPath : job?.sourcePath;
+}
+
+function findJob(jobId) {
+  return state.jobs.find(job => job.id === jobId);
 }
 
 const navItems = [
@@ -213,15 +241,35 @@ function jobsTable(rows) {
     "<th>" + t("common.status") + "</th>" +
     "<th>" + t("common.progress") + "</th>" +
     "<th>" + t("common.updated") + "</th>" +
+    '<th class="actions-head" aria-label="' + t("file.actions") + '"></th>' +
     "</tr></thead><tbody>" +
     data.map((job) => {
+      const isUnavailable = job.fileState === "missing" || job.fileState === "trashed";
       const thumb = job.thumbnail
-        ? '<div class="thumb thumb-image"><img src="' + job.thumbnail + '" alt=""><span>▶</span></div>'
-        : '<div class="thumb"><span>▶</span></div>';
+        ? '<div class="thumb thumb-image ' + (isUnavailable ? "is-unavailable" : "") + '"><img src="' + job.thumbnail + '" alt=""><span>▶</span></div>'
+        : '<div class="thumb ' + (isUnavailable ? "is-unavailable" : "") + '"><span>▶</span></div>';
       const meta = mediaMetaText(job);
-      return '<tr data-job-id="' + escapeHtml(job.id) + '">' +
+      const fileBadge = fileStateBadge(job);
+      const menu = '<div class="job-menu">' +
+        '<button class="job-menu-button" data-job-menu="' + escapeHtml(job.id) + '" type="button" aria-label="' + t("file.actions") + '">•••</button>' +
+        '<div class="job-menu-popover hidden" data-job-menu-popover="' + escapeHtml(job.id) + '">' +
+          ((jobFilePath(job) && job.fileState === "available")
+            ? '<button type="button" data-job-action="reveal" data-job-id="' + escapeHtml(job.id) + '">⌕ <span>' + t("file.openFolder") + '</span></button>'
+            : '') +
+          (!job.isRenderOutput
+            ? '<button type="button" data-job-action="relink" data-job-id="' + escapeHtml(job.id) + '">↻ <span>' + t("file.relink") + '</span></button>'
+            : '') +
+          '<div class="job-menu-separator"></div>' +
+          '<button type="button" data-job-action="remove" data-job-id="' + escapeHtml(job.id) + '">− <span>' + t(job.isRenderOutput ? "file.removeHistory" : "file.removeLibrary") + '</span></button>' +
+          ((jobFilePath(job) && job.fileState === "available")
+            ? '<button class="danger-action" type="button" data-job-action="trash" data-job-id="' + escapeHtml(job.id) + '">♲ <span>' + t("file.moveToTrash") + '</span></button>'
+            : '') +
+        '</div>' +
+      '</div>';
+
+      return '<tr class="' + (isUnavailable ? "file-unavailable-row" : "") + '" data-job-id="' + escapeHtml(job.id) + '">' +
         '<td><div class="video-cell">' + thumb + '<div class="video-copy"><b>' + escapeHtml(job.name) + '</b>' +
-        (meta ? '<small>' + escapeHtml(meta) + '</small>' : '') + '</div></div></td>' +
+        (meta ? '<small>' + escapeHtml(meta) + '</small>' : '') + fileBadge + '</div></div></td>' +
         "<td>" + languageName(job.lang) + "</td>" +
         "<td>" + statusBadge(job.status) + "</td>" +
         '<td><div class="job-progress"><div class="job-progress-head"><span data-progress-label="' + job.id + '">' +
@@ -229,8 +277,9 @@ function jobsTable(rows) {
           (job.renderSpeed ? '<small data-progress-speed="' + job.id + '">' + job.renderSpeed + '</small>' : '') +
         '</div><div class="mini-progress"><i data-progress-bar="' + job.id + '" style="width:' + Number(job.progress || 0) + '%"></i></div></div></td>' +
         '<td><div class="updated-cell"><span>' + (job.time || t("common.now")) + '</span>' +
-          (job.outputPath ? '<button class="reveal-output" data-output-path="' + encodeURIComponent(job.outputPath) + '" type="button">' + t("media.showFile") + '</button>' : '') +
+          (job.outputPath && job.fileState === "available" ? '<button class="reveal-output" data-output-path="' + encodeURIComponent(job.outputPath) + '" type="button">' + t("media.showFile") + '</button>' : '') +
         '</div></td>' +
+        '<td class="job-actions-cell">' + menu + '</td>' +
       "</tr>";
     }).join("") +
     "</tbody></table></div>";
