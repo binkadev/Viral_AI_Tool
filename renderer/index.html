@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
   <title>Viral AI Tool</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -11,12 +12,12 @@
     <div class="drag">
       <div class="app-icon">V</div>
       <strong>Viral AI Tool</strong>
-      <span class="desktop-pill">DESKTOP</span>
+      <span id="desktopPill" class="desktop-pill">Ứng dụng desktop</span>
     </div>
     <div class="window-controls">
-      <button id="winMin" aria-label="Thu nhỏ">—</button>
-      <button id="winMax" aria-label="Phóng to">□</button>
-      <button id="winClose" class="close" aria-label="Đóng">×</button>
+      <button id="winMin" aria-label="Minimize">—</button>
+      <button id="winMax" aria-label="Maximize">□</button>
+      <button id="winClose" class="close" aria-label="Close">×</button>
     </div>
   </header>
 
@@ -32,19 +33,19 @@
 
       <div class="workspace">
         <div>
-          <span>WORKSPACE</span>
+          <span id="workspaceLabel">Không gian làm việc</span>
           <strong>Hoàng Studio</strong>
         </div>
-        <i></i>
+        <i aria-hidden="true"></i>
       </div>
 
-      <nav id="nav"></nav>
+      <nav id="nav" aria-label="Primary"></nav>
 
       <div class="sidebar-bottom">
         <div class="credit-card">
-          <div class="credit-head"><span>Monthly credits</span><b>2,480</b></div>
+          <div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>2,480</b></div>
           <div class="bar"><i style="width:66%"></i></div>
-          <small>66% remaining</small>
+          <small><span>66%</span> <span id="remainingLabel">còn lại</span></small>
         </div>
         <div class="profile">
           <div class="avatar">NH</div>
@@ -56,23 +57,26 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <div id="breadcrumb" class="breadcrumb">Workspace / Dashboard</div>
-          <h1 id="pageTitle">Dashboard</h1>
+          <div id="breadcrumb" class="breadcrumb"></div>
+          <h1 id="pageTitle"></h1>
         </div>
         <div class="top-actions">
-          <button class="icon-button">⌕</button>
-          <button class="icon-button">♢</button>
-          <button id="quickProject" class="button primary">＋ New project</button>
+          <button id="langToggle" class="language-switch" type="button" aria-label="Switch language">
+            <span class="language-globe">文</span>
+            <strong id="langCode">VI</strong>
+          </button>
+          <button id="quickProject" class="button primary" type="button">＋ <span id="newProjectLabel">Dự án mới</span></button>
         </div>
       </header>
 
-      <section id="page" class="page"></section>
+      <section id="page" class="page" aria-live="polite"></section>
     </main>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="modal" class="modal-backdrop hidden"></div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
