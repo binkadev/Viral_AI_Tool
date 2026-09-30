@@ -234,10 +234,11 @@ ipcMain.handle('video:cancel-render', async (_event, jobId) => {
 
 ipcMain.handle('speech:provider-status', async () => {
   const providers = speechProviders();
-  return {
-    local: providers.local.status(),
-    cloud: providers.cloud.status()
-  };
+  const [local, cloud] = await Promise.all([
+    providers.local.status(),
+    Promise.resolve(providers.cloud.status())
+  ]);
+  return { local, cloud };
 });
 
 ipcMain.handle('speech:preflight', async (_event, payload) => {
