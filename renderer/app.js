@@ -85,6 +85,16 @@ function languageName(code) {
   return map[code] || (code ? code : t("common.notSet"));
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(Number(seconds || 0)));
   const h = Math.floor(total / 3600);
@@ -206,12 +216,12 @@ function jobsTable(rows) {
     "</tr></thead><tbody>" +
     data.map((job) => {
       const thumb = job.thumbnail
-        ? '<div class="thumb thumb-image" style="background-image:url(' + JSON.stringify(job.thumbnail) + ')"><span>▶</span></div>'
+        ? '<div class="thumb thumb-image"><img src="' + job.thumbnail + '" alt=""><span>▶</span></div>'
         : '<div class="thumb"><span>▶</span></div>';
       const meta = mediaMetaText(job);
-      return '<tr data-job-id="' + job.id + '">' +
-        '<td><div class="video-cell">' + thumb + '<div class="video-copy"><b>' + job.name + '</b>' +
-        (meta ? '<small>' + meta + '</small>' : '') + '</div></div></td>' +
+      return '<tr data-job-id="' + escapeHtml(job.id) + '">' +
+        '<td><div class="video-cell">' + thumb + '<div class="video-copy"><b>' + escapeHtml(job.name) + '</b>' +
+        (meta ? '<small>' + escapeHtml(meta) + '</small>' : '') + '</div></div></td>' +
         "<td>" + languageName(job.lang) + "</td>" +
         "<td>" + statusBadge(job.status) + "</td>" +
         '<td><div class="job-progress"><div class="job-progress-head"><span data-progress-label="' + job.id + '">' +
@@ -240,6 +250,13 @@ function dashboard() {
     ["▤", t("dashboard.subtitle"), t("dashboard.subtitleDesc"), "editor"],
     ["⇩", t("dashboard.download"), t("dashboard.downloadDesc"), "download"]
   ];
+
+  const processingJobs = state.jobs.filter(job => normalizeStatus(job.status) === "processing");
+  const queuedJobs = state.jobs.filter(job => normalizeStatus(job.status) === "queued");
+  const renderJobs = processingJobs.filter(job => job.isRenderOutput);
+  const focusJob = processingJobs[0];
+  const focusPercent = focusJob ? Math.round(Number(focusJob.progress || 0)) + "%" : "—";
+  const renderSpeed = renderJobs[0]?.renderSpeed || "—";
 
   return '<div class="dashboard-shell">' +
     '<div class="dashboard-main">' +
@@ -282,9 +299,9 @@ function dashboard() {
         '<div class="side-card-head"><div><span class="side-kicker">' + t("dashboard.today") + '</span><h4>' + t("dashboard.activityTitle") + '</h4></div><span class="live-dot"><i></i>' + t("dashboard.live") + '</span></div>' +
         '<p class="side-intro">' + t("dashboard.activityDesc") + '</p>' +
         '<div class="activity-list">' +
-          '<div class="activity-row"><span class="activity-icon purple">↻</span><div><b>' + t("dashboard.activityProcessing") + '</b><span>3 ' + t("dashboard.videos") + '</span></div><strong>73%</strong></div>' +
-          '<div class="activity-row"><span class="activity-icon blue">▶</span><div><b>' + t("dashboard.activityRendering") + '</b><span>2 ' + t("dashboard.videos") + '</span></div><strong>~8m</strong></div>' +
-          '<div class="activity-row"><span class="activity-icon amber">◷</span><div><b>' + t("dashboard.activityQueued") + '</b><span>1 ' + t("dashboard.video") + '</span></div><strong>1</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon purple">↻</span><div><b>' + t("dashboard.activityProcessing") + '</b><span>' + processingJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong data-activity-progress>' + focusPercent + '</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon blue">▶</span><div><b>' + t("dashboard.activityRendering") + '</b><span>' + renderJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong data-activity-speed>' + renderSpeed + '</strong></div>' +
+          '<div class="activity-row"><span class="activity-icon amber">◷</span><div><b>' + t("dashboard.activityQueued") + '</b><span>' + queuedJobs.length + ' ' + t("dashboard.videos") + '</span></div><strong>' + queuedJobs.length + '</strong></div>' +
         '</div>' +
       '</div>' +
 
@@ -581,6 +598,12 @@ function updateProgressElements(job) {
   document.querySelectorAll('[data-progress-speed="' + job.id + '"]').forEach(node => {
     node.textContent = job.renderSpeed || "";
   });
+  const activityProgress = document.querySelector("[data-activity-progress]");
+  if (activityProgress && normalizeStatus(job.status) === "processing") {
+    activityProgress.textContent = Math.round(Number(job.progress || 0)) + "%";
+  }
+  const activitySpeed = document.querySelector("[data-activity-speed]");
+  if (activitySpeed && job.renderSpeed) activitySpeed.textContent = job.renderSpeed;
 }
 
 async function startRealRender() {
