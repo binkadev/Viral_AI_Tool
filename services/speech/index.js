@@ -27,9 +27,9 @@ function validateMode(mode) {
   return mode;
 }
 
-function createProviders({ userDataPath, backendUrl }) {
+function createProviders({ userDataPath, tempPath, backendUrl }) {
   return {
-    local: new LocalSpeechProvider({ userDataPath }),
+    local: new LocalSpeechProvider({ userDataPath, tempPath }),
     cloud: new CloudSpeechProvider({ backendUrl })
   };
 }
