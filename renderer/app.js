@@ -769,8 +769,18 @@ function activeRenderJobsForPath(filePath) {
   return state.jobs.filter(job =>
     job.isRenderOutput &&
     job.sourcePath === filePath &&
-    normalizeStatus(job.status) === "processing"
+    ["processing", "cancelling"].includes(normalizeStatus(job.status))
   );
+}
+
+function activeSpeechJobForPath(filePath) {
+  const job = state.speech.job;
+  if (!filePath || !job || job.sourcePath !== filePath) return null;
+  return ["validating", "preparing", "processing", "cancelling"].includes(job.status) ? job : null;
+}
+
+function activeWorkCountForPath(filePath) {
+  return activeRenderJobsForPath(filePath).length + (activeSpeechJobForPath(filePath) ? 1 : 0);
 }
 
 async function checkJobFile(job, { notify = false } = {}) {
@@ -822,7 +832,7 @@ function replacementSummary(meta) {
 async function relinkJob(job) {
   if (!job || job.isRenderOutput || !window.desktopAPI?.selectReplacementVideo) return false;
 
-  if (activeRenderJobsForPath(job.sourcePath).length) {
+  if (activeWorkCountForPath(job.sourcePath) > 0) {
     toast(t("file.relinkBusy"));
     return false;
   }
@@ -851,6 +861,10 @@ async function relinkJob(job) {
     }
 
     const oldPath = job.sourcePath;
+
+    if (state.speech.result?.sourcePath === oldPath) state.speech.result = null;
+    if (state.speech.job?.sourcePath === oldPath) state.speech.job = null;
+
     job.sourcePath = picked.path;
     job.name = picked.name;
     job.meta = newMeta;
@@ -881,8 +895,8 @@ function removeJobFromLibrary(job) {
   if (!job) return;
 
   const active = job.isRenderOutput
-    ? normalizeStatus(job.status) === "processing"
-    : activeRenderJobsForPath(job.sourcePath).length > 0;
+    ? ["processing", "cancelling"].includes(normalizeStatus(job.status))
+    : activeWorkCountForPath(job.sourcePath) > 0;
 
   if (active) {
     toast(t("file.removeBusy"));
@@ -908,26 +922,43 @@ async function trashJobFile(job) {
     return;
   }
 
-  const active = job.isRenderOutput && normalizeStatus(job.status) === "processing"
+  const activeRenders = job.isRenderOutput && ["processing", "cancelling"].includes(normalizeStatus(job.status))
     ? [job]
     : activeRenderJobsForPath(filePath);
+  const activeSpeech = activeSpeechJobForPath(filePath);
+  const activeCount = activeRenders.length + (activeSpeech ? 1 : 0);
 
   const confirmed = await confirmAction({
-    title: active.length ? t("file.trashBusyTitle") : t("file.trashTitle"),
-    body: active.length
-      ? t("file.trashBusyBody", { name: job.name, count: active.length })
+    title: activeCount ? t("file.trashBusyTitle") : t("file.trashTitle"),
+    body: activeCount
+      ? t("file.trashBusyBody", { name: job.name, count: activeCount })
       : t("file.trashBody", { name: job.name }),
-    confirmLabel: active.length ? t("file.stopAndTrash") : t("file.moveToTrash"),
+    confirmLabel: activeCount ? t("file.stopAndTrash") : t("file.moveToTrash"),
     cancelLabel: t("common.cancel"),
     danger: true
   });
 
   if (!confirmed) return;
 
-  for (const renderJob of active) {
-    await window.desktopAPI.cancelRender?.(renderJob.id);
-    renderJob.status = "cancelled";
-    renderJob.time = t("common.now");
+  for (const renderJob of activeRenders) {
+    const stopped = await window.desktopAPI.cancelRender?.(renderJob.id);
+    if (stopped?.cancelled) {
+      renderJob.status = "cancelled";
+      renderJob.time = t("common.now");
+    }
+  }
+
+  if (activeSpeech) {
+    const stopped = await window.desktopAPI.cancelSpeech?.(activeSpeech.id);
+    if (!stopped?.cancelled) {
+      toast(t("file.stopWorkFailed"));
+      return;
+    }
+    activeSpeech.status = "cancelled";
+  }
+
+  if (activeCount) {
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
 
   try {
@@ -1631,6 +1662,29 @@ function bind() {
     analyze.onclick = () => toast($("url").value.trim() ? t("download.urlAnalyzed") : t("download.urlMissing"));
   }
 
+  const speechMode = $("speechMode");
+  if (speechMode) {
+    speechMode.onchange = () => {
+      state.speech.mode = speechMode.value === "cloud" ? "cloud" : "local";
+      save();
+      render();
+    };
+  }
+
+  const speechLanguage = $("speechLanguage");
+  if (speechLanguage) {
+    speechLanguage.onchange = () => {
+      state.speech.language = speechLanguage.value || "auto";
+      save();
+    };
+  }
+
+  const speechStart = $("speechStart");
+  if (speechStart) speechStart.onclick = startSpeechRecognition;
+
+  const speechStop = $("speechStop");
+  if (speechStop) speechStop.onclick = cancelSpeechRecognition;
+
   const renderButton = $("render");
   if (renderButton) renderButton.onclick = startRealRender;
 
@@ -1697,6 +1751,22 @@ function render() {
   $("page").innerHTML = (pages[state.page] || pages.dashboard)();
   bind();
   save();
+
+  if (state.page === "ai-video" && window.desktopAPI?.getSpeechProviderStatus) {
+    const stale = !state.speech.providerStatus ||
+      !state.speech.statusCheckedAt ||
+      Date.now() - state.speech.statusCheckedAt > 30000;
+
+    if (stale && !state.speech.statusCheckPending) {
+      state.speech.statusCheckPending = true;
+      setTimeout(async () => {
+        await refreshSpeechProviderStatus({ rerender: false });
+        state.speech.statusCheckedAt = Date.now();
+        state.speech.statusCheckPending = false;
+        if (state.page === "ai-video") render();
+      }, 0);
+    }
+  }
 }
 
 $("quickProject").onclick = () => {
@@ -1789,6 +1859,9 @@ if (window.desktopAPI) {
       updateProgressElements(job);
       save();
     });
+  }
+  if (window.desktopAPI.onSpeechProgress) {
+    window.desktopAPI.onSpeechProgress(updateSpeechProgress);
   }
 }
 
