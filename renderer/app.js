@@ -145,12 +145,7 @@ function mediaMetaText(job) {
 }
 
 function latestSourceJob() {
-  return state.jobs.find(job =>
-    job.sourcePath &&
-    !job.isRenderOutput &&
-    job.fileState !== "missing" &&
-    job.fileState !== "trashed"
-  );
+  return state.jobs.find(job => job.sourcePath && !job.isRenderOutput);
 }
 
 function jobFilePath(job) {
@@ -601,6 +596,289 @@ function modal(title, body) {
     root.classList.add("hidden");
     toast(title);
   };
+}
+
+
+function confirmAction({ title, body, confirmLabel, cancelLabel, danger = false }) {
+  return new Promise(resolve => {
+    const root = $("modal");
+    root.classList.remove("hidden");
+    root.innerHTML =
+      '<div class="modal commercial-modal">' +
+        '<div class="modal-icon ' + (danger ? "danger" : "info") + '">' + (danger ? "!" : "i") + '</div>' +
+        '<h3>' + escapeHtml(title) + '</h3>' +
+        '<p>' + escapeHtml(body) + '</p>' +
+        '<div class="modal-actions">' +
+          '<button id="confirmCancel" class="button ghost" type="button">' + escapeHtml(cancelLabel || t("common.cancel")) + '</button>' +
+          '<button id="confirmOk" class="button ' + (danger ? "danger solid-danger" : "primary") + '" type="button">' + escapeHtml(confirmLabel) + '</button>' +
+        '</div>' +
+      '</div>';
+
+    $("confirmCancel").onclick = () => {
+      root.classList.add("hidden");
+      resolve(false);
+    };
+    $("confirmOk").onclick = () => {
+      root.classList.add("hidden");
+      resolve(true);
+    };
+  });
+}
+
+function activeRenderJobsForPath(filePath) {
+  if (!filePath) return [];
+  return state.jobs.filter(job =>
+    job.isRenderOutput &&
+    job.sourcePath === filePath &&
+    normalizeStatus(job.status) === "processing"
+  );
+}
+
+async function checkJobFile(job, { notify = false } = {}) {
+  const filePath = jobFilePath(job);
+  if (!filePath || !window.desktopAPI?.fileStatus) return true;
+
+  const result = await window.desktopAPI.fileStatus(filePath);
+  const previous = job.fileState;
+  job.fileState = result?.exists ? "available" : "missing";
+
+  if (!result?.exists) {
+    job.previewUrl = "";
+    job.mediaState = "missing";
+    if (notify && previous !== "missing") toast(t("file.missingToast", { name: job.name }));
+  }
+
+  save();
+  return Boolean(result?.exists);
+}
+
+function replacementLooksDifferent(oldMeta, newMeta) {
+  if (!oldMeta || !newMeta) return false;
+
+  const durationA = Number(oldMeta.duration || 0);
+  const durationB = Number(newMeta.duration || 0);
+  const durationDifferent = durationA > 0 && durationB > 0 &&
+    Math.abs(durationA - durationB) > Math.max(3, durationA * 0.1);
+
+  const resolutionDifferent = oldMeta.width && oldMeta.height && newMeta.width && newMeta.height &&
+    (oldMeta.width !== newMeta.width || oldMeta.height !== newMeta.height);
+
+  const sizeA = Number(oldMeta.sizeBytes || 0);
+  const sizeB = Number(newMeta.sizeBytes || 0);
+  const sizeDifferent = sizeA > 0 && sizeB > 0 &&
+    Math.abs(sizeA - sizeB) / Math.max(sizeA, 1) > 0.55;
+
+  return durationDifferent || resolutionDifferent || sizeDifferent;
+}
+
+function replacementSummary(meta) {
+  if (!meta) return t("file.unknownDetails");
+  const parts = [];
+  if (meta.duration) parts.push(formatDuration(meta.duration));
+  if (meta.width && meta.height) parts.push(meta.width + "×" + meta.height);
+  if (meta.sizeBytes) parts.push(formatBytes(meta.sizeBytes));
+  return parts.join(" · ") || t("file.unknownDetails");
+}
+
+async function relinkJob(job) {
+  if (!job || job.isRenderOutput || !window.desktopAPI?.selectReplacementVideo) return false;
+
+  if (activeRenderJobsForPath(job.sourcePath).length) {
+    toast(t("file.relinkBusy"));
+    return false;
+  }
+
+  const picked = await window.desktopAPI.selectReplacementVideo();
+  if (!picked?.path) return false;
+
+  try {
+    const [result, previewUrl] = await Promise.all([
+      window.desktopAPI.createThumbnail(picked.path),
+      window.desktopAPI.getVideoUrl?.(picked.path)
+    ]);
+    const newMeta = result?.metadata || null;
+
+    if (replacementLooksDifferent(job.meta, newMeta)) {
+      const useIt = await confirmAction({
+        title: t("file.relinkDifferentTitle"),
+        body: t("file.relinkDifferentBody", {
+          old: replacementSummary(job.meta),
+          next: replacementSummary(newMeta)
+        }),
+        confirmLabel: t("file.useThisVideo"),
+        cancelLabel: t("file.chooseAgain")
+      });
+      if (!useIt) return relinkJob(job);
+    }
+
+    const oldPath = job.sourcePath;
+    job.sourcePath = picked.path;
+    job.name = picked.name;
+    job.meta = newMeta;
+    job.thumbnail = result?.dataUrl || "";
+    job.previewUrl = previewUrl || "";
+    job.fileState = "available";
+    job.mediaState = "ready";
+    job.mediaError = "";
+    job.time = t("common.now");
+
+    state.jobs.forEach(item => {
+      if (item !== job && item.sourcePath === oldPath && normalizeStatus(item.status) === "queued") {
+        item.sourcePath = picked.path;
+      }
+    });
+
+    save();
+    render();
+    toast(t("file.relinked"));
+    return true;
+  } catch {
+    toast(t("file.relinkFailed"));
+    return false;
+  }
+}
+
+function removeJobFromLibrary(job) {
+  if (!job) return;
+  state.jobs = state.jobs.filter(item => item.id !== job.id);
+  save();
+  render();
+  toast(t(job.isRenderOutput ? "file.historyRemoved" : "file.removedLibrary"));
+}
+
+async function trashJobFile(job) {
+  if (!job || !window.desktopAPI?.trashFile) return;
+
+  const filePath = jobFilePath(job);
+  if (!filePath) return;
+
+  const exists = await checkJobFile(job);
+  if (!exists) {
+    render();
+    showMissingFileDialog(job);
+    return;
+  }
+
+  const active = job.isRenderOutput && normalizeStatus(job.status) === "processing"
+    ? [job]
+    : activeRenderJobsForPath(filePath);
+
+  const confirmed = await confirmAction({
+    title: active.length ? t("file.trashBusyTitle") : t("file.trashTitle"),
+    body: active.length
+      ? t("file.trashBusyBody", { name: job.name, count: active.length })
+      : t("file.trashBody", { name: job.name }),
+    confirmLabel: active.length ? t("file.stopAndTrash") : t("file.moveToTrash"),
+    cancelLabel: t("common.cancel"),
+    danger: true
+  });
+
+  if (!confirmed) return;
+
+  for (const renderJob of active) {
+    await window.desktopAPI.cancelRender?.(renderJob.id);
+    renderJob.status = "cancelled";
+    renderJob.time = t("common.now");
+  }
+
+  try {
+    const result = await window.desktopAPI.trashFile(filePath);
+    if (!result?.ok) {
+      if (result?.reason === "missing") {
+        job.fileState = "missing";
+        save();
+        render();
+        showMissingFileDialog(job);
+        return;
+      }
+      toast(t("file.trashFailed"));
+      return;
+    }
+
+    job.fileState = "trashed";
+    state.jobs = state.jobs.filter(item => item.id !== job.id);
+    save();
+    render();
+    toast(t("file.trashed"));
+  } catch {
+    toast(t("file.trashFailed"));
+  }
+}
+
+async function revealJobFile(job) {
+  if (!job) return;
+  const exists = await checkJobFile(job);
+  if (!exists) {
+    render();
+    showMissingFileDialog(job);
+    return;
+  }
+  const filePath = jobFilePath(job);
+  if (filePath) window.desktopAPI?.showFile(filePath);
+}
+
+function showMissingFileDialog(job) {
+  if (!job) return;
+  const root = $("modal");
+  root.classList.remove("hidden");
+  root.innerHTML =
+    '<div class="modal commercial-modal missing-file-modal">' +
+      '<div class="modal-icon warning">!</div>' +
+      '<h3>' + escapeHtml(t("file.missingTitle")) + '</h3>' +
+      '<p>' + escapeHtml(t("file.missingBody", { name: job.name })) + '</p>' +
+      '<div class="missing-file-name">' + escapeHtml(job.name) + '</div>' +
+      '<div class="modal-actions split-actions">' +
+        '<button id="missingClose" class="button ghost" type="button">' + escapeHtml(t("common.close")) + '</button>' +
+        '<button id="missingRemove" class="button ghost" type="button">' + escapeHtml(t("file.removeLibrary")) + '</button>' +
+        (!job.isRenderOutput
+          ? '<button id="missingRelink" class="button primary" type="button">' + escapeHtml(t("file.relink")) + '</button>'
+          : '') +
+      '</div>' +
+    '</div>';
+
+  $("missingClose").onclick = () => root.classList.add("hidden");
+  $("missingRemove").onclick = () => {
+    root.classList.add("hidden");
+    removeJobFromLibrary(job);
+  };
+  const relink = $("missingRelink");
+  if (relink) {
+    relink.onclick = async () => {
+      root.classList.add("hidden");
+      await relinkJob(job);
+    };
+  }
+}
+
+async function handleJobAction(action, jobId) {
+  const job = findJob(jobId);
+  if (!job) return;
+
+  if (action === "reveal") return revealJobFile(job);
+  if (action === "relink") return relinkJob(job);
+  if (action === "remove") return removeJobFromLibrary(job);
+  if (action === "trash") return trashJobFile(job);
+}
+
+async function refreshFileStates({ notify = true } = {}) {
+  if (!window.desktopAPI?.fileStatus) return;
+
+  let newlyMissing = 0;
+  const candidates = state.jobs.filter(job => {
+    const filePath = jobFilePath(job);
+    return Boolean(filePath) && normalizeStatus(job.status) !== "processing";
+  });
+
+  for (const job of candidates) {
+    const previous = job.fileState;
+    const exists = await checkJobFile(job);
+    if (!exists && previous !== "missing") newlyMissing++;
+  }
+
+  if (newlyMissing) {
+    render();
+    if (notify) toast(t("file.missingSummary", { count: newlyMissing }));
+  }
 }
 
 async function enrichJob(job) {
