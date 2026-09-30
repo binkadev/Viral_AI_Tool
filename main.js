@@ -40,7 +40,9 @@ function closeCopy() {
 }
 
 function getActiveWorkCount() {
-  return getActiveRenderCount() + activeSpeechCount();
+  return getActiveRenderCount() +
+    activeSpeechCount() +
+    speechModelManager.activeDownloadCount();
 }
 
 function speechProviders() {
@@ -101,6 +103,7 @@ function createWindow() {
         forceClose = true;
         cancelAllRenders();
         await cancelAllSpeech();
+        speechModelManager.cancelAll();
         await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
       }
@@ -230,6 +233,68 @@ ipcMain.handle('video:render', async (event, payload) => {
 ipcMain.handle('video:cancel-render', async (_event, jobId) => {
   if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false };
   return { ok: true, cancelled: cancelRender(jobId) };
+});
+
+ipcMain.handle('speech:model-catalog', async () => {
+  return speechModelManager.catalog();
+});
+
+ipcMain.handle('speech:model-status', async (_event, modelId) => {
+  try {
+    return {
+      ok: true,
+      data: await speechModelManager.status(
+        app.getPath('userData'),
+        typeof modelId === 'string' ? modelId : undefined
+      )
+    };
+  } catch (error) {
+    const serialized = speechModelManager.serializeModelError(error);
+    console.error('[SpeechModelStatus]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
+});
+
+ipcMain.handle('speech:model-install', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  try {
+    const data = await speechModelManager.install({
+      jobId: safePayload.jobId,
+      modelId: safePayload.modelId,
+      userDataPath: app.getPath('userData'),
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('speech:model-progress', progress);
+        }
+      }
+    });
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = speechModelManager.serializeModelError(error);
+    console.error('[SpeechModelInstall]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
+});
+
+ipcMain.handle('speech:model-cancel', async (_event, jobId) => {
+  if (typeof jobId !== 'string' || !jobId.trim()) {
+    return { ok: false, cancelled: false };
+  }
+  return { ok: true, cancelled: speechModelManager.cancel(jobId) };
+});
+
+ipcMain.handle('speech:model-remove', async (_event, modelId) => {
+  try {
+    const data = await speechModelManager.remove(
+      app.getPath('userData'),
+      typeof modelId === 'string' ? modelId : undefined
+    );
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = speechModelManager.serializeModelError(error);
+    console.error('[SpeechModelRemove]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
 });
 
 ipcMain.handle('speech:provider-status', async () => {
