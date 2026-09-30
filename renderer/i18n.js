@@ -271,7 +271,9 @@ window.I18N = (() => {
         renderStarted: "Đã bắt đầu render bằng FFmpeg.",
         renderDone: "Render xong. Video đã được lưu vào thư mục bạn chọn.",
         renderFailed: "Render chưa thành công. Hãy kiểm tra video hoặc cài đặt FFmpeg.",
-        showFile: "Mở thư mục"
+        showFile: "Mở thư mục",
+        noVideo: "Chưa chọn video",
+        previewHint: "Chọn video để xem trước"
       },
       modal: { brand: "Viral AI Tool" }
     },
@@ -547,7 +549,9 @@ window.I18N = (() => {
         renderStarted: "FFmpeg render started.",
         renderDone: "Render complete. The video was saved to your output folder.",
         renderFailed: "Render failed. Check the source video or FFmpeg setup.",
-        showFile: "Show file"
+        showFile: "Show file",
+        noVideo: "No video selected",
+        previewHint: "Choose a video to preview"
       },
       modal: { brand: "Viral AI Tool" }
     }
