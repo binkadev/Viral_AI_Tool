@@ -893,6 +893,7 @@ function settingsPage() {
         '<div class="eyebrow">' + t("settings.developer") + '</div>' +
         '<div class="developer-card-head"><div><h3>' + t("settings.cloudBackend") + '</h3><p>' + t("settings.cloudBackendDesc") + '</p></div>' +
           '<span class="dev-badge">' + t("settings.developmentOnly") + '</span></div>' +
+        '<div class="dev-account-hint"><span>DEV</span><code>' + escapeHtml(t("settings.devAccountHint")) + '</code></div>' +
         '<div class="developer-cloud-grid">' +
           '<div class="speech-field"><label class="label" for="cloudEnvironment">' + t("settings.environment") + '</label>' +
             '<select id="cloudEnvironment" class="select"' + (cloudConfig.source === "environment" ? " disabled" : "") + '>' +
@@ -2252,8 +2253,14 @@ async function saveDeveloperCloudConfig() {
   state.cloud.test = null;
   state.cloud.draftEnvironment = null;
   state.cloud.draftBackendUrl = null;
+  if (response.sessionCleared) {
+    state.cloud.auth = null;
+    state.cloud.account = null;
+    toast(t("settings.cloudSavedSignedOut"));
+  } else {
+    toast(t("settings.cloudSaved"));
+  }
   state.speech.providerStatus = null;
-  toast(t("settings.cloudSaved"));
   render();
 }
 
