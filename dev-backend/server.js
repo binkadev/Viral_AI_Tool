@@ -9,6 +9,8 @@ const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
 const billing = require("./billing");
+const { createDurableStateStore } = require("./state-store");
+const { createAuditLog } = require("./audit-log");
 const {
   resolvePlan,
   publicEntitlements,
@@ -52,17 +54,70 @@ const MAX_DURATION_SECONDS = Math.max(
 
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
+const STATE_FILE = path.join(DATA_DIR, "state.json");
+const AUDIT_FILE = path.join(DATA_DIR, "audit.jsonl");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const users = new Map();
+const durableState = createDurableStateStore(STATE_FILE);
+const auditLog = createAuditLog(AUDIT_FILE);
+
+const users = new Map(
+  Object.entries(durableState.get("users", {}))
+);
 const accessTokens = new Map();
-const refreshTokens = new Map();
+const refreshTokens = new Map(
+  Object.entries(durableState.get("refreshSessions", {}))
+);
 const loginAttempts = new Map();
+const requestBuckets = new Map();
 const jobs = new Map();
 const idempotency = new Map();
 const uploadTokens = new Map();
 const serviceQuotaReservations = new Map();
-const processedBillingEvents = new Map();
+const processedBillingEvents = new Map(
+  Object.entries(durableState.get("processedBillingEvents", {}))
+    .map(([eventId, createdAt]) => [eventId, Number(createdAt || 0)])
+);
+
+function objectFromMap(map) {
+  return Object.fromEntries(map.entries());
+}
+
+function persistUsers() {
+  durableState.set("users", objectFromMap(users));
+}
+
+function persistRefreshSessions() {
+  durableState.set("refreshSessions", objectFromMap(refreshTokens));
+}
+
+function persistBillingEvents() {
+  durableState.set("processedBillingEvents", objectFromMap(processedBillingEvents));
+}
+
+function hashSessionToken(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function requestIp(req) {
+  return String(req.socket?.remoteAddress || "unknown").slice(0, 120);
+}
+
+function audit(event, req, details = {}) {
+  try {
+    auditLog.write(event, {
+      ip: req ? requestIp(req) : undefined,
+      ...details
+    });
+  } catch (error) {
+    console.error("[AuditLog]", error?.code || error?.message || String(error));
+  }
+}
+
+billing.configurePersistence({
+  load: () => durableState.get("billing", {}),
+  save: value => durableState.set("billing", value)
+});
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
@@ -76,7 +131,7 @@ function seedUser() {
   const plan = resolvePlan("creator_pro");
   const usedMinutes = 1500;
 
-  users.set(email, {
+  if (!users.has(email)) users.set(email, {
     id: "dev-user-1",
     email,
     name: "Viral AI Dev",
@@ -105,6 +160,7 @@ function seedUser() {
     }
   });
 
+  persistUsers();
   return { email, password };
 }
 
@@ -158,9 +214,14 @@ function billingSecret() {
 
 function pruneBillingEvents() {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  let changed = false;
   for (const [eventId, createdAt] of processedBillingEvents.entries()) {
-    if (createdAt < cutoff) processedBillingEvents.delete(eventId);
+    if (createdAt < cutoff) {
+      processedBillingEvents.delete(eventId);
+      changed = true;
+    }
   }
+  if (changed) persistBillingEvents();
 }
 
 function safeEqualText(left, right) {
@@ -318,6 +379,8 @@ function applyBillingEvent(event) {
 
   syncUserCommercialState(user, now);
   processedBillingEvents.set(eventId, Date.now());
+  persistBillingEvents();
+  persistUsers();
 
   return {
     duplicate: false,
@@ -372,10 +435,12 @@ function issueSession(user) {
     userId: user.id,
     expiresAt: Date.parse(accessExpiresAt)
   });
-  refreshTokens.set(refreshToken, {
+  refreshTokens.set(hashSessionToken(refreshToken), {
     userId: user.id,
-    expiresAt: Date.parse(refreshExpiresAt)
+    expiresAt: Date.parse(refreshExpiresAt),
+    createdAt: Date.now()
   });
+  persistRefreshSessions();
 
   return {
     accessToken,
@@ -449,6 +514,8 @@ function syncUserCommercialState(user, now = Date.now()) {
     );
     user.quota.resetAt = user.subscription.currentPeriodEnd || user.quota.resetAt;
   }
+
+  persistUsers();
 
   return {
     plan,
