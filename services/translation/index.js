@@ -85,11 +85,14 @@ function createService({ backendUrl, getAccessToken, appVersion }) {
     async status() {
       try {
         const data = await client.status();
+        const rawCode = data?.code || (data?.ready ? "READY" : "TRANSLATION_UNAVAILABLE");
         return {
           mode: "cloud",
           ready: data?.ready === true,
-          code: data?.code || (data?.ready ? "READY" : "TRANSLATION_UNAVAILABLE"),
-          limits: data?.limits || null
+          code: rawCode === "PLAN_REQUIRED" ? "TRANSLATION_PLAN_REQUIRED" : rawCode,
+          limits: data?.limits || null,
+          quota: data?.quota || null,
+          entitlements: data?.entitlements || null
         };
       } catch (error) {
         return {
