@@ -63,24 +63,64 @@ jobs:
       - name: Run production SQLite integration tests
         run: npm run test:backend-production
 
+      - name: Prepare embedded release metadata
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
+          $info = [ordered]@{
+            schemaVersion = 1
+            channel = $channel
+            commit = $env:GITHUB_SHA
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+            source = "github-actions"
+          }
+          $info | ConvertTo-Json | Set-Content -Path release-info.json -Encoding utf8
+          Get-Content release-info.json
+
       - name: Build Windows NSIS installer
         run: npm run dist
 
-      - name: Generate SHA-256 checksums
+      - name: Generate release manifest and SHA-256 checksums
         shell: pwsh
         run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
           $files = Get-ChildItem release -File | Where-Object {
             $_.Extension -in ".exe", ".blockmap", ".yml"
           }
           if (-not $files) {
             throw "No release artifacts were produced."
           }
+
+          $artifacts = @()
           $lines = foreach ($file in $files) {
             $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $artifacts += [ordered]@{
+              file = $file.Name
+              sizeBytes = $file.Length
+              sha256 = $hash
+            }
             "$hash  $($file.Name)"
           }
+
           $lines | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
+
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            product = "Viral AI Tool"
+            version = $pkg.version
+            channel = $channel
+            commit = $env:GITHUB_SHA
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+            platform = "win32"
+            arch = "x64"
+            artifacts = $artifacts
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path release/RELEASE-MANIFEST.json -Encoding utf8
+
           Get-Content release/SHA256SUMS.txt
+          Get-Content release/RELEASE-MANIFEST.json
 
       - name: Upload Windows build artifact
         uses: actions/upload-artifact@v4
@@ -91,6 +131,7 @@ jobs:
             release/*.blockmap
             release/*.yml
             release/SHA256SUMS.txt
+            release/RELEASE-MANIFEST.json
           if-no-files-found: error
           retention-days: 14
 
@@ -103,7 +144,7 @@ jobs:
           gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes --title "Viral AI Tool $env:GITHUB_REF_NAME"
 
           Get-ChildItem release -File | Where-Object {
-            $_.Extension -in ".exe", ".blockmap", ".yml" -or $_.Name -eq "SHA256SUMS.txt"
+            $_.Extension -in ".exe", ".blockmap", ".yml" -or $_.Name -in "SHA256SUMS.txt", "RELEASE-MANIFEST.json"
           } | ForEach-Object {
             gh release upload $env:GITHUB_REF_NAME $_.FullName --clobber
           }
