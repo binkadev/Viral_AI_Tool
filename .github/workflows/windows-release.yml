@@ -64,6 +64,16 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME does not match package version $expected"
           }
 
+      - name: Verify tagged release commit is on master
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          git fetch origin master --depth=1
+          $masterSha = (git rev-parse origin/master).Trim()
+          if ($env:GITHUB_SHA -ne $masterSha) {
+            throw "Stable tag commit $env:GITHUB_SHA is not the current master commit $masterSha."
+          }
+
       - name: Require Windows code signing for tagged release
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
