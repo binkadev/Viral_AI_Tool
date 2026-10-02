@@ -134,7 +134,7 @@ jobs:
             throw "Packaged app.asar was not produced."
           }
 
-          $listing = npx asar list $asar
+          $listing = node node_modules/@electron/asar/bin/asar.js list $asar
           foreach ($required in @(
             "\release-info.json",
             "\main.js",
