@@ -18,6 +18,7 @@ on:
       - "assets/**"
       - "tests/release-policy.test.js"
       - "tests/release-assets.test.js"
+      - "tests/release-readiness.test.js"
       - ".github/workflows/windows-release.yml"
 
 permissions:
