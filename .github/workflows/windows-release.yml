@@ -60,6 +60,9 @@ jobs:
             throw "Tagged releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD repository secrets."
           }
 
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run backend state tests
         run: npm run test:backend-state
 
