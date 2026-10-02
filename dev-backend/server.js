@@ -777,6 +777,10 @@ async function handle(req, res) {
         plan: user.plan
       },
       entitlements: publicEntitlements(user.planId || user.plan),
+      cloudActivity: {
+        activeJobs: activeCloudJobsForUser(user.id),
+        maxConcurrentJobs: publicEntitlements(user.planId || user.plan).maxConcurrentCloudJobs
+      },
       quota: quotaSnapshot(user),
       usage: user.usage || null
     });
@@ -794,6 +798,7 @@ async function handle(req, res) {
       ...base,
       ready: allowed && base.ready === true,
       code: allowed ? base.code : "PLAN_REQUIRED",
+      catalog: allowed ? (base.catalog || []) : [],
       entitlements,
       quota: {
         ...quotaSnapshot(user),
