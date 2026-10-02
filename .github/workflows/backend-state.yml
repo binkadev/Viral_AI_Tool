@@ -30,6 +30,9 @@ jobs:
       - name: Test production SQLite mode
         run: node dev-backend/tests/production-mode.integration.test.js
 
+      - name: Test release policy
+        run: node tests/release-policy.test.js
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -39,6 +42,9 @@ jobs:
           node --check dev-backend/tests/production-mode.integration.test.js
           node --check dev-backend/audit-log.js
           node --check services/auth/auth-client.js
+          node --check services/update/release-policy.js
+          node --check services/update/update-client.js
+          node --check tests/release-policy.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
