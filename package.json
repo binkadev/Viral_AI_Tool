@@ -18,7 +18,8 @@
     "test:backend-production": "node dev-backend/tests/production-mode.integration.test.js",
     "test:release-policy": "node tests/release-policy.test.js",
     "test:release-assets": "node tests/release-assets.test.js",
-    "test:release-readiness": "node tests/release-readiness.test.js"
+    "test:release-readiness": "node tests/release-readiness.test.js",
+    "test:generated-manifest": "node tests/generated-manifest.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
