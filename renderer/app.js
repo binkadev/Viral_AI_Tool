@@ -36,6 +36,9 @@ const state = {
     loading: false,
     loadedAt: 0,
     checking: false,
+    downloading: false,
+    downloaded: null,
+    downloadError: null,
     update: null
   },
   speech: {
@@ -2854,6 +2857,8 @@ async function checkReleaseUpdate() {
 
   state.release.checking = true;
   state.release.update = null;
+  state.release.downloaded = null;
+  state.release.downloadError = null;
   if (state.page === "settings") render();
 
   try {
@@ -2875,6 +2880,49 @@ async function checkReleaseUpdate() {
   }
 
   if (state.page === "settings") render();
+}
+
+async function downloadReleaseUpdate() {
+  if (!window.desktopAPI?.downloadUpdate || state.release.downloading) return;
+
+  state.release.downloading = true;
+  state.release.downloaded = null;
+  state.release.downloadError = null;
+  if (state.page === "settings") render();
+
+  try {
+    const response = await window.desktopAPI.downloadUpdate();
+    if (response?.ok) {
+      state.release.downloaded = response.data || null;
+    } else {
+      state.release.downloadError = response?.error?.code || "UPDATE_DOWNLOAD_FAILED";
+    }
+  } catch {
+    state.release.downloadError = "UPDATE_DOWNLOAD_FAILED";
+  } finally {
+    state.release.downloading = false;
+  }
+
+  if (state.page === "settings") render();
+}
+
+async function launchReleaseUpdate() {
+  const response = await window.desktopAPI?.launchUpdate?.();
+
+  if (!response?.ok) {
+    await showNotice({
+      title: t("settings.updateInstallFailedTitle"),
+      body: t("settings.updateInstallFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("settings.updateInstallerOpenedTitle"),
+    body: t("settings.updateInstallerOpenedBody"),
+    buttonLabel: t("common.close")
+  });
 }
 
 async function openLatestReleasePage() {
@@ -2951,14 +2999,36 @@ function settingsPage() {
               escapeHtml(updateCopy.title) + '</b><span>' + escapeHtml(updateCopy.body) + '</span></div></div>'
           : '';
         const available = state.release.update?.code === "UPDATE_AVAILABLE";
-        return status +
+        const downloaded = Boolean(state.release.downloaded);
+        const downloadStatus = state.release.downloadError
+          ? '<div class="release-update-status warning"><div><b>' +
+              t("settings.updateDownloadFailedTitle") + '</b><span>' +
+              t("settings.updateDownloadFailedBody") + '</span></div></div>'
+          : downloaded
+            ? '<div class="release-update-status success"><div><b>' +
+                escapeHtml(t("settings.updateVerifiedTitle", {
+                  version: state.release.downloaded?.version || state.release.update?.version || "—"
+                })) + '</b><span>' + t("settings.updateVerifiedBody") + '</span></div></div>'
+            : '';
+
+        return status + downloadStatus +
           '<div class="release-actions">' +
             '<button id="checkReleaseUpdate" class="button ghost" type="button"' +
-              (state.release.checking ? ' disabled' : '') + '>' +
+              (state.release.checking || state.release.downloading ? ' disabled' : '') + '>' +
               (state.release.checking ? t("settings.updateChecking") : t("settings.updateCheck")) +
             '</button>' +
+            (available && !downloaded
+              ? '<button id="downloadReleaseUpdate" class="button primary" type="button"' +
+                  (state.release.downloading ? ' disabled' : '') + '>' +
+                  (state.release.downloading ? t("settings.updateDownloading") : t("settings.updateDownload")) +
+                '</button>'
+              : '') +
+            (available && downloaded
+              ? '<button id="installReleaseUpdate" class="button primary" type="button">' +
+                  t("settings.updateInstall") + '</button>'
+              : '') +
             (available
-              ? '<button id="openReleasePage" class="button primary" type="button">' +
+              ? '<button id="openReleasePage" class="button ghost" type="button">' +
                   t("settings.updateOpenRelease") + '</button>'
               : '') +
           '</div>';
@@ -5253,6 +5323,12 @@ function bind() {
 
   const openReleasePageButton = $("openReleasePage");
   if (openReleasePageButton) openReleasePageButton.onclick = () => openLatestReleasePage();
+
+  const downloadReleaseUpdateButton = $("downloadReleaseUpdate");
+  if (downloadReleaseUpdateButton) downloadReleaseUpdateButton.onclick = () => downloadReleaseUpdate();
+
+  const installReleaseUpdateButton = $("installReleaseUpdate");
+  if (installReleaseUpdateButton) installReleaseUpdateButton.onclick = () => launchReleaseUpdate();
 
   const saveCloudConfig = $("saveCloudConfig");
   if (saveCloudConfig) saveCloudConfig.onclick = saveDeveloperCloudConfig;
