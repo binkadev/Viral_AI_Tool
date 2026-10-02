@@ -54,6 +54,7 @@ function stableApiError(status, payload = {}) {
     TRANSLATION_LANGUAGE_INVALID: "TRANSLATION_LANGUAGE_INVALID",
     TRANSLATION_TOO_LARGE: "TRANSLATION_TOO_LARGE",
     TRANSLATION_RESULT_INVALID: "TRANSLATION_RESULT_INVALID",
+    QUOTA_EXCEEDED: "TRANSLATION_QUOTA_EXCEEDED",
     JOB_CONFLICT: "TRANSLATION_JOB_CONFLICT",
     JOB_NOT_FOUND: "TRANSLATION_JOB_NOT_FOUND",
     SERVICE_UNAVAILABLE: "TRANSLATION_UNAVAILABLE"
@@ -68,6 +69,9 @@ function stableApiError(status, payload = {}) {
 
   if (status === 401 || status === 403) {
     return clientError("TRANSLATION_AUTH_REQUIRED", "Authentication is required.", { status });
+  }
+  if (status === 402) {
+    return clientError("TRANSLATION_QUOTA_EXCEEDED", "Cloud allowance is insufficient.", { status });
   }
   if (status === 413) {
     return clientError("TRANSLATION_TOO_LARGE", "Translation input is too large.", { status });
