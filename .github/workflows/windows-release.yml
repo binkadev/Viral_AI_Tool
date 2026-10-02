@@ -63,6 +63,9 @@ jobs:
       - name: Run production SQLite integration tests
         run: npm run test:backend-production
 
+      - name: Run release policy tests
+        run: npm run test:release-policy
+
       - name: Prepare embedded release metadata
         shell: pwsh
         run: |
