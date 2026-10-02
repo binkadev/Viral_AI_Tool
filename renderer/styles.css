@@ -3412,3 +3412,42 @@ html[data-scale="compact"] .hero p{font-size:13px}
     grid-template-columns:1fr;
   }
 }
+
+
+.release-update-status{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:14px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.release-update-status b,
+.release-update-status span{
+  display:block;
+}
+.release-update-status b{
+  font-size:11px;
+}
+.release-update-status span{
+  margin-top:3px;
+  color:var(--text-soft);
+  font-size:10px;
+  line-height:1.45;
+}
+.release-update-status.success{
+  border-color:color-mix(in srgb,var(--success) 24%,var(--line));
+  background:color-mix(in srgb,var(--success) 6%,var(--surface-solid));
+}
+.release-update-status.warning{
+  border-color:color-mix(in srgb,var(--warning) 26%,var(--line));
+  background:color-mix(in srgb,var(--warning) 7%,var(--surface-solid));
+}
+.release-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
