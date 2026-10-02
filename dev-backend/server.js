@@ -187,6 +187,113 @@ function hashSessionToken(value) {
   return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).sort().map(key =>
+      JSON.stringify(key) + ":" + stableJson(value[key])
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
+function gatewayJobFingerprint(service, body) {
+  return crypto
+    .createHash("sha256")
+    .update(String(service || "") + ":" + stableJson(body || {}))
+    .digest("hex");
+}
+
+function gatewayReceiptKey(userId, clientJobId) {
+  return String(userId || "") + ":" + String(clientJobId || "");
+}
+
+function jobServiceState(service) {
+  const all = durableState.get("jobs", {});
+  return all?.[service] && typeof all[service] === "object"
+    ? all[service]
+    : { jobs: {}, idempotency: {} };
+}
+
+function getGatewayReceipt(service, userId, clientJobId) {
+  const section = jobServiceState(service);
+  return section.gatewayReceipts?.[gatewayReceiptKey(userId, clientJobId)] || null;
+}
+
+function saveGatewayReceipt(service, userId, clientJobId, receipt) {
+  const all = durableState.get("jobs", {});
+  const section = all?.[service] && typeof all[service] === "object"
+    ? all[service]
+    : { jobs: {}, idempotency: {} };
+  const receipts = {
+    ...(section.gatewayReceipts || {}),
+    [gatewayReceiptKey(userId, clientJobId)]: {
+      ...receipt,
+      userId,
+      clientJobId,
+      updatedAt: new Date().toISOString()
+    }
+  };
+
+  durableState.set("jobs", {
+    ...all,
+    [service]: {
+      ...section,
+      gatewayReceipts: receipts
+    }
+  });
+}
+
+function updateGatewayReceiptByJobId(service, jobId, patch = {}) {
+  const all = durableState.get("jobs", {});
+  const section = all?.[service];
+  if (!section?.gatewayReceipts) return false;
+
+  let changed = false;
+  const receipts = { ...section.gatewayReceipts };
+
+  for (const [key, receipt] of Object.entries(receipts)) {
+    if (receipt?.jobId !== jobId) continue;
+    receipts[key] = {
+      ...receipt,
+      ...patch,
+      updatedAt: new Date().toISOString()
+    };
+    changed = true;
+  }
+
+  if (changed) {
+    durableState.set("jobs", {
+      ...all,
+      [service]: {
+        ...section,
+        gatewayReceipts: receipts
+      }
+    });
+  }
+
+  return changed;
+}
+
+function checkGatewayReceipt(service, userId, clientJobId, body) {
+  const fingerprint = gatewayJobFingerprint(service, body);
+  const receipt = getGatewayReceipt(service, userId, clientJobId);
+
+  if (receipt && receipt.fingerprint !== fingerprint) {
+    const err = new Error("Idempotency key was reused with different input.");
+    err.code = "JOB_CONFLICT";
+    throw err;
+  }
+
+  if (receipt?.state === "completed" || Number(receipt?.chargedMinutes || 0) > 0) {
+    const err = new Error("Completed job result was not retained by the gateway.");
+    err.code = "JOB_RESULT_NOT_RETAINED";
+    throw err;
+  }
+
+  return { fingerprint, receipt };
+}
+
 function requestIp(req) {
   return String(req.socket?.remoteAddress || "unknown").slice(0, 120);
 }
@@ -1329,12 +1436,26 @@ async function processSpeechJob(job) {
 
 translationJobs.configureQuotaHooks({
   reserve: reserveCloudQuota,
-  settle: settleCloudQuota
+  settle: payload => {
+    const result = settleCloudQuota(payload);
+    updateGatewayReceiptByJobId("translation", payload.jobId, {
+      state: payload.outcome,
+      chargedMinutes: Number(result?.chargedMinutes || 0)
+    });
+    return result;
+  }
 });
 
 voiceJobs.configureQuotaHooks({
   reserve: reserveCloudQuota,
-  settle: settleCloudQuota
+  settle: payload => {
+    const result = settleCloudQuota(payload);
+    updateGatewayReceiptByJobId("voice", payload.jobId, {
+      state: payload.outcome,
+      chargedMinutes: Number(result?.chargedMinutes || 0)
+    });
+    return result;
+  }
 });
 
 restoreSpeechJobs();
