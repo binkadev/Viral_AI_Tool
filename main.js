@@ -48,6 +48,7 @@ const {
   downloadVerifiedInstaller
 } = require('./services/update/update-client');
 const { createDiagnosticLogger } = require('./services/diagnostics/logger');
+const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
 
 let mainWindow;
 let sessionStore;
@@ -474,20 +475,8 @@ ipcMain.handle('diagnostics:export', async () => {
     const release = releaseInfo();
     const logs = diagnosticLogger.readRecent(500);
 
-    const bundle = {
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      product: {
-        name: release.name,
-        version: release.version,
-        channel: release.channel,
-        commit: release.commit,
-        builtAt: release.builtAt,
-        platform: release.platform,
-        arch: release.arch,
-        packaged: release.packaged,
-        source: release.source
-      },
+    const bundle = createDiagnosticBundle({
+      release,
       runtime: {
         platform: process.platform,
         arch: process.arch,
@@ -496,15 +485,9 @@ ipcMain.handle('diagnostics:export', async () => {
         chrome: process.versions.chrome || null,
         node: process.versions.node || null
       },
-      privacy: {
-        redacted: true,
-        accountDataIncluded: false,
-        credentialsIncluded: false,
-        cloudConfigurationIncluded: false,
-        userMediaPathsIncluded: false
-      },
-      logs
-    };
+      logs,
+      redact: diagnosticLogger.redact
+    });
 
     fs.writeFileSync(result.filePath, JSON.stringify(bundle, null, 2), {
       encoding: 'utf8',
