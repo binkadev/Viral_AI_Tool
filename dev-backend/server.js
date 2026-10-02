@@ -8,6 +8,13 @@ const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
+const {
+  resolvePlan,
+  publicEntitlements,
+  assertFeature,
+  assertService,
+  assertConcurrentJobs
+} = require("./entitlements");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
@@ -49,17 +56,21 @@ function seedUser() {
   const password = "ViralAI123!";
   const salt = crypto.randomBytes(16).toString("hex");
 
+  const plan = resolvePlan("creator_pro");
+  const usedMinutes = 1500;
+
   users.set(email, {
     id: "dev-user-1",
     email,
     name: "Viral AI Dev",
-    plan: "Creator Pro",
+    planId: plan.id,
+    plan: plan.displayName,
     salt,
     passwordHash: hashPassword(password, salt),
     quota: {
-      totalMinutes: 2000,
-      usedMinutes: 1500,
-      remainingMinutes: 500,
+      totalMinutes: plan.monthlyMinutes,
+      usedMinutes,
+      remainingMinutes: Math.max(0, plan.monthlyMinutes - usedMinutes),
       resetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     },
     usage: {
@@ -155,6 +166,7 @@ function issueSession(user) {
       id: user.id,
       email: user.email,
       name: user.name,
+      planId: user.planId || resolvePlan(user.plan).id,
       plan: user.plan
     }
   };
@@ -237,6 +249,33 @@ function activeJobState(state) {
   return ["awaiting_upload", "uploaded", "queued", "processing", "cancelling"].includes(state);
 }
 
+function activeCloudJobsForUser(userId) {
+  let total = 0;
+
+  for (const job of jobs.values()) {
+    if (job.userId === userId && activeJobState(job.state)) total++;
+  }
+
+  for (const reservation of serviceQuotaReservations.values()) {
+    if (reservation.userId === userId) total++;
+  }
+
+  return total;
+}
+
+function assertCloudJobAllowed(user, service) {
+  if (!user) {
+    const error = new Error("Authentication is required.");
+    error.code = "AUTH_REQUIRED";
+    throw error;
+  }
+
+  const planRef = user.planId || user.plan;
+  assertService(planRef, service);
+  assertConcurrentJobs(planRef, activeCloudJobsForUser(user.id));
+  return publicEntitlements(planRef);
+}
+
 function reservedMinutesForUser(userId) {
   let total = 0;
 
@@ -306,6 +345,8 @@ function reserveCloudQuota({ userId, service, jobId, minutes }) {
   const key = quotaReservationKey(service, jobId);
   const existing = serviceQuotaReservations.get(key);
   if (existing) return { minutes: existing.minutes };
+
+  assertCloudJobAllowed(user, service);
 
   const requested = Math.max(1, Math.ceil(Number(minutes || 0)));
   const available = Math.max(
@@ -732,8 +773,10 @@ async function handle(req, res) {
         id: user.id,
         email: user.email,
         name: user.name,
+        planId: user.planId || resolvePlan(user.plan).id,
         plan: user.plan
       },
+      entitlements: publicEntitlements(user.planId || user.plan),
       quota: quotaSnapshot(user),
       usage: user.usage || null
     });
@@ -742,8 +785,16 @@ async function handle(req, res) {
   if (method === "GET" && url.pathname === "/v1/voice/status") {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const base = voiceJobs.status();
+    const entitlements = publicEntitlements(user.planId || user.plan);
+    const allowed = entitlements.features.cloudVoice === true;
+
     return json(res, 200, {
-      ...voiceJobs.status(),
+      ...base,
+      ready: allowed && base.ready === true,
+      code: allowed ? base.code : "PLAN_REQUIRED",
+      entitlements,
       quota: {
         ...quotaSnapshot(user),
         plan: user.plan
@@ -754,7 +805,13 @@ async function handle(req, res) {
   if (method === "GET" && url.pathname === "/v1/voice/catalog") {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
-    return json(res, 200, voiceJobs.catalog());
+
+    try {
+      assertService(user.planId || user.plan, "voice");
+      return json(res, 200, voiceJobs.catalog());
+    } catch (err) {
+      return error(res, err?.code === "PLAN_REQUIRED" ? 403 : 400, err?.code || "VOICE_FAILED");
+    }
   }
 
   if (method === "POST" && url.pathname === "/v1/voice/preview") {
@@ -766,11 +823,13 @@ async function handle(req, res) {
     req.on("aborted", () => controller.abort());
 
     try {
+      assertFeature(user.planId || user.plan, "voicePreview");
       const preview = await voiceJobs.preview(user.id, body, controller.signal);
       return binary(res, 200, preview.buffer, preview.contentType);
     } catch (err) {
       const code = err?.code || "VOICE_FAILED";
       const status =
+        code === "PLAN_REQUIRED" ? 403 :
         code === "VOICE_PREVIEW_RATE_LIMITED" ? 429 :
         code === "VOICE_PREVIEW_INVALID" || code === "VOICE_NOT_FOUND" ? 400 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
@@ -795,6 +854,8 @@ async function handle(req, res) {
       const code = err?.code || "VOICE_FAILED";
       const status =
         code === "VOICE_TOO_LARGE" ? 413 :
+        code === "PLAN_REQUIRED" ? 403 :
+        code === "CONCURRENCY_LIMIT" ? 429 :
         code === "QUOTA_EXCEEDED" ? 402 :
         code === "JOB_CONFLICT" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
@@ -851,8 +912,15 @@ async function handle(req, res) {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
+    const base = translationJobs.status();
+    const entitlements = publicEntitlements(user.planId || user.plan);
+    const allowed = entitlements.features.cloudTranslation === true;
+
     return json(res, 200, {
-      ...translationJobs.status(),
+      ...base,
+      ready: allowed && base.ready === true,
+      code: allowed ? base.code : "PLAN_REQUIRED",
+      entitlements,
       quota: {
         ...quotaSnapshot(user),
         plan: user.plan
@@ -876,6 +944,8 @@ async function handle(req, res) {
       const code = err?.code || "TRANSLATION_FAILED";
       const status =
         code === "TRANSLATION_TOO_LARGE" ? 413 :
+        code === "PLAN_REQUIRED" ? 403 :
+        code === "CONCURRENCY_LIMIT" ? 429 :
         code === "QUOTA_EXCEEDED" ? 402 :
         code === "JOB_CONFLICT" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
@@ -915,10 +985,13 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     const providerReady = speechProvider.isConfigured();
+    const entitlements = publicEntitlements(user.planId || user.plan);
+    const allowed = entitlements.features.cloudSpeech === true;
 
     return json(res, 200, {
-      ready: providerReady,
-      code: providerReady ? "READY" : "CLOUD_PROVIDER_NOT_CONFIGURED",
+      ready: allowed && providerReady,
+      code: !allowed ? "PLAN_REQUIRED" : providerReady ? "READY" : "CLOUD_PROVIDER_NOT_CONFIGURED",
+      entitlements,
       quota: {
         ...quotaSnapshot(user),
         plan: user.plan
@@ -964,6 +1037,16 @@ async function handle(req, res) {
         }
         return json(res, 200, publicJob(existing, { createResponse: true }));
       }
+    }
+
+    try {
+      assertCloudJobAllowed(user, "speech");
+    } catch (err) {
+      const status =
+        err?.code === "PLAN_REQUIRED" ? 403 :
+        err?.code === "CONCURRENCY_LIMIT" ? 429 :
+        400;
+      return error(res, status, err?.code || "BAD_REQUEST");
     }
 
     if (!speechProvider.isConfigured()) return error(res, 503, "SERVICE_UNAVAILABLE");
