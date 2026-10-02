@@ -224,6 +224,18 @@ function requestCancellation(subscription, { now = Date.now(), immediately = fal
   return subscription;
 }
 
+function resumeCancellation(subscription, { now = Date.now() } = {}) {
+  if (!subscription) throw subscriptionError("SUBSCRIPTION_REQUIRED", "Subscription is missing.");
+  if (subscription.status === "canceled") {
+    throw subscriptionError("SUBSCRIPTION_INACTIVE", "Ended subscriptions cannot be resumed.");
+  }
+
+  subscription.cancelAtPeriodEnd = false;
+  subscription.canceledAt = null;
+  subscription.updatedAt = iso(now);
+  return subscription;
+}
+
 function assertSubscriptionAccess(subscription, now = Date.now()) {
   reconcileSubscription(subscription, { now });
 
@@ -250,5 +262,6 @@ module.exports = {
   markPaymentRecovered,
   requestPlanChange,
   requestCancellation,
+  resumeCancellation,
   assertSubscriptionAccess
 };
