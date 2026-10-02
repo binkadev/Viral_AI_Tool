@@ -305,6 +305,7 @@ components:
         - end
         - sourceText
         - text
+        - speaker
         - lengthRatio
         - timingRisk
       properties:
