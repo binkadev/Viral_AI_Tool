@@ -2,85 +2,214 @@
 
 This checklist is for a real public Windows Stable release.
 
-## Before tagging
+## 1. Source and version
 
-1. Ensure the `Backend State` workflow is green on the intended commit.
-2. Ensure the `Windows Release` validation build is green.
-3. Confirm the generated Windows artifact installs and launches on a clean Windows machine.
-4. Confirm the app shows the expected:
-   - version
-   - release channel
-   - commit
-   - build timestamp
-5. Confirm Cloud login, local processing, Cloud processing, localized export, billing UI, and update UI work in the packaged build.
-6. Confirm `npm audit --omit=dev --audit-level=high` passes.
-7. Confirm the production backend is deployed behind HTTPS.
-8. Confirm development billing routes are unavailable in production.
-9. Confirm backup/restore for production SQLite is available.
+- [ ] `package.json` contains the intended Stable version.
+- [ ] `package-lock.json` root version matches.
+- [ ] `CHANGELOG.md` contains the release entry.
+- [ ] Intended release commit is the current `master` commit.
+- [ ] No public Stable tag for this version already exists.
+- [ ] `Backend State` workflow is green.
+- [ ] `Windows Release` validation workflow is green.
 
-## Windows code signing
-
-A tagged Stable release is intentionally blocked unless these repository secrets exist:
-
-- `WINDOWS_CSC_LINK`
-- `WINDOWS_CSC_KEY_PASSWORD`
-
-`WINDOWS_CSC_LINK` should contain the certificate payload or a supported certificate reference understood by electron-builder.
-
-Do not weaken or remove this guard just to make a release pass. An unsigned commercial installer will create avoidable SmartScreen/trust problems.
-
-## Versioning
-
-Stable releases must use:
+Stable versions must use:
 
 ```text
 X.Y.Z
 ```
 
-Examples:
-
-- `0.14.0`
-- `1.0.0`
-
-Prerelease versions such as `0.15.0-beta.1` are rejected by the Stable update policy.
-
-The Git tag must exactly match:
+The tag must exactly match:
 
 ```text
 v<package.json version>
 ```
 
-For version `0.14.0`, the tag is:
+For version `0.14.0`:
 
 ```text
 v0.14.0
 ```
 
-## Stable release output
+Do not force-move a published Stable tag.
 
-A tagged release produces:
+## 2. Windows identity and code signing
 
-- Windows NSIS installer
-- blockmap/update metadata where generated
+Tagged Stable releases are intentionally blocked unless these GitHub repository secrets exist:
+
+- `WINDOWS_CSC_LINK`
+- `WINDOWS_CSC_KEY_PASSWORD`
+
+Before tagging:
+
+- [ ] Certificate is valid and not expired.
+- [ ] Publisher identity is the intended commercial publisher.
+- [ ] `assets/icon.ico` passes the release asset test.
+- [ ] Application icon looks correct in Explorer, taskbar and Start Menu.
+
+Tagged workflow must report valid Authenticode for:
+
+- [ ] NSIS installer.
+- [ ] Packaged `Viral AI Tool.exe`.
+
+Do not weaken the signing guard merely to make a release pass.
+
+## 3. Production backend
+
+- [ ] Production backend is deployed behind HTTPS.
+- [ ] `VIRAL_AI_ENV=production`.
+- [ ] Production uses the approved durable state driver.
+- [ ] SQLite backup/restore procedure is available for the current single-node baseline.
+- [ ] Production owner bootstrap has completed.
+- [ ] Bootstrap password has been removed from the deployment environment.
+- [ ] `VIRAL_AI_TRUST_PROXY=true` is enabled only when traffic reaches the backend exclusively through the trusted proxy.
+- [ ] Audit log retention/rotation is understood.
+- [ ] Health endpoint is monitored.
+- [ ] Restart/session integration behavior has been verified.
+
+## 4. Billing
+
+For a paid public launch:
+
+- [ ] Real billing provider adapter is connected.
+- [ ] Development checkout/portal is unavailable in production.
+- [ ] Billing webhook secret is stored in the production secret manager.
+- [ ] Signed lifecycle webhook has been tested.
+- [ ] Upgrade has been tested.
+- [ ] Scheduled downgrade has been tested.
+- [ ] Cancel/resume has been tested.
+- [ ] Payment failed → grace-period behavior has been tested.
+- [ ] Invoice history reflects provider records.
+
+If public billing is intentionally not launched yet, purchase UI must not imply that real payment is available.
+
+## 5. Automated release tests
+
+The intended release commit must pass:
+
+```text
+npm run test:backend-state
+npm run test:backend-restart
+npm run test:backend-production
+npm run test:release-policy
+npm run test:release-assets
+npm run test:release-readiness
+npm run test:generated-manifest
+```
+
+Also confirm:
+
+- [ ] `npm audit --omit=dev --audit-level=high` passes.
+- [ ] Verified updater regression tests pass.
+- [ ] Generated release manifest is accepted by the same policy used inside the app.
+
+## 6. Windows artifact validation
+
+Validation build must pass:
+
+- [ ] Locked dependency install.
+- [ ] NSIS packaging.
+- [ ] Silent installer.
+- [ ] Installed ProductVersion validation.
+- [ ] Installed application startup smoke test.
+- [ ] Silent uninstaller.
+- [ ] Release manifest generation.
+- [ ] Release manifest validation.
+- [ ] SHA-256 generation.
+- [ ] Artifact upload.
+
+Expected artifacts include:
+
+- Windows installer `.exe`
+- blockmap/update metadata when generated
 - `SHA256SUMS.txt`
 - `RELEASE-MANIFEST.json`
-- GitHub Release notes
 
-The desktop updater only accepts installers that:
+## 7. Clean Windows machine smoke test
 
-- belong to this GitHub repository's release path
-- match the expected version/channel
-- match manifest size
-- match SHA-256 at download time
-- match SHA-256 again immediately before launch
+Before the first public Stable release, test on a clean Windows user/VM that has not run the development build.
+
+Confirm:
+
+- [ ] Installer opens normally.
+- [ ] No unexpected administrator elevation is requested.
+- [ ] Branding/icon is correct.
+- [ ] Application launches.
+- [ ] Window size/layout is correct.
+- [ ] File picker works.
+- [ ] A local video can be imported.
+- [ ] Local processing works.
+- [ ] Production Cloud login works.
+- [ ] Account/session management works.
+- [ ] Cloud Speech/Translation/Voice behave correctly.
+- [ ] Localized render produces a playable MP4.
+- [ ] Settings shows correct version/channel/commit/build timestamp.
+- [ ] Uninstaller completes.
+- [ ] User-owned source videos remain untouched.
+
+## 8. Stable tag workflow
+
+Only create the Stable tag after all mandatory items above pass.
+
+The tagged workflow must enforce:
+
+- tag version == package version
+- package version is non-prerelease `X.Y.Z`
+- tag commit == current `master`
+- Windows signing secrets exist
+- installer/application Authenticode signatures are valid
+- generated manifest passes app update policy
+
+## 9. Published release verification
+
+After GitHub Release is created:
+
+- [ ] Installer is attached.
+- [ ] `SHA256SUMS.txt` is attached.
+- [ ] `RELEASE-MANIFEST.json` is attached.
+- [ ] Release notes are correct.
+- [ ] Manifest installer URL points to this exact tagged release.
+- [ ] SHA-256 in manifest matches the uploaded installer.
+- [ ] Release page opens from the app.
+
+## 10. Update verification
+
+From the previous Stable build:
+
+- [ ] Check for updates discovers the new Stable version.
+- [ ] Preview is not offered to Stable users.
+- [ ] Installer downloads successfully.
+- [ ] Download size matches manifest.
+- [ ] SHA-256 validation succeeds while downloading.
+- [ ] SHA-256 validation succeeds again before installer launch.
+- [ ] Update is blocked while AI/render/model work is active.
+- [ ] Verified installer opens.
+- [ ] Old app exits cleanly.
+- [ ] Updated app reports the new Stable version.
+
+## 11. Rollback and incident readiness
+
+Before publishing:
+
+- [ ] Previous Stable installer is retained.
+- [ ] Production database backup exists.
+- [ ] Backend rollback/restore procedure is known.
+- [ ] Release owner is identified.
+
+If a release is defective:
+
+1. Stop promoting the defective release.
+2. Keep the published tag immutable for traceability.
+3. Fix forward with a new patch version.
+4. Restore backend data only through the tested backup/restore procedure if needed.
+5. Document the incident/fix in the changelog and release notes.
 
 ## Do not tag yet when
 
-Do not create a Stable tag if any of these are true:
+Do **not** create a Stable tag if any of these are true:
 
-- Windows signing secrets are absent
-- Windows validation workflow is red
-- backend workflow is red
-- production billing provider is not connected for a paid public launch
-- production backend is not behind HTTPS
-- installer has not been smoke-tested on a clean Windows machine
+- Windows code-signing secrets are absent.
+- Windows validation workflow is red.
+- Backend workflow is red.
+- Production backend is not behind HTTPS.
+- Real billing provider is not connected for a paid public launch.
+- Installer has not been smoke-tested on a clean Windows machine.
