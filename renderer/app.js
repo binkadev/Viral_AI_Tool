@@ -501,6 +501,7 @@ function speechProviderStatusLabel(status) {
     CLOUD_AUTH_REQUIRED: "speech.cloudAuthRequired",
     CLOUD_QUOTA_EXCEEDED: "speech.cloudQuotaExceeded",
     CLOUD_PLAN_REQUIRED: "speech.cloudPlanRequired",
+    CLOUD_CONCURRENCY_LIMIT: "speech.cloudConcurrencyLimit",
     CLOUD_UNAVAILABLE: "speech.cloudUnavailable",
     CLOUD_PROVIDER_NOT_CONFIGURED: "speech.cloudProviderPending",
     CLOUD_NETWORK: "speech.cloudUnavailable",
@@ -784,6 +785,9 @@ function translationConnectionPanel() {
   } else if (code === "TRANSLATION_AUTH_REQUIRED") {
     title = t("translation.cloudLoginTitle");
     body = t("translation.cloudLoginBody");
+  } else if (code === "TRANSLATION_PLAN_REQUIRED") {
+    title = t("translation.planTitle");
+    body = t("translation.planBody");
   } else if (["TRANSLATION_NOT_CONFIGURED", "TRANSLATION_CONFIG_INVALID", "TRANSLATION_HTTPS_REQUIRED"].includes(code)) {
     title = t("translation.cloudSetupTitle");
     body = t("translation.cloudSetupBody");
@@ -838,6 +842,26 @@ async function handleTranslationBlock(response) {
     await showNotice({
       title: t("translation.authTitle"),
       body: t("translation.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_PLAN_REQUIRED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("translation.planTitle"),
+      body: t("translation.planBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_CONCURRENCY_LIMIT") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("translation.concurrencyTitle"),
+      body: t("translation.concurrencyBody"),
       buttonLabel: t("common.close")
     });
     return;
@@ -1214,6 +1238,9 @@ function voiceConnectionPanel() {
   } else if (code === "VOICE_AUTH_REQUIRED") {
     title = t("voiceWorkflow.cloudLoginTitle");
     body = t("voiceWorkflow.cloudLoginBody");
+  } else if (code === "VOICE_PLAN_REQUIRED") {
+    title = t("voiceWorkflow.planTitle");
+    body = t("voiceWorkflow.planBody");
   } else if (["VOICE_NOT_CONFIGURED", "VOICE_CONFIG_INVALID", "VOICE_HTTPS_REQUIRED"].includes(code)) {
     title = t("voiceWorkflow.cloudSetupTitle");
     body = t("voiceWorkflow.cloudSetupBody");
@@ -1272,6 +1299,16 @@ async function previewVoiceSelection(speakerKey) {
 
   if (!response?.ok) {
     const code = response?.error?.code || "VOICE_FAILED";
+
+    if (code === "VOICE_PLAN_REQUIRED") {
+      await showNotice({
+        title: t("voiceWorkflow.planTitle"),
+        body: t("voiceWorkflow.planBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     toast(code === "VOICE_PREVIEW_RATE_LIMITED"
       ? t("voiceWorkflow.previewWait")
       : t("voiceWorkflow.previewFailed"));
@@ -1300,6 +1337,16 @@ async function previewStudioVoice(voiceId) {
 
   if (!response?.ok) {
     const code = response?.error?.code || "VOICE_FAILED";
+
+    if (code === "VOICE_PLAN_REQUIRED") {
+      await showNotice({
+        title: t("voiceWorkflow.planTitle"),
+        body: t("voiceWorkflow.planBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     toast(code === "VOICE_PREVIEW_RATE_LIMITED"
       ? t("voiceWorkflow.previewWait")
       : t("voiceWorkflow.previewFailed"));
@@ -1355,6 +1402,26 @@ async function handleVoiceBlock(response) {
     await showNotice({
       title: t("voiceWorkflow.authTitle"),
       body: t("voiceWorkflow.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_PLAN_REQUIRED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("voiceWorkflow.planTitle"),
+      body: t("voiceWorkflow.planBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_CONCURRENCY_LIMIT") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("voiceWorkflow.concurrencyTitle"),
+      body: t("voiceWorkflow.concurrencyBody"),
       buttonLabel: t("common.close")
     });
     return;
@@ -1952,6 +2019,8 @@ function usagePage() {
   const user = account?.user || null;
   const quota = account?.quota || null;
   const usage = account?.usage || null;
+  const entitlements = account?.entitlements || null;
+  const cloudActivity = account?.cloudActivity || null;
   const authenticated = auth?.authenticated === true;
 
   if (!authenticated) {
@@ -1995,6 +2064,16 @@ function usagePage() {
     ? t("usage.minutesReserved", { minutes: Math.max(0, Math.floor(reserved)) })
     : "";
 
+  const featureItems = entitlements ? [
+    [t("usage.cloudSpeech"), entitlements.features?.cloudSpeech === true],
+    [t("usage.cloudTranslation"), entitlements.features?.cloudTranslation === true],
+    [t("usage.cloudVoice"), entitlements.features?.cloudVoice === true],
+    [t("usage.voicePreview"), entitlements.features?.voicePreview === true]
+  ] : [];
+
+  const activeJobs = Number(cloudActivity?.activeJobs);
+  const maxConcurrentJobs = Number(entitlements?.maxConcurrentCloudJobs ?? cloudActivity?.maxConcurrentJobs);
+
   const monthlyValue = Number.isFinite(used) && Number.isFinite(total)
     ? Math.floor(used).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " / " +
       Math.floor(total).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " " + t("usage.minutesUnit")
@@ -2016,7 +2095,23 @@ function usagePage() {
     return '<div class="stat-card"><div class="stat-label">' + item[0] + '</div><div class="stat-value">' +
       (Number.isFinite(value) ? Math.max(0, Math.floor(value)).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") : "—") +
       '</div><div class="muted">' + t("usage.minutesUnit") + '</div></div>';
-  }).join("") + '</div>';
+  }).join("") + '</div>' +
+  (entitlements
+    ? '<div class="section-head"><div><h3>' + t("usage.planAccess") + '</h3><p>' + t("usage.planAccessDesc") + '</p></div></div>' +
+      '<div class="usage-grid">' +
+        featureItems.map((item) =>
+          '<div class="stat-card"><div class="stat-label">' + escapeHtml(item[0]) + '</div><div class="stat-value">' +
+          escapeHtml(item[1] ? t("usage.included") : t("usage.notIncluded")) + '</div></div>'
+        ).join("") +
+        '<div class="stat-card"><div class="stat-label">' + t("usage.concurrentJobs") + '</div><div class="stat-value">' +
+          (Number.isFinite(activeJobs) ? Math.max(0, Math.floor(activeJobs)) : 0) + ' / ' +
+          (Number.isFinite(maxConcurrentJobs) ? Math.max(1, Math.floor(maxConcurrentJobs)) : "—") +
+        '</div><div class="muted">' + t("usage.activeNow") + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">' + t("usage.modelAccess") + '</div><div class="stat-value">' +
+          escapeHtml((entitlements.models?.speech || []).map(x => x === "premium" ? t("usage.premium") : t("usage.standard")).join(" + ") || "—") +
+        '</div></div>' +
+      '</div>'
+    : '');
 }
 
 function settingsPage() {
@@ -3045,7 +3140,27 @@ async function handleSpeechBlock(response, source) {
     return;
   }
 
-  if (["CLOUD_QUOTA_EXCEEDED", "CLOUD_PLAN_REQUIRED"].includes(code)) {
+  if (code === "CLOUD_PLAN_REQUIRED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("speech.cloudPlanTitle"),
+      body: t("speech.cloudPlanBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "CLOUD_CONCURRENCY_LIMIT") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("speech.cloudConcurrencyTitle"),
+      body: t("speech.cloudConcurrencyBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "CLOUD_QUOTA_EXCEEDED") {
     await refreshCloudUiState({ rerender: true });
     await showNotice({
       title: t("speech.cloudQuotaTitle"),
