@@ -41,6 +41,7 @@ const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
+const { checkForUpdate } = require('./services/update/update-client');
 
 let mainWindow;
 let sessionStore;
@@ -72,6 +73,15 @@ function releaseInfo() {
     ? new Date(metadata.builtAt).toISOString()
     : null;
 
+  const safeHttpsUrl = value => {
+    try {
+      const url = new URL(String(value || ''));
+      return url.protocol === 'https:' ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  };
+
   return {
     name: app.getName(),
     version: app.getVersion(),
@@ -81,7 +91,9 @@ function releaseInfo() {
     source: String(metadata.source || (app.isPackaged ? 'package' : 'workspace')).slice(0, 80),
     platform: process.platform,
     arch: process.arch,
-    packaged: app.isPackaged
+    packaged: app.isPackaged,
+    updateManifestUrl: safeHttpsUrl(metadata.updateManifestUrl),
+    releasePageUrl: safeHttpsUrl(metadata.releasePageUrl)
   };
 }
 
@@ -396,6 +408,41 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.handle('app:version-info', () => releaseInfo());
+
+ipcMain.handle('app:check-update', async () => {
+  const current = releaseInfo();
+
+  if (!current.updateManifestUrl) {
+    return {
+      ok: false,
+      error: { code: 'UPDATE_NOT_CONFIGURED', details: {} }
+    };
+  }
+
+  try {
+    const result = await checkForUpdate({
+      current,
+      manifestUrl: current.updateManifestUrl,
+      allowPreview: current.channel === 'preview',
+      allowLocalhost: !app.isPackaged
+    });
+
+    return {
+      ok: true,
+      data: result
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: error?.code || 'UPDATE_REQUEST_FAILED',
+        details: error?.details && typeof error.details === 'object'
+          ? { status: error.details.status || null }
+          : {}
+      }
+    };
+  }
+});
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:maximize-toggle', () => {
