@@ -60,6 +60,8 @@ function stableApiError(status, payload = {}) {
     VOICE_PREVIEW_INVALID: "VOICE_PREVIEW_INVALID",
     VOICE_PREVIEW_RATE_LIMITED: "VOICE_PREVIEW_RATE_LIMITED",
     QUOTA_EXCEEDED: "VOICE_QUOTA_EXCEEDED",
+    PLAN_REQUIRED: "VOICE_PLAN_REQUIRED",
+    CONCURRENCY_LIMIT: "VOICE_CONCURRENCY_LIMIT",
     JOB_CONFLICT: "VOICE_JOB_CONFLICT",
     JOB_NOT_FOUND: "VOICE_JOB_NOT_FOUND",
     SERVICE_UNAVAILABLE: "VOICE_UNAVAILABLE"
@@ -72,8 +74,11 @@ function stableApiError(status, payload = {}) {
     });
   }
 
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return clientError("VOICE_AUTH_REQUIRED", "Authentication is required.", { status });
+  }
+  if (status === 403) {
+    return clientError("VOICE_PLAN_REQUIRED", "The current plan does not include this feature.", { status });
   }
   if (status === 402) {
     return clientError("VOICE_QUOTA_EXCEEDED", "Cloud allowance is insufficient.", { status });
@@ -82,7 +87,7 @@ function stableApiError(status, payload = {}) {
     return clientError("VOICE_TOO_LARGE", "Voice input is too large.", { status });
   }
   if (status === 429) {
-    return clientError("VOICE_PREVIEW_RATE_LIMITED", "Voice preview is rate limited.", { status });
+    return clientError("VOICE_CONCURRENCY_LIMIT", "The active Cloud job limit has been reached.", { status });
   }
   if (status >= 500) {
     return clientError("VOICE_UNAVAILABLE", "Voice service is unavailable.", { status });
