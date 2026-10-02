@@ -39,6 +39,7 @@ const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_REFRESH_SESSIONS_PER_USER = 10;
 const UPLOAD_TTL_MS = 10 * 60 * 1000;
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_LOGIN_ATTEMPTS = 8;
@@ -431,8 +432,23 @@ function tokenExpiry(ms) {
   return new Date(Date.now() + ms).toISOString();
 }
 
+function trimRefreshSessionsForUser(userId) {
+  const sessions = [...refreshTokens.entries()]
+    .filter(([, record]) => record?.userId === userId)
+    .sort((a, b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
+
+  let changed = false;
+  for (const [key] of sessions.slice(MAX_REFRESH_SESSIONS_PER_USER - 1)) {
+    refreshTokens.delete(key);
+    changed = true;
+  }
+  if (changed) persistRefreshSessions();
+}
+
 function issueSession(user) {
   syncUserCommercialState(user);
+  pruneRefreshSessions();
+  trimRefreshSessionsForUser(user.id);
   const accessToken = newToken();
   const refreshToken = newToken();
   const accessExpiresAt = tokenExpiry(ACCESS_TTL_MS);
@@ -1173,7 +1189,8 @@ async function handle(req, res) {
       speechProviderConfigured: speechProvider.isConfigured(),
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured(),
-      durableState: true
+      durableState: true,
+      stateRecovered: Boolean(durableState.recovery?.())
     });
   }
 
