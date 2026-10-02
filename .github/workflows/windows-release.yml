@@ -83,6 +83,9 @@ jobs:
       - name: Run release policy tests
         run: npm run test:release-policy
 
+      - name: Run release readiness tests
+        run: npm run test:release-readiness
+
       - name: Prepare embedded release metadata
         shell: pwsh
         run: |
