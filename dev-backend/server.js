@@ -2618,6 +2618,67 @@ const server = http.createServer((req, res) => {
   });
 });
 
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  audit("server.shutdown.started", null, { signal });
+  clearInterval(maintenanceTimer);
+
+  for (const job of jobs.values()) {
+    if (["completed", "failed", "cancelled"].includes(job.state)) continue;
+
+    job.cancelRequested = true;
+    if (job.controller) {
+      try { job.controller.abort(); } catch {}
+    } else {
+      job.state = "cancelled";
+      job.progress = 0;
+      releaseReservation(job);
+      cleanupUpload(job);
+    }
+  }
+
+  translationJobs.cancelAllForShutdown?.();
+  voiceJobs.cancelAllForShutdown?.();
+  persistSpeechJobs();
+
+  await Promise.race([
+    new Promise(resolve => server.close(resolve)),
+    new Promise(resolve => setTimeout(resolve, 1200))
+  ]);
+
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  try {
+    persistUsers();
+    persistRefreshSessions();
+    persistBillingEvents();
+    persistSpeechJobs();
+    billing.pruneExpiredSessions();
+    audit("server.shutdown.completed", null, { signal });
+  } catch (error) {
+    console.error("[ShutdownPersist]", error?.code || error?.message || String(error));
+  }
+
+  try { durableState.close?.(); } catch {}
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => {
+  gracefulShutdown("SIGTERM").catch(error => {
+    console.error("[Shutdown]", error?.message || String(error));
+    process.exit(1);
+  });
+});
+
+process.once("SIGINT", () => {
+  gracefulShutdown("SIGINT").catch(error => {
+    console.error("[Shutdown]", error?.message || String(error));
+    process.exit(1);
+  });
+});
+
 server.listen(PORT, HOST, () => {
   const provider = speechProvider.config();
 
