@@ -9,7 +9,7 @@
     "start": "electron .",
     "dev": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --win nsis",
+    "dist": "electron-builder --win nsis --publish never",
     "dev:backend": "node dev-backend/server.js",
     "test:backend-state": "node dev-backend/tests/state-persistence.test.js",
     "test:backend-restart": "node dev-backend/tests/server-restart.integration.test.js",
