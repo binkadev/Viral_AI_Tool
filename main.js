@@ -37,6 +37,7 @@ const {
 } = require('./services/voice');
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
+const { BillingClient } = require('./services/billing/billing-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
 
 let mainWindow;
@@ -82,6 +83,32 @@ function authClient() {
   });
 }
 
+function billingClient() {
+  const cloudConfig = cloudConfigStore?.read() || { backendUrl: '' };
+  return new BillingClient({
+    backendUrl: cloudConfig.backendUrl || '',
+    appVersion: app.getVersion()
+  });
+}
+
+async function withBillingSession(action) {
+  const ready = await refreshSessionIfNeeded();
+  if (!ready) {
+    const error = new Error('Authentication is required.');
+    error.code = 'AUTH_REQUIRED';
+    throw error;
+  }
+
+  const accessToken = sessionStore?.getAccessToken();
+  if (!accessToken) {
+    const error = new Error('Authentication is required.');
+    error.code = 'AUTH_REQUIRED';
+    throw error;
+  }
+
+  return action(billingClient(), accessToken);
+}
+
 async function refreshSessionIfNeeded({ force = false } = {}) {
   if (!sessionStore) return false;
 
@@ -114,6 +141,13 @@ function publicAuthError(error) {
   return {
     code: error?.code || "AUTH_REQUEST_FAILED",
     details: {}
+  };
+}
+
+function publicBillingError(error) {
+  return {
+    code: error?.code || "BILLING_REQUEST_FAILED",
+    details: error?.details && typeof error.details === "object" ? error.details : {}
   };
 }
 
@@ -457,6 +491,91 @@ ipcMain.handle('auth:logout', async () => {
   }
 
   return { ok: true, remotePending };
+});
+
+ipcMain.handle('billing:catalog', async () => {
+  try {
+    const data = await withBillingSession((client, token) => client.catalog(token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingCatalog]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:invoices', async () => {
+  try {
+    const data = await withBillingSession((client, token) => client.invoices(token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingInvoices]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:checkout', async (_event, planId) => {
+  try {
+    const data = await withBillingSession((client, token) => client.checkout(planId, token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingCheckout]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:plan-change', async (_event, planId) => {
+  try {
+    const data = await withBillingSession((client, token) => client.changePlan(planId, token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingPlanChange]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:cancel', async () => {
+  try {
+    const data = await withBillingSession((client, token) => client.cancel(token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingCancel]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:resume', async () => {
+  try {
+    const data = await withBillingSession((client, token) => client.resume(token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingResume]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('billing:portal', async () => {
+  try {
+    const data = await withBillingSession((client, token) => client.portal(token));
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[BillingPortal]', error?.code || error?.message);
+    return { ok: false, error: publicBillingError(error) };
+  }
+});
+
+ipcMain.handle('app:open-external', async (_event, rawUrl) => {
+  try {
+    const target = new URL(String(rawUrl || '').trim());
+    const localHttp = target.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(target.hostname);
+    const allowed = target.protocol === 'https:' || localHttp;
+
+    if (!allowed) return { ok: false, code: 'EXTERNAL_URL_NOT_ALLOWED' };
+
+    await shell.openExternal(target.toString());
+    return { ok: true };
+  } catch {
+    return { ok: false, code: 'EXTERNAL_URL_INVALID' };
+  }
 });
 
 ipcMain.handle('cloud:config-get', async () => {
