@@ -412,7 +412,8 @@ function seedUser() {
   const plan = resolvePlan("creator_pro");
   const usedMinutes = 1500;
 
-  if (!users.has(email)) users.set(email, {
+  const created = !users.has(email);
+  if (created) users.set(email, {
     id: "dev-user-1",
     email,
     name: "Viral AI Dev",
@@ -442,7 +443,7 @@ function seedUser() {
   });
 
   persistUsers();
-  return { email, password, production: false, created: !users.has(email) };
+  return { email, password, production: false, created };
 }
 
 const demo = seedUser();
@@ -1661,8 +1662,12 @@ async function handle(req, res) {
     return error(res, 429, "RATE_LIMITED");
   }
 
+  if (IS_PRODUCTION && url.pathname.startsWith("/v1/billing/")) {
+    return error(res, 503, "BILLING_PROVIDER_NOT_CONFIGURED");
+  }
+
   const devCheckoutMatch = url.pathname.match(/^\/v1\/dev-billing\/checkout\/([^/]+)$/);
-  if (method === "GET" && devCheckoutMatch) {
+  if (!IS_PRODUCTION && method === "GET" && devCheckoutMatch) {
     try {
       const session = billing.consumeCheckoutSession(decodeURIComponent(devCheckoutMatch[1]));
       const user = findUserById(session.userId);
@@ -1726,7 +1731,7 @@ async function handle(req, res) {
   }
 
   const devPortalMatch = url.pathname.match(/^\/v1\/dev-billing\/portal\/([^/]+)$/);
-  if (method === "GET" && devPortalMatch) {
+  if (!IS_PRODUCTION && method === "GET" && devPortalMatch) {
     try {
       const session = billing.consumePortalSession(decodeURIComponent(devPortalMatch[1]));
       const user = findUserById(session.userId);
@@ -2610,11 +2615,19 @@ server.listen(PORT, HOST, () => {
   const provider = speechProvider.config();
 
   console.log("");
-  console.log("Viral AI Tool dev backend");
+  console.log("Viral AI Tool backend");
+  console.log("Environment: " + (IS_PRODUCTION ? "production" : "development"));
+  console.log("State driver: " + STATE_DRIVER);
   console.log("Listening: http://" + HOST + ":" + PORT);
-  console.log("Dev account:");
-  console.log("  Email:    " + demo.email);
-  console.log("  Password: " + demo.password);
+
+  if (!IS_PRODUCTION) {
+    console.log("Dev account:");
+    console.log("  Email:    " + demo.email);
+    console.log("  Password: " + demo.password);
+  } else if (demo.created) {
+    console.log("Production owner account bootstrapped: " + demo.email);
+    console.log("Remove VIRAL_AI_BOOTSTRAP_PASSWORD from the environment after verifying access.");
+  }
   console.log("");
   console.log("Cloud speech: " + (speechProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
   if (speechProvider.isConfigured()) {
@@ -2636,5 +2649,9 @@ server.listen(PORT, HOST, () => {
     console.log("Voice model: " + voice.model);
   }
   console.log("");
-  console.log("Development only. Do not expose this server to the public Internet.");
+  if (!IS_PRODUCTION) {
+    console.log("Development mode. Do not expose this server directly to the public Internet.");
+  } else {
+    console.log("Production mode expects HTTPS termination and a real billing provider in front of billing management.");
+  }
 });
