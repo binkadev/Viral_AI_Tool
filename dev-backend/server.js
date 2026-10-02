@@ -8,6 +8,7 @@ const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
+const billing = require("./billing");
 const {
   resolvePlan,
   publicEntitlements,
@@ -27,6 +28,7 @@ const {
   markPaymentRecovered,
   requestPlanChange,
   requestCancellation,
+  resumeCancellation,
   assertSubscriptionAccess
 } = require("./subscriptions");
 
@@ -116,6 +118,25 @@ function json(res, status, payload) {
     "cache-control": "no-store"
   });
   res.end(body);
+}
+
+function html(res, status, body) {
+  const value = String(body || "");
+  res.writeHead(status, {
+    "content-type": "text/html; charset=utf-8",
+    "content-length": Buffer.byteLength(value),
+    "cache-control": "no-store"
+  });
+  res.end(value);
+}
+
+function escapeHtmlText(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function binary(res, status, buffer, contentType = "application/octet-stream") {
@@ -1042,6 +1063,228 @@ async function handle(req, res) {
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured()
     });
+  }
+
+  const devCheckoutMatch = url.pathname.match(/^\/v1\/dev-billing\/checkout\/([^/]+)$/);
+  if (method === "GET" && devCheckoutMatch) {
+    try {
+      const session = billing.consumeCheckoutSession(decodeURIComponent(devCheckoutMatch[1]));
+      const user = findUserById(session.userId);
+      if (!user) return html(res, 404, "<h1>Billing account not found</h1>");
+
+      syncUserCommercialState(user);
+      const targetPlanId = requireKnownPlanId(session.targetPlanId);
+      const targetPlan = resolvePlan(targetPlanId);
+
+      if (user.subscription?.status === "canceled") {
+        user.subscription = createSubscription({
+          planId: targetPlanId,
+          status: "active",
+          now: Date.now(),
+          periodDays: 30,
+          graceDays: 3
+        });
+        user.planId = targetPlan.id;
+        user.plan = targetPlan.displayName;
+        resetUserAllowance(user);
+      } else {
+        requestPlanChange(user.subscription, targetPlanId, {
+          direction: "upgrade",
+          now: Date.now()
+        });
+        syncUserCommercialState(user);
+      }
+
+      const price = billing.checkoutAmount(targetPlanId);
+      billing.recordInvoice({
+        userId: user.id,
+        planId: targetPlanId,
+        amount: price.monthlyAmount,
+        currency: price.currency,
+        status: "paid",
+        description: "Development checkout"
+      });
+
+      return html(res, 200,
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Viral AI Tool Billing</title>" +
+        "<style>body{font-family:system-ui;background:#f5f7fb;color:#182033;padding:48px}main{max-width:640px;margin:auto;background:white;padding:32px;border-radius:20px;box-shadow:0 16px 50px #1d2a4420}h1{margin-top:0}.ok{font-size:42px}p{line-height:1.6;color:#5a6578}</style></head><body><main>" +
+        "<div class=\"ok\">✓</div><h1>Development checkout completed</h1><p>Your plan is now <b>" +
+        escapeHtmlText(targetPlan.displayName) +
+        "</b>.</p><p>Return to Viral AI Tool and refresh Billing or Usage. This page is part of the local development billing adapter and is not a production payment screen.</p>" +
+        "</main></body></html>"
+      );
+    } catch (err) {
+      return html(res, 400,
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Billing error</title></head><body><h1>Checkout could not be completed</h1><p>" +
+        escapeHtmlText(err?.code || "BILLING_REQUEST_FAILED") +
+        "</p></body></html>"
+      );
+    }
+  }
+
+  const devPortalMatch = url.pathname.match(/^\/v1\/dev-billing\/portal\/([^/]+)$/);
+  if (method === "GET" && devPortalMatch) {
+    try {
+      const session = billing.consumePortalSession(decodeURIComponent(devPortalMatch[1]));
+      const user = findUserById(session.userId);
+      if (!user) return html(res, 404, "<h1>Billing account not found</h1>");
+
+      syncUserCommercialState(user);
+      const records = billing.listInvoices(user).invoices;
+      const rows = records.length
+        ? records.map(item =>
+            "<tr><td>" + escapeHtmlText(new Date(item.createdAt).toLocaleDateString()) +
+            "</td><td>" + escapeHtmlText(item.planName) +
+            "</td><td>" + escapeHtmlText((item.amount / 100).toFixed(2) + " " + item.currency) +
+            "</td><td>" + escapeHtmlText(item.status) + "</td></tr>"
+          ).join("")
+        : "<tr><td colspan=\"4\">No invoices yet.</td></tr>";
+
+      return html(res, 200,
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Viral AI Tool Billing Portal</title>" +
+        "<style>body{font-family:system-ui;background:#f5f7fb;color:#182033;padding:48px}main{max-width:800px;margin:auto;background:white;padding:32px;border-radius:20px;box-shadow:0 16px 50px #1d2a4420}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;border-bottom:1px solid #e9edf5}p{color:#5a6578}</style></head><body><main>" +
+        "<h1>Development billing portal</h1><p>Current plan: <b>" + escapeHtmlText(user.plan) +
+        "</b> · Subscription: <b>" + escapeHtmlText(user.subscription?.status || "unknown") +
+        "</b></p><p>This is the provider-neutral development portal. A production provider adapter will replace this page.</p>" +
+        "<h2>Invoices</h2><table><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>" +
+        rows + "</tbody></table></main></body></html>"
+      );
+    } catch (err) {
+      return html(res, 400, "<h1>Billing portal unavailable</h1><p>" + escapeHtmlText(err?.code || "BILLING_REQUEST_FAILED") + "</p>");
+    }
+  }
+
+  if (method === "GET" && url.pathname === "/v1/billing/catalog") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    syncUserCommercialState(user);
+    return json(res, 200, {
+      ...billing.publicCatalog(),
+      currentPlanId: effectivePlanId(user),
+      subscription: {
+        ...publicSubscription(user.subscription),
+        planName: user.plan,
+        pendingPlanName: user.subscription?.pendingPlanId
+          ? resolvePlan(user.subscription.pendingPlanId).displayName
+          : null
+      }
+    });
+  }
+
+  if (method === "POST" && url.pathname === "/v1/billing/checkout-session") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      syncUserCommercialState(user);
+      const body = await readJson(req);
+      const targetPlanId = requireKnownPlanId(body.planId);
+      const baseUrl = "http://" + (req.headers.host || (HOST + ":" + PORT));
+      const session = billing.createCheckoutSession({
+        userId: user.id,
+        currentPlanId: effectivePlanId(user),
+        targetPlanId,
+        baseUrl
+      });
+      return json(res, 201, session);
+    } catch (err) {
+      const code = err?.code || "BILLING_REQUEST_FAILED";
+      const status =
+        code === "BILLING_PLAN_ALREADY_ACTIVE" ? 409 :
+        ["PLAN_INVALID", "BILLING_USE_PLAN_CHANGE"].includes(code) ? 400 :
+        400;
+      return error(res, status, code);
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/billing/plan-change") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      syncUserCommercialState(user);
+      const body = await readJson(req);
+      const targetPlanId = requireKnownPlanId(body.planId);
+      const currentPlanId = effectivePlanId(user);
+
+      if (targetPlanId === currentPlanId) return error(res, 409, "BILLING_PLAN_ALREADY_ACTIVE");
+      if (billing.rank(targetPlanId) >= billing.rank(currentPlanId)) {
+        return error(res, 400, "BILLING_CHECKOUT_REQUIRED");
+      }
+
+      requestPlanChange(user.subscription, targetPlanId, {
+        direction: "downgrade",
+        now: Date.now()
+      });
+      syncUserCommercialState(user);
+
+      return json(res, 200, {
+        scheduled: true,
+        subscription: {
+          ...publicSubscription(user.subscription),
+          planName: user.plan,
+          pendingPlanName: resolvePlan(targetPlanId).displayName
+        }
+      });
+    } catch (err) {
+      return error(res, 400, err?.code || "BILLING_REQUEST_FAILED");
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/billing/cancel") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      syncUserCommercialState(user);
+      requestCancellation(user.subscription, { now: Date.now(), immediately: false });
+      return json(res, 200, {
+        scheduled: true,
+        subscription: publicSubscription(user.subscription)
+      });
+    } catch (err) {
+      return error(res, 400, err?.code || "BILLING_REQUEST_FAILED");
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/billing/resume") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      syncUserCommercialState(user);
+      resumeCancellation(user.subscription, { now: Date.now() });
+      return json(res, 200, {
+        resumed: true,
+        subscription: publicSubscription(user.subscription)
+      });
+    } catch (err) {
+      return error(
+        res,
+        err?.code === "SUBSCRIPTION_INACTIVE" ? 409 : 400,
+        err?.code || "BILLING_REQUEST_FAILED"
+      );
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/billing/portal-session") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const baseUrl = "http://" + (req.headers.host || (HOST + ":" + PORT));
+    return json(res, 201, billing.createPortalSession({
+      userId: user.id,
+      baseUrl
+    }));
+  }
+
+  if (method === "GET" && url.pathname === "/v1/billing/invoices") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    syncUserCommercialState(user);
+    return json(res, 200, billing.listInvoices(user));
   }
 
   if (method === "POST" && url.pathname === "/v1/internal/billing/events") {
