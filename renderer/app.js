@@ -47,6 +47,13 @@ const state = {
     job: saved.translation?.job || null,
     result: saved.translation?.result || null
   },
+  renderOptions: {
+    burnSubtitles: saved.renderOptions?.burnSubtitles !== false,
+    mixOriginalAudio: saved.renderOptions?.mixOriginalAudio !== false,
+    originalAudioVolume: Number.isFinite(Number(saved.renderOptions?.originalAudioVolume))
+      ? Math.max(0, Math.min(0.35, Number(saved.renderOptions.originalAudioVolume)))
+      : 0.12
+  },
   voice: {
     mode: saved.voice?.mode === "local" ? "local" : "cloud",
     cloudStatus: null,
@@ -123,6 +130,11 @@ function save() {
     scale: state.scale,
     page: state.page,
     output: state.output,
+    renderOptions: {
+      burnSubtitles: state.renderOptions.burnSubtitles,
+      mixOriginalAudio: state.renderOptions.mixOriginalAudio,
+      originalAudioVolume: state.renderOptions.originalAudioVolume
+    },
     speech: {
       mode: state.speech.mode,
       language: state.speech.language,
@@ -2009,8 +2021,13 @@ function aiVideoPage() {
     '<div class="translation-summary-row"><span>' + t("voiceWorkflow.summaryLabel") + '</span><b>' +
       escapeHtml(voiceResult ? t("voiceWorkflow.completed") : t("aiVideo.steps.pending")) + '</b></div>' +
     '</div>' +
-    '<div class="mini-card"><h4>' + t("aiVideo.outputFormat") + '</h4><select class="select"><option>9:16 · 1080×1920</option><option>16:9 · 1920×1080</option><option>1:1 · 1080×1080</option></select>' +
-    '<div class="toggle-row"><span>' + t("aiVideo.burnSubtitles") + '</span><div class="toggle on"></div></div></div></div></div>';
+    '<div class="mini-card"><h4>' + t("aiVideo.outputFormat") + '</h4>' +
+    '<div class="translation-readonly">' + t("aiVideo.preserveSourceFormat") + '</div>' +
+    '<div class="toggle-row"><span>' + t("aiVideo.burnSubtitles") + '</span><div id="burnSubtitlesToggle" class="toggle ' +
+      (state.renderOptions.burnSubtitles ? "on" : "") + '"></div></div>' +
+    '<div class="toggle-row"><span>' + t("aiVideo.keepOriginalAudio") + '</span><div id="mixOriginalAudioToggle" class="toggle ' +
+      (state.renderOptions.mixOriginalAudio ? "on" : "") + '"></div></div>' +
+    '<p class="muted render-option-note">' + t("aiVideo.originalAudioHint") + '</p></div></div></div>';
 }
 
 function voicePage() {
