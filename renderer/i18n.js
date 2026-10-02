@@ -834,6 +834,8 @@ window.I18N = (() => {
         tooManySegmentsBody: "Bản render hiện hỗ trợ tối đa 300 đoạn thoại trong một video. Hãy chia video thành phần ngắn hơn rồi thử lại.",
         localizedStarted: "Đang dựng video localized...",
         localizedDone: "Video localized đã sẵn sàng.",
+        localizedBadge: "Localized",
+        localizedMeta: "{voices} đoạn giọng · {subtitles} phụ đề",
         failedTitle: "Chưa thể xuất video",
         failedBody: "Quá trình chưa hoàn tất. Video gốc vẫn an toàn. Hãy thử lại; nếu vấn đề tiếp tục, bạn có thể chọn lại video hoặc thư mục lưu."
       },
@@ -1702,6 +1704,8 @@ window.I18N = (() => {
         tooManySegmentsBody: "The current renderer supports up to 300 dialogue segments in one video. Split the video into shorter parts and try again.",
         localizedStarted: "Building localized video...",
         localizedDone: "Localized video is ready.",
+        localizedBadge: "Localized",
+        localizedMeta: "{voices} voice segments · {subtitles} subtitles",
         failedTitle: "Video could not be exported",
         failedBody: "The export did not finish. Your original video is safe. Try again; if the issue continues, choose the video or save location again."
       },
