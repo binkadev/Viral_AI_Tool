@@ -56,7 +56,9 @@ const MAX_DURATION_SECONDS = Math.max(
   Math.min(4 * 60 * 60, Number(process.env.VIRAL_AI_MAX_AUDIO_SECONDS || 7200))
 );
 
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.VIRAL_AI_DEV_DATA_DIR
+  ? path.resolve(process.env.VIRAL_AI_DEV_DATA_DIR)
+  : path.join(__dirname, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 const AUDIT_FILE = path.join(DATA_DIR, "audit.jsonl");
