@@ -6,8 +6,6 @@ const path = require("path");
 const speechProvider = require("./providers");
 const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
-const ttsProvider = require("./providers/tts");
-const ttsJobs = require("./tts-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
 
@@ -722,84 +720,6 @@ async function handle(req, res) {
     }
   }
 
-  if (method === "GET" && url.pathname === "/v1/tts/status") {
-    const user = authenticate(req);
-    if (!user) return error(res, 401, "AUTH_REQUIRED");
-    return json(res, 200, ttsJobs.status());
-  }
-
-  if (method === "POST" && url.pathname === "/v1/tts/jobs") {
-    const user = authenticate(req);
-    if (!user) return error(res, 401, "AUTH_REQUIRED");
-
-    const key = idempotencyKey(req);
-    if (!key) return error(res, 400, "BAD_REQUEST");
-
-    const body = await readJson(req);
-
-    try {
-      const result = ttsJobs.create(user.id, key, body);
-      return json(res, result.created ? 201 : 200, result.job);
-    } catch (err) {
-      const code = err?.code || "TTS_FAILED";
-      const status =
-        code === "TTS_TOO_LARGE" ? 413 :
-        code === "JOB_CONFLICT" ? 409 :
-        code === "SERVICE_UNAVAILABLE" ? 503 :
-        code === "JOB_NOT_FOUND" ? 404 :
-        400;
-      return error(res, status, code);
-    }
-  }
-
-  const ttsCancelMatch = url.pathname.match(/^\/v1\/tts\/jobs\/([^/]+)\/cancel$/);
-  if (method === "POST" && ttsCancelMatch) {
-    const user = authenticate(req);
-    if (!user) return error(res, 401, "AUTH_REQUIRED");
-
-    try {
-      return json(res, 200, ttsJobs.cancel(user.id, decodeURIComponent(ttsCancelMatch[1])));
-    } catch (err) {
-      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TTS_FAILED");
-    }
-  }
-
-  const ttsAssetMatch = url.pathname.match(/^\/v1\/tts\/jobs\/([^/]+)\/assets\/([^/]+)$/);
-  if (method === "GET" && ttsAssetMatch) {
-    const user = authenticate(req);
-    if (!user) return error(res, 401, "AUTH_REQUIRED");
-
-    try {
-      const asset = ttsJobs.asset(
-        user.id,
-        decodeURIComponent(ttsAssetMatch[1]),
-        decodeURIComponent(ttsAssetMatch[2])
-      );
-      res.writeHead(200, {
-        "content-type": asset.contentType,
-        "content-length": asset.sizeBytes,
-        "cache-control": "private, no-store",
-        "content-disposition": 'inline; filename="' + asset.fileName + '"'
-      });
-      fs.createReadStream(asset.filePath).pipe(res);
-      return;
-    } catch (err) {
-      return error(res, err?.code === "ASSET_NOT_FOUND" || err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TTS_FAILED");
-    }
-  }
-
-  const ttsJobMatch = url.pathname.match(/^\/v1\/tts\/jobs\/([^/]+)$/);
-  if (method === "GET" && ttsJobMatch) {
-    const user = authenticate(req);
-    if (!user) return error(res, 401, "AUTH_REQUIRED");
-
-    try {
-      return json(res, 200, ttsJobs.get(user.id, decodeURIComponent(ttsJobMatch[1])));
-    } catch (err) {
-      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TTS_FAILED");
-    }
-  }
-
   if (method === "GET" && url.pathname === "/v1/translation/status") {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
@@ -1053,12 +973,7 @@ server.listen(PORT, HOST, () => {
     console.log("Translation model: " + translation.model);
   }
   console.log("");
-  const tts = ttsProvider.config();
-  console.log("Cloud TTS: " + (ttsProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
-  if (ttsProvider.isConfigured()) {
-    console.log("TTS model: " + tts.model);
-  }
-  console.log("");
+
   const voice = voiceProvider.config();
   console.log("Cloud voice: " + (voiceProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
   if (voiceProvider.isConfigured()) {
