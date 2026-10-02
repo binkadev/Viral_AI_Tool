@@ -1270,6 +1270,34 @@ async function previewVoiceSelection(speakerKey) {
   playVoiceUrl(response.data?.audioUrl);
 }
 
+async function previewStudioVoice(voiceId) {
+  const language = $("voiceStudioLanguage")?.value || state.translation.targetLanguage || "vi";
+  const text = $("voiceStudioText")?.value?.trim() || voicePreviewSample(language);
+
+  if (!voiceId || !window.desktopAPI?.previewVoice) {
+    toast(t("voiceWorkflow.chooseVoice"));
+    return;
+  }
+
+  toast(t("voiceWorkflow.previewPreparing"));
+
+  const response = await window.desktopAPI.previewVoice({
+    voiceId,
+    language,
+    text
+  });
+
+  if (!response?.ok) {
+    const code = response?.error?.code || "VOICE_FAILED";
+    toast(code === "VOICE_PREVIEW_RATE_LIMITED"
+      ? t("voiceWorkflow.previewWait")
+      : t("voiceWorkflow.previewFailed"));
+    return;
+  }
+
+  playVoiceUrl(response.data?.audioUrl);
+}
+
 function voiceResultView(result) {
   if (!result) return "";
 
@@ -3742,6 +3770,23 @@ function bind() {
   const voiceStop = $("voiceStop");
   if (voiceStop) voiceStop.onclick = cancelVoiceGeneration;
 
+  const voiceStudioPreview = $("voiceStudioPreview");
+  if (voiceStudioPreview) {
+    voiceStudioPreview.onclick = () => previewStudioVoice($("voiceStudioVoice")?.value || "");
+  }
+
+  const voiceStudioLanguage = $("voiceStudioLanguage");
+  if (voiceStudioLanguage) {
+    voiceStudioLanguage.onchange = () => {
+      const input = $("voiceStudioText");
+      if (input) input.value = voicePreviewSample(voiceStudioLanguage.value);
+    };
+  }
+
+  document.querySelectorAll(".voice-studio-card-preview").forEach((node) => {
+    node.onclick = () => previewStudioVoice(node.dataset.voiceId || "");
+  });
+
   const renderButton = $("render");
   if (renderButton) renderButton.onclick = startRealRender;
 
@@ -3825,7 +3870,7 @@ function render() {
   bind();
   save();
 
-  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
+  if (["ai-video", "settings", "voice"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
     const cloudStale = !state.cloud.config ||
       !state.cloud.statusCheckedAt ||
       Date.now() - state.cloud.statusCheckedAt > 30000;
@@ -3851,7 +3896,7 @@ function render() {
     }
   }
 
-  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getVoiceStatus) {
+  if (["ai-video", "settings", "voice"].includes(state.page) && window.desktopAPI?.getVoiceStatus) {
     const voiceStale = !state.voice.cloudStatus ||
       !state.voice.statusCheckedAt ||
       Date.now() - state.voice.statusCheckedAt > 30000;
