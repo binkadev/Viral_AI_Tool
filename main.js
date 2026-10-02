@@ -335,6 +335,7 @@ function createWindow() {
     frame: false,
     backgroundColor: '#f4f7fc',
     title: 'Viral AI Tool',
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
