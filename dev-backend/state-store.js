@@ -57,6 +57,7 @@ function createDurableStateStore(filePath) {
   fs.mkdirSync(directory, { recursive: true });
 
   let state = clone(DEFAULT_STATE);
+  let recovery = null;
 
   function load() {
     if (!fs.existsSync(resolved)) {
@@ -80,12 +81,13 @@ function createDurableStateStore(filePath) {
       state = clone(DEFAULT_STATE);
       state.meta.createdAt = now;
       state.meta.updatedAt = now;
+      recovery = {
+        code: "STATE_CORRUPT_RECOVERED",
+        backup,
+        at: now
+      };
       save();
-
-      const wrapped = new Error("Durable state was corrupt and has been reset.");
-      wrapped.code = "STATE_CORRUPT";
-      wrapped.details = { backup };
-      throw wrapped;
+      return clone(state);
     }
   }
 
@@ -140,7 +142,8 @@ function createDurableStateStore(filePath) {
     set,
     mutate,
     save,
-    snapshot
+    snapshot,
+    recovery: () => clone(recovery)
   };
 }
 
