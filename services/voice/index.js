@@ -149,12 +149,15 @@ function createService({ backendUrl, getAccessToken, appVersion, userDataPath })
       try {
         const data = await client.status();
 
+        const rawCode = data?.code || (data?.ready ? "READY" : "VOICE_UNAVAILABLE");
         return {
           mode: "cloud",
           ready: data?.ready === true,
-          code: data?.code || (data?.ready ? "READY" : "VOICE_UNAVAILABLE"),
+          code: rawCode === "PLAN_REQUIRED" ? "VOICE_PLAN_REQUIRED" : rawCode,
           limits: data?.limits || null,
-          catalog: Array.isArray(data?.catalog) ? data.catalog : []
+          catalog: Array.isArray(data?.catalog) ? data.catalog : [],
+          quota: data?.quota || null,
+          entitlements: data?.entitlements || null
         };
       } catch (error) {
         return {
