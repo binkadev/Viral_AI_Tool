@@ -267,23 +267,181 @@ function sanitizeBaseName(inputPath) {
     .slice(0, 90) || "video";
 }
 
-function makeOutputPath(inputPath, outputDir) {
+function makeOutputPath(inputPath, outputDir, suffix = "exported") {
   const base = sanitizeBaseName(inputPath);
+  const safeSuffix = String(suffix || "exported").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 32) || "exported";
   const stamp = new Date()
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}Z$/, "")
     .replace("T", "_");
 
-  const first = path.join(outputDir, `${base}_exported_${stamp}.mp4`);
+  const first = path.join(outputDir, `${base}_${safeSuffix}_${stamp}.mp4`);
   if (!fs.existsSync(first)) return first;
 
   for (let index = 2; index <= 999; index++) {
-    const candidate = path.join(outputDir, `${base}_exported_${stamp}_${index}.mp4`);
+    const candidate = path.join(outputDir, `${base}_${safeSuffix}_${stamp}_${index}.mp4`);
     if (!fs.existsSync(candidate)) return candidate;
   }
 
   throw processingError("OUTPUT_NAME_UNAVAILABLE", "Could not allocate a unique output name.");
+}
+
+
+function assertVoiceAudioPath(audioPath, allowedAudioRoot) {
+  if (typeof audioPath !== "string" || !audioPath.trim()) {
+    throw processingError("VOICE_AUDIO_MISSING", "AI voice audio path is missing.");
+  }
+
+  const resolved = path.resolve(audioPath);
+  const root = path.resolve(String(allowedAudioRoot || ""));
+
+  if (!root || (resolved !== root && !resolved.startsWith(root + path.sep))) {
+    throw processingError("VOICE_AUDIO_UNTRUSTED", "AI voice audio is outside the application cache.");
+  }
+
+  if (path.extname(resolved).toLowerCase() !== ".wav") {
+    throw processingError("VOICE_AUDIO_INVALID", "AI voice audio must be a WAV file.");
+  }
+
+  if (!fs.existsSync(resolved)) {
+    throw processingError("VOICE_AUDIO_MISSING", "AI voice audio file no longer exists.", {
+      audioPath: resolved
+    });
+  }
+
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile() || stat.size < 44) {
+    throw processingError("VOICE_AUDIO_INVALID", "AI voice audio file is invalid.");
+  }
+
+  return resolved;
+}
+
+function normalizeTimedSegments(segments, { requireAudio = false, allowedAudioRoot } = {}) {
+  if (!Array.isArray(segments) || !segments.length) {
+    throw processingError(
+      requireAudio ? "VOICE_RESULT_REQUIRED" : "SUBTITLE_RESULT_REQUIRED",
+      requireAudio ? "AI voice result is required." : "Subtitle data is required."
+    );
+  }
+
+  if (segments.length > 300) {
+    throw processingError("TOO_MANY_SEGMENTS", "Too many timed segments for one export.", {
+      maxSegments: 300
+    });
+  }
+
+  return segments.map((segment, index) => {
+    const start = Number(segment?.start);
+    const end = Number(segment?.end);
+
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > 4 * 60 * 60) {
+      throw processingError("TIMING_INVALID", "A segment has invalid timing.", { index });
+    }
+
+    const normalized = {
+      id: String(segment?.id || "segment-" + (index + 1)),
+      start,
+      end,
+      text: String(segment?.text || "").trim().slice(0, 2000),
+      speaker: segment?.speaker ? String(segment.speaker) : null
+    };
+
+    if (requireAudio) {
+      normalized.audioPath = assertVoiceAudioPath(segment?.audioPath, allowedAudioRoot);
+      const audioDuration = Number(segment?.audioDuration);
+      normalized.audioDuration = Number.isFinite(audioDuration) && audioDuration > 0
+        ? audioDuration
+        : Math.max(0.01, end - start);
+      normalized.timingRisk = segment?.timingRisk === true;
+    }
+
+    return normalized;
+  }).sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function srtTimestamp(seconds) {
+  const value = Math.max(0, Number(seconds || 0));
+  const totalMs = Math.round(value * 1000);
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+
+  return String(hours).padStart(2, "0") + ":" +
+    String(minutes).padStart(2, "0") + ":" +
+    String(secs).padStart(2, "0") + "," +
+    String(ms).padStart(3, "0");
+}
+
+function buildSrt(segments) {
+  return segments.map((segment, index) => {
+    const text = String(segment.text || "")
+      .replace(/\r/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    return [
+      String(index + 1),
+      srtTimestamp(segment.start) + " --> " + srtTimestamp(segment.end),
+      text || " ",
+      ""
+    ].join("\n");
+  }).join("\n");
+}
+
+function escapeFilterPath(filePath) {
+  return path.resolve(filePath)
+    .replace(/\\/g, "/")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'");
+}
+
+function atempoFilters(factor) {
+  let remaining = Math.max(0.01, Number(factor || 1));
+  const filters = [];
+
+  while (remaining > 2.0) {
+    filters.push("atempo=2.0");
+    remaining /= 2.0;
+  }
+
+  while (remaining < 0.5) {
+    filters.push("atempo=0.5");
+    remaining /= 0.5;
+  }
+
+  if (Math.abs(remaining - 1) > 0.005) {
+    filters.push("atempo=" + remaining.toFixed(5));
+  }
+
+  return filters;
+}
+
+function preflightLocalizedExport({
+  inputPath,
+  outputDir,
+  voiceSegments,
+  subtitleSegments,
+  allowedAudioRoot,
+  burnSubtitles = true
+}) {
+  const base = preflightExport({ inputPath, outputDir });
+  const voices = normalizeTimedSegments(voiceSegments, {
+    requireAudio: true,
+    allowedAudioRoot
+  });
+  const subtitles = burnSubtitles
+    ? normalizeTimedSegments(subtitleSegments, { requireAudio: false })
+    : [];
+
+  return {
+    ...base,
+    voiceSegmentCount: voices.length,
+    subtitleSegmentCount: subtitles.length,
+    timingWarningCount: voices.filter(item => item.timingRisk).length
+  };
 }
 
 function parseProgressChunk(chunk, state) {
@@ -414,6 +572,249 @@ async function renderVideo({ jobId, inputPath, outputDir, onProgress }) {
   };
 }
 
+
+async function renderLocalizedVideo({
+  jobId,
+  inputPath,
+  outputDir,
+  voiceSegments,
+  subtitleSegments,
+  allowedAudioRoot,
+  burnSubtitles = true,
+  mixOriginalAudio = true,
+  originalAudioVolume = 0.12,
+  onProgress
+}) {
+  validateJobId(jobId);
+
+  const preflight = preflightLocalizedExport({
+    inputPath,
+    outputDir,
+    voiceSegments,
+    subtitleSegments,
+    allowedAudioRoot,
+    burnSubtitles
+  });
+
+  const safeInput = preflight.inputPath;
+  const voices = normalizeTimedSegments(voiceSegments, {
+    requireAudio: true,
+    allowedAudioRoot
+  });
+  const subtitles = burnSubtitles
+    ? normalizeTimedSegments(subtitleSegments, { requireAudio: false })
+    : [];
+
+  reservedRenders.set(jobId, safeInput);
+
+  let metadata;
+  let outputPath;
+  let subtitlePath = null;
+  const progressState = { buffer: "", outTime: 0, speed: "", fps: 0, frame: 0 };
+
+  try {
+    onProgress?.({
+      jobId,
+      phase: "preparing",
+      percent: 1,
+      speed: "",
+      fps: 0,
+      frame: 0
+    });
+
+    metadata = await probeVideo(safeInput);
+
+    if (!metadata?.duration || metadata.duration <= 0) {
+      throw processingError("SOURCE_DURATION_INVALID", "Source video duration could not be detected.");
+    }
+
+    const duration = metadata.duration;
+    const lastVoiceEnd = Math.max(...voices.map(item => item.end));
+    if (lastVoiceEnd > duration + 1.5) {
+      throw processingError("TIMING_OUTSIDE_VIDEO", "AI voice timing extends beyond the source video.", {
+        videoDuration: duration,
+        lastVoiceEnd
+      });
+    }
+
+    outputPath = makeOutputPath(safeInput, preflight.outputDir, "localized");
+
+    if (burnSubtitles) {
+      subtitlePath = path.join(
+        preflight.outputDir,
+        ".viral-ai-" + jobId + "-" + crypto.randomBytes(4).toString("hex") + ".srt"
+      );
+      fs.writeFileSync(subtitlePath, buildSrt(subtitles), "utf8");
+    }
+
+    if (cancelledRenders.has(jobId)) {
+      return { cancelled: true, outputPath: null, metadata };
+    }
+
+    const args = ["-n", "-i", safeInput];
+    voices.forEach(segment => {
+      args.push("-i", segment.audioPath);
+    });
+
+    const filters = [];
+    const voiceLabels = [];
+
+    voices.forEach((segment, index) => {
+      const inputIndex = index + 1;
+      const slotDuration = Math.max(0.01, segment.end - segment.start);
+      const speedFactor = segment.audioDuration > slotDuration * 1.02
+        ? segment.audioDuration / slotDuration
+        : 1;
+
+      const chain = [
+        "[" + inputIndex + ":a]",
+        "aresample=48000",
+        "asetpts=PTS-STARTPTS",
+        ...atempoFilters(speedFactor),
+        "atrim=duration=" + slotDuration.toFixed(3),
+        "adelay=" + Math.max(0, Math.round(segment.start * 1000)) + ":all=1"
+      ];
+
+      const label = "voice" + index;
+      filters.push(chain.join(",") + "[" + label + "]");
+      voiceLabels.push("[" + label + "]");
+    });
+
+    const audioInputs = [...voiceLabels];
+    const safeOriginalVolume = Math.max(0, Math.min(1, Number(originalAudioVolume || 0)));
+
+    if (mixOriginalAudio && metadata.audioCodec) {
+      filters.push(
+        "[0:a:0]aresample=48000,volume=" + safeOriginalVolume.toFixed(3) + "[original]"
+      );
+      audioInputs.unshift("[original]");
+    }
+
+    if (audioInputs.length === 1) {
+      filters.push(
+        audioInputs[0] +
+        "atrim=duration=" + metadata.duration.toFixed(3) +
+        ",alimiter=limit=0.95[aout]"
+      );
+    } else {
+      filters.push(
+        audioInputs.join("") +
+        "amix=inputs=" + audioInputs.length +
+        ":duration=longest:dropout_transition=0:normalize=0," +
+        "atrim=duration=" + metadata.duration.toFixed(3) +
+        ",alimiter=limit=0.95[aout]"
+      );
+    }
+
+    if (burnSubtitles && subtitlePath) {
+      filters.push(
+        "[0:v:0]subtitles=filename='" + escapeFilterPath(subtitlePath) +
+        "':force_style='Alignment=2,MarginV=54,Outline=2,Shadow=0'[vout]"
+      );
+    }
+
+    args.push("-filter_complex", filters.join(";"));
+    args.push("-map", burnSubtitles ? "[vout]" : "0:v:0");
+    args.push("-map", "[aout]");
+    args.push(
+      "-c:v", "libx264",
+      "-preset", "medium",
+      "-crf", "20",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-movflags", "+faststart",
+      "-t", metadata.duration.toFixed(3),
+      "-progress", "pipe:1",
+      "-nostats",
+      outputPath
+    );
+
+    await run(args, {
+      onStart(child) {
+        activeRenders.set(jobId, {
+          child,
+          jobId,
+          inputPath: safeInput,
+          outputPath,
+          startedAt: Date.now(),
+          localized: true
+        });
+      },
+      onStdout(chunk) {
+        parseProgressChunk(chunk, progressState);
+        const rawPercent = metadata.duration > 0
+          ? Math.max(0, Math.min(99, (progressState.outTime / metadata.duration) * 100))
+          : 0;
+        const percent = Math.max(3, Math.min(99, Math.round(3 + rawPercent * 0.96)));
+
+        onProgress?.({
+          jobId,
+          phase: "rendering",
+          percent,
+          speed: progressState.speed,
+          fps: progressState.fps,
+          frame: progressState.frame
+        });
+      }
+    });
+  } catch (error) {
+    const wasCancelled = cancelledRenders.has(jobId);
+    removePartialFile(outputPath);
+
+    if (wasCancelled) {
+      return {
+        cancelled: true,
+        outputPath: null,
+        metadata
+      };
+    }
+
+    if (error instanceof ProcessingError) throw error;
+
+    const technicalMessage = error?.message || String(error);
+    const subtitleFailure = /subtitles|libass|ass renderer|No such filter/i.test(technicalMessage);
+
+    throw processingError(
+      subtitleFailure ? "SUBTITLE_RENDER_UNAVAILABLE" : "PROCESSING_FAILED",
+      subtitleFailure ? "Subtitle rendering is unavailable." : "Localized video processing failed.",
+      { technicalMessage }
+    );
+  } finally {
+    activeRenders.delete(jobId);
+    reservedRenders.delete(jobId);
+    cancelledRenders.delete(jobId);
+
+    if (subtitlePath) {
+      try { fs.unlinkSync(subtitlePath); } catch {}
+    }
+  }
+
+  onProgress?.({
+    jobId,
+    phase: "finalizing",
+    percent: 100,
+    speed: "",
+    fps: 0,
+    frame: 0
+  });
+
+  return {
+    cancelled: false,
+    outputPath,
+    metadata,
+    sizeBytes: fs.existsSync(outputPath) ? fs.statSync(outputPath).size : 0,
+    localized: true,
+    pipeline: {
+      voiceSegmentCount: voices.length,
+      subtitleSegmentCount: subtitles.length,
+      timingWarningCount: voices.filter(item => item.timingRisk).length,
+      originalAudioMixed: Boolean(mixOriginalAudio && metadata.audioCodec),
+      burnSubtitles: Boolean(burnSubtitles)
+    }
+  };
+}
+
 function cancelRender(jobId) {
   const active = activeRenders.get(jobId);
   const reserved = reservedRenders.has(jobId);
@@ -459,7 +860,9 @@ module.exports = {
   probeVideo,
   createThumbnail,
   preflightExport,
+  preflightLocalizedExport,
   renderVideo,
+  renderLocalizedVideo,
   cancelRender,
   cancelAllRenders,
   getActiveRenderCount,
