@@ -15,42 +15,42 @@ const PRODUCT_VOICES = [
   {
     id: "an",
     name: "An",
-    style: "Ấm, tự nhiên",
+    styleKey: "warmNatural",
     internalVoice: "marin",
     instructions: "Speak naturally, warmly, and clearly. Keep a conversational pace and avoid exaggerated emotion."
   },
   {
     id: "minh",
     name: "Minh",
-    style: "Rõ, điềm tĩnh",
+    styleKey: "clearCalm",
     internalVoice: "cedar",
     instructions: "Speak clearly and calmly with a confident, natural conversational rhythm."
   },
   {
     id: "vy",
     name: "Vy",
-    style: "Sáng, thân thiện",
+    styleKey: "brightFriendly",
     internalVoice: "coral",
     instructions: "Speak in a bright, friendly, natural tone. Keep the delivery smooth and conversational."
   },
   {
     id: "khoi",
     name: "Khôi",
-    style: "Trầm, chắc",
+    styleKey: "grounded",
     internalVoice: "onyx",
     instructions: "Speak with a grounded, steady, natural tone and clear articulation."
   },
   {
     id: "linh",
     name: "Linh",
-    style: "Mềm, kể chuyện",
+    styleKey: "softStory",
     internalVoice: "shimmer",
     instructions: "Speak softly and naturally with a storytelling feel, while remaining clear and easy to understand."
   }
 ];
 
 function publicCatalog() {
-  return PRODUCT_VOICES.map(({ id, name, style }) => ({ id, name, style }));
+  return PRODUCT_VOICES.map(({ id, name, styleKey }) => ({ id, name, styleKey }));
 }
 
 function resolveVoice(voiceId) {
