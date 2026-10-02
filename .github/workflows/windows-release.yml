@@ -19,6 +19,7 @@ on:
       - "tests/release-policy.test.js"
       - "tests/release-assets.test.js"
       - "tests/release-readiness.test.js"
+      - "tests/generated-manifest.test.js"
       - ".github/workflows/windows-release.yml"
 
 permissions:
@@ -207,6 +208,9 @@ jobs:
 
           Get-Content release/SHA256SUMS.txt
           Get-Content release/RELEASE-MANIFEST.json
+
+      - name: Validate generated release manifest
+        run: npm run test:generated-manifest
 
       - name: Upload Windows build artifact
         uses: actions/upload-artifact@v4
