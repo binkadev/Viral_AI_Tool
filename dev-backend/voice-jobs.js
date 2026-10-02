@@ -186,6 +186,7 @@ function scheduleCleanup(job) {
   job.cleanupTimer = setTimeout(() => {
     cleanupDir(job.id);
     job.filesExpired = true;
+    job.cleanupTimer = null;
   }, RESULT_TTL_MS);
   job.cleanupTimer.unref?.();
 }
@@ -221,17 +222,18 @@ function publicJob(job) {
 }
 
 async function processJob(job) {
-  if (!job || job.started || job.state !== "queued") return;
+  if (!job || job.processing || !["queued", "failed", "cancelled"].includes(job.state)) return;
 
-  job.started = true;
+  job.processing = true;
+  job.cancelRequested = false;
   job.state = "processing";
-  job.progress = 0;
+  job.errorCode = null;
   job.controller = new AbortController();
 
   const outputDir = jobDir(job.id);
   await fsp.mkdir(outputDir, { recursive: true });
 
-  const outputSegments = [];
+  if (!(job.segmentOutputs instanceof Map)) job.segmentOutputs = new Map();
 
   try {
     for (let index = 0; index < job.segments.length; index++) {
@@ -240,6 +242,17 @@ async function processJob(job) {
       }
 
       const segment = job.segments[index];
+      const existing = job.segmentOutputs.get(segment.id);
+
+      if (existing) {
+        const existingPath = path.join(outputDir, existing.fileName);
+        if (fs.existsSync(existingPath)) {
+          job.progress = Math.min(99, Math.round((job.segmentOutputs.size / job.segments.length) * 100));
+          continue;
+        }
+        job.segmentOutputs.delete(segment.id);
+      }
+
       const voiceId = job.assignments.bySpeaker[segment.speaker] || job.assignments.defaultVoiceId;
 
       const generated = await voiceProvider.synthesize({
@@ -255,11 +268,14 @@ async function processJob(job) {
 
       const fileName = safeFileName(segment.id);
       const filePath = path.join(outputDir, fileName);
-      await fsp.writeFile(filePath, generated.buffer);
+      const tempPath = filePath + ".tmp";
+
+      await fsp.writeFile(tempPath, generated.buffer);
+      await fsp.rename(tempPath, filePath);
 
       const timing = timingMeta(segment, generated.duration);
 
-      outputSegments.push({
+      job.segmentOutputs.set(segment.id, {
         id: segment.id,
         start: segment.start,
         end: segment.end,
@@ -274,7 +290,13 @@ async function processJob(job) {
         fileName
       });
 
-      job.progress = Math.min(99, Math.round(((index + 1) / job.segments.length) * 100));
+      job.progress = Math.min(99, Math.round((job.segmentOutputs.size / job.segments.length) * 100));
+    }
+
+    const outputSegments = job.segments.map(segment => job.segmentOutputs.get(segment.id));
+
+    if (outputSegments.some(item => !item)) {
+      throw jobError("VOICE_FAILED", "Voice generation completed with missing segments.");
     }
 
     job.result = {
@@ -299,21 +321,21 @@ async function processJob(job) {
     job.state = "completed";
     job.progress = 100;
     job.completedAt = new Date().toISOString();
+    job.filesExpired = false;
     scheduleCleanup(job);
   } catch (error) {
     if (job.cancelRequested || job.controller?.signal.aborted || ["CANCELLED", "PROVIDER_CANCELLED"].includes(error?.code)) {
       job.state = "cancelled";
-      job.progress = 0;
     } else {
       job.state = "failed";
-      job.progress = 0;
       job.errorCode = publicErrorCode(error);
       console.error("[VoiceProvider]", error?.code || "ERROR", error?.message || String(error));
     }
 
-    cleanupDir(job.id);
+    job.progress = Math.min(99, Math.round((job.segmentOutputs.size / job.segments.length) * 100));
   } finally {
     job.controller = null;
+    job.processing = false;
   }
 }
 
@@ -357,6 +379,27 @@ function create(userId, idempotencyKey, body) {
       if (existing.fingerprint !== inputFingerprint) {
         throw jobError("JOB_CONFLICT", "Idempotency key was reused with different voice input.");
       }
+
+      if (existing.state === "completed" && existing.filesExpired) {
+        if (existing.cleanupTimer) clearTimeout(existing.cleanupTimer);
+        existing.cleanupTimer = null;
+        existing.result = null;
+        existing.segmentFiles = new Map();
+        existing.segmentOutputs = new Map();
+        existing.filesExpired = false;
+        existing.progress = 0;
+        existing.state = "queued";
+        existing.errorCode = null;
+        existing.cancelRequested = false;
+        cleanupDir(existing.id);
+        setImmediate(() => processJob(existing));
+      } else if (["failed", "cancelled"].includes(existing.state) && !existing.processing) {
+        existing.state = "queued";
+        existing.errorCode = null;
+        existing.cancelRequested = false;
+        setImmediate(() => processJob(existing));
+      }
+
       return { created: false, job: publicJob(existing) };
     }
 
@@ -381,7 +424,8 @@ function create(userId, idempotencyKey, body) {
     result: null,
     errorCode: null,
     segmentFiles: new Map(),
-    started: false,
+    segmentOutputs: new Map(),
+    processing: false,
     cancelRequested: false,
     controller: null,
     cleanupTimer: null,
@@ -424,8 +468,7 @@ function cancel(userId, jobId) {
     try { job.controller?.abort(); } catch {}
   } else {
     job.state = "cancelled";
-    job.progress = 0;
-    cleanupDir(job.id);
+    job.progress = Math.min(99, Math.round(((job.segmentOutputs?.size || 0) / job.segments.length) * 100));
   }
 
   return { cancelled: true };
