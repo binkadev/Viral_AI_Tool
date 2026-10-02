@@ -1356,16 +1356,16 @@ async function previewVoiceSelection(speakerKey) {
     const code = response?.error?.code || "VOICE_FAILED";
 
     if (code === "VOICE_SUBSCRIPTION_INACTIVE") {
-    await refreshCloudUiState({ rerender: true });
-    await showNotice({
-      title: t("voiceWorkflow.subscriptionTitle"),
-      body: t("voiceWorkflow.subscriptionBody"),
-      buttonLabel: t("common.close")
-    });
-    return;
-  }
+      await refreshCloudUiState({ rerender: true });
+      await showNotice({
+        title: t("voiceWorkflow.subscriptionTitle"),
+        body: t("voiceWorkflow.subscriptionBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
 
-  if (code === "VOICE_PLAN_REQUIRED") {
+    if (code === "VOICE_PLAN_REQUIRED") {
       await showNotice({
         title: t("voiceWorkflow.planTitle"),
         body: t("voiceWorkflow.planBody"),
