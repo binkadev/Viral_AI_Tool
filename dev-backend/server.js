@@ -392,17 +392,30 @@ function assertVoiceSelectionAllowed(user, voiceId) {
   return true;
 }
 
+function belongsToCurrentBillingPeriod(user, billingPeriodEnd) {
+  if (!billingPeriodEnd || !user?.subscription?.currentPeriodEnd) return true;
+  return String(billingPeriodEnd) === String(user.subscription.currentPeriodEnd);
+}
+
 function reservedMinutesForUser(userId) {
   let total = 0;
+  const user = findUserById(userId);
 
   for (const job of jobs.values()) {
-    if (job.userId === userId && activeJobState(job.state)) {
+    if (
+      job.userId === userId &&
+      activeJobState(job.state) &&
+      belongsToCurrentBillingPeriod(user, job.billingPeriodEnd)
+    ) {
       total += Number(job.reservedMinutes || 0);
     }
   }
 
   for (const reservation of serviceQuotaReservations.values()) {
-    if (reservation.userId === userId) {
+    if (
+      reservation.userId === userId &&
+      belongsToCurrentBillingPeriod(user, reservation.billingPeriodEnd)
+    ) {
       total += Number(reservation.minutes || 0);
     }
   }
@@ -484,6 +497,7 @@ function reserveCloudQuota({ userId, service, jobId, minutes }) {
     service,
     jobId,
     minutes: requested,
+    billingPeriodEnd: user.subscription?.currentPeriodEnd || user.quota?.resetAt || null,
     createdAt: Date.now()
   });
 
@@ -502,8 +516,19 @@ function settleCloudQuota({ userId, service, jobId, outcome }) {
   }
 
   const user = findUserById(userId);
+  if (!user) return { chargedMinutes: 0 };
+
+  syncUserCommercialState(user);
+
+  if (!belongsToCurrentBillingPeriod(user, reservation.billingPeriodEnd)) {
+    return {
+      chargedMinutes: reservation.minutes,
+      chargedToCurrentPeriod: false
+    };
+  }
+
   const chargedMinutes = chargeUserQuota(user, service, reservation.minutes);
-  return { chargedMinutes };
+  return { chargedMinutes, chargedToCurrentPeriod: true };
 }
 
 function cleanupUpload(job) {
@@ -780,8 +805,11 @@ async function processSpeechJob(job) {
       const user = findUserById(job.userId);
       if (!user) throw Object.assign(new Error("user missing"), { code: "USER_MISSING" });
 
+      syncUserCommercialState(user);
       const requestedCharge = Math.max(1, Number(job.reservedMinutes || job.estimatedMinutes || 1));
-      const charge = chargeUserQuota(user, "speech", requestedCharge);
+      const charge = belongsToCurrentBillingPeriod(user, job.billingPeriodEnd)
+        ? chargeUserQuota(user, "speech", requestedCharge)
+        : requestedCharge;
 
       job.chargedMinutes = charge;
       job.reservedMinutes = 0;
@@ -1230,6 +1258,7 @@ async function handle(req, res) {
       audio: input.audio,
       estimatedMinutes,
       reservedMinutes: estimatedMinutes,
+      billingPeriodEnd: user.subscription?.currentPeriodEnd || user.quota?.resetAt || null,
       chargedMinutes: 0,
       state: "awaiting_upload",
       progress: 0,
