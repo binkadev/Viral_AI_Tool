@@ -69,8 +69,12 @@ function createSessionStore({ userDataPath, safeStorage }) {
       throw error;
     }
 
+    const current = readRaw();
+    const nextUserId = session.user?.id || null;
+    const sameUser = Boolean(nextUserId && current?.user?.id === nextUserId);
+
     writeRaw({
-      version: 2,
+      version: 3,
       encryptedAccessToken: encrypt(accessToken),
       encryptedRefreshToken: encrypt(refreshToken),
       accessExpiresAt: session.accessExpiresAt || null,
@@ -79,12 +83,60 @@ function createSessionStore({ userDataPath, safeStorage }) {
         id: session.user.id || null,
         email: session.user.email || null,
         name: session.user.name || null,
+        planId: session.user.planId || null,
         plan: session.user.plan || null
       } : null,
+      encryptedAccountSnapshot: sameUser ? (current?.encryptedAccountSnapshot || null) : null,
+      accountVerifiedAt: sameUser ? (current?.accountVerifiedAt || null) : null,
       updatedAt: new Date().toISOString()
     });
 
     return true;
+  }
+
+  function setAccountSnapshot(account) {
+    const current = readRaw();
+    if (!current?.user?.id || !account || typeof account !== "object") {
+      const error = new Error("Account snapshot requires an authenticated user.");
+      error.code = "SESSION_INVALID";
+      throw error;
+    }
+
+    const accountUserId = account?.user?.id || current.user.id;
+    if (accountUserId !== current.user.id) {
+      const error = new Error("Account snapshot user mismatch.");
+      error.code = "SESSION_INVALID";
+      throw error;
+    }
+
+    const verifiedAt = new Date().toISOString();
+
+    writeRaw({
+      ...current,
+      version: 3,
+      encryptedAccountSnapshot: encrypt(JSON.stringify(account)),
+      accountVerifiedAt: verifiedAt,
+      updatedAt: verifiedAt
+    });
+
+    return verifiedAt;
+  }
+
+  function getAccountSnapshot() {
+    const current = readRaw();
+    if (!current?.encryptedAccountSnapshot) return null;
+
+    const value = decrypt(current.encryptedAccountSnapshot);
+    if (!value) return null;
+
+    try {
+      return {
+        account: JSON.parse(value),
+        verifiedAt: current.accountVerifiedAt || null
+      };
+    } catch {
+      return null;
+    }
   }
 
   function setAccessToken(token, meta = {}) {
@@ -153,7 +205,9 @@ function createSessionStore({ userDataPath, safeStorage }) {
       userId: user?.id || null,
       email: user?.email || null,
       name: user?.name || null,
+      planId: user?.planId || null,
       plan: user?.plan || null,
+      accountVerifiedAt: data?.accountVerifiedAt || null,
       accessExpiresAt: data?.accessExpiresAt || null,
       refreshExpiresAt: data?.refreshExpiresAt || null,
       secureStorage: canEncrypt()
@@ -168,6 +222,8 @@ function createSessionStore({ userDataPath, safeStorage }) {
   return {
     setSession,
     setAccessToken,
+    setAccountSnapshot,
+    getAccountSnapshot,
     getAccessToken,
     getRefreshToken,
     getUser,
