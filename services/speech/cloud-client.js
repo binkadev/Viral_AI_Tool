@@ -58,6 +58,7 @@ function stableApiError(status, payload = {}) {
     UNAUTHORIZED: "CLOUD_AUTH_REQUIRED",
     QUOTA_EXCEEDED: "CLOUD_QUOTA_EXCEEDED",
     PLAN_REQUIRED: "CLOUD_PLAN_REQUIRED",
+    CONCURRENCY_LIMIT: "CLOUD_CONCURRENCY_LIMIT",
     FILE_TOO_LARGE: "CLOUD_FILE_TOO_LARGE",
     UNSUPPORTED_AUDIO: "CLOUD_AUDIO_UNSUPPORTED",
     JOB_NOT_FOUND: "CLOUD_JOB_NOT_FOUND",
@@ -74,7 +75,8 @@ function stableApiError(status, payload = {}) {
 
   if (status === 401) return cloudError("CLOUD_AUTH_REQUIRED", "Authentication is required.", { status });
   if (status === 403) return cloudError("CLOUD_FORBIDDEN", "Cloud request is not allowed.", { status });
-  if (status === 402 || status === 429) return cloudError("CLOUD_QUOTA_EXCEEDED", "Cloud allowance is unavailable.", { status });
+  if (status === 402) return cloudError("CLOUD_QUOTA_EXCEEDED", "Cloud allowance is unavailable.", { status });
+  if (status === 429) return cloudError("CLOUD_CONCURRENCY_LIMIT", "The active Cloud job limit has been reached.", { status });
   if (status === 404) return cloudError("CLOUD_JOB_NOT_FOUND", "Cloud job was not found.", { status });
   if (status >= 500) return cloudError("CLOUD_UNAVAILABLE", "Cloud service is unavailable.", { status });
 
