@@ -1,3 +1,4 @@
+const fs = require("fs");
 const path = require("path");
 
 function createSqliteStateStore(filePath) {
@@ -12,6 +13,7 @@ function createSqliteStateStore(filePath) {
   }
 
   const resolved = path.resolve(filePath);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
   const db = new DatabaseSync(resolved);
 
   db.exec([
