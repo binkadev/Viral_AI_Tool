@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   checkForUpdates: () => ipcRenderer.invoke('app:check-update'),
   downloadUpdate: () => ipcRenderer.invoke('app:download-update'),
   launchUpdate: () => ipcRenderer.invoke('app:launch-update'),
+  openDiagnosticLogs: () => ipcRenderer.invoke('diagnostics:open-folder'),
+  exportDiagnostics: () => ipcRenderer.invoke('diagnostics:export'),
 
   selectVideos: () => ipcRenderer.invoke('files:select-videos'),
   selectOutputFolder: () => ipcRenderer.invoke('folder:select-output'),
