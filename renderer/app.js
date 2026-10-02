@@ -1942,10 +1942,29 @@ function settingsPage() {
 
   const devCloudStatus = state.speech.providerStatus?.cloud || null;
   const devProviderReady = devCloudStatus?.ready === true;
-  const devProviderConfigured = devCloudStatus?.code !== "CLOUD_PROVIDER_NOT_CONFIGURED";
   const devProviderLabel = devProviderReady
     ? t("settings.providerReady")
     : devCloudStatus?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
+      ? t("settings.providerNotConfigured")
+      : state.cloud.auth?.authenticated
+        ? t("settings.providerUnavailable")
+        : t("settings.providerNeedsLogin");
+
+  const devTranslationStatus = state.translation.cloudStatus || null;
+  const devTranslationReady = devTranslationStatus?.ready === true;
+  const devTranslationLabel = devTranslationReady
+    ? t("settings.providerReady")
+    : devTranslationStatus?.code === "TRANSLATION_PROVIDER_NOT_CONFIGURED"
+      ? t("settings.providerNotConfigured")
+      : state.cloud.auth?.authenticated
+        ? t("settings.providerUnavailable")
+        : t("settings.providerNeedsLogin");
+
+  const devVoiceStatus = state.voice.cloudStatus || null;
+  const devVoiceReady = devVoiceStatus?.ready === true;
+  const devVoiceLabel = devVoiceReady
+    ? t("settings.providerReady")
+    : devVoiceStatus?.code === "VOICE_PROVIDER_NOT_CONFIGURED"
       ? t("settings.providerNotConfigured")
       : state.cloud.auth?.authenticated
         ? t("settings.providerUnavailable")
@@ -1974,6 +1993,16 @@ function settingsPage() {
           '<div><span class="provider-dev-kicker">' + t("settings.speechProvider") + '</span><b>' + escapeHtml(devProviderLabel) + '</b>' +
           '<p>' + escapeHtml(t("settings.providerSetupHint")) + '</p></div>' +
           '<code>OPENAI_API_KEY</code>' +
+        '</div>' +
+        '<div class="provider-dev-strip ' + (devTranslationReady ? "success" : "neutral") + '">' +
+          '<div><span class="provider-dev-kicker">' + t("settings.translationProvider") + '</span><b>' + escapeHtml(devTranslationLabel) + '</b>' +
+          '<p>' + escapeHtml(t("settings.providerSetupHint")) + '</p></div>' +
+          '<code>VIRAL_AI_OPENAI_TRANSLATION_MODEL</code>' +
+        '</div>' +
+        '<div class="provider-dev-strip ' + (devVoiceReady ? "success" : "neutral") + '">' +
+          '<div><span class="provider-dev-kicker">' + t("settings.voiceProvider") + '</span><b>' + escapeHtml(devVoiceLabel) + '</b>' +
+          '<p>' + escapeHtml(t("settings.providerSetupHint")) + '</p></div>' +
+          '<code>VIRAL_AI_OPENAI_TTS_MODEL</code>' +
         '</div>' +
         '<div class="developer-actions">' +
           '<button id="testCloudConnection" class="button ghost" type="button">' + t("settings.testConnection") + '</button>' +
