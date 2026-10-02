@@ -1,0 +1,462 @@
+openapi: 3.1.0
+info:
+  title: Viral AI Tool Voice API
+  version: 1.0.0
+  description: |
+    Contract between Viral AI Tool Desktop and Viral AI Backend for AI voice preview and segment voice generation.
+    Provider credentials and provider-specific voice identifiers remain server-side.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/voice/status:
+    get:
+      summary: Read AI voice availability
+      responses:
+        "200":
+          description: Voice service status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceStatus"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+
+  /v1/voice/catalog:
+    get:
+      summary: List product-facing voice options
+      responses:
+        "200":
+          description: Voice catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [ready, voices]
+                properties:
+                  ready:
+                    type: boolean
+                  voices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VoiceCatalogItem"
+
+  /v1/voice/preview:
+    post:
+      summary: Generate a short authenticated voice preview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [voiceId, text, language]
+              properties:
+                voiceId:
+                  type: string
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 220
+                language:
+                  type: string
+      responses:
+        "200":
+          description: WAV preview audio
+          content:
+            audio/wav:
+              schema:
+                type: string
+                contentEncoding: binary
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "429":
+          description: Preview cooldown is active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/voice/jobs:
+    post:
+      summary: Create or recover an idempotent voice job
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVoiceJob"
+      responses:
+        "200":
+          description: Existing job recovered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceJob"
+        "201":
+          description: New voice job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "409":
+          description: Idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Voice input exceeds limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/voice/jobs/{jobId}:
+    get:
+      summary: Get voice job state or result
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Voice job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceJob"
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+  /v1/voice/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel an owned voice job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Cancellation acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cancelled]
+                properties:
+                  cancelled:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+
+  /v1/voice/jobs/{jobId}/segments/{segmentId}/audio:
+    get:
+      summary: Download one generated segment WAV
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - name: segmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generated segment WAV
+          content:
+            audio/wav:
+              schema:
+                type: string
+                contentEncoding: binary
+        "401":
+          $ref: "#/components/responses/AuthRequired"
+        "404":
+          $ref: "#/components/responses/JobNotFound"
+        "410":
+          description: Temporary audio expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-access-token
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 160
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+
+  responses:
+    AuthRequired:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    BadRequest:
+      description: Invalid voice request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    JobNotFound:
+      description: Job does not exist or is not owned by the authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ServiceUnavailable:
+      description: Voice service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    VoiceStatus:
+      type: object
+      additionalProperties: false
+      required: [ready, code, catalog]
+      properties:
+        ready:
+          type: boolean
+        code:
+          type: string
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            maxSegments:
+              type: integer
+            maxCharacters:
+              type: integer
+            maxSegmentCharacters:
+              type: integer
+        catalog:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceCatalogItem"
+
+    VoiceCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, styleKey]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        styleKey:
+          type: string
+
+    CreateVoiceJob:
+      type: object
+      additionalProperties: false
+      required: [clientJobId, language, assignments, segments]
+      properties:
+        clientJobId:
+          type: string
+        language:
+          type: string
+        assignments:
+          $ref: "#/components/schemas/VoiceAssignments"
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceSourceSegment"
+
+    VoiceAssignments:
+      type: object
+      additionalProperties: false
+      required: [defaultVoiceId, bySpeaker]
+      properties:
+        defaultVoiceId:
+          type: string
+        bySpeaker:
+          type: object
+          additionalProperties:
+            type: string
+
+    VoiceSourceSegment:
+      type: object
+      additionalProperties: false
+      required: [id, start, end, text, speaker]
+      properties:
+        id:
+          type: string
+        start:
+          type: number
+          minimum: 0
+        end:
+          type: number
+          minimum: 0
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        speaker:
+          type: string
+
+    VoiceJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, state]
+      properties:
+        jobId:
+          type: string
+        state:
+          type: string
+          enum: [queued, processing, cancelling, cancelled, completed, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        result:
+          $ref: "#/components/schemas/VoiceResult"
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+
+    VoiceResult:
+      type: object
+      additionalProperties: false
+      required: [version, language, aiGenerated, segments, speakers, meta]
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        language:
+          type: string
+        aiGenerated:
+          type: boolean
+          const: true
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeneratedVoiceSegment"
+        speakers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [speaker, voiceId]
+            properties:
+              speaker:
+                type: string
+              voiceId:
+                type: string
+        meta:
+          type: object
+          additionalProperties: true
+          properties:
+            providerMode:
+              type: string
+              enum: [cloud, local]
+            timingPreserved:
+              type: boolean
+            warningCount:
+              type: integer
+              minimum: 0
+            createdAt:
+              type: string
+              format: date-time
+            expiresAt:
+              type: string
+              format: date-time
+
+    GeneratedVoiceSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - start
+        - end
+        - text
+        - speaker
+        - voiceId
+        - audioDuration
+        - slotDuration
+        - durationRatio
+        - timingRisk
+        - audioUrl
+      properties:
+        id:
+          type: string
+        start:
+          type: number
+        end:
+          type: number
+        text:
+          type: string
+        speaker:
+          type: string
+        voiceId:
+          type: string
+        audioDuration:
+          type: number
+        slotDuration:
+          type: number
+        durationRatio:
+          type: number
+        timingRisk:
+          type: boolean
+        audioUrl:
+          type: string
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code:
+              type: string
