@@ -22,6 +22,7 @@
   "build": {
     "appId": "com.viralai.tool",
     "productName": "Viral AI Tool",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
