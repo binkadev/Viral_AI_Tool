@@ -23,6 +23,11 @@ assert(
   "Release manifest contains no artifacts."
 );
 
+assert(
+  !manifest.artifacts.some(item => String(item?.file || "").toLowerCase() === "builder-debug.yml"),
+  "Release manifest must not publish builder-debug.yml."
+);
+
 const installer = manifest.artifacts.find(item =>
   String(item?.file || "").toLowerCase().endsWith(".exe")
 );
