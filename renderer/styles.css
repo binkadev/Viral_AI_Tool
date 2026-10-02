@@ -2997,3 +2997,56 @@ html[data-scale="compact"] .hero p{font-size:13px}
     margin-bottom:-4px;
   }
 }
+
+
+/* Real Voice Studio */
+.voice-studio-controls{
+  display:grid;
+  grid-template-columns:minmax(130px,.6fr) minmax(200px,1fr) auto;
+  gap:9px;
+  align-items:center;
+  margin-top:10px;
+}
+.voice-feature-pending{
+  margin:14px 0 12px;
+  padding:11px 12px;
+  border:1px dashed var(--line);
+  border-radius:11px;
+  background:var(--surface-soft);
+}
+.voice-feature-pending b,
+.voice-feature-pending span{
+  display:block;
+}
+.voice-feature-pending b{
+  font-size:12px;
+}
+.voice-feature-pending span{
+  margin-top:3px;
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.5;
+}
+.voice-library-empty{
+  grid-column:1 / -1;
+  color:var(--text-soft);
+  font-size:12px;
+  text-align:center;
+}
+@media(max-width:820px){
+  .voice-studio-controls{
+    grid-template-columns:1fr 1fr;
+  }
+  .voice-studio-controls .button{
+    grid-column:1 / -1;
+    justify-self:start;
+  }
+}
+@media(max-width:620px){
+  .voice-studio-controls{
+    grid-template-columns:1fr;
+  }
+  .voice-studio-controls .button{
+    grid-column:auto;
+  }
+}
