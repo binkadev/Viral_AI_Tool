@@ -1297,6 +1297,11 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/billing/checkout-session") {
+    if (requestRateLimited(req, "billing-action", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_action", req, { action: "checkout" });
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
@@ -1311,6 +1316,11 @@ async function handle(req, res) {
         targetPlanId,
         baseUrl
       });
+      audit("billing.checkout.created", req, {
+        userId: user.id,
+        fromPlanId: effectivePlanId(user),
+        targetPlanId
+      });
       return json(res, 201, session);
     } catch (err) {
       const code = err?.code || "BILLING_REQUEST_FAILED";
@@ -1323,6 +1333,11 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/billing/plan-change") {
+    if (requestRateLimited(req, "billing-action", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_action", req, { action: "plan_change" });
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
@@ -1342,6 +1357,12 @@ async function handle(req, res) {
         now: Date.now()
       });
       syncUserCommercialState(user);
+      persistUsers();
+      audit("billing.plan_change.scheduled", req, {
+        userId: user.id,
+        fromPlanId: currentPlanId,
+        targetPlanId
+      });
 
       return json(res, 200, {
         scheduled: true,
@@ -1357,12 +1378,19 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/billing/cancel") {
+    if (requestRateLimited(req, "billing-action", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_action", req, { action: "cancel" });
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
       syncUserCommercialState(user);
       requestCancellation(user.subscription, { now: Date.now(), immediately: false });
+      persistUsers();
+      audit("billing.cancel.scheduled", req, { userId: user.id, planId: effectivePlanId(user) });
       return json(res, 200, {
         scheduled: true,
         subscription: publicSubscription(user.subscription)
@@ -1373,12 +1401,19 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/billing/resume") {
+    if (requestRateLimited(req, "billing-action", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_action", req, { action: "resume" });
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
       syncUserCommercialState(user);
       resumeCancellation(user.subscription, { now: Date.now() });
+      persistUsers();
+      audit("billing.cancel.resumed", req, { userId: user.id, planId: effectivePlanId(user) });
       return json(res, 200, {
         resumed: true,
         subscription: publicSubscription(user.subscription)
@@ -1393,14 +1428,21 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/billing/portal-session") {
+    if (requestRateLimited(req, "billing-action", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_action", req, { action: "portal" });
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     const baseUrl = "http://" + (req.headers.host || (HOST + ":" + PORT));
-    return json(res, 201, billing.createPortalSession({
+    const session = billing.createPortalSession({
       userId: user.id,
       baseUrl
-    }));
+    });
+    audit("billing.portal.created", req, { userId: user.id });
+    return json(res, 201, session);
   }
 
   if (method === "GET" && url.pathname === "/v1/billing/invoices") {
@@ -1968,6 +2010,14 @@ async function handle(req, res) {
 
   return error(res, 404, "NOT_FOUND");
 }
+
+const maintenanceTimer = setInterval(() => {
+  pruneRefreshSessions();
+  pruneBillingEvents();
+  pruneRequestBuckets();
+  billing.pruneExpiredSessions();
+}, 60 * 1000);
+maintenanceTimer.unref?.();
 
 const server = http.createServer((req, res) => {
   handle(req, res).catch(err => {
