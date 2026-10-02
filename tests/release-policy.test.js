@@ -9,7 +9,8 @@ const {
 const artifact = {
   file: "Viral AI Tool-0.15.0-x64.exe",
   sizeBytes: 123456,
-  sha256: "a".repeat(64)
+  sha256: "a".repeat(64),
+  downloadUrl: "https://github.com/binkadev/Viral_AI_Tool/releases/download/v0.15.0/Viral%20AI%20Tool-0.15.0-x64.exe"
 };
 
 const stableManifest = {
@@ -28,6 +29,13 @@ assert(compareVersions("0.15.0", "0.14.0") > 0);
 assert(compareVersions("0.14.0", "0.14.0") === 0);
 assert(compareVersions("0.14.0-beta.1", "0.14.0") < 0);
 assert.strictEqual(validateManifest(stableManifest).ok, true);
+assert.strictEqual(
+  validateManifest({
+    ...stableManifest,
+    artifacts: [{ ...artifact, downloadUrl: "https://example.com/update.exe" }]
+  }).code,
+  "UPDATE_INSTALLER_INVALID"
+);
 
 assert.strictEqual(
   canOfferUpdate({ version: "0.14.0", channel: "stable" }, stableManifest).code,
