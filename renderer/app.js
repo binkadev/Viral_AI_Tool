@@ -949,7 +949,8 @@ async function startTranslation() {
       id: segment.id,
       start: segment.start,
       end: segment.end,
-      text: segment.text
+      text: segment.text,
+      speaker: segment.speaker || null
     }))
   });
 
