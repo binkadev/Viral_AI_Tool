@@ -14,6 +14,10 @@ const state = {
     account: null,
     accountOffline: false,
     accountVerifiedAt: null,
+    accountSessions: null,
+    accountSessionsLoading: false,
+    accountSessionsLoadedAt: 0,
+    accountSessionsError: null,
     test: null,
     draftBackendUrl: null,
     draftEnvironment: null,
@@ -597,11 +601,17 @@ async function refreshCloudUiState({ rerender = false } = {}) {
         state.cloud.account = null;
         state.cloud.accountOffline = false;
         state.cloud.accountVerifiedAt = null;
+        state.cloud.accountSessions = null;
+        state.cloud.accountSessionsLoadedAt = 0;
+        state.cloud.accountSessionsError = "AUTH_REQUIRED";
       }
     } else {
       state.cloud.account = null;
       state.cloud.accountOffline = false;
       state.cloud.accountVerifiedAt = null;
+      state.cloud.accountSessions = null;
+      state.cloud.accountSessionsLoadedAt = 0;
+      state.cloud.accountSessionsError = null;
     }
 
     state.cloud.statusCheckedAt = Date.now();
@@ -612,7 +622,7 @@ async function refreshCloudUiState({ rerender = false } = {}) {
     state.cloud.loading = false;
   }
 
-  if (rerender && ["ai-video", "settings", "usage", "billing"].includes(state.page)) render();
+  if (rerender && ["ai-video", "settings", "usage", "billing", "accounts"].includes(state.page)) render();
   return state.cloud;
 }
 
@@ -2119,6 +2129,88 @@ function libraryPage() {
     '<div id="libraryTable">' + jobsTable() + "</div>";
 }
 
+async function loadAccountSessions({ rerender = false } = {}) {
+  if (!window.desktopAPI?.getAccountSessions || state.cloud.accountSessionsLoading) {
+    return state.cloud.accountSessions;
+  }
+
+  if (!state.cloud.auth?.authenticated) {
+    state.cloud.accountSessions = null;
+    state.cloud.accountSessionsError = "AUTH_REQUIRED";
+    state.cloud.accountSessionsLoadedAt = 0;
+    if (rerender && state.page === "accounts") render();
+    return null;
+  }
+
+  state.cloud.accountSessionsLoading = true;
+  state.cloud.accountSessionsError = null;
+
+  try {
+    const response = await window.desktopAPI.getAccountSessions();
+    if (response?.ok) {
+      state.cloud.accountSessions = Array.isArray(response.data?.sessions)
+        ? response.data.sessions
+        : [];
+      state.cloud.accountSessionsLoadedAt = Date.now();
+    } else {
+      state.cloud.accountSessions = null;
+      state.cloud.accountSessionsError = response?.error?.code || "AUTH_REQUEST_FAILED";
+      state.cloud.accountSessionsLoadedAt = Date.now();
+    }
+  } catch {
+    state.cloud.accountSessions = null;
+    state.cloud.accountSessionsError = "AUTH_NETWORK";
+    state.cloud.accountSessionsLoadedAt = Date.now();
+  } finally {
+    state.cloud.accountSessionsLoading = false;
+  }
+
+  if (rerender && state.page === "accounts") render();
+  return state.cloud.accountSessions;
+}
+
+async function revokeAccountSession(sessionId) {
+  const session = (state.cloud.accountSessions || []).find(item => item.id === sessionId);
+  if (!session || session.current) return;
+
+  const confirmed = await confirmAction({
+    title: t("accounts.revokeTitle"),
+    body: t("accounts.revokeBody", {
+      device: session.clientName || t("accounts.unknownDevice")
+    }),
+    confirmLabel: t("accounts.revokeConfirm"),
+    cancelLabel: t("common.cancel"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI?.revokeAccountSession?.(sessionId);
+  if (!response?.ok) {
+    await showNotice({
+      title: t("accounts.revokeFailedTitle"),
+      body: t("accounts.revokeFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (response.localSessionCleared) {
+    state.cloud.auth = null;
+    state.cloud.account = null;
+    state.cloud.accountOffline = false;
+    state.cloud.accountVerifiedAt = null;
+    state.cloud.accountSessions = null;
+    state.cloud.accountSessionsLoadedAt = 0;
+    state.cloud.accountSessionsError = null;
+    toast(t("account.signedOut"));
+    render();
+    return;
+  }
+
+  await loadAccountSessions({ rerender: true });
+  toast(t("accounts.revoked"));
+}
+
 function accountsPage() {
   const accounts = [
     ["TikTok", "@hoangstudio", true],
@@ -2126,12 +2218,86 @@ function accountsPage() {
     ["Instagram", "@hoang.creates", true],
     ["Facebook", state.locale === "vi" ? "Chưa kết nối" : "Not connected", false]
   ];
+
+  const authenticated = state.cloud.auth?.authenticated === true;
+  const sessions = Array.isArray(state.cloud.accountSessions)
+    ? state.cloud.accountSessions
+    : [];
+
+  let sessionContent = "";
+
+  if (!authenticated) {
+    sessionContent =
+      '<div class="card card-pad account-session-empty">' +
+        '<div class="eyebrow">' + t("accounts.securityEyebrow") + '</div>' +
+        '<h3>' + t("accounts.sessionsSignInTitle") + '</h3>' +
+        '<p class="muted">' + t("accounts.sessionsSignInBody") + '</p>' +
+        '<button id="accountsSessionLogin" class="button primary" type="button">' + t("account.signIn") + '</button>' +
+      '</div>';
+  } else if (state.cloud.accountSessionsLoading && !state.cloud.accountSessions) {
+    sessionContent =
+      '<div class="card card-pad account-session-empty">' +
+        '<div class="eyebrow">' + t("accounts.securityEyebrow") + '</div>' +
+        '<h3>' + t("accounts.sessionsLoading") + '</h3>' +
+        '<p class="muted">' + t("accounts.sessionsLoadingBody") + '</p>' +
+      '</div>';
+  } else if (state.cloud.accountSessionsError && !state.cloud.accountSessions) {
+    sessionContent =
+      '<div class="card card-pad account-session-empty">' +
+        '<div class="eyebrow">' + t("accounts.securityEyebrow") + '</div>' +
+        '<h3>' + t("accounts.sessionsUnavailable") + '</h3>' +
+        '<p class="muted">' + t("accounts.sessionsUnavailableBody") + '</p>' +
+        '<button id="accountSessionsRefresh" class="button ghost" type="button">' + t("accounts.refreshSessions") + '</button>' +
+      '</div>';
+  } else {
+    const rows = sessions.length
+      ? sessions.map(session => {
+          const device = String(session.clientName || t("accounts.unknownDevice"));
+          const version = String(session.clientVersion || "").trim();
+          const label = version && version !== "unknown"
+            ? t("accounts.deviceVersion", { device, version })
+            : device;
+
+          return '<div class="account-session-row">' +
+            '<div class="account-session-icon" aria-hidden="true">▣</div>' +
+            '<div class="account-session-copy"><div class="account-session-title">' +
+              '<b>' + escapeHtml(label) + '</b>' +
+              (session.current
+                ? '<span class="session-current-badge">' + t("accounts.currentDevice") + '</span>'
+                : '') +
+            '</div>' +
+            '<div class="account-session-meta">' +
+              '<span>' + escapeHtml(t("accounts.lastActive", { date: accountDateLabel(session.lastUsedAt) })) + '</span>' +
+              '<span>' + escapeHtml(t("accounts.sessionExpires", { date: accountDateLabel(session.expiresAt) })) + '</span>' +
+            '</div></div>' +
+            (session.current
+              ? '<span class="session-current-note">' + t("accounts.useSignOut") + '</span>'
+              : '<button class="button ghost session-revoke" data-revoke-session="' + escapeHtml(session.id) +
+                '" type="button">' + t("accounts.revoke") + '</button>') +
+          '</div>';
+        }).join("")
+      : '<div class="account-session-none">' + t("accounts.noOtherSessions") + '</div>';
+
+    sessionContent =
+      '<div class="card account-session-card">' +
+        '<div class="account-session-header"><div><div class="eyebrow">' + t("accounts.securityEyebrow") + '</div>' +
+          '<h3>' + t("accounts.sessionsTitle") + '</h3><p>' + t("accounts.sessionsDesc") + '</p></div>' +
+          '<button id="accountSessionsRefresh" class="button ghost" type="button">' + t("accounts.refreshSessions") + '</button>' +
+        '</div>' +
+        '<div class="account-session-list">' + rows + '</div>' +
+        '<div class="account-session-foot">' + t("accounts.sessionsSecurityNote") + '</div>' +
+      '</div>';
+  }
+
   return '<div class="section-head"><div><h3>' + t("accounts.title") + "</h3><p>" + t("accounts.desc") + "</p></div></div>" +
     '<div class="grid-2">' + accounts.map((x) =>
       '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">' + x[0] + "</div><b>" + x[1] +
       '</b></div><button class="button ' + (x[2] ? "ghost" : "primary") + ' account" data-connected="' + (x[2] ? "1" : "0") +
       '" type="button">' + (x[2] ? t("common.connected") : t("common.connect")) + "</button></div></div>"
-    ).join("") + "</div>";
+    ).join("") + "</div>" +
+    '<div class="section-head account-security-head"><div><h3>' + t("accounts.securityTitle") + '</h3><p>' +
+      t("accounts.securityDesc") + '</p></div></div>' +
+    sessionContent;
 }
 
 function subscriptionStatusCopy(subscription) {
@@ -4383,6 +4549,9 @@ async function saveDeveloperCloudConfig() {
     state.cloud.account = null;
     state.cloud.accountOffline = false;
     state.cloud.accountVerifiedAt = null;
+    state.cloud.accountSessions = null;
+    state.cloud.accountSessionsLoadedAt = 0;
+    state.cloud.accountSessionsError = null;
     state.billing.catalog = null;
     state.billing.invoices = null;
     state.billing.loadedAt = 0;
@@ -4506,6 +4675,9 @@ function openLoginModal() {
     state.cloud.account = response.data?.account || null;
     state.cloud.accountOffline = response.data?.offline === true;
     state.cloud.accountVerifiedAt = response.data?.verifiedAt || null;
+    state.cloud.accountSessions = null;
+    state.cloud.accountSessionsLoadedAt = 0;
+    state.cloud.accountSessionsError = null;
     state.cloud.statusCheckedAt = Date.now();
     state.billing.catalog = null;
     state.billing.invoices = null;
@@ -4535,6 +4707,9 @@ async function logoutAccount() {
   state.cloud.account = null;
   state.cloud.accountOffline = false;
   state.cloud.accountVerifiedAt = null;
+  state.cloud.accountSessions = null;
+  state.cloud.accountSessionsLoadedAt = 0;
+  state.cloud.accountSessionsError = null;
   state.cloud.test = null;
   state.billing.catalog = null;
   state.billing.invoices = null;
@@ -4565,6 +4740,21 @@ function bind() {
 
   document.querySelectorAll(".account").forEach((node) => {
     node.onclick = () => toast(node.dataset.connected === "1" ? t("accounts.already") : t("accounts.next"));
+  });
+
+  const accountsSessionLogin = $("accountsSessionLogin");
+  if (accountsSessionLogin) accountsSessionLogin.onclick = () => openLoginModal();
+
+  const accountSessionsRefresh = $("accountSessionsRefresh");
+  if (accountSessionsRefresh) {
+    accountSessionsRefresh.onclick = async () => {
+      accountSessionsRefresh.disabled = true;
+      await loadAccountSessions({ rerender: true });
+    };
+  }
+
+  document.querySelectorAll("[data-revoke-session]").forEach(node => {
+    node.onclick = () => revokeAccountSession(node.dataset.revokeSession || "");
   });
 
   const usageLogin = $("usageLogin");
@@ -4883,7 +5073,7 @@ function render() {
   bind();
   save();
 
-  if (["ai-video", "settings", "voice", "usage", "billing"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
+  if (["ai-video", "settings", "voice", "usage", "billing", "accounts"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
     const cloudStale = !state.cloud.config ||
       !state.cloud.statusCheckedAt ||
       Date.now() - state.cloud.statusCheckedAt > 30000;
@@ -4899,6 +5089,21 @@ function render() {
 
     if (billingStale && !state.billing.loading && state.cloud.auth?.authenticated) {
       setTimeout(() => loadBillingData({ rerender: true }), 0);
+    }
+  }
+
+  if (state.page === "accounts" && window.desktopAPI?.getAccountSessions) {
+    const sessionsStale =
+      !state.cloud.accountSessionsLoadedAt ||
+      Date.now() - state.cloud.accountSessionsLoadedAt > 30000;
+
+    if (
+      sessionsStale &&
+      !state.cloud.accountSessionsLoading &&
+      state.cloud.auth?.authenticated &&
+      !state.cloud.accountOffline
+    ) {
+      setTimeout(() => loadAccountSessions({ rerender: true }), 0);
     }
   }
 
