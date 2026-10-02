@@ -68,7 +68,7 @@ function releaseInfo() {
   const allowedChannels = new Set(['development', 'preview', 'stable']);
   const channel = allowedChannels.has(String(metadata.channel || '').toLowerCase())
     ? String(metadata.channel).toLowerCase()
-    : (app.isPackaged ? 'stable' : 'development');
+    : 'development';
 
   const commit = /^[a-f0-9]{7,40}$/i.test(String(metadata.commit || ''))
     ? String(metadata.commit).toLowerCase()
