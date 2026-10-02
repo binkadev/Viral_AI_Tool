@@ -1175,6 +1175,12 @@ function voiceStyleLabel(voice) {
   return key ? t("voiceWorkflow.styles." + key) : "";
 }
 
+function voiceTierLabel(voice) {
+  return String(voice?.tier || "standard") === "premium"
+    ? t("voiceWorkflow.tierPremium")
+    : t("voiceWorkflow.tierStandard");
+}
+
 function ensureVoiceAssignments(result) {
   const speakers = voiceSpeakerEntries(result);
   const catalog = Array.isArray(state.voice.catalog) ? state.voice.catalog : [];
@@ -1309,6 +1315,15 @@ async function previewVoiceSelection(speakerKey) {
       return;
     }
 
+    if (code === "VOICE_MODEL_NOT_INCLUDED") {
+      await showNotice({
+        title: t("voiceWorkflow.modelTitle"),
+        body: t("voiceWorkflow.modelBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     toast(code === "VOICE_PREVIEW_RATE_LIMITED"
       ? t("voiceWorkflow.previewWait")
       : t("voiceWorkflow.previewFailed"));
@@ -1342,6 +1357,15 @@ async function previewStudioVoice(voiceId) {
       await showNotice({
         title: t("voiceWorkflow.planTitle"),
         body: t("voiceWorkflow.planBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
+    if (code === "VOICE_MODEL_NOT_INCLUDED") {
+      await showNotice({
+        title: t("voiceWorkflow.modelTitle"),
+        body: t("voiceWorkflow.modelBody"),
         buttonLabel: t("common.close")
       });
       return;
@@ -1412,6 +1436,16 @@ async function handleVoiceBlock(response) {
     await showNotice({
       title: t("voiceWorkflow.planTitle"),
       body: t("voiceWorkflow.planBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_MODEL_NOT_INCLUDED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("voiceWorkflow.modelTitle"),
+      body: t("voiceWorkflow.modelBody"),
       buttonLabel: t("common.close")
     });
     return;
@@ -1814,7 +1848,7 @@ function aiVideoPage() {
             (voiceBusy ? " disabled" : "") + '>' +
             (state.voice.catalog || []).map(voice =>
               '<option value="' + escapeHtml(voice.id) + '"' + (voice.id === selected ? " selected" : "") + '>' +
-                escapeHtml(voice.name + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) +
+                escapeHtml(voice.name + " · " + voiceTierLabel(voice) + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) +
               '</option>'
             ).join("") +
           '</select>' +
@@ -1939,7 +1973,7 @@ function voicePage() {
     '</select><select id="voiceStudioVoice" class="select">' +
       (catalog.length
         ? catalog.map(voice => '<option value="' + escapeHtml(voice.id) + '">' +
-            escapeHtml(voice.name + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) + '</option>').join("")
+            escapeHtml(voice.name + " · " + voiceTierLabel(voice) + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) + '</option>').join("")
         : '<option value="">' + t("voice.loadingVoices") + '</option>') +
     '</select><button id="voiceStudioPreview" class="button primary" type="button"' + (!defaultVoice ? " disabled" : "") + '>▶ ' +
       t("voice.previewButton") + '</button></div>' +
@@ -1954,7 +1988,7 @@ function voicePage() {
         ? catalog.map(voice =>
             '<div class="voice-card"><div class="voice-top"><div class="voice-avatar">' +
               escapeHtml(String(voice.name || "?").slice(0,1).toUpperCase()) + '</div><div class="voice-meta"><b>' +
-              escapeHtml(voice.name) + '</b><span>' + escapeHtml(voiceStyleLabel(voice)) + '</span></div></div>' +
+              escapeHtml(voice.name) + '</b><span>' + escapeHtml(voiceTierLabel(voice) + " · " + voiceStyleLabel(voice)) + '</span></div></div>' +
               '<div class="wave">' + Array.from({ length: 22 }, (_, i) => '<i style="height:' + (7 + (i * 11) % 17) + 'px"></i>').join("") + '</div>' +
               '<button class="button ghost small voice-studio-card-preview" data-voice-id="' + escapeHtml(voice.id) + '" type="button">▶ ' +
                 t("common.preview") + '</button></div>'
