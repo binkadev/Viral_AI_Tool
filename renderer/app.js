@@ -20,6 +20,13 @@ const state = {
     loading: false,
     statusCheckedAt: 0
   },
+  billing: {
+    catalog: null,
+    invoices: null,
+    loading: false,
+    loadedAt: 0,
+    errorCode: null
+  },
   speech: {
     mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
     language: saved.speech?.language || "auto",
@@ -257,6 +264,7 @@ const navItems = [
   { id: "library", icon: "▦", label: "nav.library" },
   { id: "accounts", icon: "◎", label: "nav.accounts" },
   { id: "usage", icon: "◔", label: "nav.usage" },
+  { id: "billing", icon: "◇", label: "nav.billing" },
   { id: "settings", icon: "⚙", label: "nav.settings" }
 ];
 
@@ -271,6 +279,7 @@ const pageMeta = {
   library: ["nav.library", "library.breadcrumb"],
   accounts: ["nav.accounts", "accounts.breadcrumb"],
   usage: ["nav.usage", "usage.breadcrumb"],
+  billing: ["nav.billing", "billing.breadcrumb"],
   settings: ["nav.settings", "settings.breadcrumb"]
 };
 
@@ -2418,6 +2427,7 @@ const pages = {
   library: libraryPage,
   accounts: accountsPage,
   usage: usagePage,
+  billing: billingPage,
   settings: settingsPage
 };
 
