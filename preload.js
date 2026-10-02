@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getAuthStatus: () => ipcRenderer.invoke('auth:status'),
   login: payload => ipcRenderer.invoke('auth:login', payload),
   getAccount: () => ipcRenderer.invoke('auth:me'),
+  getAccountSessions: () => ipcRenderer.invoke('auth:sessions'),
+  revokeAccountSession: sessionId => ipcRenderer.invoke('auth:revoke-session', sessionId),
   logout: () => ipcRenderer.invoke('auth:logout'),
   getBillingCatalog: () => ipcRenderer.invoke('billing:catalog'),
   getBillingInvoices: () => ipcRenderer.invoke('billing:invoices'),
