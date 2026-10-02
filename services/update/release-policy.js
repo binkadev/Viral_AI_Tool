@@ -66,6 +66,14 @@ function validateManifest(manifest) {
     return { ok: false, code: "UPDATE_CHANNEL_INVALID" };
   }
 
+  const parsedManifestVersion = parseVersion(manifest.version);
+  if (
+    manifest.channel === "stable" &&
+    parsedManifestVersion?.prerelease
+  ) {
+    return { ok: false, code: "UPDATE_CHANNEL_VERSION_MISMATCH" };
+  }
+
   if (manifest.platform !== "win32" || manifest.arch !== "x64") {
     return { ok: false, code: "UPDATE_PLATFORM_MISMATCH" };
   }
