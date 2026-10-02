@@ -501,6 +501,16 @@ ipcMain.handle('app:download-update', async () => {
 });
 
 ipcMain.handle('app:launch-update', async () => {
+  if (getActiveWorkCount() > 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'UPDATE_WORK_IN_PROGRESS',
+        details: { activeWorkCount: getActiveWorkCount() }
+      }
+    };
+  }
+
   const record = lastVerifiedUpdate;
   if (!record?.filePath) {
     return { ok: false, error: { code: 'UPDATE_NOT_DOWNLOADED', details: {} } };
@@ -549,11 +559,17 @@ ipcMain.handle('app:launch-update', async () => {
     };
   }
 
+  forceClose = true;
+  setTimeout(() => {
+    try { app.quit(); } catch {}
+  }, 700);
+
   return {
     ok: true,
     data: {
       version: record.version,
-      fileName: record.fileName
+      fileName: record.fileName,
+      appWillQuit: true
     }
   };
 });
