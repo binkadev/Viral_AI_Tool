@@ -445,23 +445,34 @@ function trimRefreshSessionsForUser(userId) {
   if (changed) persistRefreshSessions();
 }
 
-function issueSession(user) {
+function issueSession(user, { req = null, sessionId = null, createdAt = null } = {}) {
   syncUserCommercialState(user);
   pruneRefreshSessions();
   trimRefreshSessionsForUser(user.id);
+
   const accessToken = newToken();
   const refreshToken = newToken();
   const accessExpiresAt = tokenExpiry(ACCESS_TTL_MS);
   const refreshExpiresAt = tokenExpiry(REFRESH_TTL_MS);
+  const resolvedSessionId = sessionId || ("ses_" + newToken(12));
+  const now = Date.now();
+
+  const clientName = String(req?.headers?.["x-viral-ai-client"] || "unknown").slice(0, 80);
+  const clientVersion = String(req?.headers?.["x-viral-ai-version"] || "unknown").slice(0, 80);
 
   accessTokens.set(accessToken, {
     userId: user.id,
+    sessionId: resolvedSessionId,
     expiresAt: Date.parse(accessExpiresAt)
   });
   refreshTokens.set(hashSessionToken(refreshToken), {
     userId: user.id,
+    sessionId: resolvedSessionId,
     expiresAt: Date.parse(refreshExpiresAt),
-    createdAt: Date.now()
+    createdAt: Number(createdAt || now),
+    lastUsedAt: now,
+    clientName,
+    clientVersion
   });
   persistRefreshSessions();
 
@@ -551,6 +562,63 @@ function bearerToken(req) {
   const header = String(req.headers.authorization || "");
   if (!header.startsWith("Bearer ")) return null;
   return header.slice(7).trim() || null;
+}
+
+function currentAccessRecord(req) {
+  const token = bearerToken(req);
+  if (!token) return null;
+
+  const record = accessTokens.get(token);
+  if (!record || Date.now() >= Number(record.expiresAt || 0)) return null;
+  return record;
+}
+
+function publicSessionsForUser(userId, currentSessionId = null) {
+  pruneRefreshSessions();
+
+  const byId = new Map();
+  for (const record of refreshTokens.values()) {
+    if (record?.userId !== userId || !record.sessionId) continue;
+
+    const existing = byId.get(record.sessionId);
+    if (!existing || Number(record.lastUsedAt || 0) > Number(existing.lastUsedAt || 0)) {
+      byId.set(record.sessionId, record);
+    }
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => Number(b.lastUsedAt || 0) - Number(a.lastUsedAt || 0))
+    .map(record => ({
+      id: record.sessionId,
+      clientName: record.clientName || "unknown",
+      clientVersion: record.clientVersion || "unknown",
+      createdAt: new Date(Number(record.createdAt || 0)).toISOString(),
+      lastUsedAt: new Date(Number(record.lastUsedAt || record.createdAt || 0)).toISOString(),
+      expiresAt: new Date(Number(record.expiresAt || 0)).toISOString(),
+      current: record.sessionId === currentSessionId
+    }));
+}
+
+function revokeSession(userId, sessionId) {
+  const target = String(sessionId || "");
+  let removed = false;
+
+  for (const [key, record] of refreshTokens.entries()) {
+    if (record?.userId === userId && record?.sessionId === target) {
+      refreshTokens.delete(key);
+      removed = true;
+    }
+  }
+
+  for (const [token, record] of accessTokens.entries()) {
+    if (record?.userId === userId && record?.sessionId === target) {
+      accessTokens.delete(token);
+      removed = true;
+    }
+  }
+
+  if (removed) persistRefreshSessions();
+  return removed;
 }
 
 function authenticate(req) {
@@ -1534,7 +1602,7 @@ async function handle(req, res) {
     }
 
     clearAttempts(clientKey);
-    const session = issueSession(user);
+    const session = issueSession(user, { req });
     audit("auth.login.succeeded", req, { userId: user.id, email: user.email });
     return json(res, 200, session);
   }
@@ -1571,8 +1639,15 @@ async function handle(req, res) {
 
     refreshTokens.delete(tokenKey);
     persistRefreshSessions();
-    const session = issueSession(user);
-    audit("auth.refresh.succeeded", req, { userId: user.id });
+    const session = issueSession(user, {
+      req,
+      sessionId: record.sessionId || null,
+      createdAt: record.createdAt || Date.now()
+    });
+    audit("auth.refresh.succeeded", req, {
+      userId: user.id,
+      sessionId: record.sessionId || null
+    });
     return json(res, 200, session);
   }
 
@@ -1589,6 +1664,42 @@ async function handle(req, res) {
 
     audit("auth.logout", req, { userId: user?.id || null });
     return json(res, 200, { loggedOut: true });
+  }
+
+  if (method === "GET" && url.pathname === "/v1/account/sessions") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const current = currentAccessRecord(req);
+    return json(res, 200, {
+      sessions: publicSessionsForUser(user.id, current?.sessionId || null)
+    });
+  }
+
+  const sessionDeleteMatch = url.pathname.match(/^\/v1\/account\/sessions\/([A-Za-z0-9._-]{8,160})$/);
+  if (method === "DELETE" && sessionDeleteMatch) {
+    if (requestRateLimited(req, "session-revoke", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.session_revoke", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
+
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const sessionId = sessionDeleteMatch[1];
+    const current = currentAccessRecord(req);
+    const removed = revokeSession(user.id, sessionId);
+
+    audit("auth.session.revoked", req, {
+      userId: user.id,
+      sessionId,
+      current: current?.sessionId === sessionId
+    });
+
+    return json(res, 200, {
+      revoked: removed,
+      currentSessionRevoked: current?.sessionId === sessionId
+    });
   }
 
   if (method === "GET" && url.pathname === "/v1/account/me") {
