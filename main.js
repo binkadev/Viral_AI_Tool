@@ -30,6 +30,12 @@ const {
   serializeTranslationError
 } = require('./services/translation');
 const {
+  createService: createTtsService,
+  activeTtsCount,
+  cancelAllTts,
+  serializeTtsError
+} = require('./services/tts');
+const {
   createService: createVoiceService,
   activeVoiceCount,
   cancelAllVoice,
@@ -140,6 +146,19 @@ function translationService() {
     backendUrl: cloudConfig.backendUrl || '',
     getAccessToken: () => sessionStore?.getAccessToken() || null,
     appVersion: app.getVersion()
+  });
+}
+
+function ttsService() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+
+  return createTtsService({
+    backendUrl: cloudConfig.backendUrl || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion(),
+    userDataPath: app.getPath('userData')
   });
 }
 
@@ -877,6 +896,76 @@ ipcMain.handle('voice:cancel', async (_event, jobId) => {
     console.error('[VoiceCancel]', serialized.code, serialized.technicalMessage);
     return { ok: false, cancelled: false, error: { code: serialized.code } };
   }
+});
+
+ipcMain.handle('tts:status', async () => {
+  try {
+    await refreshSessionIfNeeded();
+    return await ttsService().status();
+  } catch (error) {
+    const serialized = serializeTtsError(error);
+    console.error('[TtsStatus]', serialized.code, serialized.technicalMessage);
+    return { ready: false, code: serialized.code, voices: [] };
+  }
+});
+
+ipcMain.handle('tts:start', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    await refreshSessionIfNeeded();
+
+    const data = await ttsService().start({
+      jobId: safePayload.jobId,
+      defaultVoiceId: safePayload.defaultVoiceId,
+      voiceMap: safePayload.voiceMap && typeof safePayload.voiceMap === 'object' ? safePayload.voiceMap : {},
+      speed: Number(safePayload.speed || 1),
+      style: typeof safePayload.style === 'string' ? safePayload.style : 'natural',
+      segments: Array.isArray(safePayload.segments) ? safePayload.segments : [],
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('tts:progress', progress);
+        }
+      }
+    });
+
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeTtsError(error);
+    console.error('[TTS]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('tts:cancel', async (_event, jobId) => {
+  if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false, cancelled: false };
+
+  try {
+    return {
+      ok: true,
+      cancelled: await ttsService().cancel(jobId)
+    };
+  } catch (error) {
+    const serialized = serializeTtsError(error);
+    console.error('[TtsCancel]', serialized.code, serialized.technicalMessage);
+    return { ok: false, cancelled: false, error: { code: serialized.code } };
+  }
+});
+
+ipcMain.handle('tts:asset-url', async (_event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath.trim()) return null;
+
+  const root = path.resolve(app.getPath('userData'), 'tts-cache') + path.sep;
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(root) || !fs.existsSync(resolved)) return null;
+
+  return pathToFileURL(resolved).href;
 });
 
 ipcMain.handle('app:set-locale', async (_event, locale) => {
