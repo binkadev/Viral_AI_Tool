@@ -41,6 +41,7 @@ const IS_PRODUCTION = String(process.env.VIRAL_AI_ENV || "development").toLowerC
 const STATE_DRIVER = String(
   process.env.VIRAL_AI_STATE_DRIVER || (IS_PRODUCTION ? "sqlite" : "json")
 ).toLowerCase();
+const TRUST_PROXY = String(process.env.VIRAL_AI_TRUST_PROXY || "false").toLowerCase() === "true";
 
 if (IS_PRODUCTION && STATE_DRIVER !== "sqlite") {
   throw new Error("Production mode requires VIRAL_AI_STATE_DRIVER=sqlite.");
@@ -322,6 +323,16 @@ function checkGatewayReceipt(service, userId, clientJobId, body) {
 }
 
 function requestIp(req) {
+  if (TRUST_PROXY) {
+    const forwarded = String(req.headers?.["x-forwarded-for"] || "")
+      .split(",")[0]
+      .trim();
+
+    if (/^[A-Fa-f0-9:.]{2,80}$/.test(forwarded)) {
+      return forwarded;
+    }
+  }
+
   return String(req.socket?.remoteAddress || "unknown").slice(0, 120);
 }
 
@@ -1659,6 +1670,7 @@ async function handle(req, res) {
       durableState: true,
       stateDriver: STATE_DRIVER,
       environment: IS_PRODUCTION ? "production" : "development",
+      trustProxy: TRUST_PROXY,
       stateRecovered: Boolean(durableState.recovery?.()),
       shuttingDown
     });
