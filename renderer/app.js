@@ -4293,6 +4293,39 @@ function bind() {
     await refreshCloudUiState({ rerender: true });
   };
 
+  const billingLogin = $("billingLogin");
+  if (billingLogin) billingLogin.onclick = () => openLoginModal();
+
+  const billingRetry = $("billingRetry");
+  if (billingRetry) billingRetry.onclick = () => loadBillingData({ rerender: true });
+
+  const billingRefresh = $("billingRefresh");
+  if (billingRefresh) billingRefresh.onclick = async () => {
+    billingRefresh.disabled = true;
+    await refreshCloudUiState({ rerender: false });
+    await loadBillingData({ rerender: true });
+  };
+
+  document.querySelectorAll(".billing-upgrade").forEach(node => {
+    node.onclick = () => startBillingUpgrade(node.dataset.planId);
+  });
+
+  document.querySelectorAll(".billing-downgrade").forEach(node => {
+    node.onclick = () => scheduleBillingDowngrade(
+      node.dataset.planId,
+      node.dataset.planName || node.dataset.planId
+    );
+  });
+
+  const billingCancel = $("billingCancel");
+  if (billingCancel) billingCancel.onclick = () => cancelBillingPlan();
+
+  const billingResume = $("billingResume");
+  if (billingResume) billingResume.onclick = () => resumeBillingPlan();
+
+  const billingPortal = $("billingPortal");
+  if (billingPortal) billingPortal.onclick = () => openBillingPortal();
+
   document.querySelectorAll(".reveal-output").forEach((node) => {
     node.onclick = (event) => {
       event.stopPropagation();
@@ -4546,12 +4579,22 @@ function render() {
   bind();
   save();
 
-  if (["ai-video", "settings", "voice", "usage"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
+  if (["ai-video", "settings", "voice", "usage", "billing"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
     const cloudStale = !state.cloud.config ||
       !state.cloud.statusCheckedAt ||
       Date.now() - state.cloud.statusCheckedAt > 30000;
     if (cloudStale && !state.cloud.loading) {
       setTimeout(() => refreshCloudUiState({ rerender: true }), 0);
+    }
+  }
+
+  if (state.page === "billing" && window.desktopAPI?.getBillingCatalog) {
+    const billingStale = !state.billing.catalog ||
+      !state.billing.loadedAt ||
+      Date.now() - state.billing.loadedAt > 30000;
+
+    if (billingStale && !state.billing.loading && state.cloud.auth?.authenticated) {
+      setTimeout(() => loadBillingData({ rerender: true }), 0);
     }
   }
 
