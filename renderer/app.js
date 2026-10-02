@@ -34,7 +34,9 @@ const state = {
   release: {
     info: null,
     loading: false,
-    loadedAt: 0
+    loadedAt: 0,
+    checking: false,
+    update: null
   },
   speech: {
     mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
@@ -2807,6 +2809,91 @@ function releaseChannelLabel(channel) {
   return t("settings.releaseDevelopment");
 }
 
+function releaseUpdateCopy(update) {
+  const code = update?.code || "";
+  if (code === "UPDATE_AVAILABLE") {
+    return {
+      tone: "success",
+      title: t("settings.updateAvailableTitle", { version: update.version || "—" }),
+      body: t("settings.updateAvailableBody")
+    };
+  }
+  if (code === "UPDATE_NOT_NEWER") {
+    return {
+      tone: "success",
+      title: t("settings.updateCurrentTitle"),
+      body: t("settings.updateCurrentBody")
+    };
+  }
+  if (code === "UPDATE_NOT_PUBLISHED") {
+    return {
+      tone: "neutral",
+      title: t("settings.updateNotPublishedTitle"),
+      body: t("settings.updateNotPublishedBody")
+    };
+  }
+  if (code === "UPDATE_PREVIEW_NOT_ALLOWED") {
+    return {
+      tone: "neutral",
+      title: t("settings.updatePreviewBlockedTitle"),
+      body: t("settings.updatePreviewBlockedBody")
+    };
+  }
+  if (code) {
+    return {
+      tone: "warning",
+      title: t("settings.updateFailedTitle"),
+      body: t("settings.updateFailedBody")
+    };
+  }
+  return null;
+}
+
+async function checkReleaseUpdate() {
+  if (!window.desktopAPI?.checkForUpdates || state.release.checking) return;
+
+  state.release.checking = true;
+  state.release.update = null;
+  if (state.page === "settings") render();
+
+  try {
+    const response = await window.desktopAPI.checkForUpdates();
+    if (response?.ok) {
+      state.release.update = {
+        ...(response.data?.decision || {}),
+        manifest: response.data?.manifest || null
+      };
+    } else {
+      state.release.update = {
+        code: response?.error?.code || "UPDATE_REQUEST_FAILED"
+      };
+    }
+  } catch {
+    state.release.update = { code: "UPDATE_NETWORK" };
+  } finally {
+    state.release.checking = false;
+  }
+
+  if (state.page === "settings") render();
+}
+
+async function openLatestReleasePage() {
+  const url =
+    state.release.update?.manifest?.releasePage ||
+    state.release.info?.releasePageUrl ||
+    null;
+  if (!url) return;
+
+  const result = await window.desktopAPI?.openExternal?.(url);
+  if (!result?.ok) {
+    await showNotice({
+      title: t("settings.updateOpenFailedTitle"),
+      body: t("settings.updateOpenFailedBody"),
+      buttonLabel: t("common.close")
+    });
+  }
+}
+
 function settingsPage() {
   const settings = [
     [t("settings.autosave"), t("settings.autosaveDesc"), true],
@@ -2857,6 +2944,25 @@ function settingsPage() {
         '<div><span>' + t("settings.releaseChannel") + '</span><b>' +
           escapeHtml(releaseChannelLabel(releaseInfo?.channel)) + '</b></div>' +
       '</div>' +
+      (() => {
+        const updateCopy = releaseUpdateCopy(state.release.update);
+        const status = updateCopy
+          ? '<div class="release-update-status ' + updateCopy.tone + '"><div><b>' +
+              escapeHtml(updateCopy.title) + '</b><span>' + escapeHtml(updateCopy.body) + '</span></div></div>'
+          : '';
+        const available = state.release.update?.code === "UPDATE_AVAILABLE";
+        return status +
+          '<div class="release-actions">' +
+            '<button id="checkReleaseUpdate" class="button ghost" type="button"' +
+              (state.release.checking ? ' disabled' : '') + '>' +
+              (state.release.checking ? t("settings.updateChecking") : t("settings.updateCheck")) +
+            '</button>' +
+            (available
+              ? '<button id="openReleasePage" class="button primary" type="button">' +
+                  t("settings.updateOpenRelease") + '</button>'
+              : '') +
+          '</div>';
+      })() +
     '</div>';
 
   const accountCard =
@@ -5141,6 +5247,12 @@ function bind() {
     state.scale = event.target.value;
     render();
   };
+
+  const checkReleaseUpdateButton = $("checkReleaseUpdate");
+  if (checkReleaseUpdateButton) checkReleaseUpdateButton.onclick = () => checkReleaseUpdate();
+
+  const openReleasePageButton = $("openReleasePage");
+  if (openReleasePageButton) openReleasePageButton.onclick = () => openLatestReleasePage();
 
   const saveCloudConfig = $("saveCloudConfig");
   if (saveCloudConfig) saveCloudConfig.onclick = saveDeveloperCloudConfig;
