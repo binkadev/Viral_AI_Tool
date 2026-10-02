@@ -276,6 +276,44 @@ function assertCloudJobAllowed(user, service) {
   return publicEntitlements(planRef);
 }
 
+function allowedVoiceCatalog(user) {
+  const entitlements = publicEntitlements(user?.planId || user?.plan);
+  const allowedTiers = new Set(entitlements.models?.voice || []);
+
+  return voiceProvider.publicCatalog().filter(voice =>
+    allowedTiers.has(String(voice?.tier || "standard"))
+  );
+}
+
+function assertVoiceSelectionAllowed(user, voiceId) {
+  const requested = String(voiceId || "").trim();
+  if (!requested) return true;
+
+  const voice = voiceProvider.publicCatalog().find(item => String(item.id) === requested);
+  if (!voice) {
+    const error = new Error("Voice is not available.");
+    error.code = "VOICE_NOT_FOUND";
+    throw error;
+  }
+
+  const entitlements = publicEntitlements(user?.planId || user?.plan);
+  const allowedTiers = new Set(entitlements.models?.voice || []);
+  const tier = String(voice.tier || "standard");
+
+  if (!allowedTiers.has(tier)) {
+    const error = new Error("This voice tier is not included in the current plan.");
+    error.code = "MODEL_NOT_INCLUDED";
+    error.details = {
+      voiceId: requested,
+      tier,
+      planId: entitlements.planId
+    };
+    throw error;
+  }
+
+  return true;
+}
+
 function reservedMinutesForUser(userId) {
   let total = 0;
 
@@ -798,7 +836,7 @@ async function handle(req, res) {
       ...base,
       ready: allowed && base.ready === true,
       code: allowed ? base.code : "PLAN_REQUIRED",
-      catalog: allowed ? (base.catalog || []) : [],
+      catalog: allowed ? allowedVoiceCatalog(user) : [],
       entitlements,
       quota: {
         ...quotaSnapshot(user),
@@ -813,7 +851,11 @@ async function handle(req, res) {
 
     try {
       assertService(user.planId || user.plan, "voice");
-      return json(res, 200, voiceJobs.catalog());
+      const catalog = voiceJobs.catalog();
+      return json(res, 200, {
+        ...catalog,
+        voices: allowedVoiceCatalog(user)
+      });
     } catch (err) {
       return error(res, err?.code === "PLAN_REQUIRED" ? 403 : 400, err?.code || "VOICE_FAILED");
     }
@@ -829,12 +871,13 @@ async function handle(req, res) {
 
     try {
       assertFeature(user.planId || user.plan, "voicePreview");
+      assertVoiceSelectionAllowed(user, body?.voiceId);
       const preview = await voiceJobs.preview(user.id, body, controller.signal);
       return binary(res, 200, preview.buffer, preview.contentType);
     } catch (err) {
       const code = err?.code || "VOICE_FAILED";
       const status =
-        code === "PLAN_REQUIRED" ? 403 :
+        code === "PLAN_REQUIRED" || code === "MODEL_NOT_INCLUDED" ? 403 :
         code === "VOICE_PREVIEW_RATE_LIMITED" ? 429 :
         code === "VOICE_PREVIEW_INVALID" || code === "VOICE_NOT_FOUND" ? 400 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
@@ -853,13 +896,29 @@ async function handle(req, res) {
     const body = await readJson(req);
 
     try {
+      assertService(user.planId || user.plan, "voice");
+
+      const assignments = body?.assignments && typeof body.assignments === "object"
+        ? body.assignments
+        : {};
+      const requestedVoiceIds = new Set([
+        assignments.defaultVoiceId,
+        ...Object.values(assignments.bySpeaker && typeof assignments.bySpeaker === "object"
+          ? assignments.bySpeaker
+          : {})
+      ].filter(Boolean));
+
+      for (const voiceId of requestedVoiceIds) {
+        assertVoiceSelectionAllowed(user, voiceId);
+      }
+
       const result = voiceJobs.create(user.id, key, body);
       return json(res, result.created ? 201 : 200, result.job);
     } catch (err) {
       const code = err?.code || "VOICE_FAILED";
       const status =
         code === "VOICE_TOO_LARGE" ? 413 :
-        code === "PLAN_REQUIRED" ? 403 :
+        code === "PLAN_REQUIRED" || code === "MODEL_NOT_INCLUDED" ? 403 :
         code === "CONCURRENCY_LIMIT" ? 429 :
         code === "QUOTA_EXCEEDED" ? 402 :
         code === "JOB_CONFLICT" ? 409 :
