@@ -55,6 +55,8 @@ function stableApiError(status, payload = {}) {
     TRANSLATION_TOO_LARGE: "TRANSLATION_TOO_LARGE",
     TRANSLATION_RESULT_INVALID: "TRANSLATION_RESULT_INVALID",
     QUOTA_EXCEEDED: "TRANSLATION_QUOTA_EXCEEDED",
+    PLAN_REQUIRED: "TRANSLATION_PLAN_REQUIRED",
+    CONCURRENCY_LIMIT: "TRANSLATION_CONCURRENCY_LIMIT",
     JOB_CONFLICT: "TRANSLATION_JOB_CONFLICT",
     JOB_NOT_FOUND: "TRANSLATION_JOB_NOT_FOUND",
     SERVICE_UNAVAILABLE: "TRANSLATION_UNAVAILABLE"
@@ -67,8 +69,14 @@ function stableApiError(status, payload = {}) {
     });
   }
 
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return clientError("TRANSLATION_AUTH_REQUIRED", "Authentication is required.", { status });
+  }
+  if (status === 403) {
+    return clientError("TRANSLATION_PLAN_REQUIRED", "The current plan does not include this feature.", { status });
+  }
+  if (status === 429) {
+    return clientError("TRANSLATION_CONCURRENCY_LIMIT", "The active Cloud job limit has been reached.", { status });
   }
   if (status === 402) {
     return clientError("TRANSLATION_QUOTA_EXCEEDED", "Cloud allowance is insufficient.", { status });
