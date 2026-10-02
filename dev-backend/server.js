@@ -134,7 +134,11 @@ function restoreSpeechJobs() {
       result: null
     };
 
-    if (job.state === "completed") {
+    if (
+      ["settling", "settled"].includes(job.billingState) ||
+      Number(job.chargedMinutes || 0) > 0 ||
+      job.state === "completed"
+    ) {
       job.state = "failed";
       job.errorCode = "RESULT_NOT_RETAINED";
       job.progress = 100;
@@ -287,7 +291,10 @@ function checkGatewayReceipt(service, userId, clientJobId, body) {
     throw err;
   }
 
-  if (receipt?.state === "completed" || Number(receipt?.chargedMinutes || 0) > 0) {
+  if (
+    ["settling", "completed"].includes(receipt?.state) ||
+    Number(receipt?.chargedMinutes || 0) > 0
+  ) {
     const err = new Error("Completed job result was not retained by the gateway.");
     err.code = "JOB_RESULT_NOT_RETAINED";
     throw err;
@@ -1404,12 +1411,17 @@ async function processSpeechJob(job) {
 
       syncUserCommercialState(user);
       const requestedCharge = Math.max(1, Number(job.reservedMinutes || job.estimatedMinutes || 1));
+
+      job.billingState = "settling";
+      persistSpeechJobs();
+
       const charge = belongsToCurrentBillingPeriod(user, job.billingPeriodEnd)
         ? chargeUserQuota(user, "speech", requestedCharge)
         : requestedCharge;
 
       job.chargedMinutes = charge;
       job.reservedMinutes = 0;
+      job.billingState = "settled";
       job.result = result;
       job.state = "completed";
       job.progress = 100;
@@ -1439,6 +1451,12 @@ async function processSpeechJob(job) {
 translationJobs.configureQuotaHooks({
   reserve: reserveCloudQuota,
   settle: payload => {
+    if (payload.outcome === "completed") {
+      updateGatewayReceiptByJobId("translation", payload.jobId, {
+        state: "settling"
+      });
+    }
+
     const result = settleCloudQuota(payload);
     updateGatewayReceiptByJobId("translation", payload.jobId, {
       state: payload.outcome,
@@ -1451,6 +1469,12 @@ translationJobs.configureQuotaHooks({
 voiceJobs.configureQuotaHooks({
   reserve: reserveCloudQuota,
   settle: payload => {
+    if (payload.outcome === "completed") {
+      updateGatewayReceiptByJobId("voice", payload.jobId, {
+        state: "settling"
+      });
+    }
+
     const result = settleCloudQuota(payload);
     updateGatewayReceiptByJobId("voice", payload.jobId, {
       state: payload.outcome,
@@ -2321,6 +2345,7 @@ async function handle(req, res) {
       reservedMinutes: estimatedMinutes,
       billingPeriodEnd: user.subscription?.currentPeriodEnd || user.quota?.resetAt || null,
       chargedMinutes: 0,
+      billingState: "pending",
       state: "awaiting_upload",
       progress: 0,
       result: null,
