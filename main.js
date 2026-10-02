@@ -41,7 +41,10 @@ const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
-const { checkForUpdate } = require('./services/update/update-client');
+const {
+  checkForUpdate,
+  downloadVerifiedInstaller
+} = require('./services/update/update-client');
 
 let mainWindow;
 let sessionStore;
@@ -49,6 +52,7 @@ let cloudConfigStore;
 let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
+let lastVerifiedUpdate = null;
 
 function releaseInfo() {
   let metadata = {};
@@ -443,6 +447,91 @@ ipcMain.handle('app:check-update', async () => {
       }
     };
   }
+});
+
+ipcMain.handle('app:download-update', async () => {
+  const current = releaseInfo();
+
+  if (!current.updateManifestUrl) {
+    return {
+      ok: false,
+      error: { code: 'UPDATE_NOT_CONFIGURED', details: {} }
+    };
+  }
+
+  try {
+    const result = await downloadVerifiedInstaller({
+      current,
+      manifestUrl: current.updateManifestUrl,
+      outputDir: path.join(app.getPath('userData'), 'updates'),
+      allowPreview: current.channel === 'preview',
+      allowLocalhost: !app.isPackaged
+    });
+
+    lastVerifiedUpdate = {
+      filePath: result.filePath,
+      version: result.version,
+      fileName: result.fileName,
+      sha256: result.sha256,
+      sizeBytes: result.sizeBytes
+    };
+
+    return {
+      ok: true,
+      data: {
+        version: result.version,
+        fileName: result.fileName,
+        sizeBytes: result.sizeBytes
+      }
+    };
+  } catch (error) {
+    console.error('[UpdateDownload]', error?.code || error?.message);
+    lastVerifiedUpdate = null;
+    return {
+      ok: false,
+      error: {
+        code: error?.code || 'UPDATE_DOWNLOAD_FAILED',
+        details: error?.details && typeof error.details === 'object'
+          ? { status: error.details.status || null }
+          : {}
+      }
+    };
+  }
+});
+
+ipcMain.handle('app:launch-update', async () => {
+  const record = lastVerifiedUpdate;
+  if (!record?.filePath) {
+    return { ok: false, error: { code: 'UPDATE_NOT_DOWNLOADED', details: {} } };
+  }
+
+  const root = path.resolve(path.join(app.getPath('userData'), 'updates'));
+  const target = path.resolve(record.filePath);
+
+  if (
+    target !== path.join(root, path.basename(target)) ||
+    path.extname(target).toLowerCase() !== '.exe' ||
+    !fs.existsSync(target)
+  ) {
+    lastVerifiedUpdate = null;
+    return { ok: false, error: { code: 'UPDATE_INSTALLER_INVALID', details: {} } };
+  }
+
+  const launchError = await shell.openPath(target);
+  if (launchError) {
+    return {
+      ok: false,
+      error: { code: 'UPDATE_INSTALLER_LAUNCH_FAILED', details: {} }
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      version: record.version,
+      fileName: record.fileName
+    }
+  };
 });
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
