@@ -121,11 +121,16 @@ jobs:
           $artifacts = @()
           $lines = foreach ($file in $files) {
             $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            $artifacts += [ordered]@{
+            $artifact = [ordered]@{
               file = $file.Name
               sizeBytes = $file.Length
               sha256 = $hash
             }
+            if ($channel -eq "stable" -and $file.Extension -eq ".exe") {
+              $encodedName = [uri]::EscapeDataString($file.Name).Replace("%20", "%20")
+              $artifact.downloadUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/download/v$($pkg.version)/$encodedName"
+            }
+            $artifacts += $artifact
             "$hash  $($file.Name)"
           }
 
