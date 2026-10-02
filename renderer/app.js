@@ -470,7 +470,7 @@ function downloadPage() {
     subscription?.cancelAtPeriodEnd
       ? t("usage.cancelAtPeriodEnd", { date: accountDateLabel(subscription.currentPeriodEnd) })
       : subscription?.pendingPlanId
-        ? t("usage.planChangesNextCycle", { plan: subscription.pendingPlanId, date: accountDateLabel(subscription.currentPeriodEnd) })
+        ? t("usage.planChangesNextCycle", { plan: subscription.pendingPlanName || subscription.pendingPlanId, date: accountDateLabel(subscription.currentPeriodEnd) })
         : "";
 
   const offlineNotice = offlineSnapshot
