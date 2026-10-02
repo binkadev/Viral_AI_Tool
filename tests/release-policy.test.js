@@ -32,6 +32,18 @@ assert.strictEqual(validateManifest(stableManifest).ok, true);
 assert.strictEqual(
   validateManifest({
     ...stableManifest,
+    version: "0.15.0-beta.1",
+    artifacts: [{
+      ...artifact,
+      file: "Viral AI Tool-0.15.0-beta.1-x64.exe",
+      downloadUrl: "https://github.com/binkadev/Viral_AI_Tool/releases/download/v0.15.0-beta.1/Viral%20AI%20Tool-0.15.0-beta.1-x64.exe"
+    }]
+  }).code,
+  "UPDATE_CHANNEL_VERSION_MISMATCH"
+);
+assert.strictEqual(
+  validateManifest({
+    ...stableManifest,
     artifacts: [{ ...artifact, downloadUrl: "https://example.com/update.exe" }]
   }).code,
   "UPDATE_INSTALLER_INVALID"
