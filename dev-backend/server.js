@@ -936,6 +936,8 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
+      syncUserCommercialState(user);
+      assertSubscriptionAccess(user.subscription);
       assertService(effectivePlanId(user), "voice");
       const catalog = voiceJobs.catalog();
       return json(res, 200, {
@@ -943,7 +945,11 @@ async function handle(req, res) {
         voices: allowedVoiceCatalog(user)
       });
     } catch (err) {
-      return error(res, err?.code === "PLAN_REQUIRED" ? 403 : 400, err?.code || "VOICE_FAILED");
+      return error(
+        res,
+        ["PLAN_REQUIRED", "SUBSCRIPTION_INACTIVE"].includes(err?.code) ? 403 : 400,
+        err?.code || "VOICE_FAILED"
+      );
     }
   }
 
@@ -956,6 +962,8 @@ async function handle(req, res) {
     req.on("aborted", () => controller.abort());
 
     try {
+      syncUserCommercialState(user);
+      assertSubscriptionAccess(user.subscription);
       assertFeature(effectivePlanId(user), "voicePreview");
       assertVoiceSelectionAllowed(user, body?.voiceId);
       const preview = await voiceJobs.preview(user.id, body, controller.signal);
@@ -1198,7 +1206,7 @@ async function handle(req, res) {
       assertCloudJobAllowed(user, "speech");
     } catch (err) {
       const status =
-        err?.code === "PLAN_REQUIRED" ? 403 :
+        ["PLAN_REQUIRED", "SUBSCRIPTION_INACTIVE"].includes(err?.code) ? 403 :
         err?.code === "CONCURRENCY_LIMIT" ? 429 :
         400;
       return error(res, status, err?.code || "BAD_REQUEST");
