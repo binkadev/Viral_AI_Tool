@@ -568,7 +568,7 @@ async function refreshCloudUiState({ rerender = false } = {}) {
     state.cloud.loading = false;
   }
 
-  if (rerender && ["ai-video", "settings"].includes(state.page)) render();
+  if (rerender && ["ai-video", "settings", "usage"].includes(state.page)) render();
   return state.cloud;
 }
 
@@ -1925,17 +1925,71 @@ function accountsPage() {
 }
 
 function usagePage() {
-  const usage = [
-    [t("usage.dubbing"), "620"],
-    [t("usage.renderMinutes"), "410"],
-    [t("usage.downloads"), "286"],
-    [t("usage.runs"), "204"]
+  const auth = state.cloud.auth;
+  const account = state.cloud.account;
+  const user = account?.user || null;
+  const quota = account?.quota || null;
+  const usage = account?.usage || null;
+  const authenticated = auth?.authenticated === true;
+
+  if (!authenticated) {
+    return '<div class="card card-pad account-empty">' +
+      '<div class="eyebrow">' + t("usage.currentPlan") + '</div>' +
+      '<h3>' + t("usage.signInRequiredTitle") + '</h3>' +
+      '<p class="muted">' + t("usage.signInRequiredBody") + '</p>' +
+      '<button id="usageLogin" class="button primary" type="button">' + t("account.signIn") + '</button>' +
+    '</div>';
+  }
+
+  const total = Number(quota?.totalMinutes);
+  const remaining = Number(quota?.remainingMinutes);
+  const explicitUsed = Number(quota?.usedMinutes);
+  const used = Number.isFinite(explicitUsed)
+    ? Math.max(0, explicitUsed)
+    : Number.isFinite(total) && Number.isFinite(remaining)
+      ? Math.max(0, total - remaining)
+      : NaN;
+  const percent = Number.isFinite(total) && total > 0 && Number.isFinite(used)
+    ? Math.max(0, Math.min(100, Math.round((used / total) * 100)))
+    : 0;
+
+  const resetAt = quota?.resetAt ? new Date(quota.resetAt) : null;
+  const resetLabel = resetAt && !Number.isNaN(resetAt.getTime())
+    ? resetAt.toLocaleDateString(state.locale === "vi" ? "vi-VN" : "en-US")
+    : "—";
+
+  const items = [
+    [t("usage.speechMinutes"), usage?.speechMinutes],
+    [t("usage.translationMinutes"), usage?.translationMinutes],
+    [t("usage.voiceMinutes"), usage?.voiceMinutes],
+    [t("usage.exportMinutes"), usage?.exportMinutes]
   ];
-  return '<div class="grid-2"><div class="card card-pad"><div class="eyebrow">' + t("usage.currentPlan") + "</div><h3>Creator Pro</h3><p class=\"muted\">" +
-    t("usage.creditsRemaining") + '</p><button class="button primary" type="button">' + t("usage.upgrade") + "</button></div>" +
-    '<div class="card card-pad"><div class="eyebrow">' + t("usage.monthlyUsage") + '</div><div class="stat-value">1,520 / 4,000</div><div class="bar"><i style="width:38%"></i></div></div></div>' +
-    '<div class="section-head"><div><h3>' + t("usage.breakdown") + "</h3></div></div>" +
-    '<div class="usage-grid">' + usage.map((x) => '<div class="stat-card"><div class="stat-label">' + x[0] + '</div><div class="stat-value">' + x[1] + "</div></div>").join("") + "</div>";
+
+  const allowance = Number.isFinite(remaining)
+    ? t("usage.minutesRemaining", { minutes: Math.max(0, Math.floor(remaining)), date: resetLabel })
+    : t("usage.allowanceUnavailable");
+
+  const monthlyValue = Number.isFinite(used) && Number.isFinite(total)
+    ? Math.floor(used).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " / " +
+      Math.floor(total).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " " + t("usage.minutesUnit")
+    : "—";
+
+  return '<div class="grid-2">' +
+    '<div class="card card-pad"><div class="eyebrow">' + t("usage.currentPlan") + '</div><h3>' +
+      escapeHtml(user?.plan || auth?.plan || "—") + '</h3><p class="muted">' + escapeHtml(allowance) + '</p>' +
+      '<div class="row"><button id="usageRefresh" class="button ghost" type="button">' + t("usage.refresh") + '</button>' +
+      '<button id="usageLogout" class="button ghost" type="button">' + t("account.signOut") + '</button></div></div>' +
+    '<div class="card card-pad"><div class="eyebrow">' + t("usage.monthlyUsage") + '</div><div class="stat-value">' +
+      escapeHtml(monthlyValue) + '</div><div class="bar"><i style="width:' + percent + '%"></i></div>' +
+      '<p class="muted">' + escapeHtml(t("usage.usedPercent", { percent })) + '</p></div>' +
+  '</div>' +
+  '<div class="section-head"><div><h3>' + t("usage.breakdown") + '</h3><p>' + t("usage.breakdownDesc") + '</p></div></div>' +
+  '<div class="usage-grid">' + items.map((item) => {
+    const value = Number(item[1]);
+    return '<div class="stat-card"><div class="stat-label">' + item[0] + '</div><div class="stat-value">' +
+      (Number.isFinite(value) ? Math.max(0, Math.floor(value)).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") : "—") +
+      '</div><div class="muted">' + t("usage.minutesUnit") + '</div></div>';
+  }).join("") + '</div>';
 }
 
 function settingsPage() {
@@ -3617,6 +3671,18 @@ function bind() {
     node.onclick = () => toast(node.dataset.connected === "1" ? t("accounts.already") : t("accounts.next"));
   });
 
+  const usageLogin = $("usageLogin");
+  if (usageLogin) usageLogin.onclick = () => openLoginModal();
+
+  const usageLogout = $("usageLogout");
+  if (usageLogout) usageLogout.onclick = () => logoutAccount();
+
+  const usageRefresh = $("usageRefresh");
+  if (usageRefresh) usageRefresh.onclick = async () => {
+    usageRefresh.disabled = true;
+    await refreshCloudUiState({ rerender: true });
+  };
+
   document.querySelectorAll(".reveal-output").forEach((node) => {
     node.onclick = (event) => {
       event.stopPropagation();
@@ -3870,7 +3936,7 @@ function render() {
   bind();
   save();
 
-  if (["ai-video", "settings", "voice"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
+  if (["ai-video", "settings", "voice", "usage"].includes(state.page) && window.desktopAPI?.getCloudConfig) {
     const cloudStale = !state.cloud.config ||
       !state.cloud.statusCheckedAt ||
       Date.now() - state.cloud.statusCheckedAt > 30000;
