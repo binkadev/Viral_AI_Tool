@@ -344,6 +344,67 @@ function hashPassword(password, salt) {
 }
 
 function seedUser() {
+  if (IS_PRODUCTION) {
+    if (users.size > 0) {
+      return { email: null, password: null, production: true, created: false };
+    }
+
+    const email = String(process.env.VIRAL_AI_BOOTSTRAP_EMAIL || "").trim().toLowerCase();
+    const password = String(process.env.VIRAL_AI_BOOTSTRAP_PASSWORD || "");
+    const requestedPlan = String(process.env.VIRAL_AI_BOOTSTRAP_PLAN || "free").trim();
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      throw new Error("Production bootstrap requires VIRAL_AI_BOOTSTRAP_EMAIL.");
+    }
+    if (password.length < 12) {
+      throw new Error("Production bootstrap password must contain at least 12 characters.");
+    }
+    if (!isKnownPlan(requestedPlan)) {
+      throw new Error("VIRAL_AI_BOOTSTRAP_PLAN is invalid.");
+    }
+
+    const plan = resolvePlan(requestedPlan);
+    const salt = crypto.randomBytes(16).toString("hex");
+
+    users.set(email, {
+      id: "usr_" + newToken(12),
+      email,
+      name: String(process.env.VIRAL_AI_BOOTSTRAP_NAME || "Account Owner").trim().slice(0, 120),
+      planId: plan.id,
+      plan: plan.displayName,
+      subscription: createSubscription({
+        planId: plan.id,
+        status: "active",
+        now: Date.now(),
+        periodDays: 30,
+        graceDays: 3
+      }),
+      salt,
+      passwordHash: hashPassword(password, salt),
+      quota: {
+        totalMinutes: plan.monthlyMinutes,
+        usedMinutes: 0,
+        remainingMinutes: plan.monthlyMinutes,
+        resetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      usage: {
+        speechMinutes: 0,
+        translationMinutes: 0,
+        voiceMinutes: 0,
+        exportMinutes: 0
+      }
+    });
+
+    persistUsers();
+    auditLog.write("auth.bootstrap.created", {
+      userId: users.get(email).id,
+      email,
+      planId: plan.id
+    });
+
+    return { email, password: null, production: true, created: true };
+  }
+
   const email = "demo@viral-ai.local";
   const password = "ViralAI123!";
   const salt = crypto.randomBytes(16).toString("hex");
@@ -381,7 +442,7 @@ function seedUser() {
   });
 
   persistUsers();
-  return { email, password };
+  return { email, password, production: false, created: !users.has(email) };
 }
 
 const demo = seedUser();
@@ -1589,6 +1650,8 @@ async function handle(req, res) {
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured(),
       durableState: true,
+      stateDriver: STATE_DRIVER,
+      environment: IS_PRODUCTION ? "production" : "development",
       stateRecovered: Boolean(durableState.recovery?.())
     });
   }
