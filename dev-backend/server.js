@@ -56,8 +56,16 @@ function seedUser() {
     salt,
     passwordHash: hashPassword(password, salt),
     quota: {
+      totalMinutes: 2000,
+      usedMinutes: 1500,
       remainingMinutes: 500,
       resetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    usage: {
+      speechMinutes: 720,
+      translationMinutes: 390,
+      voiceMinutes: 390,
+      exportMinutes: 0
     }
   });
 
@@ -615,7 +623,8 @@ async function handle(req, res) {
         name: user.name,
         plan: user.plan
       },
-      quota: user.quota
+      quota: user.quota,
+      usage: user.usage || null
     });
   }
 
