@@ -668,6 +668,7 @@ async function renderLocalizedVideo({
 
       const chain = [
         "aresample=48000",
+        "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo",
         "asetpts=PTS-STARTPTS",
         ...atempoFilters(speedFactor),
         "atrim=duration=" + slotDuration.toFixed(3),
@@ -684,7 +685,8 @@ async function renderLocalizedVideo({
 
     if (mixOriginalAudio && metadata.audioCodec) {
       filters.push(
-        "[0:a:0]aresample=48000,volume=" + safeOriginalVolume.toFixed(3) + "[original]"
+        "[0:a:0]aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=" +
+        safeOriginalVolume.toFixed(3) + "[original]"
       );
       audioInputs.unshift("[original]");
     }
