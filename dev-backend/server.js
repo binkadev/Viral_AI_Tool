@@ -924,7 +924,13 @@ async function handle(req, res) {
         planId: user.planId || resolvePlan(user.plan).id,
         plan: user.plan
       },
-      subscription: publicSubscription(user.subscription),
+      subscription: {
+        ...publicSubscription(user.subscription),
+        planName: resolvePlan(user.subscription?.planId || effectivePlanId(user)).displayName,
+        pendingPlanName: user.subscription?.pendingPlanId
+          ? resolvePlan(user.subscription.pendingPlanId).displayName
+          : null
+      },
       entitlements: publicEntitlements(effectivePlanId(user)),
       cloudActivity: {
         activeJobs: activeCloudJobsForUser(user.id),
