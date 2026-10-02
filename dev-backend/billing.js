@@ -185,8 +185,6 @@ function consumeCheckoutSession(id) {
   session.consumedAt = Date.now();
   checkoutSessions.delete(key);
   persistState();
-  portalSessions.delete(key);
-  persistState();
   return { ...session };
 }
 
@@ -221,6 +219,9 @@ function consumePortalSession(id) {
     persistState();
     throw billingError("BILLING_SESSION_EXPIRED", "Portal session expired.");
   }
+
+  portalSessions.delete(key);
+  persistState();
   return { ...session };
 }
 
