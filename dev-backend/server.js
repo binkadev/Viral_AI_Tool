@@ -2035,6 +2035,7 @@ async function handle(req, res) {
     const body = await readJson(req);
 
     try {
+      const receiptCheck = checkGatewayReceipt("voice", user.id, key, body);
       assertService(effectivePlanId(user), "voice");
 
       const assignments = body?.assignments && typeof body.assignments === "object"
@@ -2052,6 +2053,15 @@ async function handle(req, res) {
       }
 
       const result = voiceJobs.create(user.id, key, body);
+
+      saveGatewayReceipt("voice", user.id, key, {
+        fingerprint: receiptCheck.fingerprint,
+        jobId: result.job?.jobId || null,
+        state: result.job?.state || "queued",
+        chargedMinutes: Number(result.job?.chargedMinutes || 0),
+        createdAt: receiptCheck.receipt?.createdAt || new Date().toISOString()
+      });
+
       return json(res, result.created ? 201 : 200, result.job);
     } catch (err) {
       const code = err?.code || "VOICE_FAILED";
@@ -2060,7 +2070,7 @@ async function handle(req, res) {
         code === "PLAN_REQUIRED" || code === "MODEL_NOT_INCLUDED" || code === "SUBSCRIPTION_INACTIVE" ? 403 :
         code === "CONCURRENCY_LIMIT" ? 429 :
         code === "QUOTA_EXCEEDED" ? 402 :
-        code === "JOB_CONFLICT" ? 409 :
+        code === "JOB_CONFLICT" || code === "JOB_RESULT_NOT_RETAINED" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
         code === "JOB_NOT_FOUND" ? 404 :
         400;
@@ -2093,7 +2103,12 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
-      return json(res, 200, voiceJobs.cancel(user.id, decodeURIComponent(voiceCancelMatch[1])));
+      const jobId = decodeURIComponent(voiceCancelMatch[1]);
+      const result = voiceJobs.cancel(user.id, jobId);
+      if (result?.cancelled) {
+        updateGatewayReceiptByJobId("voice", jobId, { state: "cancelled" });
+      }
+      return json(res, 200, result);
     } catch (err) {
       return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "VOICE_FAILED");
     }
@@ -2105,7 +2120,13 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
-      return json(res, 200, voiceJobs.get(user.id, decodeURIComponent(voiceJobMatch[1])));
+      const jobId = decodeURIComponent(voiceJobMatch[1]);
+      const result = voiceJobs.get(user.id, jobId);
+      updateGatewayReceiptByJobId("voice", jobId, {
+        state: result?.state || "unknown",
+        chargedMinutes: Number(result?.chargedMinutes || 0)
+      });
+      return json(res, 200, result);
     } catch (err) {
       return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "VOICE_FAILED");
     }
