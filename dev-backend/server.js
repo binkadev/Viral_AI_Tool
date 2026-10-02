@@ -47,6 +47,8 @@ const RATE_WINDOW_MS = 5 * 60 * 1000;
 const GENERAL_RATE_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 240;
 const MAX_SENSITIVE_REQUESTS_PER_WINDOW = 60;
+const STALE_UPLOAD_JOB_MS = 24 * 60 * 60 * 1000;
+const JOB_RECEIPT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_AUDIO_BYTES = Math.max(
   1024 * 1024,
   Math.min(100 * 1024 * 1024, Number(process.env.VIRAL_AI_PROVIDER_MAX_AUDIO_BYTES || 24 * 1024 * 1024))
@@ -891,6 +893,76 @@ function pruneRequestBuckets(now = Date.now()) {
     if (active.length) requestBuckets.set(key, active);
     else requestBuckets.delete(key);
   }
+}
+
+function pruneSpeechJobHistory(now = Date.now()) {
+  let changed = false;
+  const removedIds = new Set();
+
+  for (const [jobId, job] of jobs.entries()) {
+    const createdAt = Date.parse(job?.createdAt || "") || 0;
+    const completedAt = Date.parse(job?.completedAt || "") || createdAt;
+    const terminal = ["completed", "failed", "cancelled"].includes(job?.state);
+
+    if (
+      job?.state === "awaiting_upload" &&
+      createdAt > 0 &&
+      now - createdAt > STALE_UPLOAD_JOB_MS
+    ) {
+      job.reservedMinutes = 0;
+      cleanupUpload(job);
+      jobs.delete(jobId);
+      removedIds.add(jobId);
+      changed = true;
+      continue;
+    }
+
+    if (terminal && completedAt > 0 && now - completedAt > JOB_RECEIPT_TTL_MS) {
+      cleanupUpload(job);
+      jobs.delete(jobId);
+      removedIds.add(jobId);
+      changed = true;
+    }
+  }
+
+  if (removedIds.size) {
+    for (const [key, jobId] of idempotency.entries()) {
+      if (removedIds.has(jobId)) {
+        idempotency.delete(key);
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) persistSpeechJobs();
+}
+
+function pruneGatewayReceipts(now = Date.now()) {
+  const all = durableState.get("jobs", {});
+  let changed = false;
+  const next = { ...all };
+
+  for (const service of ["translation", "voice"]) {
+    const section = all?.[service];
+    if (!section?.gatewayReceipts) continue;
+
+    const receipts = {};
+    for (const [key, receipt] of Object.entries(section.gatewayReceipts)) {
+      const updatedAt = Date.parse(receipt?.updatedAt || receipt?.createdAt || "") || 0;
+      if (updatedAt > 0 && now - updatedAt <= JOB_RECEIPT_TTL_MS) {
+        receipts[key] = receipt;
+      } else {
+        changed = true;
+      }
+    }
+
+    next[service] = {
+      ...section,
+      gatewayReceipts: receipts
+    };
+  }
+
+  if (changed) durableState.set("jobs", next);
 }
 
 function safeEqualHex(a, b) {
@@ -2434,6 +2506,8 @@ const maintenanceTimer = setInterval(() => {
   pruneRefreshSessions();
   pruneBillingEvents();
   pruneRequestBuckets();
+  pruneSpeechJobHistory();
+  pruneGatewayReceipts();
   billing.pruneExpiredSessions();
 }, 60 * 1000);
 maintenanceTimer.unref?.();
