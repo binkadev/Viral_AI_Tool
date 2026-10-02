@@ -3320,3 +3320,95 @@ html[data-scale="compact"] .hero p{font-size:13px}
     text-align:left;
   }
 }
+
+
+/* Release metadata */
+.release-info-card{
+  overflow:hidden;
+}
+.release-info-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+}
+.release-info-head h3{
+  margin:4px 0 5px;
+}
+.release-info-head p{
+  margin:0;
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.5;
+  max-width:560px;
+}
+.release-channel-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:0 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.release-channel-badge.stable{
+  color:var(--success);
+  border-color:color-mix(in srgb,var(--success) 25%,var(--line));
+  background:color-mix(in srgb,var(--success) 8%,var(--surface-solid));
+}
+.release-channel-badge.preview{
+  color:var(--warning);
+  border-color:color-mix(in srgb,var(--warning) 28%,var(--line));
+  background:color-mix(in srgb,var(--warning) 8%,var(--surface-solid));
+}
+.release-channel-badge.development{
+  color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 24%,var(--line));
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface-solid));
+}
+.release-facts{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin-top:18px;
+}
+.release-facts > div{
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.release-facts span{
+  display:block;
+  margin-bottom:4px;
+  color:var(--text-faint);
+  font-size:9px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.release-facts b{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:11px;
+}
+.release-facts code{
+  font-size:10px;
+}
+@media(max-width:900px){
+  .release-facts{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+@media(max-width:640px){
+  .release-info-head{
+    flex-direction:column;
+  }
+  .release-facts{
+    grid-template-columns:1fr;
+  }
+}
