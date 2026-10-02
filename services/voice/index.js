@@ -153,7 +153,10 @@ function createService({ backendUrl, getAccessToken, appVersion, userDataPath })
         return {
           mode: "cloud",
           ready: data?.ready === true,
-          code: rawCode === "PLAN_REQUIRED" ? "VOICE_PLAN_REQUIRED" : rawCode,
+          code:
+            rawCode === "PLAN_REQUIRED" ? "VOICE_PLAN_REQUIRED" :
+            rawCode === "SUBSCRIPTION_INACTIVE" ? "VOICE_SUBSCRIPTION_INACTIVE" :
+            rawCode,
           limits: data?.limits || null,
           catalog: Array.isArray(data?.catalog) ? data.catalog : [],
           quota: data?.quota || null,
