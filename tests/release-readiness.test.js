@@ -72,12 +72,18 @@ for (const required of [
 }
 
 for (const required of [
+  "Verify tagged release commit is on master",
   "Require Windows code signing for tagged release",
   "WINDOWS_CSC_LINK",
   "WINDOWS_CSC_KEY_PASSWORD",
+  "Smoke-test Windows installer",
+  "Installed Viral AI Tool exited during startup smoke test",
+  "Verify Authenticode signatures for tagged release",
+  "Get-AuthenticodeSignature",
   "Run release policy tests",
   "Verify Windows release assets",
   "Generate release manifest and SHA-256 checksums",
+  "Validate generated release manifest",
   "RELEASE-MANIFEST.json",
   "SHA256SUMS.txt",
   "gh release create"
