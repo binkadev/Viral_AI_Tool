@@ -1154,6 +1154,8 @@ window.I18N = (() => {
         connectionBody: "The translation did not finish. Check your connection and try again; Viral AI Tool will recover the existing job when possible.",
         conflictTitle: "Previous translation job cannot be reused",
         conflictBody: "The content changed since the previous attempt. Viral AI Tool will not combine results from different content.",
+        resultNotRetainedTitle: "The previous result is no longer retained",
+        resultNotRetainedBody: "The previous job completed and allowance was recorded. The app will not rerun the same job ID automatically. Create a new translation job if needed.",
         failedTitle: "Translation could not be completed",
         failedBody: "Your original transcript is safe. Try again or check the Cloud connection.",
         projectSummary: "Translation summary",
