@@ -225,6 +225,20 @@ async function downloadVerifiedInstaller({
     try { fs.rmSync(target, { force: true }); } catch {}
     fs.renameSync(partial, target);
 
+    try {
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isFile()) continue;
+
+        const candidate = path.join(root, entry.name);
+        if (candidate === target) continue;
+
+        const lower = entry.name.toLowerCase();
+        if (lower.endsWith(".exe") || lower.includes(".part-")) {
+          try { fs.rmSync(candidate, { force: true }); } catch {}
+        }
+      }
+    } catch {}
+
     return {
       version: decision.version,
       channel: decision.channel,
