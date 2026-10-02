@@ -62,6 +62,8 @@ const MAX_AUDIO_BYTES = Math.max(
   1024 * 1024,
   Math.min(100 * 1024 * 1024, Number(process.env.VIRAL_AI_PROVIDER_MAX_AUDIO_BYTES || 24 * 1024 * 1024))
 );
+let shuttingDown = false;
+
 const MAX_DURATION_SECONDS = Math.max(
   60,
   Math.min(4 * 60 * 60, Number(process.env.VIRAL_AI_MAX_AUDIO_SECONDS || 7200))
@@ -1643,6 +1645,10 @@ async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
   const method = req.method || "GET";
 
+  if (shuttingDown && url.pathname !== "/health") {
+    return error(res, 503, "SERVER_SHUTTING_DOWN");
+  }
+
   if (method === "GET" && url.pathname === "/health") {
     return json(res, 200, {
       ok: true,
@@ -1653,7 +1659,8 @@ async function handle(req, res) {
       durableState: true,
       stateDriver: STATE_DRIVER,
       environment: IS_PRODUCTION ? "production" : "development",
-      stateRecovered: Boolean(durableState.recovery?.())
+      stateRecovered: Boolean(durableState.recovery?.()),
+      shuttingDown
     });
   }
 
