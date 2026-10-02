@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const {
   probeVideo,
@@ -513,6 +514,29 @@ ipcMain.handle('app:launch-update', async () => {
     path.extname(target).toLowerCase() !== '.exe' ||
     !fs.existsSync(target)
   ) {
+    lastVerifiedUpdate = null;
+    return { ok: false, error: { code: 'UPDATE_INSTALLER_INVALID', details: {} } };
+  }
+
+  try {
+    const stat = fs.statSync(target);
+    if (!stat.isFile() || stat.size !== Number(record.sizeBytes || 0)) {
+      lastVerifiedUpdate = null;
+      return { ok: false, error: { code: 'UPDATE_SIZE_MISMATCH', details: {} } };
+    }
+
+    const digest = crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(target))
+      .digest('hex');
+
+    const expected = String(record.sha256 || '').toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(expected) || digest !== expected) {
+      lastVerifiedUpdate = null;
+      try { fs.rmSync(target, { force: true }); } catch {}
+      return { ok: false, error: { code: 'UPDATE_CHECKSUM_MISMATCH', details: {} } };
+    }
+  } catch {
     lastVerifiedUpdate = null;
     return { ok: false, error: { code: 'UPDATE_INSTALLER_INVALID', details: {} } };
   }
