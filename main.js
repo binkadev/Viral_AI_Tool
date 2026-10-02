@@ -362,9 +362,10 @@ ipcMain.handle('auth:login', async (_event, payload) => {
     sessionStore.setSession(session);
 
     let account = null;
+    let verifiedAt = null;
     try {
       account = await authClient().me(session.accessToken);
-      if (account) sessionStore.setAccountSnapshot(account);
+      if (account) verifiedAt = sessionStore.setAccountSnapshot(account);
     } catch (error) {
       console.error('[AuthMeAfterLogin]', error?.code || error?.message);
     }
@@ -373,7 +374,9 @@ ipcMain.handle('auth:login', async (_event, payload) => {
       ok: true,
       data: {
         status: sessionStore.status(),
-        account
+        account,
+        offline: false,
+        verifiedAt
       }
     };
   } catch (error) {
