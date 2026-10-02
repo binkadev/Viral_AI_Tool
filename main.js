@@ -364,6 +364,7 @@ ipcMain.handle('auth:login', async (_event, payload) => {
     let account = null;
     try {
       account = await authClient().me(session.accessToken);
+      if (account) sessionStore.setAccountSnapshot(account);
     } catch (error) {
       console.error('[AuthMeAfterLogin]', error?.code || error?.message);
     }
@@ -394,15 +395,43 @@ ipcMain.handle('auth:me', async () => {
     }
 
     const account = await authClient().me(accessToken);
+    const verifiedAt = sessionStore.setAccountSnapshot(account);
+
     return {
       ok: true,
       data: {
         status: sessionStore.status(),
-        account
+        account,
+        offline: false,
+        verifiedAt
       }
     };
   } catch (error) {
     console.error('[AuthMe]', error?.code || error?.message);
+
+    const offlineCodes = new Set([
+      'AUTH_NETWORK',
+      'AUTH_TIMEOUT',
+      'AUTH_SERVICE_UNAVAILABLE'
+    ]);
+
+    if (offlineCodes.has(error?.code)) {
+      const cached = sessionStore?.getAccountSnapshot?.();
+      const status = sessionStore?.status();
+
+      if (cached?.account && status?.authenticated) {
+        return {
+          ok: true,
+          data: {
+            status,
+            account: cached.account,
+            offline: true,
+            verifiedAt: cached.verifiedAt || null
+          }
+        };
+      }
+    }
+
     return { ok: false, error: publicAuthError(error) };
   }
 });
