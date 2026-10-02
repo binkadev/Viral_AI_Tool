@@ -89,7 +89,10 @@ function createService({ backendUrl, getAccessToken, appVersion }) {
         return {
           mode: "cloud",
           ready: data?.ready === true,
-          code: rawCode === "PLAN_REQUIRED" ? "TRANSLATION_PLAN_REQUIRED" : rawCode,
+          code:
+            rawCode === "PLAN_REQUIRED" ? "TRANSLATION_PLAN_REQUIRED" :
+            rawCode === "SUBSCRIPTION_INACTIVE" ? "TRANSLATION_SUBSCRIPTION_INACTIVE" :
+            rawCode,
           limits: data?.limits || null,
           quota: data?.quota || null,
           entitlements: data?.entitlements || null
