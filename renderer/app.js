@@ -2949,6 +2949,41 @@ async function openLatestReleasePage() {
   }
 }
 
+async function exportSupportDiagnostics() {
+  const response = await window.desktopAPI?.exportDiagnostics?.();
+
+  if (!response?.ok) {
+    await showNotice({
+      title: t("settings.diagnosticsExportFailedTitle"),
+      body: t("settings.diagnosticsExportFailedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (response.data?.cancelled) return;
+
+  await showNotice({
+    title: t("settings.diagnosticsExportedTitle"),
+    body: t("settings.diagnosticsExportedBody", {
+      file: response.data?.fileName || "diagnostics.json",
+      count: Number(response.data?.logCount || 0)
+    }),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function openSupportLogs() {
+  const response = await window.desktopAPI?.openDiagnosticLogs?.();
+  if (response?.ok) return;
+
+  await showNotice({
+    title: t("settings.diagnosticsOpenFailedTitle"),
+    body: t("settings.diagnosticsOpenFailedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
 function settingsPage() {
   const settings = [
     [t("settings.autosave"), t("settings.autosaveDesc"), true],
@@ -3040,6 +3075,21 @@ function settingsPage() {
               : '') +
           '</div>';
       })() +
+    '</div>';
+
+  const supportCard =
+    '<div class="card card-pad diagnostics-card">' +
+      '<div class="diagnostics-head"><div><div class="eyebrow">' + t("settings.diagnosticsEyebrow") + '</div>' +
+        '<h3>' + t("settings.diagnosticsTitle") + '</h3><p>' + t("settings.diagnosticsDesc") + '</p></div>' +
+        '<span class="diagnostics-safe-badge">✓ ' + t("settings.diagnosticsRedacted") + '</span></div>' +
+      '<div class="diagnostics-privacy-note"><b>' + t("settings.diagnosticsPrivacyTitle") + '</b><span>' +
+        t("settings.diagnosticsPrivacy") + '</span></div>' +
+      '<div class="release-actions">' +
+        '<button id="exportDiagnostics" class="button primary" type="button">' +
+          t("settings.diagnosticsExport") + '</button>' +
+        '<button id="openDiagnosticLogs" class="button ghost" type="button">' +
+          t("settings.diagnosticsOpenLogs") + '</button>' +
+      '</div>' +
     '</div>';
 
   const accountCard =
@@ -3167,6 +3217,7 @@ function settingsPage() {
     '<div style="margin-top:14px"><label class="label">' + t("common.resolution") + '</label><select class="select"><option>1080p</option><option>4K</option></select></div>' +
     '</div>' +
     releaseCard +
+    supportCard +
     accountCard +
     developerCard +
     '</div>';
@@ -5156,6 +5207,12 @@ function bind() {
 
   const settingsLogin = $("settingsLogin");
   if (settingsLogin) settingsLogin.onclick = openLoginModal;
+
+  const exportDiagnostics = $("exportDiagnostics");
+  if (exportDiagnostics) exportDiagnostics.onclick = exportSupportDiagnostics;
+
+  const openDiagnosticLogs = $("openDiagnosticLogs");
+  if (openDiagnosticLogs) openDiagnosticLogs.onclick = openSupportLogs;
 
   const settingsLogout = $("settingsLogout");
   if (settingsLogout) settingsLogout.onclick = logoutAccount;
