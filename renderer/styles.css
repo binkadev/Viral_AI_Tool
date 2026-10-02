@@ -3201,3 +3201,122 @@ html[data-scale="compact"] .hero p{font-size:13px}
   font-size:10px;
   line-height:1.45;
 }
+
+
+/* Account security sessions */
+.account-security-head{
+  margin-top:28px;
+}
+.account-session-card{
+  overflow:hidden;
+}
+.account-session-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  padding:20px 22px 16px;
+  border-bottom:1px solid var(--line);
+}
+.account-session-header h3{
+  margin:4px 0 5px;
+}
+.account-session-header p{
+  margin:0;
+  color:var(--text-soft);
+  font-size:12px;
+  line-height:1.5;
+}
+.account-session-list{
+  display:grid;
+}
+.account-session-row{
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) auto;
+  align-items:center;
+  gap:13px;
+  min-height:76px;
+  padding:14px 22px;
+  border-bottom:1px solid var(--line);
+}
+.account-session-row:last-child{
+  border-bottom:0;
+}
+.account-session-icon{
+  width:36px;
+  height:36px;
+  display:grid;
+  place-items:center;
+  border-radius:11px;
+  background:var(--surface-soft);
+  color:var(--text-soft);
+  font-size:16px;
+}
+.account-session-copy{
+  min-width:0;
+}
+.account-session-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.account-session-title b{
+  font-size:12px;
+}
+.account-session-meta{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  margin-top:5px;
+  color:var(--text-faint);
+  font-size:10px;
+}
+.session-current-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:0 8px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--success) 10%,var(--surface-solid));
+  color:var(--success);
+  font-size:9px;
+  font-weight:800;
+}
+.session-current-note{
+  max-width:180px;
+  color:var(--text-faint);
+  font-size:10px;
+  line-height:1.4;
+  text-align:right;
+}
+.account-session-foot{
+  padding:12px 22px;
+  border-top:1px solid var(--line);
+  background:var(--surface-soft);
+  color:var(--text-soft);
+  font-size:10px;
+  line-height:1.5;
+}
+.account-session-none{
+  padding:24px 22px;
+  color:var(--text-soft);
+  font-size:12px;
+}
+.account-session-empty{
+  min-height:170px;
+}
+@media(max-width:760px){
+  .account-session-header{
+    flex-direction:column;
+  }
+  .account-session-row{
+    grid-template-columns:36px minmax(0,1fr);
+  }
+  .account-session-row > .button,
+  .session-current-note{
+    grid-column:2;
+    justify-self:start;
+    text-align:left;
+  }
+}
