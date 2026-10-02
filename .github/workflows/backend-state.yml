@@ -30,3 +30,8 @@ jobs:
           node --check dev-backend/billing.js
           node --check dev-backend/state-store.js
           node --check dev-backend/audit-log.js
+          node --check services/auth/auth-client.js
+          node --check main.js
+          node --check preload.js
+          node --check renderer/app.js
+          node --check renderer/i18n.js
