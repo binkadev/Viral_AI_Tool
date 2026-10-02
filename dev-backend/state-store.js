@@ -7,6 +7,11 @@ const DEFAULT_STATE = Object.freeze({
   users: {},
   refreshSessions: {},
   processedBillingEvents: {},
+  jobs: {
+    speech: { jobs: {}, idempotency: {} },
+    translation: { jobs: {}, idempotency: {} },
+    voice: { jobs: {}, idempotency: {} }
+  },
   billing: {
     checkoutSessions: {},
     portalSessions: {},
@@ -33,6 +38,17 @@ function mergeState(raw) {
     processedBillingEvents: input.processedBillingEvents && typeof input.processedBillingEvents === "object"
       ? input.processedBillingEvents
       : {},
+    jobs: {
+      speech: input.jobs?.speech && typeof input.jobs.speech === "object"
+        ? input.jobs.speech
+        : { jobs: {}, idempotency: {} },
+      translation: input.jobs?.translation && typeof input.jobs.translation === "object"
+        ? input.jobs.translation
+        : { jobs: {}, idempotency: {} },
+      voice: input.jobs?.voice && typeof input.jobs.voice === "object"
+        ? input.jobs.voice
+        : { jobs: {}, idempotency: {} }
+    },
     billing: {
       checkoutSessions: input.billing?.checkoutSessions && typeof input.billing.checkoutSessions === "object"
         ? input.billing.checkoutSessions
