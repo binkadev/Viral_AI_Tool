@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('ele
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 const { pathToFileURL } = require('url');
 const {
   probeVideo,
@@ -46,6 +47,7 @@ const {
   checkForUpdate,
   downloadVerifiedInstaller
 } = require('./services/update/update-client');
+const { createDiagnosticLogger } = require('./services/diagnostics/logger');
 
 let mainWindow;
 let sessionStore;
@@ -54,6 +56,8 @@ let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
 let lastVerifiedUpdate = null;
+let diagnosticLogger = null;
+let removeDiagnosticProcessHandlers = null;
 
 function releaseInfo() {
   let metadata = {};
@@ -394,6 +398,18 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.viralai.tool');
+
+  diagnosticLogger = createDiagnosticLogger({
+    userDataPath: app.getPath('userData'),
+    tempPath: app.getPath('temp')
+  });
+  removeDiagnosticProcessHandlers = diagnosticLogger.installProcessHandlers();
+  diagnosticLogger.info('app.started', {
+    release: releaseInfo(),
+    electron: process.versions.electron,
+    node: process.versions.node
+  });
+
   sessionStore = createSessionStore({
     userDataPath: app.getPath('userData'),
     safeStorage
@@ -413,7 +429,109 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('will-quit', () => {
+  try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
+  try { removeDiagnosticProcessHandlers?.(); } catch {}
+  removeDiagnosticProcessHandlers = null;
+});
+
 ipcMain.handle('app:version-info', () => releaseInfo());
+
+ipcMain.handle('diagnostics:open-folder', async () => {
+  if (!diagnosticLogger?.logsDir) {
+    return { ok: false, error: { code: 'DIAGNOSTICS_UNAVAILABLE', details: {} } };
+  }
+
+  const openError = await shell.openPath(diagnosticLogger.logsDir);
+  return openError
+    ? { ok: false, error: { code: 'DIAGNOSTICS_OPEN_FAILED', details: {} } }
+    : { ok: true };
+});
+
+ipcMain.handle('diagnostics:export', async () => {
+  if (!diagnosticLogger) {
+    return { ok: false, error: { code: 'DIAGNOSTICS_UNAVAILABLE', details: {} } };
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const suggestedName = 'viral-ai-diagnostics-' + stamp + '.json';
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Viral AI Tool diagnostics',
+    defaultPath: path.join(app.getPath('documents'), suggestedName),
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { ok: true, data: { cancelled: true } };
+  }
+
+  try {
+    const release = releaseInfo();
+    const logs = diagnosticLogger.readRecent(500);
+
+    const bundle = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      product: {
+        name: release.name,
+        version: release.version,
+        channel: release.channel,
+        commit: release.commit,
+        builtAt: release.builtAt,
+        platform: release.platform,
+        arch: release.arch,
+        packaged: release.packaged,
+        source: release.source
+      },
+      runtime: {
+        platform: process.platform,
+        arch: process.arch,
+        windowsRelease: process.platform === 'win32' ? os.release() : null,
+        electron: process.versions.electron || null,
+        chrome: process.versions.chrome || null,
+        node: process.versions.node || null
+      },
+      privacy: {
+        redacted: true,
+        accountDataIncluded: false,
+        credentialsIncluded: false,
+        cloudConfigurationIncluded: false,
+        userMediaPathsIncluded: false
+      },
+      logs
+    };
+
+    fs.writeFileSync(result.filePath, JSON.stringify(bundle, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600
+    });
+    try { fs.chmodSync(result.filePath, 0o600); } catch {}
+
+    diagnosticLogger.info('diagnostics.exported', {
+      logCount: logs.length,
+      bundleVersion: bundle.schemaVersion
+    });
+
+    return {
+      ok: true,
+      data: {
+        cancelled: false,
+        fileName: path.basename(result.filePath),
+        logCount: logs.length
+      }
+    };
+  } catch (error) {
+    diagnosticLogger.error('diagnostics.export_failed', {
+      name: error?.name,
+      message: error?.message
+    });
+    return {
+      ok: false,
+      error: { code: 'DIAGNOSTICS_EXPORT_FAILED', details: {} }
+    };
+  }
+});
 
 ipcMain.handle('app:check-update', async () => {
   const current = releaseInfo();
