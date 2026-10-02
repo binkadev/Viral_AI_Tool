@@ -13,13 +13,19 @@ const {
   publicEntitlements,
   assertFeature,
   assertService,
-  assertConcurrentJobs
+  assertConcurrentJobs,
+  PLAN_DEFINITIONS,
+  normalizePlanId
 } = require("./entitlements");
 const {
   createSubscription,
   publicSubscription,
   hasCloudAccess,
   reconcileSubscription,
+  markPaymentFailed,
+  markPaymentRecovered,
+  requestPlanChange,
+  requestCancellation,
   assertSubscriptionAccess
 } = require("./subscriptions");
 
@@ -53,6 +59,7 @@ const jobs = new Map();
 const idempotency = new Map();
 const uploadTokens = new Map();
 const serviceQuotaReservations = new Map();
+const processedBillingEvents = new Map();
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
@@ -121,6 +128,183 @@ function binary(res, status, buffer, contentType = "application/octet-stream") {
 
 function error(res, status, code) {
   return json(res, status, { error: { code } });
+}
+
+function billingSecret() {
+  return String(process.env.VIRAL_AI_BILLING_WEBHOOK_SECRET || "").trim();
+}
+
+function pruneBillingEvents() {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [eventId, createdAt] of processedBillingEvents.entries()) {
+    if (createdAt < cutoff) processedBillingEvents.delete(eventId);
+  }
+}
+
+function safeEqualText(left, right) {
+  try {
+    const a = Buffer.from(String(left || ""), "utf8");
+    const b = Buffer.from(String(right || ""), "utf8");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+async function readRawBody(req, maxBytes = MAX_BODY_BYTES) {
+  let size = 0;
+  const chunks = [];
+
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) {
+      const error = new Error("body too large");
+      error.code = "BODY_TOO_LARGE";
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function verifyBillingWebhook(req, rawBody) {
+  const secret = billingSecret();
+  if (!secret) {
+    const error = new Error("Billing webhook is not configured.");
+    error.code = "BILLING_NOT_CONFIGURED";
+    throw error;
+  }
+
+  const timestamp = Number(req.headers["x-viral-ai-billing-timestamp"] || 0);
+  const signature = String(req.headers["x-viral-ai-billing-signature"] || "").trim().toLowerCase();
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (!Number.isFinite(timestamp) || Math.abs(nowSeconds - timestamp) > 300) {
+    const error = new Error("Billing webhook timestamp is invalid.");
+    error.code = "BILLING_SIGNATURE_INVALID";
+    throw error;
+  }
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(String(timestamp) + ".")
+    .update(rawBody)
+    .digest("hex");
+
+  if (!/^[a-f0-9]{64}$/.test(signature) || !safeEqualText(signature, expected)) {
+    const error = new Error("Billing webhook signature is invalid.");
+    error.code = "BILLING_SIGNATURE_INVALID";
+    throw error;
+  }
+}
+
+function requireKnownPlanId(value) {
+  const normalized = normalizePlanId(value);
+  if (!value || !PLAN_DEFINITIONS[normalized]) {
+    const error = new Error("Billing plan is invalid.");
+    error.code = "PLAN_INVALID";
+    throw error;
+  }
+  return normalized;
+}
+
+function resetUserAllowance(user) {
+  const plan = resolvePlan(effectivePlanId(user));
+  user.quota = {
+    totalMinutes: plan.monthlyMinutes,
+    usedMinutes: 0,
+    remainingMinutes: plan.monthlyMinutes,
+    resetAt: user.subscription?.currentPeriodEnd || user.quota?.resetAt || null
+  };
+  user.usage = {
+    speechMinutes: 0,
+    translationMinutes: 0,
+    voiceMinutes: 0,
+    exportMinutes: 0
+  };
+}
+
+function applyBillingEvent(event) {
+  const eventId = String(event?.eventId || "").trim();
+  const type = String(event?.type || "").trim();
+  const userId = String(event?.userId || "").trim();
+
+  if (!/^[A-Za-z0-9._:-]{8,160}$/.test(eventId) || !type || !userId) {
+    const error = new Error("Billing event is invalid.");
+    error.code = "BILLING_EVENT_INVALID";
+    throw error;
+  }
+
+  pruneBillingEvents();
+  if (processedBillingEvents.has(eventId)) {
+    return { duplicate: true, eventId };
+  }
+
+  const user = findUserById(userId);
+  if (!user) {
+    const error = new Error("Billing user was not found.");
+    error.code = "BILLING_USER_NOT_FOUND";
+    throw error;
+  }
+
+  syncUserCommercialState(user);
+  const now = Number.isFinite(Number(event.occurredAt))
+    ? Number(event.occurredAt)
+    : Date.now();
+
+  if (type === "subscription.trial_started") {
+    const planId = requireKnownPlanId(event.planId);
+    user.subscription = createSubscription({
+      planId,
+      status: "trialing",
+      now,
+      trialDays: Math.max(1, Number(event.trialDays || 7)),
+      periodDays: Math.max(1, Number(event.periodDays || 30))
+    });
+    user.planId = planId;
+    user.plan = resolvePlan(planId).displayName;
+    resetUserAllowance(user);
+  } else if (type === "subscription.activated") {
+    const planId = requireKnownPlanId(event.planId || effectivePlanId(user));
+    user.subscription = createSubscription({
+      planId,
+      status: "active",
+      now,
+      periodDays: Math.max(1, Number(event.periodDays || 30))
+    });
+    user.planId = planId;
+    user.plan = resolvePlan(planId).displayName;
+    resetUserAllowance(user);
+  } else if (type === "payment.failed") {
+    markPaymentFailed(user.subscription, { now });
+  } else if (type === "payment.recovered") {
+    markPaymentRecovered(user.subscription, { now });
+  } else if (type === "subscription.plan_changed") {
+    const planId = requireKnownPlanId(event.planId);
+    const direction = event.effective === "period_end" ? "downgrade" : "upgrade";
+    requestPlanChange(user.subscription, planId, { direction, now });
+    syncUserCommercialState(user, now);
+  } else if (type === "subscription.cancel_requested") {
+    requestCancellation(user.subscription, { now, immediately: false });
+  } else if (type === "subscription.cancelled") {
+    requestCancellation(user.subscription, { now, immediately: true });
+  } else {
+    const error = new Error("Billing event type is unsupported.");
+    error.code = "BILLING_EVENT_UNSUPPORTED";
+    throw error;
+  }
+
+  syncUserCommercialState(user, now);
+  processedBillingEvents.set(eventId, Date.now());
+
+  return {
+    duplicate: false,
+    eventId,
+    userId: user.id,
+    subscription: publicSubscription(user.subscription),
+    planId: user.planId
+  };
 }
 
 async function readJson(req) {
@@ -858,6 +1042,32 @@ async function handle(req, res) {
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured()
     });
+  }
+
+  if (method === "POST" && url.pathname === "/v1/internal/billing/events") {
+    try {
+      const rawBody = await readRawBody(req);
+      verifyBillingWebhook(req, rawBody);
+
+      let event;
+      try {
+        event = JSON.parse(rawBody.toString("utf8"));
+      } catch {
+        return error(res, 400, "BILLING_EVENT_INVALID");
+      }
+
+      const result = applyBillingEvent(event);
+      return json(res, 200, result);
+    } catch (err) {
+      const code = err?.code || "BILLING_EVENT_INVALID";
+      const status =
+        code === "BILLING_NOT_CONFIGURED" ? 503 :
+        code === "BILLING_SIGNATURE_INVALID" ? 401 :
+        code === "BILLING_USER_NOT_FOUND" ? 404 :
+        code === "BILLING_EVENT_UNSUPPORTED" ? 422 :
+        400;
+      return error(res, status, code);
+    }
   }
 
   if (method === "POST" && url.pathname === "/v1/auth/login") {
