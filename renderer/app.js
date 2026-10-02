@@ -3852,6 +3852,24 @@ async function handleSpeechBlock(response, source) {
     return;
   }
 
+  if (code === "SERVICE_RESTARTED") {
+    await showNotice({
+      title: t("speech.restartTitle"),
+      body: t("speech.restartBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "RESULT_NOT_RETAINED") {
+    await showNotice({
+      title: t("speech.resultNotRetainedTitle"),
+      body: t("speech.resultNotRetainedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   await showNotice({
     title: t("speech.failedTitle"),
     body: t("speech.failedBody"),
