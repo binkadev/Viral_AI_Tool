@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   toggleMaximize: () => ipcRenderer.invoke('window:maximize-toggle'),
   close: () => ipcRenderer.invoke('window:close'),
   getVersionInfo: () => ipcRenderer.invoke('app:version-info'),
+  checkForUpdates: () => ipcRenderer.invoke('app:check-update'),
 
   selectVideos: () => ipcRenderer.invoke('files:select-videos'),
   selectOutputFolder: () => ipcRenderer.invoke('folder:select-output'),
