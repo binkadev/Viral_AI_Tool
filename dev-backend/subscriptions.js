@@ -50,6 +50,7 @@ function createSubscription({
     endedAt: null,
     periodDays: Math.max(1, Number(periodDays || 30)),
     graceDays: Math.max(0, Number(graceDays || 3)),
+    pastDueHours: 24,
     updatedAt: iso(current)
   };
 }
@@ -138,10 +139,17 @@ function reconcileSubscription(subscription, {
 
   if (subscription.status === "past_due") {
     const graceEnd = parseTime(subscription.graceEndsAt);
-    if (graceEnd !== null) subscription.status = current < graceEnd ? "grace_period" : "canceled";
-    if (subscription.status === "canceled") {
+    const pastDueAt = parseTime(subscription.pastDueAt);
+    const graceStartsAt = pastDueAt === null
+      ? current
+      : pastDueAt + Math.max(0, Number(subscription.pastDueHours || 24)) * 60 * 60 * 1000;
+
+    if (graceEnd !== null && current >= graceEnd) {
+      subscription.status = "canceled";
       subscription.canceledAt = subscription.canceledAt || iso(current);
-      subscription.endedAt = subscription.endedAt || iso(graceEnd || current);
+      subscription.endedAt = subscription.endedAt || iso(graceEnd);
+    } else if (current >= graceStartsAt) {
+      subscription.status = "grace_period";
     }
   } else if (subscription.status === "grace_period") {
     const graceEnd = parseTime(subscription.graceEndsAt);
