@@ -667,7 +667,6 @@ async function renderLocalizedVideo({
         : 1;
 
       const chain = [
-        "[" + inputIndex + ":a]",
         "aresample=48000",
         "asetpts=PTS-STARTPTS",
         ...atempoFilters(speedFactor),
@@ -676,7 +675,7 @@ async function renderLocalizedVideo({
       ];
 
       const label = "voice" + index;
-      filters.push(chain.join(",") + "[" + label + "]");
+      filters.push("[" + inputIndex + ":a]" + chain.join(",") + "[" + label + "]");
       voiceLabels.push("[" + label + "]");
     });
 
