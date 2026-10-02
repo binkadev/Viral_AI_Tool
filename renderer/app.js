@@ -852,6 +852,16 @@ async function handleTranslationBlock(response) {
     return;
   }
 
+  if (code === "TRANSLATION_QUOTA_EXCEEDED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("translation.quotaTitle"),
+      body: t("translation.quotaBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   if (code === "TRANSLATION_TOO_LARGE") {
     await showNotice({
       title: t("translation.tooLargeTitle"),
@@ -1022,6 +1032,7 @@ async function startTranslation() {
     };
   }
 
+  await refreshCloudUiState({ rerender: false });
   save();
   render();
   toast(t("translation.done"));
@@ -1349,6 +1360,16 @@ async function handleVoiceBlock(response) {
     return;
   }
 
+  if (code === "VOICE_QUOTA_EXCEEDED") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("voiceWorkflow.quotaTitle"),
+      body: t("voiceWorkflow.quotaBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   if (code === "VOICE_TOO_LARGE") {
     await showNotice({
       title: t("voiceWorkflow.tooLargeTitle"),
@@ -1529,6 +1550,7 @@ async function startVoiceGeneration() {
     };
   }
 
+  await refreshCloudUiState({ rerender: false });
   save();
   render();
   toast(t("voiceWorkflow.done"));
