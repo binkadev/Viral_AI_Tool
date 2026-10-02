@@ -19,7 +19,8 @@
     "test:release-policy": "node tests/release-policy.test.js",
     "test:release-assets": "node tests/release-assets.test.js",
     "test:release-readiness": "node tests/release-readiness.test.js",
-    "test:generated-manifest": "node tests/generated-manifest.test.js"
+    "test:generated-manifest": "node tests/generated-manifest.test.js",
+    "test:update-client": "node tests/update-client.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
