@@ -27,11 +27,16 @@ jobs:
       - name: Test backend restart and sessions
         run: node dev-backend/tests/server-restart.integration.test.js
 
+      - name: Test production SQLite mode
+        run: node dev-backend/tests/production-mode.integration.test.js
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
           node --check dev-backend/billing.js
           node --check dev-backend/state-store.js
+          node --check dev-backend/state-store-sqlite.js
+          node --check dev-backend/tests/production-mode.integration.test.js
           node --check dev-backend/audit-log.js
           node --check services/auth/auth-client.js
           node --check main.js
