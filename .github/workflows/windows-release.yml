@@ -60,16 +60,8 @@ jobs:
             throw "Tagged releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD repository secrets."
           }
 
-      - name: Verify branded Windows icon
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "assets/icon.ico")) {
-            throw "assets/icon.ico is missing."
-          }
-          $icon = Get-Item "assets/icon.ico"
-          if ($icon.Length -lt 4096) {
-            throw "assets/icon.ico looks invalid or too small."
-          }
+      - name: Verify Windows release assets
+        run: npm run test:release-assets
 
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
