@@ -45,6 +45,7 @@ function normalizeSegments(input) {
     const text = String(item?.text || "").trim();
     const start = Math.max(0, Number(item?.start || 0));
     const end = Math.max(start, Number(item?.end || start));
+    const speaker = item?.speaker ? String(item.speaker).trim() : null;
 
     if (!id || ids.has(id) || !text) {
       throw jobError("TRANSLATION_INPUT_INVALID", "Translation segment IDs or text are invalid.");
@@ -53,7 +54,7 @@ function normalizeSegments(input) {
     ids.add(id);
     totalChars += text.length;
 
-    return { id, start, end, text };
+    return { id, start, end, text, speaker };
   });
 
   if (totalChars > MAX_TOTAL_CHARS) {
@@ -188,6 +189,7 @@ async function processJob(job) {
         end: source.end,
         sourceText: source.text,
         text,
+        speaker: source.speaker || null,
         lengthRatio: meta.lengthRatio,
         timingRisk: meta.timingRisk
       };
