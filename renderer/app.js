@@ -759,7 +759,7 @@ async function refreshTranslationStatus({ rerender = false } = {}) {
     state.translation.statusCheckPending = false;
   }
 
-  if (rerender && state.page === "ai-video") render();
+  if (rerender && ["ai-video", "settings"].includes(state.page)) render();
   return state.translation.cloudStatus;
 }
 
@@ -1178,7 +1178,7 @@ async function refreshVoiceStatus({ rerender = false } = {}) {
     state.voice.statusCheckPending = false;
   }
 
-  if (rerender && state.page === "ai-video") render();
+  if (rerender && ["ai-video", "settings"].includes(state.page)) render();
   return state.voice.cloudStatus;
 }
 
@@ -3797,7 +3797,7 @@ function render() {
     }, 0);
   }
 
-  if (state.page === "ai-video" && state.translation.mode === "cloud" && window.desktopAPI?.getTranslationStatus) {
+  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getTranslationStatus) {
     const translationStale = !state.translation.cloudStatus ||
       !state.translation.statusCheckedAt ||
       Date.now() - state.translation.statusCheckedAt > 30000;
@@ -3807,7 +3807,7 @@ function render() {
     }
   }
 
-  if (state.page === "ai-video" && state.voice.mode === "cloud" && window.desktopAPI?.getVoiceStatus) {
+  if (["ai-video", "settings"].includes(state.page) && window.desktopAPI?.getVoiceStatus) {
     const voiceStale = !state.voice.cloudStatus ||
       !state.voice.statusCheckedAt ||
       Date.now() - state.voice.statusCheckedAt > 30000;
