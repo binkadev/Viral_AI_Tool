@@ -144,6 +144,16 @@ jobs:
             throw "Installed ProductVersion $($versionInfo.ProductVersion) does not match package version $($pkg.version)."
           }
 
+          $appProcess = Start-Process -FilePath $appExe -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($appProcess.HasExited) {
+            throw "Installed Viral AI Tool exited during startup smoke test with code $($appProcess.ExitCode)."
+          }
+
+          Stop-Process -Id $appProcess.Id -Force
+          $appProcess.WaitForExit()
+
           $uninstaller = Get-ChildItem $installDir -File | Where-Object {
             $_.Name -like "Uninstall*.exe"
           } | Select-Object -First 1
@@ -161,6 +171,36 @@ jobs:
           if (Test-Path $installDir) {
             Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
           }
+
+      - name: Verify Authenticode signatures for tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release -File -Filter "*.exe" | Where-Object {
+            $_.Name -notlike "__uninstaller-*"
+          } | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Signed Windows installer was not produced."
+          }
+
+          $installerSignature = Get-AuthenticodeSignature $installer.FullName
+          if ($installerSignature.Status -ne "Valid") {
+            throw "Installer Authenticode signature is not valid: $($installerSignature.Status)"
+          }
+
+          $unpackedExe = Join-Path "release\win-unpacked" "Viral AI Tool.exe"
+          if (-not (Test-Path $unpackedExe)) {
+            throw "Packaged executable was not found for signature verification."
+          }
+
+          $appSignature = Get-AuthenticodeSignature $unpackedExe
+          if ($appSignature.Status -ne "Valid") {
+            throw "Application Authenticode signature is not valid: $($appSignature.Status)"
+          }
+
+          Write-Host "Installer signer: $($installerSignature.SignerCertificate.Subject)"
+          Write-Host "Application signer: $($appSignature.SignerCertificate.Subject)"
 
       - name: Generate release manifest and SHA-256 checksums
         shell: pwsh
