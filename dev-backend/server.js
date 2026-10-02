@@ -2144,7 +2144,17 @@ async function handle(req, res) {
     const body = await readJson(req);
 
     try {
+      const receiptCheck = checkGatewayReceipt("translation", user.id, key, body);
       const result = translationJobs.create(user.id, key, body);
+
+      saveGatewayReceipt("translation", user.id, key, {
+        fingerprint: receiptCheck.fingerprint,
+        jobId: result.job?.jobId || null,
+        state: result.job?.state || "queued",
+        chargedMinutes: Number(result.job?.chargedMinutes || 0),
+        createdAt: receiptCheck.receipt?.createdAt || new Date().toISOString()
+      });
+
       return json(res, result.created ? 201 : 200, result.job);
     } catch (err) {
       const code = err?.code || "TRANSLATION_FAILED";
@@ -2153,7 +2163,7 @@ async function handle(req, res) {
         code === "PLAN_REQUIRED" || code === "SUBSCRIPTION_INACTIVE" ? 403 :
         code === "CONCURRENCY_LIMIT" ? 429 :
         code === "QUOTA_EXCEEDED" ? 402 :
-        code === "JOB_CONFLICT" ? 409 :
+        code === "JOB_CONFLICT" || code === "JOB_RESULT_NOT_RETAINED" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
         code === "JOB_NOT_FOUND" ? 404 :
         400;
@@ -2167,7 +2177,11 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
-      const result = translationJobs.cancel(user.id, decodeURIComponent(translationCancelMatch[1]));
+      const jobId = decodeURIComponent(translationCancelMatch[1]);
+      const result = translationJobs.cancel(user.id, jobId);
+      if (result?.cancelled) {
+        updateGatewayReceiptByJobId("translation", jobId, { state: "cancelled" });
+      }
       return json(res, 200, result);
     } catch (err) {
       return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TRANSLATION_FAILED");
@@ -2180,7 +2194,13 @@ async function handle(req, res) {
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
     try {
-      return json(res, 200, translationJobs.get(user.id, decodeURIComponent(translationJobMatch[1])));
+      const jobId = decodeURIComponent(translationJobMatch[1]);
+      const result = translationJobs.get(user.id, jobId);
+      updateGatewayReceiptByJobId("translation", jobId, {
+        state: result?.state || "unknown",
+        chargedMinutes: Number(result?.chargedMinutes || 0)
+      });
+      return json(res, 200, result);
     } catch (err) {
       return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "TRANSLATION_FAILED");
     }
