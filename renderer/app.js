@@ -1560,6 +1560,8 @@ function aiVideoPage() {
   const speechResult = speechResultForSource(source);
   const translationJob = translationJobForSource(source);
   const translationResult = translationResultForSource(source);
+  const voiceJob = voiceJobForSource(source);
+  const voiceResult = voiceResultForSource(source);
 
   const speechStep = speechResult
     ? t("aiVideo.steps.detected")
@@ -1575,12 +1577,20 @@ function aiVideoPage() {
         ? t("aiVideo.steps.pending")
         : "—";
 
+  const voiceStep = voiceResult
+    ? t("voiceWorkflow.completed")
+    : voiceJob
+      ? voiceStatusCopy(voiceJob)
+      : translationResult
+        ? t("aiVideo.steps.pending")
+        : "—";
+
   const steps = [
     ["1", t("aiVideo.steps.import"), source ? t("aiVideo.steps.ready") : t("aiVideo.steps.pending")],
     ["2", t("aiVideo.steps.speech"), speechStep],
     ["3", t("aiVideo.steps.translate"), translationStep],
-    ["4", t("aiVideo.steps.voices"), translationResult ? t("aiVideo.steps.pending") : "—"],
-    ["5", t("aiVideo.steps.subtitles"), t("aiVideo.steps.pending")],
+    ["4", t("aiVideo.steps.voices"), voiceStep],
+    ["5", t("aiVideo.steps.subtitles"), voiceResult ? t("aiVideo.steps.pending") : "—"],
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
 
@@ -1637,10 +1647,62 @@ function aiVideoPage() {
           t("translation.interruptedBody") + '</span></div>'
       : "";
 
+  const voiceBusy = voiceJob &&
+    ["validating", "queued", "generating", "downloading", "cancelling"].includes(voiceJob.status);
+  const voiceInterrupted = voiceJob?.status === "interrupted";
+  const voiceLocal = state.voice.mode === "local";
+  const voiceCatalogReady = Array.isArray(state.voice.catalog) && state.voice.catalog.length > 0;
+  const voiceSpeakers = translationResult ? ensureVoiceAssignments(translationResult) : [];
+
+  const voiceAction = voiceBusy
+    ? '<button id="voiceStop" class="button danger" type="button"' +
+        (voiceJob.status === "cancelling" ? " disabled" : "") + '>' + t("voiceWorkflow.stop") + '</button>'
+    : !translationResult
+      ? '<button class="button primary" type="button" disabled>' + t("voiceWorkflow.needTranslationButton") + '</button>'
+      : voiceLocal
+        ? '<button class="button primary" type="button" disabled>' + t("voiceWorkflow.localUnavailableButton") + '</button>'
+        : !voiceCatalogReady
+          ? '<button class="button primary" type="button" disabled>' + t("voiceWorkflow.checkingVoices") + '</button>'
+          : '<button id="voiceStart" class="button primary" type="button">' +
+              (voiceInterrupted ? t("voiceWorkflow.retry") : voiceResult ? t("voiceWorkflow.generateAgain") : t("voiceWorkflow.generate")) +
+            '</button>';
+
+  const voiceProgress = voiceBusy
+    ? '<div class="speech-job-state voice-job-state"><div class="speech-job-head"><div><b id="voiceStateLabel">' +
+        escapeHtml(voiceStatusCopy(voiceJob)) + '</b><span>' +
+        escapeHtml(languageName(voiceJob.language)) + '</span></div><strong id="voicePercent">' +
+        (voiceJob.indeterminate ? "•••" : Math.round(Number(voiceJob.progress || 0)) + "%") + '</strong></div>' +
+        '<div id="voiceProgressTrack" class="speech-progress ' + (voiceJob.indeterminate ? "indeterminate" : "") +
+        '"><i id="voiceProgressBar" style="width:' +
+        (voiceJob.indeterminate ? "36" : Math.round(Number(voiceJob.progress || 0))) + '%"></i></div></div>'
+    : voiceInterrupted
+      ? '<div class="speech-alert warning"><b>' + t("voiceWorkflow.interruptedTitle") + '</b><span>' +
+          t("voiceWorkflow.interruptedBody") + '</span></div>'
+      : "";
+
+  const voiceMappingRows = translationResult && voiceSpeakers.length
+    ? '<div class="voice-mapping-list">' + voiceSpeakers.map(speaker => {
+        const selected = state.voice.assignments?.[speaker.key] || "";
+        return '<div class="voice-mapping-row"><div class="voice-speaker-copy"><span>' +
+          escapeHtml(speaker.label) + '</span><small>' + escapeHtml(languageName(translationResult.targetLanguage)) + '</small></div>' +
+          '<select class="select voice-assignment-select" data-speaker-key="' + escapeHtml(speaker.key) + '"' +
+            (voiceBusy ? " disabled" : "") + '>' +
+            (state.voice.catalog || []).map(voice =>
+              '<option value="' + escapeHtml(voice.id) + '"' + (voice.id === selected ? " selected" : "") + '>' +
+                escapeHtml(voice.name + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) +
+              '</option>'
+            ).join("") +
+          '</select>' +
+          '<button class="button ghost small voice-preview-button" type="button" data-voice-preview-speaker="' +
+            escapeHtml(speaker.key) + '"' + (voiceBusy || !selected ? " disabled" : "") + '>▶ ' +
+            t("voiceWorkflow.preview") + '</button></div>';
+      }).join("") + '</div>'
+    : '<div class="voice-empty">' + t("voiceWorkflow.waitingTranslation") + '</div>';
+
   return '<div class="section-head"><div><h3>' + t("aiVideo.workflow") + "</h3><p>" + t("aiVideo.workflowDesc") +
     '</p></div><button id="render" class="button primary" type="button">' + t("aiVideo.renderFinal") + "</button></div>" +
     '<div class="workflow">' + steps.map((x, i) =>
-      '<div class="wf-step ' + (i === (translationResult ? 3 : speechResult ? 2 : source ? 1 : 0) ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
+      '<div class="wf-step ' + (i === (voiceResult ? 4 : translationResult ? 3 : speechResult ? 2 : source ? 1 : 0) ? "active" : "") + '"><b>' + x[0] + ". " + x[1] + "</b><span>" + x[2] + "</span></div>" +
       (i < steps.length - 1 ? '<div class="wf-arrow">→</div>' : "")
     ).join("") + "</div>" +
 
@@ -1701,6 +1763,24 @@ function aiVideoPage() {
       translationResultView(translationResult) +
     '</div>' +
 
+    '<div class="card speech-card voice-workflow-card"><div class="speech-card-head"><div><div class="eyebrow">' +
+      t("aiVideo.steps.voices") + '</div><h3>' + t("voiceWorkflow.title") + '</h3><p>' + t("voiceWorkflow.desc") +
+      '</p></div>' + voiceAction + '</div>' +
+      '<div class="voice-top-controls"><div class="speech-field"><label class="label" for="voiceMode">' +
+        t("voiceWorkflow.mode") + '</label><select id="voiceMode" class="select"' + (voiceBusy ? " disabled" : "") + '>' +
+          '<option value="cloud"' + (!voiceLocal ? " selected" : "") + '>' + t("speech.cloud") + '</option>' +
+          '<option value="local"' + (voiceLocal ? " selected" : "") + '>' + t("speech.local") + '</option>' +
+        '</select><div class="speech-choice-help"><span>' +
+          (voiceLocal ? t("voiceWorkflow.localDesc") : t("voiceWorkflow.cloudDesc")) + '</span></div></div>' +
+        '<div class="voice-language-summary"><span>' + t("voiceWorkflow.voiceLanguage") + '</span><b>' +
+          escapeHtml(translationResult ? languageName(translationResult.targetLanguage) : "—") + '</b></div></div>' +
+      voiceConnectionPanel() +
+      '<div class="ai-voice-disclosure"><span aria-hidden="true">AI</span><p>' + t("voiceWorkflow.aiDisclosure") + '</p></div>' +
+      voiceMappingRows +
+      voiceProgress +
+      voiceResultView(voiceResult) +
+    '</div>' +
+
     '<div class="section-head"><div><h3>' + t("aiVideo.editor") + '</h3><p>' + escapeHtml(sourceName) +
       (sourceMeta ? ' · ' + escapeHtml(sourceMeta) : '') + "</p></div></div>" +
     '<div class="editor-grid">' + preview +
@@ -1709,6 +1789,8 @@ function aiVideoPage() {
       escapeHtml(languageName(state.translation.targetLanguage)) + '</b></div>' +
     '<div class="translation-summary-row"><span>' + t("translation.status") + '</span><b>' +
       escapeHtml(translationResult ? t("translation.completed") : t("aiVideo.steps.pending")) + '</b></div>' +
+    '<div class="translation-summary-row"><span>' + t("voiceWorkflow.summaryLabel") + '</span><b>' +
+      escapeHtml(voiceResult ? t("voiceWorkflow.completed") : t("aiVideo.steps.pending")) + '</b></div>' +
     '</div>' +
     '<div class="mini-card"><h4>' + t("aiVideo.outputFormat") + '</h4><select class="select"><option>9:16 · 1080×1920</option><option>16:9 · 1920×1080</option><option>1:1 · 1080×1080</option></select>' +
     '<div class="toggle-row"><span>' + t("aiVideo.burnSubtitles") + '</span><div class="toggle on"></div></div></div></div></div>';
