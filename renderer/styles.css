@@ -3171,3 +3171,33 @@ html[data-scale="compact"] .hero p{font-size:13px}
     grid-template-columns:1fr;
   }
 }
+
+
+/* Final localized render */
+.pipeline-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  width:max-content;
+  margin-top:5px;
+  padding:3px 7px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.pipeline-badge.localized{
+  color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 22%,var(--line));
+  background:color-mix(in srgb,var(--accent) 6%,var(--surface-solid));
+}
+.pipeline-meta{
+  margin-top:3px;
+  color:var(--text-faint);
+}
+.render-option-note{
+  margin:9px 0 0;
+  font-size:10px;
+  line-height:1.45;
+}
