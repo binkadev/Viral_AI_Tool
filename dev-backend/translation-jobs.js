@@ -291,6 +291,7 @@ async function processJob(job) {
     }
   } finally {
     job.controller = null;
+    job.started = false;
   }
 }
 
