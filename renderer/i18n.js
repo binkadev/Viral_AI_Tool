@@ -247,6 +247,8 @@ window.I18N = (() => {
         connectionBody: "Bản dịch chưa hoàn tất. Hãy kiểm tra kết nối rồi thử lại; Viral AI Tool sẽ dùng lại job cũ khi có thể.",
         conflictTitle: "Không thể dùng lại tiến trình cũ",
         conflictBody: "Nội dung đã thay đổi so với lần dịch trước. Viral AI Tool sẽ không ghép kết quả của hai nội dung khác nhau.",
+        resultNotRetainedTitle: "Kết quả cũ không còn được lưu",
+        resultNotRetainedBody: "Tiến trình trước đã hoàn tất và hạn mức đã được ghi nhận. Ứng dụng không tự chạy lại cùng mã tiến trình. Hãy tạo một tiến trình dịch mới nếu cần.",
         failedTitle: "Chưa thể hoàn tất bản dịch",
         failedBody: "Transcript gốc vẫn an toàn. Hãy thử lại hoặc kiểm tra kết nối Cloud.",
         projectSummary: "Tóm tắt bản dịch",
