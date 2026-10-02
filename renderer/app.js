@@ -1073,6 +1073,487 @@ function updateTranslationProgress(payload) {
   save();
 }
 
+function voiceJobForSource(source) {
+  const job = state.voice.job;
+  return source &&
+    job?.sourcePath === source.sourcePath &&
+    job?.language === state.translation.targetLanguage
+    ? job
+    : null;
+}
+
+function voiceResultForSource(source) {
+  const result = state.voice.result;
+  return source &&
+    result?.sourcePath === source.sourcePath &&
+    result?.language === state.translation.targetLanguage
+    ? result
+    : null;
+}
+
+function voiceStatusCopy(job) {
+  if (!job) return "";
+  const key = {
+    validating: "voiceWorkflow.validating",
+    queued: "voiceWorkflow.queued",
+    generating: "voiceWorkflow.generating",
+    downloading: "voiceWorkflow.downloading",
+    cancelling: "voiceWorkflow.cancelling",
+    completed: "voiceWorkflow.completed",
+    cancelled: "voiceWorkflow.cancelled",
+    failed: "voiceWorkflow.failed",
+    interrupted: "voiceWorkflow.interrupted"
+  }[job.status] || "voiceWorkflow.generating";
+  return t(key);
+}
+
+function voiceSpeakerEntries(result) {
+  const segments = Array.isArray(result?.segments) ? result.segments : [];
+  const seen = new Set();
+  const entries = [];
+
+  for (const segment of segments) {
+    const key = String(segment?.speaker || "speaker-1").trim() || "speaker-1";
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      key,
+      label: t("voiceWorkflow.speakerName", { number: entries.length + 1 })
+    });
+  }
+
+  return entries.length
+    ? entries
+    : [{ key: "speaker-1", label: t("voiceWorkflow.speakerName", { number: 1 }) }];
+}
+
+function voiceStyleLabel(voice) {
+  const key = String(voice?.styleKey || "");
+  return key ? t("voiceWorkflow.styles." + key) : "";
+}
+
+function ensureVoiceAssignments(result) {
+  const speakers = voiceSpeakerEntries(result);
+  const catalog = Array.isArray(state.voice.catalog) ? state.voice.catalog : [];
+  const validIds = new Set(catalog.map(item => String(item.id)));
+  const next = { ...(state.voice.assignments || {}) };
+
+  speakers.forEach((speaker, index) => {
+    if (!validIds.has(String(next[speaker.key] || ""))) {
+      next[speaker.key] = catalog[index % Math.max(1, catalog.length)]?.id || "";
+    }
+  });
+
+  state.voice.assignments = next;
+  return speakers;
+}
+
+async function refreshVoiceStatus({ rerender = false } = {}) {
+  if (!window.desktopAPI?.getVoiceStatus || state.voice.statusCheckPending) {
+    return state.voice.cloudStatus;
+  }
+
+  state.voice.statusCheckPending = true;
+
+  try {
+    const status = await window.desktopAPI.getVoiceStatus();
+    state.voice.cloudStatus = status || null;
+    state.voice.catalog = Array.isArray(status?.catalog) ? status.catalog : [];
+    state.voice.statusCheckedAt = Date.now();
+  } catch {
+    state.voice.cloudStatus = {
+      ready: false,
+      code: "VOICE_UNAVAILABLE"
+    };
+    state.voice.catalog = [];
+  } finally {
+    state.voice.statusCheckPending = false;
+  }
+
+  if (rerender && state.page === "ai-video") render();
+  return state.voice.cloudStatus;
+}
+
+function voiceConnectionPanel() {
+  if (state.voice.mode === "local") {
+    return '<div class="voice-connection needs-action">' +
+      '<div><b>' + t("voiceWorkflow.localPendingTitle") + '</b><p>' + t("voiceWorkflow.localPendingBody") + '</p></div>' +
+      '<span class="speech-provider-badge pending"><i></i>' + t("voiceWorkflow.notReady") + '</span>' +
+    '</div>';
+  }
+
+  const status = state.voice.cloudStatus;
+  const ready = status?.ready === true;
+  const code = status?.code || "CHECKING";
+
+  let title = t("voiceWorkflow.cloudChecking");
+  let body = t("voiceWorkflow.cloudCheckingBody");
+
+  if (ready) {
+    title = t("voiceWorkflow.cloudReadyTitle");
+    body = t("voiceWorkflow.cloudReadyBody");
+  } else if (code === "VOICE_AUTH_REQUIRED") {
+    title = t("voiceWorkflow.cloudLoginTitle");
+    body = t("voiceWorkflow.cloudLoginBody");
+  } else if (["VOICE_NOT_CONFIGURED", "VOICE_CONFIG_INVALID", "VOICE_HTTPS_REQUIRED"].includes(code)) {
+    title = t("voiceWorkflow.cloudSetupTitle");
+    body = t("voiceWorkflow.cloudSetupBody");
+  } else if (code !== "CHECKING") {
+    title = t("voiceWorkflow.cloudUnavailableTitle");
+    body = t("voiceWorkflow.cloudUnavailableBody");
+  }
+
+  return '<div class="voice-connection ' + (ready ? "is-ready" : "needs-action") + '">' +
+    '<div><b>' + escapeHtml(title) + '</b><p>' + escapeHtml(body) + '</p></div>' +
+    '<span class="speech-provider-badge ' + (ready ? "ready" : "pending") + '"><i></i>' +
+      escapeHtml(ready ? t("voiceWorkflow.ready") : t("voiceWorkflow.notReady")) + '</span>' +
+  '</div>';
+}
+
+function voicePreviewSample(language) {
+  const supported = ["vi", "en", "ko", "ja"];
+  const code = supported.includes(language) ? language : "en";
+  return t("voiceWorkflow.previewSamples." + code);
+}
+
+function playVoiceUrl(url) {
+  if (!url) return;
+
+  try {
+    if (window.__viralVoiceAudio) {
+      window.__viralVoiceAudio.pause();
+      window.__viralVoiceAudio = null;
+    }
+
+    const audio = new Audio(url);
+    window.__viralVoiceAudio = audio;
+    audio.play().catch(() => toast(t("voiceWorkflow.playFailed")));
+  } catch {
+    toast(t("voiceWorkflow.playFailed"));
+  }
+}
+
+async function previewVoiceSelection(speakerKey) {
+  const voiceId = state.voice.assignments?.[speakerKey] || "";
+  const translationResult = translationResultForSource(latestSourceJob());
+  const language = translationResult?.targetLanguage || state.translation.targetLanguage;
+
+  if (!voiceId || !window.desktopAPI?.previewVoice) {
+    toast(t("voiceWorkflow.chooseVoice"));
+    return;
+  }
+
+  toast(t("voiceWorkflow.previewPreparing"));
+
+  const response = await window.desktopAPI.previewVoice({
+    voiceId,
+    language,
+    text: voicePreviewSample(language)
+  });
+
+  if (!response?.ok) {
+    const code = response?.error?.code || "VOICE_FAILED";
+    toast(code === "VOICE_PREVIEW_RATE_LIMITED"
+      ? t("voiceWorkflow.previewWait")
+      : t("voiceWorkflow.previewFailed"));
+    return;
+  }
+
+  playVoiceUrl(response.data?.audioUrl);
+}
+
+function voiceResultView(result) {
+  if (!result) return "";
+
+  const segments = Array.isArray(result.segments) ? result.segments : [];
+  const warnings = Number(result?.meta?.warningCount || segments.filter(item => item.timingRisk).length || 0);
+  const speakerEntries = voiceSpeakerEntries(result);
+  const speakerLabels = new Map(speakerEntries.map(item => [item.key, item.label]));
+
+  return '<div class="voice-result">' +
+    '<div class="voice-result-head"><div><span class="side-kicker">' + t("voiceWorkflow.resultTitle") + '</span>' +
+      '<h4>' + escapeHtml(t("voiceWorkflow.resultDesc", {
+        count: segments.length,
+        speakers: speakerEntries.length
+      })) + '</h4></div>' +
+      '<span class="speech-provider-badge ready"><i></i>' + t("voiceWorkflow.completed") + '</span></div>' +
+    (warnings
+      ? '<div class="voice-timing-warning"><b>' + t("voiceWorkflow.timingWarningTitle", { count: warnings }) + '</b><span>' +
+          t("voiceWorkflow.timingWarningBody") + '</span></div>'
+      : '') +
+    '<div class="voice-segment-list">' +
+      segments.slice(0, 10).map(segment =>
+        '<div class="voice-segment-row ' + (segment.timingRisk ? "has-warning" : "") + '">' +
+          '<time>' + formatDuration(segment.start) + '</time>' +
+          '<div class="voice-segment-copy"><b>' + escapeHtml(speakerLabels.get(String(segment.speaker || "speaker-1")) || speakerEntries[0]?.label || "") + '</b>' +
+          '<p>' + escapeHtml(segment.text || "") + '</p><small>' +
+            escapeHtml(t("voiceWorkflow.audioDuration", {
+              audio: Number(segment.audioDuration || 0).toFixed(1),
+              slot: Number(segment.slotDuration || 0).toFixed(1)
+            })) +
+          '</small></div>' +
+          '<button class="button ghost small voice-audio-play" type="button" data-audio-url="' +
+            encodeURIComponent(segment.audioUrl || "") + '">▶ ' + t("common.preview") + '</button>' +
+        '</div>'
+      ).join("") +
+    '</div>' +
+    (segments.length > 10 ? '<p class="speech-result-note">' + t("voiceWorkflow.moreSegments", { count: segments.length - 10 }) + '</p>' : '') +
+  '</div>';
+}
+
+async function handleVoiceBlock(response) {
+  const code = response?.error?.code || "VOICE_FAILED";
+
+  if (code === "VOICE_AUTH_REQUIRED") {
+    await showNotice({
+      title: t("voiceWorkflow.authTitle"),
+      body: t("voiceWorkflow.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_TOO_LARGE") {
+    await showNotice({
+      title: t("voiceWorkflow.tooLargeTitle"),
+      body: t("voiceWorkflow.tooLargeBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["VOICE_NETWORK", "VOICE_TIMEOUT", "VOICE_UNAVAILABLE", "SERVICE_UNAVAILABLE"].includes(code)) {
+    await showNotice({
+      title: t("voiceWorkflow.connectionTitle"),
+      body: t("voiceWorkflow.connectionBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_JOB_CONFLICT") {
+    await showNotice({
+      title: t("voiceWorkflow.conflictTitle"),
+      body: t("voiceWorkflow.conflictBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["VOICE_AUDIO_EXPIRED", "VOICE_AUDIO_NOT_FOUND"].includes(code)) {
+    await showNotice({
+      title: t("voiceWorkflow.audioExpiredTitle"),
+      body: t("voiceWorkflow.audioExpiredBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  await showNotice({
+    title: t("voiceWorkflow.failedTitle"),
+    body: t("voiceWorkflow.failedBody"),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function startVoiceGeneration() {
+  const source = latestSourceJob();
+  const translationResult = translationResultForSource(source);
+
+  if (!source || !translationResult?.segments?.length) {
+    toast(t("voiceWorkflow.needTranslation"));
+    return;
+  }
+
+  if (state.voice.mode === "local") {
+    await showNotice({
+      title: t("voiceWorkflow.localPendingTitle"),
+      body: t("voiceWorkflow.localPendingBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (!state.cloud.auth?.authenticated) {
+    await handleVoiceBlock({ error: { code: "VOICE_AUTH_REQUIRED" } });
+    return;
+  }
+
+  const status = await refreshVoiceStatus({ rerender: false });
+  if (!status?.ready) {
+    render();
+    await handleVoiceBlock({ error: { code: status?.code || "VOICE_UNAVAILABLE" } });
+    return;
+  }
+
+  const speakers = ensureVoiceAssignments(translationResult);
+  const catalogIds = new Set((state.voice.catalog || []).map(item => String(item.id)));
+  const bySpeaker = {};
+
+  for (const speaker of speakers) {
+    const voiceId = String(state.voice.assignments?.[speaker.key] || "");
+    if (!catalogIds.has(voiceId)) {
+      toast(t("voiceWorkflow.chooseVoice"));
+      return;
+    }
+    bySpeaker[speaker.key] = voiceId;
+  }
+
+  const defaultVoiceId = bySpeaker[speakers[0]?.key] || "";
+  const existingJob = voiceJobForSource(source);
+
+  if (existingJob && ["validating", "queued", "generating", "downloading", "cancelling"].includes(existingJob.status)) {
+    toast(t("voiceWorkflow.alreadyRunning"));
+    return;
+  }
+
+  const confirmed = await confirmAction({
+    title: t("voiceWorkflow.cloudConsentTitle"),
+    body: t("voiceWorkflow.cloudConsentBody", {
+      count: translationResult.segments.length,
+      language: languageName(translationResult.targetLanguage)
+    }),
+    confirmLabel: t("voiceWorkflow.generate"),
+    cancelLabel: t("common.cancel")
+  });
+  if (!confirmed) return;
+
+  const reuse = existingJob &&
+    (existingJob.status === "interrupted" || existingJob.retrySameId === true) &&
+    existingJob.language === translationResult.targetLanguage;
+
+  const job = {
+    id: reuse ? existingJob.id : makeJobId("voice"),
+    sourcePath: source.sourcePath,
+    sourceName: source.name,
+    language: translationResult.targetLanguage,
+    status: "validating",
+    progress: 0,
+    indeterminate: false,
+    retrySameId: false,
+    startedAt: Date.now()
+  };
+
+  state.voice.job = job;
+  state.voice.result = null;
+  save();
+  render();
+  toast(t("voiceWorkflow.started"));
+
+  const response = await window.desktopAPI.startVoice({
+    jobId: job.id,
+    language: job.language,
+    assignments: {
+      defaultVoiceId,
+      bySpeaker
+    },
+    segments: translationResult.segments.map(segment => ({
+      id: segment.id,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+      speaker: segment.speaker || "speaker-1"
+    }))
+  });
+
+  if (!response?.ok) {
+    job.status = "failed";
+    job.failureCode = response?.error?.code || "VOICE_FAILED";
+    job.retrySameId = [
+      "VOICE_NETWORK",
+      "VOICE_TIMEOUT",
+      "VOICE_UNAVAILABLE",
+      "VOICE_REQUEST_FAILED",
+      "VOICE_AUDIO_EXPIRED"
+    ].includes(job.failureCode);
+    save();
+    render();
+    await handleVoiceBlock(response);
+    return;
+  }
+
+  if (response.data?.cancelled || job.status === "cancelling") {
+    job.status = "cancelled";
+    save();
+    render();
+    toast(t("voiceWorkflow.stopped"));
+    return;
+  }
+
+  const result = response.data?.result || null;
+  job.status = "completed";
+  job.progress = 100;
+  job.completedAt = Date.now();
+
+  if (result) {
+    state.voice.result = {
+      ...result,
+      sourcePath: source.sourcePath,
+      sourceName: source.name
+    };
+  }
+
+  save();
+  render();
+  toast(t("voiceWorkflow.done"));
+}
+
+async function cancelVoiceGeneration() {
+  const job = state.voice.job;
+  if (!job || !["validating", "queued", "generating", "downloading"].includes(job.status)) return;
+
+  const confirmed = await confirmAction({
+    title: t("voiceWorkflow.stopTitle"),
+    body: t("voiceWorkflow.stopBody"),
+    confirmLabel: t("voiceWorkflow.stop"),
+    cancelLabel: t("voiceWorkflow.keepGoing"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  job.status = "cancelling";
+  save();
+  render();
+
+  const response = await window.desktopAPI?.cancelVoice?.(job.id);
+
+  if (!response?.cancelled) {
+    job.status = "generating";
+    save();
+    render();
+    toast(t("voiceWorkflow.stopFailed"));
+    return;
+  }
+
+  toast(t("voiceWorkflow.stopping"));
+}
+
+function updateVoiceProgress(payload) {
+  const job = state.voice.job;
+  if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
+
+  const allowed = new Set(["validating", "queued", "generating", "downloading"]);
+  if (allowed.has(payload.state)) job.status = payload.state;
+  if (payload.serverJobId) job.serverJobId = String(payload.serverJobId);
+
+  job.indeterminate = payload.indeterminate === true;
+
+  if (!job.indeterminate && Number.isFinite(Number(payload.percent))) {
+    job.progress = Math.max(0, Math.min(99, Number(payload.percent)));
+  }
+
+  const label = $("voiceStateLabel");
+  const percent = $("voicePercent");
+  const bar = $("voiceProgressBar");
+  const track = $("voiceProgressTrack");
+
+  if (label) label.textContent = voiceStatusCopy(job);
+  if (percent) percent.textContent = job.indeterminate ? "•••" : Math.round(job.progress || 0) + "%";
+  if (track) track.classList.toggle("indeterminate", job.indeterminate);
+  if (bar) bar.style.width = (job.indeterminate ? 36 : Math.round(job.progress || 0)) + "%";
+  save();
+}
+
 function aiVideoPage() {
   const source = latestSourceJob();
   const speechJob = speechJobForSource(source);
