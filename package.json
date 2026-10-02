@@ -16,7 +16,8 @@
     "test:backend-state": "node dev-backend/tests/state-persistence.test.js",
     "test:backend-restart": "node dev-backend/tests/server-restart.integration.test.js",
     "test:backend-production": "node dev-backend/tests/production-mode.integration.test.js",
-    "test:release-policy": "node tests/release-policy.test.js"
+    "test:release-policy": "node tests/release-policy.test.js",
+    "test:release-assets": "node tests/release-assets.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
