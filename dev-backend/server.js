@@ -78,6 +78,90 @@ const jobs = new Map();
 const idempotency = new Map();
 const uploadTokens = new Map();
 const serviceQuotaReservations = new Map();
+
+function serializeSpeechJob(job) {
+  if (!job) return null;
+  const {
+    controller,
+    uploadToken,
+    uploadExpiresAt,
+    result,
+    ...rest
+  } = job;
+
+  return {
+    ...rest,
+    controller: null,
+    uploadToken: null,
+    uploadExpiresAt: null,
+    result: null,
+    processStarted: false,
+    cancelRequested: false
+  };
+}
+
+function persistSpeechJobs() {
+  const currentJobs = durableState.get("jobs", {});
+  durableState.set("jobs", {
+    ...currentJobs,
+    speech: {
+      jobs: Object.fromEntries(
+        [...jobs.entries()].map(([id, job]) => [id, serializeSpeechJob(job)])
+      ),
+      idempotency: Object.fromEntries(idempotency.entries())
+    }
+  });
+}
+
+function restoreSpeechJobs() {
+  const persisted = durableState.get("jobs", {})?.speech || {};
+  jobs.clear();
+  idempotency.clear();
+
+  for (const [id, raw] of Object.entries(persisted.jobs || {})) {
+    if (!raw || typeof raw !== "object") continue;
+
+    const job = {
+      ...raw,
+      id,
+      controller: null,
+      uploadToken: null,
+      uploadExpiresAt: null,
+      processStarted: false,
+      cancelRequested: false,
+      result: null
+    };
+
+    if (job.state === "completed") {
+      job.state = "failed";
+      job.errorCode = "RESULT_NOT_RETAINED";
+      job.progress = 100;
+      job.reservedMinutes = 0;
+      job.recoveredAt = new Date().toISOString();
+    } else if (["queued", "processing", "cancelling"].includes(job.state)) {
+      const hasUpload = fs.existsSync(jobFilePath(id));
+      if (hasUpload) {
+        job.state = "uploaded";
+        job.progress = 0;
+      } else {
+        job.state = "failed";
+        job.errorCode = "SERVICE_RESTARTED";
+        job.progress = 0;
+        job.reservedMinutes = 0;
+      }
+      job.recoveredAt = new Date().toISOString();
+    }
+
+    jobs.set(id, job);
+  }
+
+  for (const [key, jobId] of Object.entries(persisted.idempotency || {})) {
+    if (jobs.has(String(jobId))) idempotency.set(key, String(jobId));
+  }
+
+  persistSpeechJobs();
+}
+
 const processedBillingEvents = new Map(
   Object.entries(durableState.get("processedBillingEvents", {}))
     .map(([eventId, createdAt]) => [eventId, Number(createdAt || 0)])
@@ -1161,6 +1245,7 @@ async function receiveUpload(req, res, token) {
   job.state = "uploaded";
   job.progress = 0;
   job.uploadedAt = new Date().toISOString();
+  persistSpeechJobs();
   uploadTokens.delete(token);
   job.uploadToken = null;
   job.uploadExpiresAt = null;
@@ -1174,18 +1259,21 @@ async function processSpeechJob(job) {
   job.processStarted = true;
   job.state = "queued";
   job.progress = 0;
+  persistSpeechJobs();
 
   setImmediate(async () => {
     if (job.cancelRequested) {
       job.state = "cancelled";
       releaseReservation(job);
       cleanupUpload(job);
+      persistSpeechJobs();
       return;
     }
 
     job.state = "processing";
     job.progress = null;
     job.controller = new AbortController();
+    persistSpeechJobs();
 
     try {
       const result = await speechProvider.transcribe({
@@ -1217,6 +1305,7 @@ async function processSpeechJob(job) {
       job.state = "completed";
       job.progress = 100;
       job.completedAt = new Date().toISOString();
+      persistSpeechJobs();
     } catch (err) {
       if (job.cancelRequested || err?.code === "PROVIDER_CANCELLED") {
         job.state = "cancelled";
@@ -1229,9 +1318,11 @@ async function processSpeechJob(job) {
         releaseReservation(job);
         console.error("[SpeechProvider]", err?.code || "ERROR", err?.message || String(err));
       }
+      persistSpeechJobs();
     } finally {
       job.controller = null;
       cleanupUpload(job);
+      persistSpeechJobs();
     }
   });
 }
@@ -1245,6 +1336,13 @@ voiceJobs.configureQuotaHooks({
   reserve: reserveCloudQuota,
   settle: settleCloudQuota
 });
+
+restoreSpeechJobs();
+for (const job of jobs.values()) {
+  if (job.state === "uploaded" && fs.existsSync(jobFilePath(job.id))) {
+    setImmediate(() => processSpeechJob(job));
+  }
+}
 
 async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
@@ -2020,6 +2118,7 @@ async function handle(req, res) {
       const existing = jobs.get(existingId);
       if (!existing) {
         idempotency.delete(idemKey);
+        persistSpeechJobs();
       } else {
         if (existing.fingerprint !== jobFingerprint(input)) {
           return error(res, 409, "JOB_CONFLICT");
@@ -2072,6 +2171,7 @@ async function handle(req, res) {
 
     jobs.set(job.id, job);
     idempotency.set(idemKey, job.id);
+    persistSpeechJobs();
 
     return json(res, 201, publicJob(job, { createResponse: true }));
   }
@@ -2114,12 +2214,14 @@ async function handle(req, res) {
 
     if (job.state === "processing" || job.state === "cancelling") {
       job.state = "cancelling";
+      persistSpeechJobs();
       try { job.controller?.abort(); } catch {}
     } else {
       job.state = "cancelled";
       job.progress = 0;
       releaseReservation(job);
       cleanupUpload(job);
+      persistSpeechJobs();
     }
 
     return json(res, 200, { cancelled: true });
