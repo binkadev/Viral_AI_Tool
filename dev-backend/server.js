@@ -15,7 +15,8 @@ const {
   assertService,
   assertConcurrentJobs,
   PLAN_DEFINITIONS,
-  normalizePlanId
+  normalizePlanId,
+  isKnownPlan
 } = require("./entitlements");
 const {
   createSubscription,
@@ -200,13 +201,12 @@ function verifyBillingWebhook(req, rawBody) {
 }
 
 function requireKnownPlanId(value) {
-  const normalized = normalizePlanId(value);
-  if (!value || !PLAN_DEFINITIONS[normalized]) {
+  if (!isKnownPlan(value)) {
     const error = new Error("Billing plan is invalid.");
     error.code = "PLAN_INVALID";
     throw error;
   }
-  return normalized;
+  return normalizePlanId(value);
 }
 
 function resetUserAllowance(user) {
