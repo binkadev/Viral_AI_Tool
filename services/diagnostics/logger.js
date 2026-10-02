@@ -38,6 +38,9 @@ function createRedactor({ userDataPath, tempPath } = {}) {
     }
 
     const replacements = [
+      [/https?:\/\/[^\s"'<>]+/gi, "<URL>"],
+      [/\b[A-Z]:[\\/][^\s"'<>|]+/gi, "<PATH>"],
+      [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<EMAIL>"],
       [/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer <REDACTED>"],
       [/(access[_-]?token|refresh[_-]?token|api[_-]?key|authorization|password|secret)(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1$2<REDACTED>"],
       [/\bsk-[A-Za-z0-9_-]{16,}\b/g, "<REDACTED_API_KEY>"],
