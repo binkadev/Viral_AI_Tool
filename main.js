@@ -6,7 +6,9 @@ const {
   probeVideo,
   createThumbnail,
   preflightExport,
+  preflightLocalizedExport,
   renderVideo,
+  renderLocalizedVideo,
   cancelRender,
   cancelAllRenders,
   getActiveRenderCount,
@@ -708,6 +710,72 @@ ipcMain.handle('video:preflight-export', async (_event, payload) => {
   } catch (error) {
     const serialized = serializeProcessingError(error);
     console.error('[ExportPreflight]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('video:preflight-localized-export', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    return {
+      ok: true,
+      data: preflightLocalizedExport({
+        inputPath: safePayload.inputPath,
+        outputDir: safePayload.outputDir,
+        voiceSegments: Array.isArray(safePayload.voiceSegments) ? safePayload.voiceSegments : [],
+        subtitleSegments: Array.isArray(safePayload.subtitleSegments) ? safePayload.subtitleSegments : [],
+        allowedAudioRoot: path.join(app.getPath('userData'), 'voice-cache'),
+        burnSubtitles: safePayload.burnSubtitles !== false
+      })
+    };
+  } catch (error) {
+    const serialized = serializeProcessingError(error);
+    console.error('[LocalizedExportPreflight]', serialized.code, serialized.technicalMessage);
+    return {
+      ok: false,
+      error: {
+        code: serialized.code,
+        details: serialized.details
+      }
+    };
+  }
+});
+
+ipcMain.handle('video:render-localized', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    const data = await renderLocalizedVideo({
+      jobId: safePayload.jobId,
+      inputPath: safePayload.inputPath,
+      outputDir: safePayload.outputDir,
+      voiceSegments: Array.isArray(safePayload.voiceSegments) ? safePayload.voiceSegments : [],
+      subtitleSegments: Array.isArray(safePayload.subtitleSegments) ? safePayload.subtitleSegments : [],
+      allowedAudioRoot: path.join(app.getPath('userData'), 'voice-cache'),
+      burnSubtitles: safePayload.burnSubtitles !== false,
+      mixOriginalAudio: safePayload.mixOriginalAudio !== false,
+      originalAudioVolume: Number.isFinite(Number(safePayload.originalAudioVolume))
+        ? Number(safePayload.originalAudioVolume)
+        : 0.12,
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('video:render-progress', progress);
+        }
+      }
+    });
+
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeProcessingError(error);
+    console.error('[LocalizedVideoExport]', serialized.code, serialized.technicalMessage);
+
     return {
       ok: false,
       error: {
