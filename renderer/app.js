@@ -459,28 +459,8 @@ function dashboard() {
 
 function downloadPage() {
   const platforms = ["TikTok", "Douyin", "YouTube", "Bilibili", "Facebook", "Instagram", "Xiaohongshu"];
-  const subscriptionEnd =
-    subscription?.status === "trialing"
-      ? subscription?.trialEndsAt
-      : subscription?.status === "grace_period" || subscription?.status === "past_due"
-        ? subscription?.graceEndsAt
-        : subscription?.currentPeriodEnd;
 
-  const subscriptionNote =
-    subscription?.cancelAtPeriodEnd
-      ? t("usage.cancelAtPeriodEnd", { date: accountDateLabel(subscription.currentPeriodEnd) })
-      : subscription?.pendingPlanId
-        ? t("usage.planChangesNextCycle", { plan: subscription.pendingPlanName || subscription.pendingPlanId, date: accountDateLabel(subscription.currentPeriodEnd) })
-        : "";
-
-  const offlineNotice = offlineSnapshot
-    ? '<div class="speech-alert warning"><b>' + t("usage.offlineSnapshotTitle") + '</b><span>' +
-        escapeHtml(t("usage.offlineSnapshotBody", {
-          date: accountDateLabel(state.cloud.accountVerifiedAt)
-        })) + '</span></div>'
-    : "";
-
-  return offlineNotice + '<div class="grid-2">' +
+  return '<div class="grid-2">' +
     '<div class="card card-pad"><div class="eyebrow">' + t("download.urlEyebrow") + "</div><h3>" + t("download.urlTitle") + "</h3>" +
     '<p class="muted">' + t("download.urlDesc") + "</p>" +
     '<div class="row"><input id="url" class="input" placeholder="' + t("download.urlPlaceholder") + '">' +
@@ -2206,7 +2186,31 @@ function usagePage() {
       Math.floor(total).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " " + t("usage.minutesUnit")
     : "—";
 
-  return '<div class="grid-2">' +
+  const subscriptionEnd =
+    subscription?.status === "trialing"
+      ? subscription?.trialEndsAt
+      : subscription?.status === "grace_period" || subscription?.status === "past_due"
+        ? subscription?.graceEndsAt
+        : subscription?.currentPeriodEnd;
+
+  const subscriptionNote =
+    subscription?.cancelAtPeriodEnd
+      ? t("usage.cancelAtPeriodEnd", { date: accountDateLabel(subscription.currentPeriodEnd) })
+      : subscription?.pendingPlanId
+        ? t("usage.planChangesNextCycle", {
+            plan: subscription.pendingPlanName || subscription.pendingPlanId,
+            date: accountDateLabel(subscription.currentPeriodEnd)
+          })
+        : "";
+
+  const offlineNotice = offlineSnapshot
+    ? '<div class="speech-alert warning"><b>' + t("usage.offlineSnapshotTitle") + '</b><span>' +
+        escapeHtml(t("usage.offlineSnapshotBody", {
+          date: accountDateLabel(state.cloud.accountVerifiedAt)
+        })) + '</span></div>'
+    : "";
+
+  return offlineNotice + '<div class="grid-2">' +
     '<div class="card card-pad"><div class="eyebrow">' + t("usage.currentPlan") + '</div><h3>' +
       escapeHtml(user?.plan || auth?.plan || "—") + '</h3><p class="muted">' + escapeHtml(allowance) + '</p>' +
       (reservationNote ? '<p class="muted usage-reservation-note">' + escapeHtml(reservationNote) + '</p>' : '') +
