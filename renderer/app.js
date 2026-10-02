@@ -2910,6 +2910,17 @@ async function launchReleaseUpdate() {
   const response = await window.desktopAPI?.launchUpdate?.();
 
   if (!response?.ok) {
+    const code = response?.error?.code || "UPDATE_INSTALLER_LAUNCH_FAILED";
+
+    if (code === "UPDATE_WORK_IN_PROGRESS") {
+      await showNotice({
+        title: t("settings.updateWorkTitle"),
+        body: t("settings.updateWorkBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     await showNotice({
       title: t("settings.updateInstallFailedTitle"),
       body: t("settings.updateInstallFailedBody"),
@@ -2918,11 +2929,7 @@ async function launchReleaseUpdate() {
     return;
   }
 
-  await showNotice({
-    title: t("settings.updateInstallerOpenedTitle"),
-    body: t("settings.updateInstallerOpenedBody"),
-    buttonLabel: t("common.close")
-  });
+  toast(t("settings.updateClosing"));
 }
 
 async function openLatestReleasePage() {
