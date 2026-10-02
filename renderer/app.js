@@ -3865,7 +3865,7 @@ async function startSpeechRecognition() {
     return;
   }
 
-  let source = sourceOverride || latestSourceJob();
+  let source = latestSourceJob();
   if (!source) {
     const added = await addFiles();
     source = added[0];
@@ -4198,7 +4198,7 @@ async function startLocalizedRender(sourceOverride = null) {
     return;
   }
 
-  let source = latestSourceJob();
+  let source = sourceOverride || latestSourceJob();
   if (!source) {
     const added = await addFiles();
     source = added[0];
