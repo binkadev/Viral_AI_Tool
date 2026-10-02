@@ -155,6 +155,28 @@ class AuthClient {
       accessToken
     });
   }
+
+  async sessions(accessToken) {
+    if (!accessToken) throw authError("AUTH_REQUIRED", "Access token is missing.");
+    return this.request("/v1/account/sessions", {
+      method: "GET",
+      accessToken
+    });
+  }
+
+  async revokeSession(sessionId, accessToken) {
+    if (!accessToken) throw authError("AUTH_REQUIRED", "Access token is missing.");
+
+    const id = String(sessionId || "").trim();
+    if (!/^[A-Za-z0-9._-]{8,160}$/.test(id)) {
+      throw authError("AUTH_SESSION_INVALID", "Session ID is invalid.");
+    }
+
+    return this.request("/v1/account/sessions/" + encodeURIComponent(id), {
+      method: "DELETE",
+      accessToken
+    });
+  }
 }
 
 module.exports = {
