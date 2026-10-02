@@ -41,6 +41,8 @@ $env:OPENAI_API_KEY="YOUR_PRIVATE_API_KEY"
 $env:VIRAL_AI_SPEECH_PROVIDER="openai"
 $env:VIRAL_AI_OPENAI_TRANSCRIBE_MODEL="whisper-1"
 $env:VIRAL_AI_OPENAI_TRANSLATION_MODEL="gpt-5-mini"
+$env:VIRAL_AI_VOICE_PROVIDER="openai"
+$env:VIRAL_AI_OPENAI_TTS_MODEL="gpt-4o-mini-tts"
 
 npm run dev:backend
 ```
@@ -62,6 +64,8 @@ Cloud speech: READY
 Speech model: whisper-1
 Cloud translation: READY
 Translation model: gpt-5-mini
+Cloud voice: READY
+Voice model: gpt-4o-mini-tts
 ```
 
 Never send or paste a real provider API key into chat, screenshots, source files, issue descriptions, or commits.
@@ -143,6 +147,47 @@ Batch size:         30 segments
 
 Changing the target language creates a new translation job. Retrying an interrupted translation for the same input reuses the original client job ID.
 
+## Test AI Voice / TTS
+
+After Cloud translation returns translated segments:
+
+1. Stay in **Video AI**.
+2. Go to step **Giọng AI / AI Voice**.
+3. Choose **Cloud**.
+4. For each detected speaker, choose one product voice.
+5. Use **Nghe thử / Preview** to check the selected voice.
+6. Start voice generation.
+7. Confirm that translated text may be sent to Cloud.
+
+Expected flow:
+
+```text
+Translated timed segments
+  -> speaker identity preserved
+  -> speaker -> product voice mapping
+  -> authenticated idempotent voice job
+  -> WAV generation per segment
+  -> generated duration check
+  -> protected audio download
+  -> local voice-cache
+  -> timing-risk hints
+```
+
+Voice provider/model names are not exposed in the customer UI. Product voice IDs remain stable even if the backend provider changes later.
+
+Development voice limits:
+
+```text
+Maximum segments:          300
+Maximum total characters:  60,000
+Maximum characters/segment: 4,096
+Preview text:               220 characters
+Preview cooldown:           3 seconds
+Temporary server audio TTL: 60 minutes
+```
+
+If a multi-segment voice job fails or is cancelled, completed segment audio is kept on the development backend. Retrying the same idempotent job regenerates only missing segments. After the completed server audio TTL expires, retrying the same job safely regenerates the audio.
+
 ## Development job guarantees
 
 The dev backend now implements:
@@ -165,7 +210,13 @@ The dev backend now implements:
 - translation job ownership and idempotency;
 - original transcript timing preserved after translation;
 - cancellation between translation batches;
-- timing-risk hints for significantly longer translated segments.
+- timing-risk hints for significantly longer translated segments;
+- product-facing voice catalog independent of provider voice IDs;
+- authenticated voice preview with cooldown;
+- per-speaker voice assignment;
+- resumable per-segment voice generation;
+- protected WAV download to desktop cache;
+- timing-risk hints when generated speech exceeds the original slot.
 
 The same idempotency key cannot be reused with different audio metadata.
 
