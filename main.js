@@ -475,6 +475,44 @@ ipcMain.handle('auth:me', async () => {
   }
 });
 
+ipcMain.handle('auth:sessions', async () => {
+  try {
+    const ready = await refreshSessionIfNeeded();
+    if (!ready) return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+
+    const accessToken = sessionStore?.getAccessToken();
+    if (!accessToken) return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+
+    const data = await authClient().sessions(accessToken);
+    return { ok: true, data };
+  } catch (error) {
+    console.error('[AuthSessions]', error?.code || error?.message);
+    return { ok: false, error: publicAuthError(error) };
+  }
+});
+
+ipcMain.handle('auth:revoke-session', async (_event, sessionId) => {
+  try {
+    const ready = await refreshSessionIfNeeded();
+    if (!ready) return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+
+    const accessToken = sessionStore?.getAccessToken();
+    if (!accessToken) return { ok: false, error: { code: 'AUTH_REQUIRED', details: {} } };
+
+    const data = await authClient().revokeSession(sessionId, accessToken);
+    if (data?.currentSessionRevoked) sessionStore?.clear();
+
+    return {
+      ok: true,
+      data,
+      localSessionCleared: data?.currentSessionRevoked === true
+    };
+  } catch (error) {
+    console.error('[AuthRevokeSession]', error?.code || error?.message);
+    return { ok: false, error: publicAuthError(error) };
+  }
+});
+
 ipcMain.handle('auth:logout', async () => {
   const refreshToken = sessionStore?.getRefreshToken() || null;
   const accessToken = sessionStore?.getAccessToken() || null;
