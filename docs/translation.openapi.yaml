@@ -228,6 +228,10 @@ components:
         text:
           type: string
           minLength: 1
+        speaker:
+          type:
+            - string
+            - "null"
 
     TranslationJob:
       type: object
@@ -314,6 +318,10 @@ components:
           type: string
         text:
           type: string
+        speaker:
+          type:
+            - string
+            - "null"
         lengthRatio:
           type: number
         timingRisk:
