@@ -106,6 +106,56 @@ jobs:
       - name: Build Windows NSIS installer
         run: npm run dist
 
+      - name: Smoke-test Windows installer
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $installer = Get-ChildItem release -File -Filter "*.exe" | Where-Object {
+            $_.Name -notlike "__uninstaller-*"
+          } | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Windows installer was not produced."
+          }
+
+          $installDir = "C:\ViralAIToolSmoke-$env:GITHUB_RUN_ID"
+          if (Test-Path $installDir) {
+            Remove-Item $installDir -Recurse -Force
+          }
+
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Silent installer failed with exit code $($process.ExitCode)."
+          }
+
+          $appExe = Join-Path $installDir "Viral AI Tool.exe"
+          if (-not (Test-Path $appExe)) {
+            throw "Installed Viral AI Tool executable was not found."
+          }
+
+          $versionInfo = (Get-Item $appExe).VersionInfo
+          if ($versionInfo.ProductVersion -notlike "$($pkg.version)*") {
+            throw "Installed ProductVersion $($versionInfo.ProductVersion) does not match package version $($pkg.version)."
+          }
+
+          $uninstaller = Get-ChildItem $installDir -File | Where-Object {
+            $_.Name -like "Uninstall*.exe"
+          } | Select-Object -First 1
+
+          if (-not $uninstaller) {
+            throw "NSIS uninstaller was not found."
+          }
+
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList "/S" -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Silent uninstaller failed with exit code $($uninstall.ExitCode)."
+          }
+
+          Start-Sleep -Milliseconds 500
+          if (Test-Path $installDir) {
+            Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Generate release manifest and SHA-256 checksums
         shell: pwsh
         run: |
