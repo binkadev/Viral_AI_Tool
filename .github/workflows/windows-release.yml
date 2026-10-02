@@ -77,6 +77,8 @@ jobs:
             commit = $env:GITHUB_SHA
             builtAt = (Get-Date).ToUniversalTime().ToString("o")
             source = "github-actions"
+            updateManifestUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json"
+            releasePageUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest"
           }
           $info | ConvertTo-Json | Set-Content -Path release-info.json -Encoding utf8
           Get-Content release-info.json
@@ -118,6 +120,7 @@ jobs:
             builtAt = (Get-Date).ToUniversalTime().ToString("o")
             platform = "win32"
             arch = "x64"
+            releasePage = "https://github.com/binkadev/Viral_AI_Tool/releases/tag/v$($pkg.version)"
             artifacts = $artifacts
           }
           $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path release/RELEASE-MANIFEST.json -Encoding utf8
