@@ -145,6 +145,7 @@ jobs:
             "\services\update\update-client.js",
             "\services\update\release-policy.js",
             "\services\diagnostics\logger.js",
+            "\services\diagnostics\bundle.js",
             "\renderer\index.html"
           )) {
             if ($listing -notcontains $required) {
