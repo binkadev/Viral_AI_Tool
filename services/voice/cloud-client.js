@@ -59,6 +59,7 @@ function stableApiError(status, payload = {}) {
     VOICE_AUDIO_NOT_FOUND: "VOICE_AUDIO_NOT_FOUND",
     VOICE_PREVIEW_INVALID: "VOICE_PREVIEW_INVALID",
     VOICE_PREVIEW_RATE_LIMITED: "VOICE_PREVIEW_RATE_LIMITED",
+    QUOTA_EXCEEDED: "VOICE_QUOTA_EXCEEDED",
     JOB_CONFLICT: "VOICE_JOB_CONFLICT",
     JOB_NOT_FOUND: "VOICE_JOB_NOT_FOUND",
     SERVICE_UNAVAILABLE: "VOICE_UNAVAILABLE"
@@ -73,6 +74,9 @@ function stableApiError(status, payload = {}) {
 
   if (status === 401 || status === 403) {
     return clientError("VOICE_AUTH_REQUIRED", "Authentication is required.", { status });
+  }
+  if (status === 402) {
+    return clientError("VOICE_QUOTA_EXCEEDED", "Cloud allowance is insufficient.", { status });
   }
   if (status === 413) {
     return clientError("VOICE_TOO_LARGE", "Voice input is too large.", { status });
