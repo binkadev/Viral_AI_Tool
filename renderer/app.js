@@ -366,6 +366,9 @@ function jobsTable(rows) {
           (job.isRenderOutput && normalizeStatus(job.status) === "processing"
             ? '<button type="button" data-job-action="cancel-export" data-job-id="' + escapeHtml(job.id) + '">■ <span>' + t("export.stop") + '</span></button>'
             : '') +
+          (job.isRenderOutput && normalizeStatus(job.status) === "failed"
+            ? '<button type="button" data-job-action="retry-export" data-job-id="' + escapeHtml(job.id) + '">↻ <span>' + t("export.retry") + '</span></button>'
+            : '') +
           '<div class="job-menu-separator"></div>' +
           '<button type="button" data-job-action="remove" data-job-id="' + escapeHtml(job.id) + '">− <span>' + t(job.isRenderOutput ? "file.removeHistory" : "file.removeLibrary") + '</span></button>' +
           ((jobFilePath(job) && job.fileState === "available")
@@ -3102,6 +3105,17 @@ async function handleJobAction(action, jobId) {
   if (action === "remove") return removeJobFromLibrary(job);
   if (action === "trash") return trashJobFile(job);
   if (action === "cancel-export") return cancelExportJob(job);
+  if (action === "retry-export") {
+    const source = state.jobs.find(item =>
+      !item.isRenderOutput &&
+      item.sourcePath === job.sourcePath
+    );
+    if (!source) {
+      toast(t("export.retrySourceMissing"));
+      return;
+    }
+    return job.localized ? startLocalizedRender(source) : startRealRender(source);
+  }
 }
 
 async function refreshFileStates({ notify = true } = {}) {
@@ -3676,7 +3690,7 @@ async function startSpeechRecognition() {
     return;
   }
 
-  let source = latestSourceJob();
+  let source = sourceOverride || latestSourceJob();
   if (!source) {
     const added = await addFiles();
     source = added[0];
@@ -3921,6 +3935,51 @@ async function handleExportBlock(response, source) {
     return;
   }
 
+  if (["VOICE_RESULT_REQUIRED", "VOICE_AUDIO_MISSING", "VOICE_AUDIO_INVALID"].includes(code)) {
+    await showNotice({
+      title: t("export.voiceAudioMissingTitle"),
+      body: t("export.voiceAudioMissingBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_AUDIO_UNTRUSTED") {
+    await showNotice({
+      title: t("export.voiceAudioInvalidTitle"),
+      body: t("export.voiceAudioInvalidBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (["TIMING_INVALID", "TIMING_OUTSIDE_VIDEO"].includes(code)) {
+    await showNotice({
+      title: t("export.timingInvalidTitle"),
+      body: t("export.timingInvalidBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "SUBTITLE_RENDER_UNAVAILABLE") {
+    await showNotice({
+      title: t("export.subtitleUnavailableTitle"),
+      body: t("export.subtitleUnavailableBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TOO_MANY_SEGMENTS") {
+    await showNotice({
+      title: t("export.tooManySegmentsTitle"),
+      body: t("export.tooManySegmentsBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   await showNotice({
     title: t("export.failedTitle"),
     body: t("export.failedBody"),
@@ -3958,7 +4017,7 @@ async function cancelExportJob(job) {
 }
 
 
-async function startLocalizedRender() {
+async function startLocalizedRender(sourceOverride = null) {
   if (!window.desktopAPI?.renderLocalizedVideo || !window.desktopAPI?.preflightLocalizedExport) {
     toast(t("media.desktopOnly"));
     return;
@@ -4146,13 +4205,13 @@ async function startLocalizedRender() {
   toast(t("export.localizedDone"));
 }
 
-async function startRealRender() {
+async function startRealRender(sourceOverride = null) {
   if (!window.desktopAPI?.renderVideo || !window.desktopAPI?.preflightExport) {
     toast(t("media.desktopOnly"));
     return;
   }
 
-  let source = latestSourceJob();
+  let source = sourceOverride || latestSourceJob();
   if (!source) {
     const added = await addFiles();
     source = added[0];
@@ -4715,7 +4774,25 @@ function bind() {
   });
 
   const renderButton = $("render");
-  if (renderButton) renderButton.onclick = startRealRender;
+  if (renderButton) renderButton.onclick = () => startLocalizedRender();
+
+  const burnSubtitlesToggle = $("burnSubtitlesToggle");
+  if (burnSubtitlesToggle) {
+    burnSubtitlesToggle.onclick = () => {
+      state.renderOptions.burnSubtitles = !state.renderOptions.burnSubtitles;
+      save();
+      render();
+    };
+  }
+
+  const mixOriginalAudioToggle = $("mixOriginalAudioToggle");
+  if (mixOriginalAudioToggle) {
+    mixOriginalAudioToggle.onclick = () => {
+      state.renderOptions.mixOriginalAudio = !state.renderOptions.mixOriginalAudio;
+      save();
+      render();
+    };
+  }
 
   const tts = $("tts");
   if (tts) tts.onclick = () => toast(t("voice.generated"));
@@ -4945,6 +5022,7 @@ if (window.desktopAPI) {
       const job = state.jobs.find(item => item.id === payload?.jobId);
       if (!job || ["cancelling", "cancelled"].includes(normalizeStatus(job.status))) return;
       job.progress = Math.max(0, Math.min(100, Number(payload.percent || 0)));
+      job.renderPhase = payload.phase || job.renderPhase || "rendering";
       job.renderSpeed = payload.speed || "";
       job.status = job.progress >= 100 ? "completed" : "processing";
       updateProgressElements(job);
