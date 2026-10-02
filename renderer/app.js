@@ -31,6 +31,11 @@ const state = {
     loadedAt: 0,
     errorCode: null
   },
+  release: {
+    info: null,
+    loading: false,
+    loadedAt: 0
+  },
   speech: {
     mode: saved.speech?.mode === "cloud" ? "cloud" : "local",
     language: saved.speech?.language || "auto",
@@ -2774,6 +2779,34 @@ async function openBillingPortal() {
   if (!opened?.ok) await billingErrorNotice("BILLING_REQUEST_FAILED");
 }
 
+async function loadReleaseInfo({ rerender = false } = {}) {
+  if (!window.desktopAPI?.getVersionInfo || state.release.loading) {
+    return state.release.info;
+  }
+
+  state.release.loading = true;
+  try {
+    const info = await window.desktopAPI.getVersionInfo();
+    state.release.info = info && typeof info === "object" ? info : null;
+    state.release.loadedAt = Date.now();
+  } catch {
+    state.release.info = null;
+    state.release.loadedAt = Date.now();
+  } finally {
+    state.release.loading = false;
+  }
+
+  if (rerender && state.page === "settings") render();
+  return state.release.info;
+}
+
+function releaseChannelLabel(channel) {
+  const value = String(channel || "").toLowerCase();
+  if (value === "stable") return t("settings.releaseStable");
+  if (value === "preview") return t("settings.releasePreview");
+  return t("settings.releaseDevelopment");
+}
+
 function settingsPage() {
   const settings = [
     [t("settings.autosave"), t("settings.autosaveDesc"), true],
@@ -2799,6 +2832,32 @@ function settingsPage() {
   const accountQuota = state.cloud.account?.quota || null;
   const accountAuthenticated = state.cloud.auth?.authenticated === true;
   const accountRemaining = Number(accountQuota?.remainingMinutes);
+
+  const releaseInfo = state.release.info;
+  const releaseCommit = releaseInfo?.commit
+    ? String(releaseInfo.commit).slice(0, 10)
+    : "—";
+  const releaseBuiltAt = releaseInfo?.builtAt
+    ? accountDateLabel(releaseInfo.builtAt)
+    : "—";
+  const releaseCard =
+    '<div class="card card-pad release-info-card">' +
+      '<div class="release-info-head"><div><div class="eyebrow">' + t("settings.releaseEyebrow") + '</div>' +
+        '<h3>' + t("settings.releaseTitle") + '</h3><p>' + t("settings.releaseDesc") + '</p></div>' +
+        '<span class="release-channel-badge ' + escapeHtml(releaseInfo?.channel || "development") + '">' +
+          escapeHtml(releaseChannelLabel(releaseInfo?.channel)) + '</span></div>' +
+      '<div class="release-facts">' +
+        '<div><span>' + t("settings.releaseVersion") + '</span><b>' + escapeHtml(releaseInfo?.version || "—") + '</b></div>' +
+        '<div><span>' + t("settings.releaseCommit") + '</span><b><code>' + escapeHtml(releaseCommit) + '</code></b></div>' +
+        '<div><span>' + t("settings.releaseBuiltAt") + '</span><b>' + escapeHtml(releaseBuiltAt) + '</b></div>' +
+        '<div><span>' + t("settings.releaseArchitecture") + '</span><b>' +
+          escapeHtml((releaseInfo?.platform || "—") + " · " + (releaseInfo?.arch || "—")) + '</b></div>' +
+        '<div><span>' + t("settings.releaseBuildType") + '</span><b>' +
+          escapeHtml(releaseInfo?.packaged ? t("settings.releasePackaged") : t("settings.releaseSource")) + '</b></div>' +
+        '<div><span>' + t("settings.releaseChannel") + '</span><b>' +
+          escapeHtml(releaseChannelLabel(releaseInfo?.channel)) + '</b></div>' +
+      '</div>' +
+    '</div>';
 
   const accountCard =
     '<div class="card card-pad account-settings-card">' +
@@ -2924,6 +2983,7 @@ function settingsPage() {
     '"><button id="chooseOutput" class="button ghost" type="button">' + t("common.choose") + '</button></div>' +
     '<div style="margin-top:14px"><label class="label">' + t("common.resolution") + '</label><select class="select"><option>1080p</option><option>4K</option></select></div>' +
     '</div>' +
+    releaseCard +
     accountCard +
     developerCard +
     '</div>';
@@ -5115,6 +5175,17 @@ function render() {
       Date.now() - state.cloud.statusCheckedAt > 30000;
     if (cloudStale && !state.cloud.loading) {
       setTimeout(() => refreshCloudUiState({ rerender: true }), 0);
+    }
+  }
+
+  if (state.page === "settings" && window.desktopAPI?.getVersionInfo) {
+    const releaseStale =
+      !state.release.info ||
+      !state.release.loadedAt ||
+      Date.now() - state.release.loadedAt > 5 * 60 * 1000;
+
+    if (releaseStale && !state.release.loading) {
+      setTimeout(() => loadReleaseInfo({ rerender: true }), 0);
     }
   }
 
