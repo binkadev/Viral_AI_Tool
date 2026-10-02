@@ -97,6 +97,17 @@ function resolvePlan(value) {
   return PLAN_DEFINITIONS[id] || PLAN_DEFINITIONS.free;
 }
 
+function isKnownPlan(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+
+  const normalizedRaw = raw.replace(/[-]+/g, "_").replace(/\s+/g, " ");
+  return Boolean(
+    PLAN_ALIASES[normalizedRaw] ||
+    PLAN_ALIASES[normalizedRaw.replace(/\s+/g, "_")]
+  );
+}
+
 function publicEntitlements(value) {
   const plan = resolvePlan(value);
   return {
@@ -166,6 +177,7 @@ module.exports = {
   PLAN_DEFINITIONS,
   normalizePlanId,
   resolvePlan,
+  isKnownPlan,
   publicEntitlements,
   featureForService,
   assertFeature,
