@@ -29,6 +29,12 @@ const {
   cancelAllTranslations,
   serializeTranslationError
 } = require('./services/translation');
+const {
+  createService: createVoiceService,
+  activeVoiceCount,
+  cancelAllVoice,
+  serializeVoiceError
+} = require('./services/voice');
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
@@ -64,6 +70,7 @@ function getActiveWorkCount() {
   return getActiveRenderCount() +
     activeSpeechCount() +
     activeTranslationCount() +
+    activeVoiceCount() +
     speechModelManager.activeDownloadCount();
 }
 
@@ -133,6 +140,19 @@ function translationService() {
     backendUrl: cloudConfig.backendUrl || '',
     getAccessToken: () => sessionStore?.getAccessToken() || null,
     appVersion: app.getVersion()
+  });
+}
+
+function voiceService() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+
+  return createVoiceService({
+    backendUrl: cloudConfig.backendUrl || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion(),
+    userDataPath: app.getPath('userData')
   });
 }
 
@@ -265,6 +285,7 @@ function createWindow() {
         cancelAllRenders();
         await cancelAllSpeech();
         await cancelAllTranslations();
+        await cancelAllVoice();
         speechModelManager.cancelAll();
         await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
@@ -774,6 +795,86 @@ ipcMain.handle('translation:cancel', async (_event, jobId) => {
   } catch (error) {
     const serialized = serializeTranslationError(error);
     console.error('[TranslationCancel]', serialized.code, serialized.technicalMessage);
+    return { ok: false, cancelled: false, error: { code: serialized.code } };
+  }
+});
+
+ipcMain.handle('voice:status', async () => {
+  try {
+    await refreshSessionIfNeeded();
+    return await voiceService().status();
+  } catch (error) {
+    const serialized = serializeVoiceError(error);
+    console.error('[VoiceStatus]', serialized.code, serialized.technicalMessage);
+    return { ready: false, code: serialized.code, catalog: [] };
+  }
+});
+
+ipcMain.handle('voice:catalog', async () => {
+  try {
+    await refreshSessionIfNeeded();
+    return { ok: true, data: await voiceService().catalog() };
+  } catch (error) {
+    const serialized = serializeVoiceError(error);
+    console.error('[VoiceCatalog]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
+});
+
+ipcMain.handle('voice:preview', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    await refreshSessionIfNeeded();
+
+    const data = await voiceService().preview({
+      voiceId: safePayload.voiceId,
+      text: safePayload.text,
+      language: safePayload.language
+    });
+
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeVoiceError(error);
+    console.error('[VoicePreview]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
+});
+
+ipcMain.handle('voice:start', async (event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    await refreshSessionIfNeeded();
+
+    const data = await voiceService().start({
+      jobId: safePayload.jobId,
+      language: safePayload.language,
+      assignments: safePayload.assignments,
+      segments: Array.isArray(safePayload.segments) ? safePayload.segments : [],
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('voice:progress', progress);
+        }
+      }
+    });
+
+    return { ok: true, data };
+  } catch (error) {
+    const serialized = serializeVoiceError(error);
+    console.error('[VoiceGeneration]', serialized.code, serialized.technicalMessage);
+    return { ok: false, error: { code: serialized.code, details: serialized.details } };
+  }
+});
+
+ipcMain.handle('voice:cancel', async (_event, jobId) => {
+  if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false, cancelled: false };
+
+  try {
+    return { ok: true, cancelled: await voiceService().cancel(jobId) };
+  } catch (error) {
+    const serialized = serializeVoiceError(error);
+    console.error('[VoiceCancel]', serialized.code, serialized.technicalMessage);
     return { ok: false, cancelled: false, error: { code: serialized.code } };
   }
 });
