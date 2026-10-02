@@ -3451,3 +3451,59 @@ html[data-scale="compact"] .hero p{font-size:13px}
   flex-wrap:wrap;
   margin-top:14px;
 }
+
+
+/* Support diagnostics */
+.diagnostics-card{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.diagnostics-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.diagnostics-head h3{
+  margin:4px 0 5px;
+}
+.diagnostics-head p{
+  margin:0;
+  color:var(--text-soft);
+  font-size:12px;
+  line-height:1.5;
+}
+.diagnostics-safe-badge{
+  display:inline-flex;
+  align-items:center;
+  white-space:nowrap;
+  min-height:26px;
+  padding:0 9px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--success) 10%,var(--surface-solid));
+  color:var(--success);
+  font-size:9px;
+  font-weight:800;
+}
+.diagnostics-privacy-note{
+  display:grid;
+  gap:4px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.diagnostics-privacy-note b{
+  font-size:10px;
+}
+.diagnostics-privacy-note span{
+  color:var(--text-soft);
+  font-size:10px;
+  line-height:1.5;
+}
+@media(max-width:760px){
+  .diagnostics-head{
+    flex-direction:column;
+  }
+}
