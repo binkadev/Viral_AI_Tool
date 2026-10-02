@@ -24,6 +24,9 @@ jobs:
       - name: Test durable backend state
         run: node dev-backend/tests/state-persistence.test.js
 
+      - name: Test backend restart and sessions
+        run: node dev-backend/tests/server-restart.integration.test.js
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
