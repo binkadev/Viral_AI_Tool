@@ -1370,6 +1370,8 @@ window.I18N = (() => {
         connectionBody: "Generation did not finish. Check your connection and try again; the existing job will be recovered when possible.",
         conflictTitle: "Previous voice job cannot be reused",
         conflictBody: "The content or voice selection changed. Viral AI Tool will not combine audio from different configurations.",
+        resultNotRetainedTitle: "The previous voice result is no longer retained",
+        resultNotRetainedBody: "The previous job completed and allowance was recorded. The app will not regenerate the same job ID automatically. Create a new voice job if needed.",
         audioExpiredTitle: "Temporary Cloud audio has expired",
         audioExpiredBody: "Generate the voice again. Audio already downloaded successfully to this computer remains available.",
         failedTitle: "AI voice could not be completed",
