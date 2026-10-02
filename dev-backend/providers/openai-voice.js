@@ -15,6 +15,7 @@ const PRODUCT_VOICES = [
   {
     id: "an",
     name: "An",
+    tier: "standard",
     styleKey: "warmNatural",
     internalVoice: "marin",
     instructions: "Speak naturally, warmly, and clearly. Keep a conversational pace and avoid exaggerated emotion."
@@ -22,6 +23,7 @@ const PRODUCT_VOICES = [
   {
     id: "minh",
     name: "Minh",
+    tier: "standard",
     styleKey: "clearCalm",
     internalVoice: "cedar",
     instructions: "Speak clearly and calmly with a confident, natural conversational rhythm."
@@ -29,6 +31,7 @@ const PRODUCT_VOICES = [
   {
     id: "vy",
     name: "Vy",
+    tier: "standard",
     styleKey: "brightFriendly",
     internalVoice: "coral",
     instructions: "Speak in a bright, friendly, natural tone. Keep the delivery smooth and conversational."
@@ -36,6 +39,7 @@ const PRODUCT_VOICES = [
   {
     id: "khoi",
     name: "Khôi",
+    tier: "premium",
     styleKey: "grounded",
     internalVoice: "onyx",
     instructions: "Speak with a grounded, steady, natural tone and clear articulation."
@@ -43,6 +47,7 @@ const PRODUCT_VOICES = [
   {
     id: "linh",
     name: "Linh",
+    tier: "premium",
     styleKey: "softStory",
     internalVoice: "shimmer",
     instructions: "Speak softly and naturally with a storytelling feel, while remaining clear and easy to understand."
@@ -50,7 +55,7 @@ const PRODUCT_VOICES = [
 ];
 
 function publicCatalog() {
-  return PRODUCT_VOICES.map(({ id, name, styleKey }) => ({ id, name, styleKey }));
+  return PRODUCT_VOICES.map(({ id, name, tier, styleKey }) => ({ id, name, tier, styleKey }));
 }
 
 function resolveVoice(voiceId) {
