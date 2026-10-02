@@ -58,6 +58,7 @@ let uiLocale = 'vi';
 let lastVerifiedUpdate = null;
 let diagnosticLogger = null;
 let removeDiagnosticProcessHandlers = null;
+let removeDiagnosticConsoleCapture = null;
 
 function releaseInfo() {
   let metadata = {};
@@ -404,6 +405,7 @@ app.whenReady().then(() => {
     tempPath: app.getPath('temp')
   });
   removeDiagnosticProcessHandlers = diagnosticLogger.installProcessHandlers();
+  removeDiagnosticConsoleCapture = diagnosticLogger.installConsoleCapture(console);
   diagnosticLogger.info('app.started', {
     release: releaseInfo(),
     electron: process.versions.electron,
@@ -432,7 +434,9 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
   try { removeDiagnosticProcessHandlers?.(); } catch {}
+  try { removeDiagnosticConsoleCapture?.(); } catch {}
   removeDiagnosticProcessHandlers = null;
+  removeDiagnosticConsoleCapture = null;
 });
 
 ipcMain.handle('app:version-info', () => releaseInfo());
