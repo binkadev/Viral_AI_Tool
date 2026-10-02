@@ -1987,9 +1987,13 @@ function usagePage() {
     [t("usage.exportMinutes"), usage?.exportMinutes]
   ];
 
+  const reserved = Number(quota?.reservedMinutes);
   const allowance = Number.isFinite(remaining)
     ? t("usage.minutesRemaining", { minutes: Math.max(0, Math.floor(remaining)), date: resetLabel })
     : t("usage.allowanceUnavailable");
+  const reservationNote = Number.isFinite(reserved) && reserved > 0
+    ? t("usage.minutesReserved", { minutes: Math.max(0, Math.floor(reserved)) })
+    : "";
 
   const monthlyValue = Number.isFinite(used) && Number.isFinite(total)
     ? Math.floor(used).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") + " / " +
@@ -1999,6 +2003,7 @@ function usagePage() {
   return '<div class="grid-2">' +
     '<div class="card card-pad"><div class="eyebrow">' + t("usage.currentPlan") + '</div><h3>' +
       escapeHtml(user?.plan || auth?.plan || "—") + '</h3><p class="muted">' + escapeHtml(allowance) + '</p>' +
+      (reservationNote ? '<p class="muted usage-reservation-note">' + escapeHtml(reservationNote) + '</p>' : '') +
       '<div class="row"><button id="usageRefresh" class="button ghost" type="button">' + t("usage.refresh") + '</button>' +
       '<button id="usageLogout" class="button ghost" type="button">' + t("account.signOut") + '</button></div></div>' +
     '<div class="card card-pad"><div class="eyebrow">' + t("usage.monthlyUsage") + '</div><div class="stat-value">' +
@@ -3041,6 +3046,7 @@ async function handleSpeechBlock(response, source) {
   }
 
   if (["CLOUD_QUOTA_EXCEEDED", "CLOUD_PLAN_REQUIRED"].includes(code)) {
+    await refreshCloudUiState({ rerender: true });
     await showNotice({
       title: t("speech.cloudQuotaTitle"),
       body: t("speech.cloudQuotaBody"),
@@ -3217,6 +3223,9 @@ async function startSpeechRecognition() {
       }
     : null;
 
+  if (speechJob.mode === "cloud") {
+    await refreshCloudUiState({ rerender: false });
+  }
   save();
   render();
   toast(t("speech.transcriptReady"));
