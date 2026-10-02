@@ -38,6 +38,16 @@ const state = {
     job: saved.translation?.job || null,
     result: saved.translation?.result || null
   },
+  voice: {
+    mode: saved.voice?.mode === "local" ? "local" : "cloud",
+    cloudStatus: null,
+    statusCheckedAt: 0,
+    statusCheckPending: false,
+    catalog: [],
+    assignments: saved.voice?.assignments || {},
+    job: saved.voice?.job || null,
+    result: saved.voice?.result || null
+  },
   jobs: saved.jobs || [
     { name: "Douyin_Product_042.mp4", lang: "vi", status: "processing", progress: 73, time: "2 min ago" },
     { name: "UGC_Beauty_118.mp4", lang: "ko", status: "completed", progress: 100, time: "18 min ago" },
@@ -63,6 +73,14 @@ if (state.translation.job && ["validating", "queued", "translating", "cancelling
     ...state.translation.job,
     status: "interrupted",
     progress: Number(state.translation.job.progress || 0)
+  };
+}
+
+if (state.voice.job && ["validating", "queued", "generating", "downloading", "cancelling"].includes(state.voice.job.status)) {
+  state.voice.job = {
+    ...state.voice.job,
+    status: "interrupted",
+    progress: Number(state.voice.job.progress || 0)
   };
 }
 
@@ -108,6 +126,12 @@ function save() {
       preserveTone: state.translation.preserveTone,
       job: state.translation.job,
       result: state.translation.result
+    },
+    voice: {
+      mode: state.voice.mode,
+      assignments: state.voice.assignments,
+      job: state.voice.job,
+      result: state.voice.result
     },
     jobs: state.jobs.slice(0, 50).map(({ thumbnail, previewUrl, ...job }) => job)
   }));
@@ -1501,10 +1525,17 @@ function activeTranslationJobForPath(filePath) {
   return ["validating", "queued", "translating", "cancelling"].includes(job.status) ? job : null;
 }
 
+function activeVoiceJobForPath(filePath) {
+  const job = state.voice.job;
+  if (!filePath || !job || job.sourcePath !== filePath) return null;
+  return ["validating", "queued", "generating", "downloading", "cancelling"].includes(job.status) ? job : null;
+}
+
 function activeWorkCountForPath(filePath) {
   return activeRenderJobsForPath(filePath).length +
     (activeSpeechJobForPath(filePath) ? 1 : 0) +
-    (activeTranslationJobForPath(filePath) ? 1 : 0);
+    (activeTranslationJobForPath(filePath) ? 1 : 0) +
+    (activeVoiceJobForPath(filePath) ? 1 : 0);
 }
 
 async function checkJobFile(job, { notify = false } = {}) {
@@ -1590,6 +1621,8 @@ async function relinkJob(job) {
     if (state.speech.job?.sourcePath === oldPath) state.speech.job = null;
     if (state.translation.result?.sourcePath === oldPath) state.translation.result = null;
     if (state.translation.job?.sourcePath === oldPath) state.translation.job = null;
+    if (state.voice.result?.sourcePath === oldPath) state.voice.result = null;
+    if (state.voice.job?.sourcePath === oldPath) state.voice.job = null;
 
     job.sourcePath = picked.path;
     job.name = picked.name;
@@ -1653,7 +1686,8 @@ async function trashJobFile(job) {
     : activeRenderJobsForPath(filePath);
   const activeSpeech = activeSpeechJobForPath(filePath);
   const activeTranslation = activeTranslationJobForPath(filePath);
-  const activeCount = activeRenders.length + (activeSpeech ? 1 : 0) + (activeTranslation ? 1 : 0);
+  const activeVoice = activeVoiceJobForPath(filePath);
+  const activeCount = activeRenders.length + (activeSpeech ? 1 : 0) + (activeTranslation ? 1 : 0) + (activeVoice ? 1 : 0);
 
   const confirmed = await confirmAction({
     title: activeCount ? t("file.trashBusyTitle") : t("file.trashTitle"),
@@ -1691,6 +1725,15 @@ async function trashJobFile(job) {
       return;
     }
     activeTranslation.status = "cancelled";
+  }
+
+  if (activeVoice) {
+    const stopped = await window.desktopAPI.cancelVoice?.(activeVoice.id);
+    if (!stopped?.cancelled) {
+      toast(t("file.stopWorkFailed"));
+      return;
+    }
+    activeVoice.status = "cancelled";
   }
 
   if (activeCount) {
