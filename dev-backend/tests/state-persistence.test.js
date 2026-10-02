@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 
 const { createDurableStateStore } = require("../state-store");
+const { createAuditLog } = require("../audit-log");
 const billing = require("../billing");
 
 function tempDir() {
@@ -38,6 +39,62 @@ function testDurableState() {
     fs.readdirSync(root).some(name => name.includes(".corrupt-")),
     "corrupt state should be backed up"
   );
+
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+function testJobReceiptPersistence() {
+  const root = tempDir();
+  const statePath = path.join(root, "state.json");
+
+  let store = createDurableStateStore(statePath);
+  const jobs = store.get("jobs", {});
+  jobs.speech = {
+    jobs: {
+      "sp_1": {
+        id: "sp_1",
+        state: "processing",
+        result: null,
+        reservedMinutes: 2
+      }
+    },
+    idempotency: {
+      "user-1:client-job-1": "sp_1"
+    }
+  };
+  store.set("jobs", jobs);
+
+  store = createDurableStateStore(statePath);
+  const restored = store.get("jobs", {}).speech;
+
+  assert.strictEqual(restored.jobs.sp_1.state, "processing");
+  assert.strictEqual(restored.jobs.sp_1.result, null);
+  assert.strictEqual(restored.idempotency["user-1:client-job-1"], "sp_1");
+
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+function testAuditSanitization() {
+  const root = tempDir();
+  const auditPath = path.join(root, "audit.jsonl");
+  const audit = createAuditLog(auditPath);
+
+  audit.write("auth.test", {
+    userId: "user-1",
+    password: "do-not-store",
+    accessToken: "secret-token",
+    nested: {
+      authorization: "Bearer hidden",
+      safe: "visible"
+    }
+  });
+
+  const raw = fs.readFileSync(auditPath, "utf8");
+  assert(raw.includes("user-1"));
+  assert(raw.includes("visible"));
+  assert(!raw.includes("do-not-store"));
+  assert(!raw.includes("secret-token"));
+  assert(!raw.includes("Bearer hidden"));
 
   fs.rmSync(root, { recursive: true, force: true });
 }
@@ -98,6 +155,8 @@ function testBillingPersistence() {
 
 function run() {
   testDurableState();
+  testJobReceiptPersistence();
+  testAuditSanitization();
   testBillingPersistence();
   console.log("Backend durable-state tests passed.");
 }
