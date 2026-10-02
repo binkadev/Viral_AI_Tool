@@ -1805,30 +1805,45 @@ function aiVideoPage() {
 }
 
 function voicePage() {
-  function wave() {
-    return Array.from({ length: 22 }, (_, i) => '<i style="height:' + (7 + (i * 11) % 17) + 'px"></i>').join("");
-  }
-  const voices = [
-    ["Minh", state.locale === "vi" ? "Tiếng Việt · Nam" : "Vietnamese · Male", "M"],
-    ["Vy", state.locale === "vi" ? "Tiếng Việt · Nữ" : "Vietnamese · Female", "V"],
-    ["Jisoo", state.locale === "vi" ? "Tiếng Hàn · Nữ" : "Korean · Female", "J"],
-    ["Haruto", state.locale === "vi" ? "Tiếng Nhật · Nam" : "Japanese · Male", "H"],
-    ["Ava", "English · Female", "A"],
-    ["Noah", "English · Male", "N"]
-  ];
-  return '<div class="grid-2"><div class="card card-pad"><div class="eyebrow">' + t("voice.ttsEyebrow") + "</div><h3>" + t("voice.ttsTitle") +
-    '</h3><textarea class="textarea" rows="6">' + t("voice.sampleText") + '</textarea><div class="row" style="margin-top:8px">' +
-    '<select class="select"><option>Minh · ' + languageName("vi") + '</option><option>Vy · ' + languageName("vi") + '</option><option>Ava · English</option></select>' +
-    '<button id="tts" class="button primary" type="button">' + t("voice.generate") + "</button></div></div>" +
-    '<div class="card card-pad"><div class="eyebrow">' + t("voice.cloneEyebrow") + "</div><h3>" + t("voice.cloneTitle") + "</h3><p class=\"muted\">" +
-    t("voice.cloneDesc") + '</p><div class="dropzone"><div class="dropzone-icon">◖</div><strong>' + t("voice.upload") + "</strong><p>" + t("voice.uploadDesc") +
-    "</p></div></div></div>" +
-    '<div class="section-head"><div><h3>' + t("voice.library") + "</h3></div></div>" +
-    '<div class="voice-grid">' + voices.map((x) =>
-      '<div class="voice-card"><div class="voice-top"><div class="voice-avatar">' + x[2] + '</div><div class="voice-meta"><b>' + x[0] +
-      "</b><span>" + x[1] + '</span></div></div><div class="wave">' + wave() + '</div><button class="button ghost small previewVoice" type="button">▶ ' +
-      t("common.preview") + "</button></div>"
-    ).join("") + "</div>";
+  const catalog = Array.isArray(state.voice.catalog) ? state.voice.catalog : [];
+  const defaultVoice = catalog[0]?.id || "";
+  const language = state.translation.targetLanguage || "vi";
+  const sample = voicePreviewSample(language);
+
+  return '<div class="grid-2"><div class="card card-pad"><div class="eyebrow">' + t("voice.ttsEyebrow") + '</div>' +
+    '<h3>' + t("voice.ttsTitle") + '</h3><p class="muted">' + t("voice.previewOnlyDesc") + '</p>' +
+    '<label class="label" for="voiceStudioText">' + t("voice.sampleLabel") + '</label>' +
+    '<textarea id="voiceStudioText" class="textarea" rows="5" maxlength="220">' + escapeHtml(sample) + '</textarea>' +
+    '<div class="voice-studio-controls"><select id="voiceStudioLanguage" class="select">' +
+      '<option value="vi"' + (language === "vi" ? " selected" : "") + '>' + languageName("vi") + '</option>' +
+      '<option value="en"' + (language === "en" ? " selected" : "") + '>English</option>' +
+      '<option value="ko"' + (language === "ko" ? " selected" : "") + '>' + languageName("ko") + '</option>' +
+      '<option value="ja"' + (language === "ja" ? " selected" : "") + '>' + languageName("ja") + '</option>' +
+    '</select><select id="voiceStudioVoice" class="select">' +
+      (catalog.length
+        ? catalog.map(voice => '<option value="' + escapeHtml(voice.id) + '">' +
+            escapeHtml(voice.name + (voiceStyleLabel(voice) ? " · " + voiceStyleLabel(voice) : "")) + '</option>').join("")
+        : '<option value="">' + t("voice.loadingVoices") + '</option>') +
+    '</select><button id="voiceStudioPreview" class="button primary" type="button"' + (!defaultVoice ? " disabled" : "") + '>▶ ' +
+      t("voice.previewButton") + '</button></div>' +
+    '<div class="ai-voice-disclosure"><span aria-hidden="true">AI</span><p>' + t("voiceWorkflow.aiDisclosure") + '</p></div></div>' +
+    '<div class="card card-pad"><div class="eyebrow">' + t("voice.cloneEyebrow") + '</div><h3>' + t("voice.cloneTitle") + '</h3>' +
+      '<p class="muted">' + t("voice.cloneCommercialDesc") + '</p>' +
+      '<div class="voice-feature-pending"><b>' + t("voice.clonePendingTitle") + '</b><span>' + t("voice.clonePendingBody") + '</span></div>' +
+      '<button class="button ghost" type="button" disabled>' + t("voice.cloneUnavailable") + '</button></div></div>' +
+    '<div class="section-head"><div><h3>' + t("voice.library") + '</h3><p>' + t("voice.libraryDesc") + '</p></div></div>' +
+    '<div class="voice-grid">' +
+      (catalog.length
+        ? catalog.map(voice =>
+            '<div class="voice-card"><div class="voice-top"><div class="voice-avatar">' +
+              escapeHtml(String(voice.name || "?").slice(0,1).toUpperCase()) + '</div><div class="voice-meta"><b>' +
+              escapeHtml(voice.name) + '</b><span>' + escapeHtml(voiceStyleLabel(voice)) + '</span></div></div>' +
+              '<div class="wave">' + Array.from({ length: 22 }, (_, i) => '<i style="height:' + (7 + (i * 11) % 17) + 'px"></i>').join("") + '</div>' +
+              '<button class="button ghost small voice-studio-card-preview" data-voice-id="' + escapeHtml(voice.id) + '" type="button">▶ ' +
+                t("common.preview") + '</button></div>'
+          ).join("")
+        : '<div class="card card-pad voice-library-empty">' + t("voice.cloudRequired") + '</div>') +
+    '</div>';
 }
 
 function editorPage() {
