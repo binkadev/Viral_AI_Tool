@@ -16,6 +16,8 @@ on:
       - "renderer/**"
       - "services/**"
       - "assets/**"
+      - "tests/release-policy.test.js"
+      - "tests/release-assets.test.js"
       - ".github/workflows/windows-release.yml"
 
 permissions:
@@ -47,127 +49,7 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          if ($pkg.version -notmatch '^\d+\.\d+\.\d+
-      - name: Require Windows code signing for tagged release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
-            throw "Tagged releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD repository secrets."
-          }
-
-      - name: Verify Windows release assets
-        run: npm run test:release-assets
-
-      - name: Audit runtime dependencies
-        run: npm audit --omit=dev --audit-level=high
-
-      - name: Run backend state tests
-        run: npm run test:backend-state
-
-      - name: Run restart/session integration tests
-        run: npm run test:backend-restart
-
-      - name: Run production SQLite integration tests
-        run: npm run test:backend-production
-
-      - name: Run release policy tests
-        run: npm run test:release-policy
-
-      - name: Prepare embedded release metadata
-        shell: pwsh
-        run: |
-          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
-          $info = [ordered]@{
-            schemaVersion = 1
-            channel = $channel
-            commit = $env:GITHUB_SHA
-            builtAt = (Get-Date).ToUniversalTime().ToString("o")
-            source = "github-actions"
-            updateManifestUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json"
-            releasePageUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest"
-          }
-          $info | ConvertTo-Json | Set-Content -Path release-info.json -Encoding utf8
-          Get-Content release-info.json
-
-      - name: Build Windows NSIS installer
-        run: npm run dist
-
-      - name: Generate release manifest and SHA-256 checksums
-        shell: pwsh
-        run: |
-          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
-          $files = Get-ChildItem release -File | Where-Object {
-            $_.Extension -in ".exe", ".blockmap", ".yml"
-          }
-          if (-not $files) {
-            throw "No release artifacts were produced."
-          }
-
-          $artifacts = @()
-          $lines = foreach ($file in $files) {
-            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            $artifact = [ordered]@{
-              file = $file.Name
-              sizeBytes = $file.Length
-              sha256 = $hash
-            }
-            if ($channel -eq "stable" -and $file.Extension -eq ".exe") {
-              $encodedName = [uri]::EscapeDataString($file.Name).Replace("%20", "%20")
-              $artifact.downloadUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/download/v$($pkg.version)/$encodedName"
-            }
-            $artifacts += $artifact
-            "$hash  $($file.Name)"
-          }
-
-          $lines | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
-
-          $manifest = [ordered]@{
-            schemaVersion = 1
-            product = "Viral AI Tool"
-            version = $pkg.version
-            channel = $channel
-            commit = $env:GITHUB_SHA
-            builtAt = (Get-Date).ToUniversalTime().ToString("o")
-            platform = "win32"
-            arch = "x64"
-            releasePage = "https://github.com/binkadev/Viral_AI_Tool/releases/tag/v$($pkg.version)"
-            artifacts = $artifacts
-          }
-          $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path release/RELEASE-MANIFEST.json -Encoding utf8
-
-          Get-Content release/SHA256SUMS.txt
-          Get-Content release/RELEASE-MANIFEST.json
-
-      - name: Upload Windows build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Viral-AI-Tool-Windows-${{ github.sha }}
-          path: |
-            release/*.exe
-            release/*.blockmap
-            release/*.yml
-            release/SHA256SUMS.txt
-            release/RELEASE-MANIFEST.json
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes --title "Viral AI Tool $env:GITHUB_REF_NAME"
-
-          Get-ChildItem release -File | Where-Object {
-            $_.Extension -in ".exe", ".blockmap", ".yml" -or $_.Name -in "SHA256SUMS.txt", "RELEASE-MANIFEST.json"
-          } | ForEach-Object {
-            gh release upload $env:GITHUB_REF_NAME $_.FullName --clobber
-          }
-) {
+          if ($pkg.version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Tagged Stable releases require a non-prerelease X.Y.Z package version."
           }
           $expected = "v$($pkg.version)"
@@ -242,7 +124,7 @@ jobs:
               sha256 = $hash
             }
             if ($channel -eq "stable" -and $file.Extension -eq ".exe") {
-              $encodedName = [uri]::EscapeDataString($file.Name).Replace("%20", "%20")
+              $encodedName = [uri]::EscapeDataString($file.Name)
               $artifact.downloadUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/download/v$($pkg.version)/$encodedName"
             }
             $artifacts += $artifact
