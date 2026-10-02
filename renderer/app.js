@@ -1412,6 +1412,16 @@ async function previewStudioVoice(voiceId) {
   if (!response?.ok) {
     const code = response?.error?.code || "VOICE_FAILED";
 
+    if (code === "VOICE_SUBSCRIPTION_INACTIVE") {
+      await refreshCloudUiState({ rerender: true });
+      await showNotice({
+        title: t("voiceWorkflow.subscriptionTitle"),
+        body: t("voiceWorkflow.subscriptionBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     if (code === "VOICE_PLAN_REQUIRED") {
       await showNotice({
         title: t("voiceWorkflow.planTitle"),
@@ -3902,8 +3912,8 @@ function openLoginModal() {
     root.classList.add("hidden");
     state.cloud.auth = response.data?.status || null;
     state.cloud.account = response.data?.account || null;
-    state.cloud.accountOffline = false;
-    state.cloud.accountVerifiedAt = null;
+    state.cloud.accountOffline = response.data?.offline === true;
+    state.cloud.accountVerifiedAt = response.data?.verifiedAt || null;
     state.cloud.statusCheckedAt = Date.now();
     state.speech.providerStatus = null;
     state.speech.statusCheckedAt = 0;
