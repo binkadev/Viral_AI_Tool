@@ -126,6 +126,28 @@ jobs:
       - name: Build Windows NSIS installer
         run: npm run dist
 
+      - name: Verify packaged release contents
+        shell: pwsh
+        run: |
+          $asar = Join-Path "release\win-unpacked\resources" "app.asar"
+          if (-not (Test-Path $asar)) {
+            throw "Packaged app.asar was not produced."
+          }
+
+          $listing = npx asar list $asar
+          foreach ($required in @(
+            "\release-info.json",
+            "\main.js",
+            "\preload.js",
+            "\services\update\update-client.js",
+            "\services\update\release-policy.js",
+            "\renderer\index.html"
+          )) {
+            if ($listing -notcontains $required) {
+              throw "Packaged app.asar is missing required file: $required"
+            }
+          }
+
       - name: Smoke-test Windows installer
         shell: pwsh
         run: |
