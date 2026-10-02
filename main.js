@@ -49,6 +49,42 @@ let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
 
+function releaseInfo() {
+  let metadata = {};
+
+  try {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'release-info.json'), 'utf8')
+    );
+    if (raw && typeof raw === 'object') metadata = raw;
+  } catch {}
+
+  const allowedChannels = new Set(['development', 'preview', 'stable']);
+  const channel = allowedChannels.has(String(metadata.channel || '').toLowerCase())
+    ? String(metadata.channel).toLowerCase()
+    : (app.isPackaged ? 'stable' : 'development');
+
+  const commit = /^[a-f0-9]{7,40}$/i.test(String(metadata.commit || ''))
+    ? String(metadata.commit).toLowerCase()
+    : null;
+
+  const builtAt = metadata.builtAt && !Number.isNaN(Date.parse(metadata.builtAt))
+    ? new Date(metadata.builtAt).toISOString()
+    : null;
+
+  return {
+    name: app.getName(),
+    version: app.getVersion(),
+    channel,
+    commit,
+    builtAt,
+    source: String(metadata.source || (app.isPackaged ? 'package' : 'workspace')).slice(0, 80),
+    platform: process.platform,
+    arch: process.arch,
+    packaged: app.isPackaged
+  };
+}
+
 function closeCopy() {
   if (uiLocale === 'en') {
     return {
@@ -358,6 +394,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+ipcMain.handle('app:version-info', () => releaseInfo());
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:maximize-toggle', () => {
