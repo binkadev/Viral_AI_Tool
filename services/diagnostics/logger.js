@@ -39,7 +39,9 @@ function createRedactor({ userDataPath, tempPath } = {}) {
 
     const replacements = [
       [/https?:\/\/[^\s"'<>]+/gi, "<URL>"],
+      [/\\\\[^\\\s"'<>]+\\[^\s"'<>|]+/g, "<PATH>"],
       [/\b[A-Z]:[\\/][^\s"'<>|]+/gi, "<PATH>"],
+      [/(^|[\s"'(])\/(?:[^\s"'<>]+\/)*[^\s"'<>]+/g, "$1<PATH>"],
       [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<EMAIL>"],
       [/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer <REDACTED>"],
       [/(access[_-]?token|refresh[_-]?token|api[_-]?key|authorization|password|secret)(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1$2<REDACTED>"],
@@ -151,6 +153,44 @@ function createDiagnosticLogger({
     return lines.slice(-safeLimit);
   }
 
+  function installConsoleCapture(consoleObject = console) {
+    if (!consoleObject || typeof consoleObject !== "object") return () => {};
+
+    const originalWarn = typeof consoleObject.warn === "function"
+      ? consoleObject.warn.bind(consoleObject)
+      : null;
+    const originalError = typeof consoleObject.error === "function"
+      ? consoleObject.error.bind(consoleObject)
+      : null;
+
+    if (originalWarn) {
+      consoleObject.warn = (...args) => {
+        try {
+          write("warn", "console.warn", {
+            message: args.map(safeString).join(" ")
+          });
+        } catch {}
+        originalWarn(...args);
+      };
+    }
+
+    if (originalError) {
+      consoleObject.error = (...args) => {
+        try {
+          write("error", "console.error", {
+            message: args.map(safeString).join(" ")
+          });
+        } catch {}
+        originalError(...args);
+      };
+    }
+
+    return () => {
+      if (originalWarn) consoleObject.warn = originalWarn;
+      if (originalError) consoleObject.error = originalError;
+    };
+  }
+
   function installProcessHandlers() {
     const uncaught = error => {
       write("error", "process.uncaught_exception", {
@@ -184,6 +224,7 @@ function createDiagnosticLogger({
     warn(event, details) { return write("warn", event, details); },
     error(event, details) { return write("error", event, details); },
     readRecent,
+    installConsoleCapture,
     installProcessHandlers
   };
 }
