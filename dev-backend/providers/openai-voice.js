@@ -67,8 +67,13 @@ function config() {
   };
 }
 
+function modelSupported(model) {
+  return /^gpt-4o-mini-tts(?:-|$)/.test(String(model || ""));
+}
+
 function isConfigured() {
-  return Boolean(config().apiKey);
+  const current = config();
+  return Boolean(current.apiKey) && modelSupported(current.model);
 }
 
 function stableProviderError(status, payload) {
@@ -122,6 +127,9 @@ async function synthesize({ text, voiceId, language, signal, instructions }) {
   const current = config();
   if (!current.apiKey) {
     throw providerError("PROVIDER_NOT_CONFIGURED", "Voice provider is not configured.");
+  }
+  if (!modelSupported(current.model)) {
+    throw providerError("PROVIDER_CONFIG_INVALID", "Configured TTS model is not compatible with the product voice catalog.");
   }
 
   const input = String(text || "").trim();
@@ -195,5 +203,6 @@ module.exports = {
   resolveVoice,
   config,
   wavDurationSeconds,
-  VoiceProviderError
+  VoiceProviderError,
+  modelSupported
 };
