@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   close: () => ipcRenderer.invoke('window:close'),
   getVersionInfo: () => ipcRenderer.invoke('app:version-info'),
   checkForUpdates: () => ipcRenderer.invoke('app:check-update'),
+  downloadUpdate: () => ipcRenderer.invoke('app:download-update'),
+  launchUpdate: () => ipcRenderer.invoke('app:launch-update'),
 
   selectVideos: () => ipcRenderer.invoke('files:select-videos'),
   selectOutputFolder: () => ipcRenderer.invoke('folder:select-output'),
