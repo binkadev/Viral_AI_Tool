@@ -1,0 +1,204 @@
+const crypto = require("crypto");
+const { isKnownPlan, normalizePlanId, resolvePlan, publicEntitlements } = require("./entitlements");
+
+const PLAN_ORDER = ["free", "creator", "creator_pro", "business"];
+const DEV_PRICING = Object.freeze({
+  free: { monthlyAmount: 0, currency: "USD" },
+  creator: { monthlyAmount: 1200, currency: "USD" },
+  creator_pro: { monthlyAmount: 2400, currency: "USD" },
+  business: { monthlyAmount: 7900, currency: "USD" }
+});
+
+const checkoutSessions = new Map();
+const portalSessions = new Map();
+const invoices = new Map();
+
+function billingError(code, message, details = {}) {
+  const error = new Error(message);
+  error.code = code;
+  error.details = details;
+  return error;
+}
+
+function token(prefix) {
+  return prefix + "_" + crypto.randomBytes(18).toString("base64url");
+}
+
+function rank(planId) {
+  return PLAN_ORDER.indexOf(normalizePlanId(planId));
+}
+
+function priceFor(planId) {
+  return DEV_PRICING[normalizePlanId(planId)] || DEV_PRICING.free;
+}
+
+function publicCatalog() {
+  return {
+    provider: "development",
+    pricingEnvironment: "development",
+    developmentOnly: true,
+    plans: PLAN_ORDER.map(planId => {
+      const plan = resolvePlan(planId);
+      const price = priceFor(planId);
+      const entitlements = publicEntitlements(planId);
+
+      return {
+        id: plan.id,
+        name: plan.displayName,
+        monthlyAmount: price.monthlyAmount,
+        currency: price.currency,
+        monthlyMinutes: plan.monthlyMinutes,
+        maxConcurrentCloudJobs: plan.maxConcurrentCloudJobs,
+        features: entitlements.features,
+        models: entitlements.models
+      };
+    })
+  };
+}
+
+function createCheckoutSession({ userId, currentPlanId, targetPlanId, baseUrl }) {
+  if (!isKnownPlan(targetPlanId)) {
+    throw billingError("PLAN_INVALID", "Target billing plan is invalid.");
+  }
+
+  const current = normalizePlanId(currentPlanId);
+  const target = normalizePlanId(targetPlanId);
+
+  if (target === current) {
+    throw billingError("BILLING_PLAN_ALREADY_ACTIVE", "The target plan is already active.");
+  }
+
+  if (rank(target) <= rank(current)) {
+    throw billingError("BILLING_USE_PLAN_CHANGE", "Downgrades do not require checkout.");
+  }
+
+  const id = token("chk");
+  const createdAt = Date.now();
+  const expiresAt = createdAt + 15 * 60 * 1000;
+
+  checkoutSessions.set(id, {
+    id,
+    userId,
+    currentPlanId: current,
+    targetPlanId: target,
+    createdAt,
+    expiresAt,
+    consumedAt: null
+  });
+
+  return {
+    id,
+    provider: "development",
+    checkoutUrl: String(baseUrl || "").replace(/\/+$/, "") + "/v1/dev-billing/checkout/" + encodeURIComponent(id),
+    expiresAt: new Date(expiresAt).toISOString(),
+    targetPlanId: target
+  };
+}
+
+function consumeCheckoutSession(id) {
+  const session = checkoutSessions.get(String(id || ""));
+  if (!session) throw billingError("BILLING_SESSION_NOT_FOUND", "Checkout session was not found.");
+  if (session.consumedAt) throw billingError("BILLING_SESSION_USED", "Checkout session was already used.");
+  if (Date.now() >= session.expiresAt) {
+    checkoutSessions.delete(session.id);
+    throw billingError("BILLING_SESSION_EXPIRED", "Checkout session expired.");
+  }
+
+  session.consumedAt = Date.now();
+  return { ...session };
+}
+
+function createPortalSession({ userId, baseUrl }) {
+  const id = token("portal");
+  const createdAt = Date.now();
+  const expiresAt = createdAt + 15 * 60 * 1000;
+
+  portalSessions.set(id, {
+    id,
+    userId,
+    createdAt,
+    expiresAt
+  });
+
+  return {
+    id,
+    provider: "development",
+    portalUrl: String(baseUrl || "").replace(/\/+$/, "") + "/v1/dev-billing/portal/" + encodeURIComponent(id),
+    expiresAt: new Date(expiresAt).toISOString()
+  };
+}
+
+function consumePortalSession(id) {
+  const session = portalSessions.get(String(id || ""));
+  if (!session) throw billingError("BILLING_SESSION_NOT_FOUND", "Portal session was not found.");
+  if (Date.now() >= session.expiresAt) {
+    portalSessions.delete(session.id);
+    throw billingError("BILLING_SESSION_EXPIRED", "Portal session expired.");
+  }
+  return { ...session };
+}
+
+function invoiceBucket(userId) {
+  const key = String(userId || "");
+  if (!invoices.has(key)) invoices.set(key, []);
+  return invoices.get(key);
+}
+
+function recordInvoice({ userId, planId, amount, currency = "USD", status = "paid", description }) {
+  const item = {
+    id: token("inv"),
+    createdAt: new Date().toISOString(),
+    status,
+    planId: normalizePlanId(planId),
+    planName: resolvePlan(planId).displayName,
+    amount: Math.max(0, Number(amount || 0)),
+    currency: String(currency || "USD"),
+    description: description || (resolvePlan(planId).displayName + " subscription")
+  };
+
+  invoiceBucket(userId).unshift(item);
+  return item;
+}
+
+function ensureDevelopmentInvoice(user) {
+  const bucket = invoiceBucket(user.id);
+  if (bucket.length) return;
+
+  const price = priceFor(user.planId || user.plan);
+  if (price.monthlyAmount <= 0) return;
+
+  recordInvoice({
+    userId: user.id,
+    planId: user.planId || user.plan,
+    amount: price.monthlyAmount,
+    currency: price.currency,
+    status: "paid",
+    description: "Development billing record"
+  });
+}
+
+function listInvoices(user) {
+  ensureDevelopmentInvoice(user);
+  return {
+    provider: "development",
+    invoices: invoiceBucket(user.id).map(item => ({ ...item }))
+  };
+}
+
+function checkoutAmount(planId) {
+  return { ...priceFor(planId) };
+}
+
+module.exports = {
+  PLAN_ORDER,
+  rank,
+  publicCatalog,
+  createCheckoutSession,
+  consumeCheckoutSession,
+  createPortalSession,
+  consumePortalSession,
+  recordInvoice,
+  listInvoices,
+  checkoutAmount,
+  BillingError: Error
+};
