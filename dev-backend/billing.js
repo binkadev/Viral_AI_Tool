@@ -13,6 +13,80 @@ const checkoutSessions = new Map();
 const portalSessions = new Map();
 const invoices = new Map();
 
+let persistence = {
+  load: null,
+  save: null
+};
+
+function sessionKey(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function mapFromObject(value) {
+  return new Map(Object.entries(value && typeof value === "object" ? value : {}));
+}
+
+function objectFromMap(map) {
+  return Object.fromEntries(map.entries());
+}
+
+function persistState() {
+  if (!persistence.save) return;
+  persistence.save({
+    checkoutSessions: objectFromMap(checkoutSessions),
+    portalSessions: objectFromMap(portalSessions),
+    invoices: Object.fromEntries(
+      [...invoices.entries()].map(([userId, items]) => [userId, Array.isArray(items) ? items : []])
+    )
+  });
+}
+
+function configurePersistence(adapter = {}) {
+  persistence = {
+    load: typeof adapter.load === "function" ? adapter.load : null,
+    save: typeof adapter.save === "function" ? adapter.save : null
+  };
+
+  const restored = persistence.load?.() || {};
+
+  checkoutSessions.clear();
+  for (const [key, value] of mapFromObject(restored.checkoutSessions)) {
+    checkoutSessions.set(key, value);
+  }
+
+  portalSessions.clear();
+  for (const [key, value] of mapFromObject(restored.portalSessions)) {
+    portalSessions.set(key, value);
+  }
+
+  invoices.clear();
+  for (const [userId, items] of Object.entries(restored.invoices || {})) {
+    invoices.set(userId, Array.isArray(items) ? items : []);
+  }
+
+  pruneExpiredSessions();
+}
+
+function pruneExpiredSessions(now = Date.now()) {
+  let changed = false;
+
+  for (const [key, session] of checkoutSessions.entries()) {
+    if (!session || Number(session.expiresAt || 0) <= now || session.consumedAt) {
+      checkoutSessions.delete(key);
+      changed = true;
+    }
+  }
+
+  for (const [key, session] of portalSessions.entries()) {
+    if (!session || Number(session.expiresAt || 0) <= now) {
+      portalSessions.delete(key);
+      changed = true;
+    }
+  }
+
+  if (changed) persistState();
+}
+
 function billingError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
@@ -76,8 +150,8 @@ function createCheckoutSession({ userId, currentPlanId, targetPlanId, baseUrl })
   const createdAt = Date.now();
   const expiresAt = createdAt + 15 * 60 * 1000;
 
-  checkoutSessions.set(id, {
-    id,
+  pruneExpiredSessions(createdAt);
+  checkoutSessions.set(sessionKey(id), {
     userId,
     currentPlanId: current,
     targetPlanId: target,
@@ -85,6 +159,7 @@ function createCheckoutSession({ userId, currentPlanId, targetPlanId, baseUrl })
     expiresAt,
     consumedAt: null
   });
+  persistState();
 
   return {
     id,
@@ -96,15 +171,22 @@ function createCheckoutSession({ userId, currentPlanId, targetPlanId, baseUrl })
 }
 
 function consumeCheckoutSession(id) {
-  const session = checkoutSessions.get(String(id || ""));
+  pruneExpiredSessions();
+  const key = sessionKey(id);
+  const session = checkoutSessions.get(key);
   if (!session) throw billingError("BILLING_SESSION_NOT_FOUND", "Checkout session was not found.");
   if (session.consumedAt) throw billingError("BILLING_SESSION_USED", "Checkout session was already used.");
   if (Date.now() >= session.expiresAt) {
-    checkoutSessions.delete(session.id);
+    checkoutSessions.delete(key);
+    persistState();
     throw billingError("BILLING_SESSION_EXPIRED", "Checkout session expired.");
   }
 
   session.consumedAt = Date.now();
+  checkoutSessions.delete(key);
+  persistState();
+  portalSessions.delete(key);
+  persistState();
   return { ...session };
 }
 
@@ -113,12 +195,13 @@ function createPortalSession({ userId, baseUrl }) {
   const createdAt = Date.now();
   const expiresAt = createdAt + 15 * 60 * 1000;
 
-  portalSessions.set(id, {
-    id,
+  pruneExpiredSessions(createdAt);
+  portalSessions.set(sessionKey(id), {
     userId,
     createdAt,
     expiresAt
   });
+  persistState();
 
   return {
     id,
@@ -129,10 +212,13 @@ function createPortalSession({ userId, baseUrl }) {
 }
 
 function consumePortalSession(id) {
-  const session = portalSessions.get(String(id || ""));
+  pruneExpiredSessions();
+  const key = sessionKey(id);
+  const session = portalSessions.get(key);
   if (!session) throw billingError("BILLING_SESSION_NOT_FOUND", "Portal session was not found.");
   if (Date.now() >= session.expiresAt) {
-    portalSessions.delete(session.id);
+    portalSessions.delete(key);
+    persistState();
     throw billingError("BILLING_SESSION_EXPIRED", "Portal session expired.");
   }
   return { ...session };
@@ -157,6 +243,7 @@ function recordInvoice({ userId, planId, amount, currency = "USD", status = "pai
   };
 
   invoiceBucket(userId).unshift(item);
+  persistState();
   return item;
 }
 
@@ -200,5 +287,7 @@ module.exports = {
   recordInvoice,
   listInvoices,
   checkoutAmount,
+  configurePersistence,
+  pruneExpiredSessions,
   BillingError: Error
 };
