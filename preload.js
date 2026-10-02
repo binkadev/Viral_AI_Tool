@@ -49,6 +49,15 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getTranslationStatus: () => ipcRenderer.invoke('translation:status'),
   startTranslation: payload => ipcRenderer.invoke('translation:start', payload),
   cancelTranslation: jobId => ipcRenderer.invoke('translation:cancel', jobId),
+  getTtsStatus: () => ipcRenderer.invoke('tts:status'),
+  startTts: payload => ipcRenderer.invoke('tts:start', payload),
+  cancelTts: jobId => ipcRenderer.invoke('tts:cancel', jobId),
+  getTtsAssetUrl: filePath => ipcRenderer.invoke('tts:asset-url', filePath),
+  onTtsProgress: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('tts:progress', listener);
+    return () => ipcRenderer.removeListener('tts:progress', listener);
+  },
   onTranslationProgress: callback => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('translation:progress', listener);
