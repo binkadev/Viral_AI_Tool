@@ -3050,3 +3050,124 @@ html[data-scale="compact"] .hero p{font-size:13px}
     grid-column:auto;
   }
 }
+
+
+/* Plans & Billing */
+.billing-dev-banner{
+  margin-bottom:18px;
+}
+.billing-plan-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+}
+.billing-plan-card{
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-height:360px;
+  border:1px solid var(--line);
+}
+.billing-plan-card.is-current{
+  border-color:color-mix(in srgb,var(--accent) 36%,var(--line));
+  box-shadow:0 16px 38px color-mix(in srgb,var(--accent) 9%,transparent);
+}
+.billing-plan-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.billing-plan-head h3{
+  margin:4px 0 0;
+  font-size:19px;
+}
+.billing-current-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:25px;
+  padding:0 9px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface-solid));
+  color:var(--accent);
+  font-size:10px;
+  font-weight:800;
+}
+.billing-price{
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:-.02em;
+}
+.billing-feature-list{
+  display:grid;
+  gap:8px;
+  margin-top:2px;
+}
+.billing-feature{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+}
+.billing-feature span{
+  width:20px;
+  height:20px;
+  display:grid;
+  place-items:center;
+  border-radius:6px;
+  background:var(--surface-soft);
+  color:var(--text-faint);
+  font-weight:900;
+}
+.billing-feature.included span{
+  background:color-mix(in srgb,var(--success) 10%,var(--surface-solid));
+  color:var(--success);
+}
+.billing-feature.excluded{
+  color:var(--text-faint);
+}
+.billing-plan-action{
+  margin-top:auto;
+}
+.billing-plan-action .button{
+  width:100%;
+  justify-content:center;
+}
+.billing-subscription-card .row{
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.billing-pending{
+  margin:10px 0 0;
+  padding:9px 10px;
+  border-radius:10px;
+  background:color-mix(in srgb,var(--warning) 7%,var(--surface-solid));
+  color:var(--text-soft);
+  font-size:11px;
+  line-height:1.5;
+}
+.billing-invoices{
+  margin-bottom:24px;
+}
+.billing-empty-row{
+  color:var(--text-soft);
+  text-align:center!important;
+  padding:24px!important;
+}
+.billing-loading{
+  min-height:180px;
+}
+.danger-text{
+  color:var(--danger);
+}
+@media(max-width:1280px){
+  .billing-plan-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+@media(max-width:760px){
+  .billing-plan-grid{
+    grid-template-columns:1fr;
+  }
+}
