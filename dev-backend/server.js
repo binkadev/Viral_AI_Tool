@@ -38,6 +38,7 @@ const loginAttempts = new Map();
 const jobs = new Map();
 const idempotency = new Map();
 const uploadTokens = new Map();
+const serviceQuotaReservations = new Map();
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
@@ -238,12 +239,112 @@ function activeJobState(state) {
 
 function reservedMinutesForUser(userId) {
   let total = 0;
+
   for (const job of jobs.values()) {
     if (job.userId === userId && activeJobState(job.state)) {
       total += Number(job.reservedMinutes || 0);
     }
   }
+
+  for (const reservation of serviceQuotaReservations.values()) {
+    if (reservation.userId === userId) {
+      total += Number(reservation.minutes || 0);
+    }
+  }
+
   return total;
+}
+
+function quotaUsageKey(service) {
+  if (service === "speech") return "speechMinutes";
+  if (service === "translation") return "translationMinutes";
+  if (service === "voice") return "voiceMinutes";
+  return null;
+}
+
+function chargeUserQuota(user, service, minutes) {
+  if (!user) return 0;
+  const requested = Math.max(0, Number(minutes || 0));
+  const available = Math.max(0, Number(user.quota?.remainingMinutes || 0));
+  const charge = Math.min(requested, available);
+
+  user.quota.remainingMinutes = Math.max(0, available - charge);
+  user.quota.usedMinutes = Math.max(0, Number(user.quota?.usedMinutes || 0) + charge);
+
+  const usageKey = quotaUsageKey(service);
+  if (usageKey) {
+    user.usage = user.usage || {};
+    user.usage[usageKey] = Math.max(0, Number(user.usage[usageKey] || 0) + charge);
+  }
+
+  return charge;
+}
+
+function quotaSnapshot(user) {
+  if (!user) return null;
+  const reservedMinutes = reservedMinutesForUser(user.id);
+
+  return {
+    ...user.quota,
+    remainingMinutes: Math.max(0, Number(user.quota?.remainingMinutes || 0) - reservedMinutes),
+    reservedMinutes
+  };
+}
+
+function quotaReservationKey(service, jobId) {
+  return String(service || "cloud") + ":" + String(jobId || "");
+}
+
+function reserveCloudQuota({ userId, service, jobId, minutes }) {
+  const user = findUserById(userId);
+  if (!user) {
+    const err = new Error("User was not found.");
+    err.code = "AUTH_REQUIRED";
+    throw err;
+  }
+
+  const key = quotaReservationKey(service, jobId);
+  const existing = serviceQuotaReservations.get(key);
+  if (existing) return { minutes: existing.minutes };
+
+  const requested = Math.max(1, Math.ceil(Number(minutes || 0)));
+  const available = Math.max(
+    0,
+    Number(user.quota?.remainingMinutes || 0) - reservedMinutesForUser(userId)
+  );
+
+  if (available < requested) {
+    const err = new Error("Cloud allowance is insufficient.");
+    err.code = "QUOTA_EXCEEDED";
+    err.details = { requiredMinutes: requested, availableMinutes: available };
+    throw err;
+  }
+
+  serviceQuotaReservations.set(key, {
+    userId,
+    service,
+    jobId,
+    minutes: requested,
+    createdAt: Date.now()
+  });
+
+  return { minutes: requested };
+}
+
+function settleCloudQuota({ userId, service, jobId, outcome }) {
+  const key = quotaReservationKey(service, jobId);
+  const reservation = serviceQuotaReservations.get(key);
+  if (!reservation) return { chargedMinutes: 0 };
+
+  serviceQuotaReservations.delete(key);
+
+  if (outcome !== "completed") {
+    return { chargedMinutes: 0 };
+  }
+
+  const user = findUserById(userId);
+  const chargedMinutes = chargeUserQuota(user, service, reservation.minutes);
+  return { chargedMinutes };
 }
 
 function cleanupUpload(job) {
@@ -520,8 +621,8 @@ async function processSpeechJob(job) {
       const user = findUserById(job.userId);
       if (!user) throw Object.assign(new Error("user missing"), { code: "USER_MISSING" });
 
-      const charge = Math.max(1, Number(job.reservedMinutes || job.estimatedMinutes || 1));
-      user.quota.remainingMinutes = Math.max(0, Number(user.quota.remainingMinutes || 0) - charge);
+      const requestedCharge = Math.max(1, Number(job.reservedMinutes || job.estimatedMinutes || 1));
+      const charge = chargeUserQuota(user, "speech", requestedCharge);
 
       job.chargedMinutes = charge;
       job.reservedMinutes = 0;
@@ -547,6 +648,16 @@ async function processSpeechJob(job) {
     }
   });
 }
+
+translationJobs.configureQuotaHooks({
+  reserve: reserveCloudQuota,
+  settle: settleCloudQuota
+});
+
+voiceJobs.configureQuotaHooks({
+  reserve: reserveCloudQuota,
+  settle: settleCloudQuota
+});
 
 async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
@@ -623,7 +734,7 @@ async function handle(req, res) {
         name: user.name,
         plan: user.plan
       },
-      quota: user.quota,
+      quota: quotaSnapshot(user),
       usage: user.usage || null
     });
   }
@@ -631,7 +742,13 @@ async function handle(req, res) {
   if (method === "GET" && url.pathname === "/v1/voice/status") {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
-    return json(res, 200, voiceJobs.status());
+    return json(res, 200, {
+      ...voiceJobs.status(),
+      quota: {
+        ...quotaSnapshot(user),
+        plan: user.plan
+      }
+    });
   }
 
   if (method === "GET" && url.pathname === "/v1/voice/catalog") {
@@ -678,6 +795,7 @@ async function handle(req, res) {
       const code = err?.code || "VOICE_FAILED";
       const status =
         code === "VOICE_TOO_LARGE" ? 413 :
+        code === "QUOTA_EXCEEDED" ? 402 :
         code === "JOB_CONFLICT" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
         code === "JOB_NOT_FOUND" ? 404 :
@@ -733,7 +851,13 @@ async function handle(req, res) {
     const user = authenticate(req);
     if (!user) return error(res, 401, "AUTH_REQUIRED");
 
-    return json(res, 200, translationJobs.status());
+    return json(res, 200, {
+      ...translationJobs.status(),
+      quota: {
+        ...quotaSnapshot(user),
+        plan: user.plan
+      }
+    });
   }
 
   if (method === "POST" && url.pathname === "/v1/translation/jobs") {
@@ -752,6 +876,7 @@ async function handle(req, res) {
       const code = err?.code || "TRANSLATION_FAILED";
       const status =
         code === "TRANSLATION_TOO_LARGE" ? 413 :
+        code === "QUOTA_EXCEEDED" ? 402 :
         code === "JOB_CONFLICT" ? 409 :
         code === "SERVICE_UNAVAILABLE" ? 503 :
         code === "JOB_NOT_FOUND" ? 404 :
@@ -795,8 +920,7 @@ async function handle(req, res) {
       ready: providerReady,
       code: providerReady ? "READY" : "CLOUD_PROVIDER_NOT_CONFIGURED",
       quota: {
-        remainingMinutes: Math.max(0, user.quota.remainingMinutes - reservedMinutesForUser(user.id)),
-        resetAt: user.quota.resetAt,
+        ...quotaSnapshot(user),
         plan: user.plan
       },
       limits: {
