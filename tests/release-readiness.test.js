@@ -10,6 +10,15 @@ const workflow = fs.readFileSync(
   "utf8"
 );
 const main = fs.readFileSync(path.join(root, "main.js"), "utf8");
+const preload = fs.readFileSync(path.join(root, "preload.js"), "utf8");
+const diagnosticsLogger = fs.readFileSync(
+  path.join(root, "services", "diagnostics", "logger.js"),
+  "utf8"
+);
+const diagnosticsBundle = fs.readFileSync(
+  path.join(root, "services", "diagnostics", "bundle.js"),
+  "utf8"
+);
 const updateClient = fs.readFileSync(
   path.join(root, "services", "update", "update-client.js"),
   "utf8"
@@ -52,6 +61,41 @@ for (const required of [
   "app.quit()"
 ]) {
   assert(main.includes(required), "Main update handoff is missing: " + required);
+}
+
+for (const required of [
+  "diagnostics:open-folder",
+  "diagnostics:export",
+  "createDiagnosticBundle",
+  "installConsoleCapture"
+]) {
+  assert(main.includes(required), "Main diagnostics integration is missing: " + required);
+}
+
+for (const required of [
+  "openDiagnosticLogs",
+  "exportDiagnostics"
+]) {
+  assert(preload.includes(required), "Preload diagnostics bridge is missing: " + required);
+}
+
+for (const required of [
+  "password|token|secret|authorization|cookie|api.?key",
+  "<EMAIL>",
+  "<URL>",
+  "<PATH>",
+  "installConsoleCapture"
+]) {
+  assert(diagnosticsLogger.includes(required), "Diagnostics redaction is missing: " + required);
+}
+
+for (const required of [
+  "accountDataIncluded: false",
+  "credentialsIncluded: false",
+  "cloudConfigurationIncluded: false",
+  "userMediaPathsIncluded: false"
+]) {
+  assert(diagnosticsBundle.includes(required), "Diagnostic bundle privacy guard is missing: " + required);
 }
 
 for (const required of [
