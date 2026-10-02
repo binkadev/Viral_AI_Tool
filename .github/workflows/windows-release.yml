@@ -20,6 +20,7 @@ on:
       - "tests/release-assets.test.js"
       - "tests/release-readiness.test.js"
       - "tests/generated-manifest.test.js"
+      - "tests/update-client.test.js"
       - ".github/workflows/windows-release.yml"
 
 permissions:
@@ -91,6 +92,9 @@ jobs:
 
       - name: Run release readiness tests
         run: npm run test:release-readiness
+
+      - name: Run update client tests
+        run: npm run test:update-client
 
       - name: Prepare embedded release metadata
         shell: pwsh
