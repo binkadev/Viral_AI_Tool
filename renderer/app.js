@@ -12,6 +12,8 @@ const state = {
     config: null,
     auth: null,
     account: null,
+    accountOffline: false,
+    accountVerifiedAt: null,
     test: null,
     draftBackendUrl: null,
     draftEnvironment: null,
@@ -457,7 +459,28 @@ function dashboard() {
 
 function downloadPage() {
   const platforms = ["TikTok", "Douyin", "YouTube", "Bilibili", "Facebook", "Instagram", "Xiaohongshu"];
-  return '<div class="grid-2">' +
+  const subscriptionEnd =
+    subscription?.status === "trialing"
+      ? subscription?.trialEndsAt
+      : subscription?.status === "grace_period" || subscription?.status === "past_due"
+        ? subscription?.graceEndsAt
+        : subscription?.currentPeriodEnd;
+
+  const subscriptionNote =
+    subscription?.cancelAtPeriodEnd
+      ? t("usage.cancelAtPeriodEnd", { date: accountDateLabel(subscription.currentPeriodEnd) })
+      : subscription?.pendingPlanId
+        ? t("usage.planChangesNextCycle", { plan: subscription.pendingPlanId, date: accountDateLabel(subscription.currentPeriodEnd) })
+        : "";
+
+  const offlineNotice = offlineSnapshot
+    ? '<div class="speech-alert warning"><b>' + t("usage.offlineSnapshotTitle") + '</b><span>' +
+        escapeHtml(t("usage.offlineSnapshotBody", {
+          date: accountDateLabel(state.cloud.accountVerifiedAt)
+        })) + '</span></div>'
+    : "";
+
+  return offlineNotice + '<div class="grid-2">' +
     '<div class="card card-pad"><div class="eyebrow">' + t("download.urlEyebrow") + "</div><h3>" + t("download.urlTitle") + "</h3>" +
     '<p class="muted">' + t("download.urlDesc") + "</p>" +
     '<div class="row"><input id="url" class="input" placeholder="' + t("download.urlPlaceholder") + '">' +
@@ -501,6 +524,7 @@ function speechProviderStatusLabel(status) {
     CLOUD_AUTH_REQUIRED: "speech.cloudAuthRequired",
     CLOUD_QUOTA_EXCEEDED: "speech.cloudQuotaExceeded",
     CLOUD_PLAN_REQUIRED: "speech.cloudPlanRequired",
+    CLOUD_SUBSCRIPTION_INACTIVE: "speech.cloudSubscriptionInactive",
     CLOUD_CONCURRENCY_LIMIT: "speech.cloudConcurrencyLimit",
     CLOUD_UNAVAILABLE: "speech.cloudUnavailable",
     CLOUD_PROVIDER_NOT_CONFIGURED: "speech.cloudProviderPending",
@@ -553,12 +577,18 @@ async function refreshCloudUiState({ rerender = false } = {}) {
       if (accountResponse?.ok) {
         state.cloud.auth = accountResponse.data?.status || auth;
         state.cloud.account = accountResponse.data?.account || null;
+        state.cloud.accountOffline = accountResponse.data?.offline === true;
+        state.cloud.accountVerifiedAt = accountResponse.data?.verifiedAt || null;
       } else if (accountResponse?.error?.code === "AUTH_REQUIRED") {
         state.cloud.auth = { ...auth, authenticated: false, accessReady: false, refreshReady: false };
         state.cloud.account = null;
+        state.cloud.accountOffline = false;
+        state.cloud.accountVerifiedAt = null;
       }
     } else {
       state.cloud.account = null;
+      state.cloud.accountOffline = false;
+      state.cloud.accountVerifiedAt = null;
     }
 
     state.cloud.statusCheckedAt = Date.now();
@@ -638,9 +668,12 @@ function cloudConnectionPanel() {
     title = status?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
       ? t("speech.cloudProviderPending")
       : speechProviderStatusLabel(status);
-    body = status?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
-      ? t("speech.cloudProviderPendingBody")
-      : t("speech.cloudUnavailableBody");
+    body =
+      status?.code === "CLOUD_PROVIDER_NOT_CONFIGURED"
+        ? t("speech.cloudProviderPendingBody")
+        : status?.code === "CLOUD_SUBSCRIPTION_INACTIVE"
+          ? t("speech.cloudSubscriptionBody")
+          : t("speech.cloudUnavailableBody");
     action =
       '<button id="cloudLogoutAction" class="button ghost" type="button">' + escapeHtml(t("account.signOut")) + '</button>' +
       (devVisible ? '<button id="openCloudSettings" class="button ghost" type="button">' + escapeHtml(t("speech.cloudSettings")) + '</button>' : '');
@@ -788,6 +821,9 @@ function translationConnectionPanel() {
   } else if (code === "TRANSLATION_PLAN_REQUIRED") {
     title = t("translation.planTitle");
     body = t("translation.planBody");
+  } else if (code === "TRANSLATION_SUBSCRIPTION_INACTIVE") {
+    title = t("translation.subscriptionTitle");
+    body = t("translation.subscriptionBody");
   } else if (["TRANSLATION_NOT_CONFIGURED", "TRANSLATION_CONFIG_INVALID", "TRANSLATION_HTTPS_REQUIRED"].includes(code)) {
     title = t("translation.cloudSetupTitle");
     body = t("translation.cloudSetupBody");
@@ -842,6 +878,16 @@ async function handleTranslationBlock(response) {
     await showNotice({
       title: t("translation.authTitle"),
       body: t("translation.authBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "TRANSLATION_SUBSCRIPTION_INACTIVE") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("translation.subscriptionTitle"),
+      body: t("translation.subscriptionBody"),
       buttonLabel: t("common.close")
     });
     return;
@@ -1247,6 +1293,9 @@ function voiceConnectionPanel() {
   } else if (code === "VOICE_PLAN_REQUIRED") {
     title = t("voiceWorkflow.planTitle");
     body = t("voiceWorkflow.planBody");
+  } else if (code === "VOICE_SUBSCRIPTION_INACTIVE") {
+    title = t("voiceWorkflow.subscriptionTitle");
+    body = t("voiceWorkflow.subscriptionBody");
   } else if (["VOICE_NOT_CONFIGURED", "VOICE_CONFIG_INVALID", "VOICE_HTTPS_REQUIRED"].includes(code)) {
     title = t("voiceWorkflow.cloudSetupTitle");
     body = t("voiceWorkflow.cloudSetupBody");
@@ -1306,7 +1355,17 @@ async function previewVoiceSelection(speakerKey) {
   if (!response?.ok) {
     const code = response?.error?.code || "VOICE_FAILED";
 
-    if (code === "VOICE_PLAN_REQUIRED") {
+    if (code === "VOICE_SUBSCRIPTION_INACTIVE") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("voiceWorkflow.subscriptionTitle"),
+      body: t("voiceWorkflow.subscriptionBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_PLAN_REQUIRED") {
       await showNotice({
         title: t("voiceWorkflow.planTitle"),
         body: t("voiceWorkflow.planBody"),
@@ -2047,6 +2106,28 @@ function accountsPage() {
     ).join("") + "</div>";
 }
 
+function subscriptionStatusCopy(subscription) {
+  const status = String(subscription?.status || "unknown");
+  const key = {
+    trialing: "usage.subscriptionTrial",
+    active: "usage.subscriptionActive",
+    past_due: "usage.subscriptionPastDue",
+    grace_period: "usage.subscriptionGrace",
+    canceled: "usage.subscriptionCanceled"
+  }[status] || "usage.subscriptionUnknown";
+  return t(key);
+}
+
+function accountDateLabel(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
 function usagePage() {
   const auth = state.cloud.auth;
   const account = state.cloud.account;
@@ -2055,7 +2136,9 @@ function usagePage() {
   const usage = account?.usage || null;
   const entitlements = account?.entitlements || null;
   const cloudActivity = account?.cloudActivity || null;
+  const subscription = account?.subscription || null;
   const authenticated = auth?.authenticated === true;
+  const offlineSnapshot = state.cloud.accountOffline === true;
 
   if (!authenticated) {
     return '<div class="card card-pad account-empty">' +
@@ -2123,6 +2206,13 @@ function usagePage() {
       escapeHtml(monthlyValue) + '</div><div class="bar"><i style="width:' + percent + '%"></i></div>' +
       '<p class="muted">' + escapeHtml(t("usage.usedPercent", { percent })) + '</p></div>' +
   '</div>' +
+  (subscription
+    ? '<div class="card card-pad subscription-card"><div class="eyebrow">' + t("usage.subscription") + '</div>' +
+      '<h3>' + escapeHtml(subscriptionStatusCopy(subscription)) + '</h3>' +
+      '<p class="muted">' + escapeHtml(t("usage.subscriptionUntil", { date: accountDateLabel(subscriptionEnd) })) + '</p>' +
+      (subscriptionNote ? '<p class="muted">' + escapeHtml(subscriptionNote) + '</p>' : '') +
+    '</div>'
+    : '') +
   '<div class="section-head"><div><h3>' + t("usage.breakdown") + '</h3><p>' + t("usage.breakdownDesc") + '</p></div></div>' +
   '<div class="usage-grid">' + items.map((item) => {
     const value = Number(item[1]);
@@ -3174,6 +3264,16 @@ async function handleSpeechBlock(response, source) {
     return;
   }
 
+  if (code === "CLOUD_SUBSCRIPTION_INACTIVE") {
+    await refreshCloudUiState({ rerender: true });
+    await showNotice({
+      title: t("speech.cloudSubscriptionTitle"),
+      body: t("speech.cloudSubscriptionBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   if (code === "CLOUD_PLAN_REQUIRED") {
     await refreshCloudUiState({ rerender: true });
     await showNotice({
@@ -3683,6 +3783,8 @@ async function saveDeveloperCloudConfig() {
   if (response.sessionCleared) {
     state.cloud.auth = null;
     state.cloud.account = null;
+    state.cloud.accountOffline = false;
+    state.cloud.accountVerifiedAt = null;
     toast(t("settings.cloudSavedSignedOut"));
   } else {
     toast(t("settings.cloudSaved"));
@@ -3800,6 +3902,8 @@ function openLoginModal() {
     root.classList.add("hidden");
     state.cloud.auth = response.data?.status || null;
     state.cloud.account = response.data?.account || null;
+    state.cloud.accountOffline = false;
+    state.cloud.accountVerifiedAt = null;
     state.cloud.statusCheckedAt = Date.now();
     state.speech.providerStatus = null;
     state.speech.statusCheckedAt = 0;
@@ -3823,6 +3927,8 @@ async function logoutAccount() {
   const response = await window.desktopAPI?.logout?.();
   state.cloud.auth = null;
   state.cloud.account = null;
+  state.cloud.accountOffline = false;
+  state.cloud.accountVerifiedAt = null;
   state.cloud.test = null;
   state.cloud.statusCheckedAt = 0;
   state.speech.providerStatus = null;
