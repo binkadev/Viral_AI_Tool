@@ -469,6 +469,8 @@ window.I18N = (() => {
         connectionBody: "Tiến trình chưa hoàn tất. Hãy kiểm tra kết nối rồi thử lại; job cũ sẽ được dùng lại khi có thể.",
         conflictTitle: "Không thể dùng lại tiến trình cũ",
         conflictBody: "Nội dung hoặc lựa chọn giọng đã thay đổi. Viral AI Tool sẽ không ghép âm thanh từ hai cấu hình khác nhau.",
+        resultNotRetainedTitle: "Kết quả giọng cũ không còn được lưu",
+        resultNotRetainedBody: "Tiến trình trước đã hoàn tất và hạn mức đã được ghi nhận. Ứng dụng không tự tạo lại cùng mã tiến trình. Hãy tạo một tiến trình giọng mới nếu cần.",
         audioExpiredTitle: "Âm thanh tạm trên Cloud đã hết hạn",
         audioExpiredBody: "Hãy tạo lại giọng. Các file đã tải thành công về máy vẫn được giữ nguyên.",
         failedTitle: "Chưa thể hoàn tất giọng AI",
