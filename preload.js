@@ -54,6 +54,16 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     ipcRenderer.on('translation:progress', listener);
     return () => ipcRenderer.removeListener('translation:progress', listener);
   },
+  getVoiceStatus: () => ipcRenderer.invoke('voice:status'),
+  getVoiceCatalog: () => ipcRenderer.invoke('voice:catalog'),
+  previewVoice: payload => ipcRenderer.invoke('voice:preview', payload),
+  startVoice: payload => ipcRenderer.invoke('voice:start', payload),
+  cancelVoice: jobId => ipcRenderer.invoke('voice:cancel', jobId),
+  onVoiceProgress: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('voice:progress', listener);
+    return () => ipcRenderer.removeListener('voice:progress', listener);
+  },
   onSpeechProgress: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);
