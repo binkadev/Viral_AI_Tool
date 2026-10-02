@@ -10,6 +10,12 @@ on:
     paths:
       - "package.json"
       - "package-lock.json"
+      - "main.js"
+      - "preload.js"
+      - "release-info.json"
+      - "renderer/**"
+      - "services/**"
+      - "assets/**"
       - ".github/workflows/windows-release.yml"
 
 permissions:
