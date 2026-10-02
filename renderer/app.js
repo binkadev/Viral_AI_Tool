@@ -588,7 +588,7 @@ async function refreshCloudUiState({ rerender = false } = {}) {
     state.cloud.loading = false;
   }
 
-  if (rerender && ["ai-video", "settings", "usage"].includes(state.page)) render();
+  if (rerender && ["ai-video", "settings", "usage", "billing"].includes(state.page)) render();
   return state.cloud;
 }
 
@@ -4109,6 +4109,10 @@ async function saveDeveloperCloudConfig() {
     state.cloud.account = null;
     state.cloud.accountOffline = false;
     state.cloud.accountVerifiedAt = null;
+    state.billing.catalog = null;
+    state.billing.invoices = null;
+    state.billing.loadedAt = 0;
+    state.billing.errorCode = null;
     toast(t("settings.cloudSavedSignedOut"));
   } else {
     toast(t("settings.cloudSaved"));
@@ -4229,6 +4233,10 @@ function openLoginModal() {
     state.cloud.accountOffline = response.data?.offline === true;
     state.cloud.accountVerifiedAt = response.data?.verifiedAt || null;
     state.cloud.statusCheckedAt = Date.now();
+    state.billing.catalog = null;
+    state.billing.invoices = null;
+    state.billing.loadedAt = 0;
+    state.billing.errorCode = null;
     state.speech.providerStatus = null;
     state.speech.statusCheckedAt = 0;
     await refreshSpeechProviderStatus({ rerender: false });
@@ -4254,6 +4262,10 @@ async function logoutAccount() {
   state.cloud.accountOffline = false;
   state.cloud.accountVerifiedAt = null;
   state.cloud.test = null;
+  state.billing.catalog = null;
+  state.billing.invoices = null;
+  state.billing.loadedAt = 0;
+  state.billing.errorCode = null;
   state.cloud.statusCheckedAt = 0;
   state.speech.providerStatus = null;
   state.speech.statusCheckedAt = 0;
