@@ -982,6 +982,15 @@ async function handleTranslationBlock(response) {
     return;
   }
 
+  if (code === "TRANSLATION_RESULT_NOT_RETAINED") {
+    await showNotice({
+      title: t("translation.resultNotRetainedTitle"),
+      body: t("translation.resultNotRetainedBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
   await showNotice({
     title: t("translation.failedTitle"),
     body: t("translation.failedBody"),
@@ -1585,6 +1594,15 @@ async function handleVoiceBlock(response) {
     await showNotice({
       title: t("voiceWorkflow.conflictTitle"),
       body: t("voiceWorkflow.conflictBody"),
+      buttonLabel: t("common.close")
+    });
+    return;
+  }
+
+  if (code === "VOICE_RESULT_NOT_RETAINED") {
+    await showNotice({
+      title: t("voiceWorkflow.resultNotRetainedTitle"),
+      body: t("voiceWorkflow.resultNotRetainedBody"),
       buttonLabel: t("common.close")
     });
     return;
