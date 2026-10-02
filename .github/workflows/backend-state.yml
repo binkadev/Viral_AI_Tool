@@ -33,6 +33,9 @@ jobs:
       - name: Test release policy
         run: node tests/release-policy.test.js
 
+      - name: Test diagnostics privacy
+        run: npm run test:diagnostics
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
