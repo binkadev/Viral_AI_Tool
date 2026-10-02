@@ -1,0 +1,32 @@
+name: Backend State
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  durable-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test durable backend state
+        run: node dev-backend/tests/state-persistence.test.js
+
+      - name: Syntax check hardened backend
+        run: |
+          node --check dev-backend/server.js
+          node --check dev-backend/billing.js
+          node --check dev-backend/state-store.js
+          node --check dev-backend/audit-log.js
