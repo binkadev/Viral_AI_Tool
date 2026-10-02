@@ -12,7 +12,8 @@
     "dist": "electron-builder --win nsis",
     "dev:backend": "node dev-backend/server.js",
     "test:backend-state": "node dev-backend/tests/state-persistence.test.js",
-    "test:backend-restart": "node dev-backend/tests/server-restart.integration.test.js"
+    "test:backend-restart": "node dev-backend/tests/server-restart.integration.test.js",
+    "test:backend-production": "node dev-backend/tests/production-mode.integration.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
