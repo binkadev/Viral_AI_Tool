@@ -354,6 +354,15 @@ function jobsTable(rows) {
         : '<div class="thumb ' + (isUnavailable ? "is-unavailable" : "") + '"><span>▶</span></div>';
       const meta = mediaMetaText(job);
       const fileBadge = fileStateBadge(job);
+      const pipelineBadge = job.localized
+        ? '<span class="pipeline-badge localized">✦ ' + t("export.localizedBadge") + '</span>'
+        : '';
+      const pipelineMeta = job.localized && job.pipeline
+        ? '<small class="pipeline-meta">' + escapeHtml(t("export.localizedMeta", {
+            voices: Number(job.pipeline.voiceSegmentCount || 0),
+            subtitles: Number(job.pipeline.subtitleSegmentCount || 0)
+          })) + '</small>'
+        : '';
       const menu = '<div class="job-menu">' +
         '<button class="job-menu-button" data-job-menu="' + escapeHtml(job.id) + '" type="button" aria-label="' + t("file.actions") + '">•••</button>' +
         '<div class="job-menu-popover hidden" data-job-menu-popover="' + escapeHtml(job.id) + '">' +
@@ -379,7 +388,7 @@ function jobsTable(rows) {
 
       return '<tr class="' + (isUnavailable ? "file-unavailable-row" : "") + '" data-job-id="' + escapeHtml(job.id) + '">' +
         '<td><div class="video-cell">' + thumb + '<div class="video-copy"><b>' + escapeHtml(job.name) + '</b>' +
-        (meta ? '<small>' + escapeHtml(meta) + '</small>' : '') + fileBadge + '</div></div></td>' +
+        (meta ? '<small>' + escapeHtml(meta) + '</small>' : '') + pipelineMeta + fileBadge + pipelineBadge + '</div></div></td>' +
         "<td>" + languageName(job.lang) + "</td>" +
         "<td>" + statusBadge(job.status) + "</td>" +
         '<td><div class="job-progress"><div class="job-progress-head"><span data-progress-label="' + job.id + '">' +
