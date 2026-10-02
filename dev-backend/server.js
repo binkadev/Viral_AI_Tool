@@ -43,6 +43,9 @@ const UPLOAD_TTL_MS = 10 * 60 * 1000;
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_LOGIN_ATTEMPTS = 8;
 const RATE_WINDOW_MS = 5 * 60 * 1000;
+const GENERAL_RATE_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 240;
+const MAX_SENSITIVE_REQUESTS_PER_WINDOW = 60;
 const MAX_AUDIO_BYTES = Math.max(
   1024 * 1024,
   Math.min(100 * 1024 * 1024, Number(process.env.VIRAL_AI_PROVIDER_MAX_AUDIO_BYTES || 24 * 1024 * 1024))
@@ -165,6 +168,9 @@ function seedUser() {
 }
 
 const demo = seedUser();
+pruneRefreshSessions();
+pruneBillingEvents();
+billing.pruneExpiredSessions();
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -305,6 +311,7 @@ function resetUserAllowance(user) {
     voiceMinutes: 0,
     exportMinutes: 0
   };
+  persistUsers();
 }
 
 function applyBillingEvent(event) {
@@ -566,6 +573,42 @@ function clearAttempts(key) {
   loginAttempts.delete(key);
 }
 
+function pruneRefreshSessions(now = Date.now()) {
+  let changed = false;
+
+  for (const [key, record] of refreshTokens.entries()) {
+    if (!record || Number(record.expiresAt || 0) <= now) {
+      refreshTokens.delete(key);
+      changed = true;
+    }
+  }
+
+  if (changed) persistRefreshSessions();
+}
+
+function requestRateLimited(req, scope = "general", limit = MAX_REQUESTS_PER_WINDOW, windowMs = GENERAL_RATE_WINDOW_MS) {
+  const now = Date.now();
+  const key = scope + ":" + requestIp(req);
+  const bucket = (requestBuckets.get(key) || []).filter(timestamp => now - timestamp < windowMs);
+
+  if (bucket.length >= limit) {
+    requestBuckets.set(key, bucket);
+    return true;
+  }
+
+  bucket.push(now);
+  requestBuckets.set(key, bucket);
+  return false;
+}
+
+function pruneRequestBuckets(now = Date.now()) {
+  for (const [key, bucket] of requestBuckets.entries()) {
+    const active = (bucket || []).filter(timestamp => now - timestamp < RATE_WINDOW_MS);
+    if (active.length) requestBuckets.set(key, active);
+    else requestBuckets.delete(key);
+  }
+}
+
 function safeEqualHex(a, b) {
   try {
     const left = Buffer.from(a, "hex");
@@ -717,6 +760,7 @@ function chargeUserQuota(user, service, minutes) {
     user.usage[usageKey] = Math.max(0, Number(user.usage[usageKey] || 0) + charge);
   }
 
+  persistUsers();
   return charge;
 }
 
@@ -1128,8 +1172,14 @@ async function handle(req, res) {
       service: "viral-ai-dev-backend",
       speechProviderConfigured: speechProvider.isConfigured(),
       translationProviderConfigured: translationProvider.isConfigured(),
-      voiceProviderConfigured: voiceProvider.isConfigured()
+      voiceProviderConfigured: voiceProvider.isConfigured(),
+      durableState: true
     });
+  }
+
+  if (requestRateLimited(req, "general")) {
+    audit("rate_limit.general", req, { method, path: url.pathname });
+    return error(res, 429, "RATE_LIMITED");
   }
 
   const devCheckoutMatch = url.pathname.match(/^\/v1\/dev-billing\/checkout\/([^/]+)$/);
@@ -1170,6 +1220,13 @@ async function handle(req, res) {
         currency: price.currency,
         status: "paid",
         description: "Development checkout"
+      });
+      persistUsers();
+      audit("billing.checkout.completed", req, {
+        userId: user.id,
+        planId: targetPlanId,
+        amount: price.monthlyAmount,
+        currency: price.currency
       });
 
       return html(res, 200,
@@ -1355,6 +1412,11 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/internal/billing/events") {
+    if (requestRateLimited(req, "billing-webhook", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("rate_limit.billing_webhook", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     try {
       const rawBody = await readRawBody(req);
       verifyBillingWebhook(req, rawBody);
@@ -1367,8 +1429,15 @@ async function handle(req, res) {
       }
 
       const result = applyBillingEvent(event);
+      audit("billing.webhook.accepted", req, {
+        eventId: result.eventId,
+        userId: result.userId || null,
+        duplicate: result.duplicate === true,
+        type: event?.type || null
+      });
       return json(res, 200, result);
     } catch (err) {
+      audit("billing.webhook.rejected", req, { code: err?.code || "BILLING_EVENT_INVALID" });
       const code = err?.code || "BILLING_EVENT_INVALID";
       const status =
         code === "BILLING_NOT_CONFIGURED" ? 503 :
@@ -1381,8 +1450,14 @@ async function handle(req, res) {
   }
 
   if (method === "POST" && url.pathname === "/v1/auth/login") {
-    const clientKey = String(req.socket.remoteAddress || "unknown");
-    if (rateLimited(clientKey)) return error(res, 429, "RATE_LIMITED");
+    const clientKey = requestIp(req);
+    if (
+      requestRateLimited(req, "auth-login", MAX_SENSITIVE_REQUESTS_PER_WINDOW) ||
+      rateLimited(clientKey)
+    ) {
+      audit("auth.login.rate_limited", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
 
     const body = await readJson(req);
     const email = String(body.email || "").trim().toLowerCase();
@@ -1395,38 +1470,65 @@ async function handle(req, res) {
 
     if (!user || !safeEqualHex(candidateHash, user.passwordHash)) {
       recordFailedAttempt(clientKey);
+      audit("auth.login.failed", req, { email });
       return error(res, 401, "INVALID_CREDENTIALS");
     }
 
     clearAttempts(clientKey);
-    return json(res, 200, issueSession(user));
+    const session = issueSession(user);
+    audit("auth.login.succeeded", req, { userId: user.id, email: user.email });
+    return json(res, 200, session);
   }
 
   if (method === "POST" && url.pathname === "/v1/auth/refresh") {
+    if (requestRateLimited(req, "auth-refresh", MAX_SENSITIVE_REQUESTS_PER_WINDOW)) {
+      audit("auth.refresh.rate_limited", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
+
     const body = await readJson(req);
     const token = String(body.refreshToken || "");
-    const record = refreshTokens.get(token);
+    const tokenKey = hashSessionToken(token);
+    pruneRefreshSessions();
+
+    const record = refreshTokens.get(tokenKey);
 
     if (!record || Date.now() >= record.expiresAt) {
-      if (record) refreshTokens.delete(token);
+      if (record) {
+        refreshTokens.delete(tokenKey);
+        persistRefreshSessions();
+      }
+      audit("auth.refresh.failed", req, { code: "AUTH_EXPIRED" });
       return error(res, 401, "AUTH_EXPIRED");
     }
 
     const user = findUserById(record.userId);
-    if (!user) return error(res, 401, "AUTH_EXPIRED");
+    if (!user) {
+      refreshTokens.delete(tokenKey);
+      persistRefreshSessions();
+      audit("auth.refresh.failed", req, { code: "AUTH_EXPIRED" });
+      return error(res, 401, "AUTH_EXPIRED");
+    }
 
-    refreshTokens.delete(token);
-    return json(res, 200, issueSession(user));
+    refreshTokens.delete(tokenKey);
+    persistRefreshSessions();
+    const session = issueSession(user);
+    audit("auth.refresh.succeeded", req, { userId: user.id });
+    return json(res, 200, session);
   }
 
   if (method === "POST" && url.pathname === "/v1/auth/logout") {
+    const user = authenticate(req);
     const body = await readJson(req);
     const refreshToken = String(body.refreshToken || "");
-    refreshTokens.delete(refreshToken);
+
+    if (refreshToken) refreshTokens.delete(hashSessionToken(refreshToken));
+    persistRefreshSessions();
 
     const accessToken = bearerToken(req);
     if (accessToken) accessTokens.delete(accessToken);
 
+    audit("auth.logout", req, { userId: user?.id || null });
     return json(res, 200, { loggedOut: true });
   }
 
