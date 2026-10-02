@@ -35,12 +35,6 @@ const {
   cancelAllVoice,
   serializeVoiceError
 } = require('./services/voice');
-const {
-  createService: createVoiceService,
-  activeVoiceCount,
-  cancelAllVoice,
-  serializeVoiceError
-} = require('./services/voice');
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
