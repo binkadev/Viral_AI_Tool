@@ -960,6 +960,14 @@ async function startTranslation() {
   };
 
   state.translation.job = job;
+
+  if (state.voice.job?.sourcePath === source.sourcePath) {
+    state.voice.job = null;
+  }
+  if (state.voice.result?.sourcePath === source.sourcePath) {
+    state.voice.result = null;
+  }
+
   save();
   render();
   toast(t("translation.started"));
@@ -3006,6 +3014,12 @@ async function startSpeechRecognition() {
   if (state.translation.result?.sourcePath === source.sourcePath) {
     state.translation.result = null;
   }
+  if (state.voice.job?.sourcePath === source.sourcePath) {
+    state.voice.job = null;
+  }
+  if (state.voice.result?.sourcePath === source.sourcePath) {
+    state.voice.result = null;
+  }
 
   save();
   render();
@@ -3629,6 +3643,8 @@ function bind() {
   if (translationTarget) {
     translationTarget.onchange = () => {
       state.translation.targetLanguage = translationTarget.value || "en";
+      state.voice.job = null;
+      state.voice.result = null;
       save();
       render();
     };
@@ -3647,6 +3663,40 @@ function bind() {
 
   const translationStop = $("translationStop");
   if (translationStop) translationStop.onclick = cancelTranslation;
+
+  const voiceMode = $("voiceMode");
+  if (voiceMode) {
+    voiceMode.onchange = () => {
+      state.voice.mode = voiceMode.value === "local" ? "local" : "cloud";
+      save();
+      render();
+    };
+  }
+
+  document.querySelectorAll(".voice-assignment-select").forEach((node) => {
+    node.onchange = () => {
+      const speaker = node.dataset.speakerKey || "speaker-1";
+      state.voice.assignments[speaker] = node.value;
+      state.voice.job = null;
+      state.voice.result = null;
+      save();
+      render();
+    };
+  });
+
+  document.querySelectorAll("[data-voice-preview-speaker]").forEach((node) => {
+    node.onclick = () => previewVoiceSelection(node.dataset.voicePreviewSpeaker || "speaker-1");
+  });
+
+  document.querySelectorAll(".voice-audio-play").forEach((node) => {
+    node.onclick = () => playVoiceUrl(decodeURIComponent(node.dataset.audioUrl || ""));
+  });
+
+  const voiceStart = $("voiceStart");
+  if (voiceStart) voiceStart.onclick = startVoiceGeneration;
+
+  const voiceStop = $("voiceStop");
+  if (voiceStop) voiceStop.onclick = cancelVoiceGeneration;
 
   const renderButton = $("render");
   if (renderButton) renderButton.onclick = startRealRender;
@@ -3754,6 +3804,16 @@ function render() {
 
     if (translationStale && !state.translation.statusCheckPending) {
       setTimeout(() => refreshTranslationStatus({ rerender: true }), 0);
+    }
+  }
+
+  if (state.page === "ai-video" && state.voice.mode === "cloud" && window.desktopAPI?.getVoiceStatus) {
+    const voiceStale = !state.voice.cloudStatus ||
+      !state.voice.statusCheckedAt ||
+      Date.now() - state.voice.statusCheckedAt > 30000;
+
+    if (voiceStale && !state.voice.statusCheckPending) {
+      setTimeout(() => refreshVoiceStatus({ rerender: true }), 0);
     }
   }
 
@@ -3870,6 +3930,9 @@ if (window.desktopAPI) {
   }
   if (window.desktopAPI.onTranslationProgress) {
     window.desktopAPI.onTranslationProgress(updateTranslationProgress);
+  }
+  if (window.desktopAPI.onVoiceProgress) {
+    window.desktopAPI.onVoiceProgress(updateVoiceProgress);
   }
   if (window.desktopAPI.onSpeechModelProgress) {
     window.desktopAPI.onSpeechModelProgress(updateSpeechModelProgress);
