@@ -1,18 +1,96 @@
 # Viral AI Tool
 
-Ứng dụng desktop Electron cho quy trình video AI trên Windows.
+Ứng dụng desktop Windows bằng Electron dành cho workflow localize video bằng AI.
+
+**Phiên bản hiện tại:** `0.14.0`
 
 ## Ngôn ngữ
 
-Ứng dụng hiện hỗ trợ:
+Ứng dụng hỗ trợ:
+
 - Tiếng Việt
 - English
 
-Bạn có thể đổi ngôn ngữ trực tiếp bằng nút `VI / EN` trên thanh trên cùng. Lựa chọn được ghi nhớ sau khi mở lại ứng dụng.
+Có thể đổi trực tiếp bằng nút `VI / EN`. Lựa chọn được ghi nhớ giữa các lần mở ứng dụng.
+
+## Workflow chính
+
+Viral AI Tool hiện đã có:
+
+- nhập video local
+- nhận diện lời nói
+- dịch
+- AI voice
+- căn timing theo segment
+- giữ audio gốc làm nền
+- burn subtitle
+- xuất MP4 H.264 / AAC
+- progress / cancel / retry
+- Local / Cloud workflow
+- quản lý account/session
+- gói Free / Creator / Creator Pro / Business
+- quota/concurrency/model entitlement
+- subscription lifecycle và billing core
+- Usage & Credits
+- verified Windows updater
+
+## Chạy development
+
+```powershell
+npm ci
+npm start
+```
+
+Backend development:
+
+```powershell
+npm run dev:backend
+```
+
+## Build installer Windows
+
+```powershell
+npm run dist
+```
+
+Build output:
+
+```text
+release\
+```
+
+## Release & production
+
+Backend production baseline hỗ trợ:
+
+- SQLite durable state
+- hashed refresh sessions
+- device/session revocation
+- audit log
+- rate limit
+- idempotency/restart recovery
+- graceful shutdown
+
+Windows release pipeline hỗ trợ:
+
+- branded icon
+- NSIS installer
+- startup smoke test
+- SHA-256
+- release manifest
+- verified updater
+- Authenticode guard cho Stable tag
+- tag/version/master commit validation
+
+Xem:
+
+- `CHANGELOG.md`
+- `docs/PRODUCTION_BACKEND.md`
+- `docs/RELEASE_CHECKLIST.md`
 
 ## Font
 
-Viral AI Tool dùng font hệ thống Windows để đảm bảo tiếng Việt hiển thị ổn định:
+App dùng font hệ thống Windows để tiếng Việt hiển thị ổn định:
 
 - Segoe UI Variable Text
 - Segoe UI Variable
@@ -22,52 +100,13 @@ Viral AI Tool dùng font hệ thống Windows để đảm bảo tiếng Việt 
 
 Không cần tải font ngoài khi chạy app.
 
-## Chạy ứng dụng
+## Trạng thái v0.14.0
 
-```powershell
-npm install
-npm start
-```
+`0.14.0` là production-hardening/release baseline.
 
-## Build file cài đặt Windows
+Chưa nên tạo public Stable tag cho paid launch trước khi:
 
-```powershell
-npm run dist
-```
-
-File build nằm trong thư mục:
-
-```text
-release\
-```
-
-## Chức năng prototype hiện tại
-
-- Dashboard
-- Download Studio
-- Channel Monitor
-- AI Video
-- Voice Studio
-- Video Editor
-- Automation
-- Library
-- Social Accounts
-- Usage & Credits
-- Settings
-- Chọn nhiều video từ Windows
-- Drag & drop video
-- Chọn thư mục output
-- Queue và render progress mô phỏng
-- Giao diện song ngữ VI / EN
-
-## Bước tiếp theo
-
-- FFmpeg engine
-- đọc metadata video thật
-- thumbnail / preview thật
-- render MP4 thật
-- speech-to-text
-- translation
-- AI voice
-- subtitle pipeline
-- automation worker
+1. cấu hình Windows code-signing certificate;
+2. deploy production backend qua HTTPS;
+3. nối real billing provider;
+4. smoke-test installer trên một máy Windows user sạch.
