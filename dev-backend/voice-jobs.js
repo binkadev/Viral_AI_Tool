@@ -610,6 +610,28 @@ async function preview(userId, body, signal) {
   };
 }
 
+function cancelAllForShutdown() {
+  let cancelled = 0;
+
+  for (const job of jobs.values()) {
+    if (["completed", "failed", "cancelled"].includes(job.state)) continue;
+
+    job.cancelRequested = true;
+    if (job.controller) {
+      try { job.controller.abort(); } catch {}
+    }
+
+    if (job.state !== "processing") {
+      job.state = "cancelled";
+      settleQuota(job, "cancelled");
+    }
+
+    cancelled++;
+  }
+
+  return cancelled;
+}
+
 module.exports = {
   status,
   catalog,
@@ -618,6 +640,7 @@ module.exports = {
   cancel,
   getAudio,
   preview,
+  cancelAllForShutdown,
   configureQuotaHooks,
   VoiceJobError
 };
