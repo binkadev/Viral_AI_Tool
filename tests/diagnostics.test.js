@@ -7,6 +7,9 @@ const {
   createRedactor,
   createDiagnosticLogger
 } = require("../services/diagnostics/logger");
+const {
+  createDiagnosticBundle
+} = require("../services/diagnostics/bundle");
 
 function testRedactor() {
   const userDataPath = path.join(os.tmpdir(), "viral-ai-diagnostics-user");
@@ -88,6 +91,101 @@ function testLoggerAndRotation() {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
+function testConsoleCaptureAndBundleAllowlist() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "viral-ai-diagnostics-console-"));
+  const logger = createDiagnosticLogger({
+    userDataPath: root,
+    tempPath: path.join(root, "temp"),
+    maxBytes: 1024 * 1024,
+    maxFiles: 2
+  });
+
+  const calls = [];
+  const fakeConsole = {
+    warn(...args) { calls.push(["warn", ...args]); },
+    error(...args) { calls.push(["error", ...args]); }
+  };
+
+  const restore = logger.installConsoleCapture(fakeConsole);
+  fakeConsole.error(
+    "Login failed",
+    "person@example.com",
+    "https://cloud.example.test/v1/login?token=hidden",
+    "D:\\Users\\Person\\Videos\\private.mp4"
+  );
+  restore();
+
+  assert.strictEqual(calls.length, 1);
+  const recent = logger.readRecent(20);
+  const rawLogs = JSON.stringify(recent);
+  assert(!rawLogs.includes("person@example.com"));
+  assert(!rawLogs.includes("cloud.example.test"));
+  assert(!rawLogs.includes("private.mp4"));
+
+  const bundle = createDiagnosticBundle({
+    release: {
+      name: "Viral AI Tool",
+      version: "0.14.0",
+      channel: "preview",
+      commit: "abcdef1234567890",
+      builtAt: "2026-10-02T00:00:00.000Z",
+      platform: "win32",
+      arch: "x64",
+      packaged: true,
+      source: "github-actions",
+      email: "must-not-enter@example.com",
+      accessToken: "must-not-enter",
+      backendUrl: "https://private.example.test"
+    },
+    runtime: {
+      platform: "win32",
+      arch: "x64",
+      windowsRelease: "10.0.26100",
+      electron: "38.2.0",
+      chrome: "140",
+      node: "22",
+      userDataPath: "D:\\Secret\\AppData"
+    },
+    logs: [{
+      at: "2026-10-02T00:00:00.000Z",
+      level: "error",
+      event: "support.test",
+      details: {
+        message: "person@example.com D:\\Videos\\private.mp4",
+        accessToken: "hidden-token",
+        backendUrl: "https://private.example.test",
+        safeCode: "VOICE_TIMEOUT"
+      }
+    }],
+    redact: logger.redact,
+    exportedAt: "2026-10-02T00:01:00.000Z"
+  });
+
+  const serialized = JSON.stringify(bundle);
+  for (const forbidden of [
+    "must-not-enter@example.com",
+    "must-not-enter",
+    "private.example.test",
+    "hidden-token",
+    "person@example.com",
+    "private.mp4",
+    "Secret"
+  ]) {
+    assert(!serialized.includes(forbidden), "Diagnostic bundle leaked: " + forbidden);
+  }
+
+  assert.strictEqual(bundle.privacy.accountDataIncluded, false);
+  assert.strictEqual(bundle.privacy.credentialsIncluded, false);
+  assert.strictEqual(bundle.privacy.cloudConfigurationIncluded, false);
+  assert.strictEqual(bundle.privacy.userMediaPathsIncluded, false);
+  assert.strictEqual(bundle.logs[0].details.safeCode, "VOICE_TIMEOUT");
+  assert.strictEqual(bundle.logs[0].details.accessToken, undefined);
+  assert.strictEqual(bundle.logs[0].details.backendUrl, undefined);
+
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
 testRedactor();
 testLoggerAndRotation();
+testConsoleCaptureAndBundleAllowlist();
 console.log("Diagnostics privacy tests passed.");
