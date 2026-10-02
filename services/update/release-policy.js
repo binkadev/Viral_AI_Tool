@@ -33,6 +33,22 @@ function validSha256(value) {
   return /^[a-f0-9]{64}$/i.test(String(value || ""));
 }
 
+function normalizeInstallerUrl(value, version) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || url.hostname !== "github.com") return null;
+    if (url.username || url.password || url.hash) return null;
+
+    const expectedPrefix = "/binkadev/Viral_AI_Tool/releases/download/v" +
+      String(version || "") + "/";
+    if (!url.pathname.startsWith(expectedPrefix)) return null;
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function validateManifest(manifest) {
   if (!manifest || typeof manifest !== "object") {
     return { ok: false, code: "UPDATE_MANIFEST_INVALID" };
@@ -57,7 +73,14 @@ function validateManifest(manifest) {
   const artifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
   const installer = artifacts.find(item => String(item?.file || "").toLowerCase().endsWith(".exe"));
 
-  if (!installer || !validSha256(installer.sha256) || Number(installer.sizeBytes || 0) <= 0) {
+  const downloadUrl = normalizeInstallerUrl(installer?.downloadUrl, manifest.version);
+
+  if (
+    !installer ||
+    !validSha256(installer.sha256) ||
+    Number(installer.sizeBytes || 0) <= 0 ||
+    (manifest.channel === "stable" && !downloadUrl)
+  ) {
     return { ok: false, code: "UPDATE_INSTALLER_INVALID" };
   }
 
@@ -66,7 +89,8 @@ function validateManifest(manifest) {
     installer: {
       file: String(installer.file),
       sizeBytes: Number(installer.sizeBytes),
-      sha256: String(installer.sha256).toLowerCase()
+      sha256: String(installer.sha256).toLowerCase(),
+      downloadUrl
     }
   };
 }
@@ -123,5 +147,6 @@ module.exports = {
   compareVersions,
   validateManifest,
   canOfferUpdate,
-  verifyBufferSha256
+  verifyBufferSha256,
+  normalizeInstallerUrl
 };
