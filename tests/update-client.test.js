@@ -70,11 +70,10 @@ async function testVerifiedDownloadAndCleanup() {
   fs.writeFileSync(path.join(root, "abandoned.part-123"), "partial");
   fs.writeFileSync(path.join(root, "keep.txt"), "keep");
 
-  let call = 0;
-  await withMockFetch(async () => {
-    call++;
+  await withMockFetch(async rawUrl => {
+    const url = String(rawUrl || "");
 
-    if (call === 1) {
+    if (url.includes("RELEASE-MANIFEST.json")) {
       const text = JSON.stringify(manifest);
       return {
         ok: true,
@@ -120,11 +119,10 @@ async function testChecksumMismatch() {
   const payload = Buffer.from("installer", "utf8");
   const manifest = manifestFor(payload, "0".repeat(64));
 
-  let call = 0;
   await assert.rejects(
-    () => withMockFetch(async () => {
-      call++;
-      if (call === 1) {
+    () => withMockFetch(async rawUrl => {
+      const url = String(rawUrl || "");
+      if (url.includes("RELEASE-MANIFEST.json")) {
         const text = JSON.stringify(manifest);
         return {
           ok: true,
