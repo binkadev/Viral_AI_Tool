@@ -98,7 +98,7 @@ function fingerprint(input) {
       sourceLanguage: input.sourceLanguage,
       targetLanguage: input.targetLanguage,
       preserveTone: input.preserveTone,
-      segments: input.segments.map(item => ({ id: item.id, text: item.text }))
+      segments: input.segments.map(item => ({ id: item.id, text: item.text, speaker: item.speaker }))
     }))
     .digest("hex");
 }
@@ -189,6 +189,7 @@ async function processJob(job) {
         end: source.end,
         sourceText: source.text,
         text,
+        speaker: source.speaker,
         speaker: source.speaker || null,
         lengthRatio: meta.lengthRatio,
         timingRisk: meta.timingRisk
