@@ -104,8 +104,9 @@ class CloudSpeechProvider {
         return {
           mode: this.mode,
           ready: false,
-          code: payload?.code || "CLOUD_UNAVAILABLE",
+          code: payload?.code === "PLAN_REQUIRED" ? "CLOUD_PLAN_REQUIRED" : (payload?.code || "CLOUD_UNAVAILABLE"),
           quota: payload?.quota || null,
+          entitlements: payload?.entitlements || null,
           limits: payload?.limits || null,
           retention: payload?.retention || null
         };
