@@ -6,6 +6,8 @@ const path = require("path");
 const speechProvider = require("./providers");
 const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
+const voiceProvider = require("./providers/voice");
+const voiceJobs = require("./voice-jobs");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
@@ -72,6 +74,15 @@ function json(res, status, payload) {
     "cache-control": "no-store"
   });
   res.end(body);
+}
+
+function binary(res, status, buffer, contentType = "application/octet-stream") {
+  res.writeHead(status, {
+    "content-type": contentType,
+    "content-length": buffer.length,
+    "cache-control": "no-store"
+  });
+  res.end(buffer);
 }
 
 function error(res, status, code) {
@@ -538,7 +549,8 @@ async function handle(req, res) {
       ok: true,
       service: "viral-ai-dev-backend",
       speechProviderConfigured: speechProvider.isConfigured(),
-      translationProviderConfigured: translationProvider.isConfigured()
+      translationProviderConfigured: translationProvider.isConfigured(),
+      voiceProviderConfigured: voiceProvider.isConfigured()
     });
   }
 
@@ -605,6 +617,107 @@ async function handle(req, res) {
       },
       quota: user.quota
     });
+  }
+
+  if (method === "GET" && url.pathname === "/v1/voice/status") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+    return json(res, 200, voiceJobs.status());
+  }
+
+  if (method === "GET" && url.pathname === "/v1/voice/catalog") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+    return json(res, 200, voiceJobs.catalog());
+  }
+
+  if (method === "POST" && url.pathname === "/v1/voice/preview") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const body = await readJson(req);
+    const controller = new AbortController();
+    req.on("aborted", () => controller.abort());
+
+    try {
+      const preview = await voiceJobs.preview(user.id, body, controller.signal);
+      return binary(res, 200, preview.buffer, preview.contentType);
+    } catch (err) {
+      const code = err?.code || "VOICE_FAILED";
+      const status =
+        code === "VOICE_PREVIEW_RATE_LIMITED" ? 429 :
+        code === "VOICE_PREVIEW_INVALID" || code === "VOICE_NOT_FOUND" ? 400 :
+        code === "SERVICE_UNAVAILABLE" ? 503 :
+        400;
+      return error(res, status, code);
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/voice/jobs") {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    const key = idempotencyKey(req);
+    if (!key) return error(res, 400, "BAD_REQUEST");
+
+    const body = await readJson(req);
+
+    try {
+      const result = voiceJobs.create(user.id, key, body);
+      return json(res, result.created ? 201 : 200, result.job);
+    } catch (err) {
+      const code = err?.code || "VOICE_FAILED";
+      const status =
+        code === "VOICE_TOO_LARGE" ? 413 :
+        code === "JOB_CONFLICT" ? 409 :
+        code === "SERVICE_UNAVAILABLE" ? 503 :
+        code === "JOB_NOT_FOUND" ? 404 :
+        400;
+      return error(res, status, code);
+    }
+  }
+
+  const voiceAudioMatch = url.pathname.match(/^\/v1\/voice\/jobs\/([^/]+)\/segments\/([^/]+)\/audio$/);
+  if (method === "GET" && voiceAudioMatch) {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      const audio = voiceJobs.getAudio(
+        user.id,
+        decodeURIComponent(voiceAudioMatch[1]),
+        decodeURIComponent(voiceAudioMatch[2])
+      );
+      const buffer = await fsp.readFile(audio.filePath);
+      return binary(res, 200, buffer, audio.contentType);
+    } catch (err) {
+      const code = err?.code || "VOICE_AUDIO_NOT_FOUND";
+      return error(res, code === "JOB_NOT_FOUND" ? 404 : 410, code);
+    }
+  }
+
+  const voiceCancelMatch = url.pathname.match(/^\/v1\/voice\/jobs\/([^/]+)\/cancel$/);
+  if (method === "POST" && voiceCancelMatch) {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      return json(res, 200, voiceJobs.cancel(user.id, decodeURIComponent(voiceCancelMatch[1])));
+    } catch (err) {
+      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "VOICE_FAILED");
+    }
+  }
+
+  const voiceJobMatch = url.pathname.match(/^\/v1\/voice\/jobs\/([^/]+)$/);
+  if (method === "GET" && voiceJobMatch) {
+    const user = authenticate(req);
+    if (!user) return error(res, 401, "AUTH_REQUIRED");
+
+    try {
+      return json(res, 200, voiceJobs.get(user.id, decodeURIComponent(voiceJobMatch[1])));
+    } catch (err) {
+      return error(res, err?.code === "JOB_NOT_FOUND" ? 404 : 400, err?.code || "VOICE_FAILED");
+    }
   }
 
   if (method === "GET" && url.pathname === "/v1/translation/status") {
@@ -858,6 +971,12 @@ server.listen(PORT, HOST, () => {
   console.log("Cloud translation: " + (translationProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
   if (translationProvider.isConfigured()) {
     console.log("Translation model: " + translation.model);
+  }
+  console.log("");
+  const voice = voiceProvider.config();
+  console.log("Cloud voice: " + (voiceProvider.isConfigured() ? "READY" : "NOT CONFIGURED"));
+  if (voiceProvider.isConfigured()) {
+    console.log("Voice model: " + voice.model);
   }
   console.log("");
   console.log("Development only. Do not expose this server to the public Internet.");
