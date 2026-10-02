@@ -2261,6 +2261,306 @@ function usagePage() {
     : '');
 }
 
+
+function formatBillingMoney(amount, currency) {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric)) return "—";
+
+  try {
+    return new Intl.NumberFormat(state.locale === "vi" ? "vi-VN" : "en-US", {
+      style: "currency",
+      currency: String(currency || "USD"),
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(numeric / 100);
+  } catch {
+    return (numeric / 100).toFixed(2) + " " + String(currency || "USD");
+  }
+}
+
+async function loadBillingData({ rerender = false } = {}) {
+  if (!window.desktopAPI || state.billing.loading) return state.billing;
+
+  if (!state.cloud.auth?.authenticated) {
+    state.billing.catalog = null;
+    state.billing.invoices = null;
+    state.billing.errorCode = "AUTH_REQUIRED";
+    if (rerender && state.page === "billing") render();
+    return state.billing;
+  }
+
+  state.billing.loading = true;
+  state.billing.errorCode = null;
+
+  try {
+    const [catalogResponse, invoiceResponse] = await Promise.all([
+      window.desktopAPI.getBillingCatalog?.(),
+      window.desktopAPI.getBillingInvoices?.()
+    ]);
+
+    if (catalogResponse?.ok) {
+      state.billing.catalog = catalogResponse.data || null;
+    } else {
+      state.billing.errorCode = catalogResponse?.error?.code || "BILLING_REQUEST_FAILED";
+    }
+
+    if (invoiceResponse?.ok) {
+      state.billing.invoices = invoiceResponse.data || null;
+    } else if (!state.billing.errorCode) {
+      state.billing.errorCode = invoiceResponse?.error?.code || "BILLING_REQUEST_FAILED";
+    }
+
+    state.billing.loadedAt = Date.now();
+  } catch {
+    state.billing.errorCode = "BILLING_NETWORK";
+  } finally {
+    state.billing.loading = false;
+  }
+
+  if (rerender && state.page === "billing") render();
+  return state.billing;
+}
+
+function billingFeatureList(plan) {
+  const features = [
+    [t("billing.featureSpeech"), plan?.features?.cloudSpeech === true],
+    [t("billing.featureTranslation"), plan?.features?.cloudTranslation === true],
+    [t("billing.featureVoice"), plan?.features?.cloudVoice === true],
+    [t("billing.featurePremium"), Array.isArray(plan?.models?.voice) && plan.models.voice.includes("premium")]
+  ];
+
+  return features.map(([label, enabled]) =>
+    '<div class="billing-feature ' + (enabled ? "included" : "excluded") + '">' +
+      '<span aria-hidden="true">' + (enabled ? "✓" : "–") + '</span><b>' + escapeHtml(label) + '</b>' +
+    '</div>'
+  ).join("");
+}
+
+function billingPage() {
+  const authenticated = state.cloud.auth?.authenticated === true;
+  const account = state.cloud.account;
+  const catalog = state.billing.catalog;
+  const invoices = Array.isArray(state.billing.invoices?.invoices)
+    ? state.billing.invoices.invoices
+    : [];
+  const subscription = account?.subscription || catalog?.subscription || null;
+
+  if (!authenticated) {
+    return '<div class="card card-pad account-empty">' +
+      '<div class="eyebrow">' + t("billing.eyebrow") + '</div>' +
+      '<h3>' + t("billing.signInTitle") + '</h3><p class="muted">' + t("billing.signInBody") + '</p>' +
+      '<button id="billingLogin" class="button primary" type="button">' + t("account.signIn") + '</button>' +
+    '</div>';
+  }
+
+  if (state.billing.loading && !catalog) {
+    return '<div class="card card-pad billing-loading"><div class="eyebrow">' + t("billing.eyebrow") +
+      '</div><h3>' + t("billing.loading") + '</h3><p class="muted">' + t("billing.loadingDesc") + '</p></div>';
+  }
+
+  if (!catalog) {
+    return '<div class="card card-pad billing-loading"><div class="eyebrow">' + t("billing.eyebrow") +
+      '</div><h3>' + t("billing.unavailableTitle") + '</h3><p class="muted">' + t("billing.unavailableBody") +
+      '</p><button id="billingRetry" class="button primary" type="button">' + t("billing.retry") + '</button></div>';
+  }
+
+  const plans = Array.isArray(catalog.plans) ? catalog.plans : [];
+  const currentPlanId = String(catalog.currentPlanId || account?.user?.planId || "");
+  const currentIndex = plans.findIndex(plan => plan.id === currentPlanId);
+
+  const planCards = plans.map((plan, index) => {
+    const current = plan.id === currentPlanId;
+    const upgrade = currentIndex >= 0 && index > currentIndex;
+    const downgrade = currentIndex >= 0 && index < currentIndex;
+    const price = Number(plan.monthlyAmount) === 0
+      ? t("billing.free")
+      : t("billing.perMonth", {
+          price: formatBillingMoney(plan.monthlyAmount, plan.currency)
+        });
+
+    let action = '<button class="button ghost" type="button" disabled>' + t("billing.currentPlan") + '</button>';
+    if (upgrade) {
+      action = '<button class="button primary billing-upgrade" data-plan-id="' + escapeHtml(plan.id) +
+        '" type="button">' + t("billing.upgrade") + '</button>';
+    } else if (downgrade) {
+      action = '<button class="button ghost billing-downgrade" data-plan-id="' + escapeHtml(plan.id) +
+        '" data-plan-name="' + escapeHtml(plan.name) + '" type="button">' + t("billing.downgrade") + '</button>';
+    }
+
+    return '<div class="card billing-plan-card ' + (current ? "is-current" : "") + '">' +
+      '<div class="billing-plan-head"><div><span class="eyebrow">' + (current ? t("billing.current") : t("billing.plan")) +
+        '</span><h3>' + escapeHtml(plan.name) + '</h3></div>' +
+        (current ? '<span class="billing-current-badge">' + t("billing.active") + '</span>' : '') +
+      '</div>' +
+      '<div class="billing-price">' + escapeHtml(price) + '</div>' +
+      '<p class="muted">' + escapeHtml(t("billing.minutes", { minutes: Number(plan.monthlyMinutes || 0).toLocaleString(state.locale === "vi" ? "vi-VN" : "en-US") })) + '</p>' +
+      '<p class="muted">' + escapeHtml(t("billing.concurrent", { count: plan.maxConcurrentCloudJobs || 1 })) + '</p>' +
+      '<div class="billing-feature-list">' + billingFeatureList(plan) + '</div>' +
+      '<div class="billing-plan-action">' + action + '</div>' +
+    '</div>';
+  }).join("");
+
+  const status = subscription ? subscriptionStatusCopy(subscription) : "—";
+  const subscriptionDate =
+    subscription?.status === "trialing"
+      ? subscription?.trialEndsAt
+      : subscription?.status === "past_due" || subscription?.status === "grace_period"
+        ? subscription?.graceEndsAt
+        : subscription?.currentPeriodEnd;
+
+  const subscriptionActions = subscription?.cancelAtPeriodEnd
+    ? '<button id="billingResume" class="button primary" type="button">' + t("billing.resume") + '</button>'
+    : '<button id="billingCancel" class="button ghost danger-text" type="button">' + t("billing.cancelPlan") + '</button>';
+
+  const invoiceRows = invoices.length
+    ? invoices.map(item =>
+        '<tr><td>' + escapeHtml(accountDateLabel(item.createdAt)) + '</td>' +
+        '<td>' + escapeHtml(item.planName || item.planId || "—") + '</td>' +
+        '<td>' + escapeHtml(formatBillingMoney(item.amount, item.currency)) + '</td>' +
+        '<td><span class="status-pill done">' + escapeHtml(item.status || "—") + '</span></td></tr>'
+      ).join("")
+    : '<tr><td colspan="4" class="billing-empty-row">' + t("billing.noInvoices") + '</td></tr>';
+
+  return (catalog.developmentOnly
+    ? '<div class="speech-alert warning billing-dev-banner"><b>' + t("billing.devTitle") + '</b><span>' +
+        t("billing.devBody") + '</span></div>'
+    : '') +
+    '<div class="section-head"><div><h3>' + t("billing.choosePlan") + '</h3><p>' + t("billing.choosePlanDesc") + '</p></div>' +
+      '<button id="billingRefresh" class="button ghost" type="button">' + t("billing.refresh") + '</button></div>' +
+    '<div class="billing-plan-grid">' + planCards + '</div>' +
+    '<div class="section-head"><div><h3>' + t("billing.manage") + '</h3><p>' + t("billing.manageDesc") + '</p></div></div>' +
+    '<div class="grid-2">' +
+      '<div class="card card-pad billing-subscription-card"><div class="eyebrow">' + t("billing.subscription") + '</div>' +
+        '<h3>' + escapeHtml(status) + '</h3><p class="muted">' +
+          escapeHtml(t("billing.nextDate", { date: accountDateLabel(subscriptionDate) })) + '</p>' +
+        (subscription?.pendingPlanName
+          ? '<p class="billing-pending">' + escapeHtml(t("billing.pendingPlan", { plan: subscription.pendingPlanName })) + '</p>'
+          : '') +
+        '<div class="row">' + subscriptionActions +
+          '<button id="billingPortal" class="button ghost" type="button">' + t("billing.portal") + '</button></div>' +
+      '</div>' +
+      '<div class="card card-pad"><div class="eyebrow">' + t("billing.security") + '</div><h3>' +
+        t("billing.securityTitle") + '</h3><p class="muted">' + t("billing.securityBody") + '</p></div>' +
+    '</div>' +
+    '<div class="section-head"><div><h3>' + t("billing.invoices") + '</h3><p>' + t("billing.invoicesDesc") + '</p></div></div>' +
+    '<div class="card table-wrap billing-invoices"><table class="data-table"><thead><tr><th>' + t("billing.date") +
+      '</th><th>' + t("billing.invoicePlan") + '</th><th>' + t("billing.amount") + '</th><th>' +
+      t("common.status") + '</th></tr></thead><tbody>' + invoiceRows + '</tbody></table></div>';
+}
+
+async function billingErrorNotice(code) {
+  const map = {
+    AUTH_REQUIRED: ["billing.authTitle", "billing.authBody"],
+    BILLING_NETWORK: ["billing.networkTitle", "billing.networkBody"],
+    BILLING_TIMEOUT: ["billing.networkTitle", "billing.networkBody"],
+    BILLING_SERVICE_UNAVAILABLE: ["billing.unavailableTitle", "billing.unavailableBody"],
+    BILLING_PLAN_ALREADY_ACTIVE: ["billing.samePlanTitle", "billing.samePlanBody"],
+    BILLING_SESSION_EXPIRED: ["billing.sessionTitle", "billing.sessionBody"],
+    SUBSCRIPTION_INACTIVE: ["billing.inactiveTitle", "billing.inactiveBody"]
+  };
+  const copy = map[code] || ["billing.failedTitle", "billing.failedBody"];
+  await showNotice({
+    title: t(copy[0]),
+    body: t(copy[1]),
+    buttonLabel: t("common.close")
+  });
+}
+
+async function startBillingUpgrade(planId) {
+  const response = await window.desktopAPI?.startBillingCheckout?.(planId);
+  if (!response?.ok) {
+    await billingErrorNotice(response?.error?.code);
+    return;
+  }
+
+  const url = response.data?.checkoutUrl;
+  if (!url) {
+    await billingErrorNotice("BILLING_REQUEST_FAILED");
+    return;
+  }
+
+  const opened = await window.desktopAPI?.openExternal?.(url);
+  if (!opened?.ok) {
+    await billingErrorNotice("BILLING_REQUEST_FAILED");
+    return;
+  }
+
+  await showNotice({
+    title: t("billing.checkoutOpenedTitle"),
+    body: t("billing.checkoutOpenedBody"),
+    buttonLabel: t("common.close")
+  });
+
+  setTimeout(async () => {
+    await refreshCloudUiState({ rerender: false });
+    await loadBillingData({ rerender: state.page === "billing" });
+  }, 1600);
+}
+
+async function scheduleBillingDowngrade(planId, planName) {
+  const confirmed = await confirmAction({
+    title: t("billing.downgradeTitle", { plan: planName }),
+    body: t("billing.downgradeBody", { plan: planName }),
+    confirmLabel: t("billing.confirmDowngrade"),
+    cancelLabel: t("common.cancel")
+  });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI?.changeBillingPlan?.(planId);
+  if (!response?.ok) {
+    await billingErrorNotice(response?.error?.code);
+    return;
+  }
+
+  await refreshCloudUiState({ rerender: false });
+  await loadBillingData({ rerender: true });
+  toast(t("billing.downgradeScheduled"));
+}
+
+async function cancelBillingPlan() {
+  const confirmed = await confirmAction({
+    title: t("billing.cancelTitle"),
+    body: t("billing.cancelBody"),
+    confirmLabel: t("billing.confirmCancel"),
+    cancelLabel: t("common.cancel"),
+    danger: true
+  });
+  if (!confirmed) return;
+
+  const response = await window.desktopAPI?.cancelBillingSubscription?.();
+  if (!response?.ok) {
+    await billingErrorNotice(response?.error?.code);
+    return;
+  }
+
+  await refreshCloudUiState({ rerender: false });
+  await loadBillingData({ rerender: true });
+  toast(t("billing.cancelScheduled"));
+}
+
+async function resumeBillingPlan() {
+  const response = await window.desktopAPI?.resumeBillingSubscription?.();
+  if (!response?.ok) {
+    await billingErrorNotice(response?.error?.code);
+    return;
+  }
+
+  await refreshCloudUiState({ rerender: false });
+  await loadBillingData({ rerender: true });
+  toast(t("billing.resumed"));
+}
+
+async function openBillingPortal() {
+  const response = await window.desktopAPI?.openBillingPortal?.();
+  if (!response?.ok || !response.data?.portalUrl) {
+    await billingErrorNotice(response?.error?.code);
+    return;
+  }
+
+  const opened = await window.desktopAPI?.openExternal?.(response.data.portalUrl);
+  if (!opened?.ok) await billingErrorNotice("BILLING_REQUEST_FAILED");
+}
+
 function settingsPage() {
   const settings = [
     [t("settings.autosave"), t("settings.autosaveDesc"), true],
