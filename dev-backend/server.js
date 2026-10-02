@@ -10,6 +10,7 @@ const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
 const billing = require("./billing");
 const { createDurableStateStore } = require("./state-store");
+const { createSqliteStateStore } = require("./state-store-sqlite");
 const { createAuditLog } = require("./audit-log");
 const {
   resolvePlan,
@@ -36,6 +37,14 @@ const {
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
+const IS_PRODUCTION = String(process.env.VIRAL_AI_ENV || "development").toLowerCase() === "production";
+const STATE_DRIVER = String(
+  process.env.VIRAL_AI_STATE_DRIVER || (IS_PRODUCTION ? "sqlite" : "json")
+).toLowerCase();
+
+if (IS_PRODUCTION && STATE_DRIVER !== "sqlite") {
+  throw new Error("Production mode requires VIRAL_AI_STATE_DRIVER=sqlite.");
+}
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -62,11 +71,16 @@ const DATA_DIR = process.env.VIRAL_AI_DEV_DATA_DIR
   ? path.resolve(process.env.VIRAL_AI_DEV_DATA_DIR)
   : path.join(__dirname, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
-const STATE_FILE = path.join(DATA_DIR, "state.json");
+const STATE_FILE = path.join(
+  DATA_DIR,
+  STATE_DRIVER === "sqlite" ? "state.sqlite" : "state.json"
+);
 const AUDIT_FILE = path.join(DATA_DIR, "audit.jsonl");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const durableState = createDurableStateStore(STATE_FILE);
+const durableState = STATE_DRIVER === "sqlite"
+  ? createSqliteStateStore(STATE_FILE)
+  : createDurableStateStore(STATE_FILE);
 const auditLog = createAuditLog(AUDIT_FILE);
 
 const users = new Map(
