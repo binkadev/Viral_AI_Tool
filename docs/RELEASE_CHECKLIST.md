@@ -160,7 +160,31 @@ Confirm:
 - [ ] Uninstaller completes.
 - [ ] User-owned source videos remain untouched.
 
-## 8. Stable Candidate dry run
+## 8. Unsigned Production Audit
+
+When Windows code-signing credentials are not available yet, run **Windows Release** manually from GitHub Actions on `master` with:
+
+```text
+stable_candidate = false
+production_audit = true
+```
+
+This mode intentionally keeps Windows signing disabled while still exercising the production-side release gates:
+
+- [ ] Current commit is the latest `master`.
+- [ ] `PRODUCTION_CLOUD_URL` exists and is valid HTTPS.
+- [ ] `PRODUCTION_BILLING_READY=true`.
+- [ ] Production `/health` responds and reports production + durable SQLite state.
+- [ ] Production `/ready` responds with `ready=true`.
+- [ ] Billing readiness contract is fully ready.
+- [ ] Normal release-policy, backend, updater, diagnostics, Cloud-config and render tests pass.
+- [ ] Unsigned Windows installer builds and passes install/launch/uninstall smoke test.
+- [ ] Preview/internal artifact uploads successfully.
+- [ ] No tag or GitHub Release is created.
+
+The resulting artifact is for internal validation only. It is not a public Stable release and does not replace the later signed Stable Candidate run.
+
+## 9. Stable Candidate dry run
 
 Before creating the first Stable tag, run **Windows Release** manually from GitHub Actions on `master` with:
 
@@ -183,7 +207,7 @@ This dry run intentionally does **not** create a tag or GitHub Release. It must 
 
 Do not create `v0.14.0` until this dry run is green.
 
-## 9. Stable tag workflow
+## 10. Stable tag workflow
 
 Only create the Stable tag after all mandatory items above pass.
 
@@ -196,7 +220,7 @@ The tagged workflow must enforce:
 - installer/application Authenticode signatures are valid
 - generated manifest passes app update policy
 
-## 10. Published release verification
+## 11. Published release verification
 
 After GitHub Release is created:
 
@@ -210,7 +234,7 @@ After GitHub Release is created:
 - [ ] SHA-256 in manifest matches the uploaded installer.
 - [ ] Release page opens from the app.
 
-## 11. Update verification
+## 12. Update verification
 
 From the previous Stable build:
 
@@ -225,7 +249,7 @@ From the previous Stable build:
 - [ ] Old app exits cleanly.
 - [ ] Updated app reports the new Stable version.
 
-## 12. Rollback and incident readiness
+## 13. Rollback and incident readiness
 
 Before publishing:
 
