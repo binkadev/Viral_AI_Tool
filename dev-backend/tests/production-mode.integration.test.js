@@ -176,15 +176,15 @@ async function run() {
     assert(!opsSerialized.includes(ownerPassword));
     assert(!opsSerialized.includes(dataDir));
 
-    const readiness = await request("/ready");
-    assert.strictEqual(readiness.response.status, 200, readiness.text);
-    assert.strictEqual(readiness.payload?.ready, true);
-    assert.strictEqual(readiness.payload?.releaseReady, false);
-    assert.strictEqual(readiness.payload?.checks?.billing?.ready, false);
-    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.providerConfigured, false);
-    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.checkoutReady, false);
-    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.portalReady, false);
-    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.invoicesReady, false);
+    const billingReadiness = await request("/ready");
+    assert.strictEqual(billingReadiness.response.status, 200, billingReadiness.text);
+    assert.strictEqual(billingReadiness.payload?.ready, true);
+    assert.strictEqual(billingReadiness.payload?.releaseReady, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.ready, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.providerConfigured, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.checkoutReady, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.portalReady, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.invoicesReady, false);
 
     const demo = await login("demo@viral-ai.local", "ViralAI123!");
     assert.strictEqual(demo.response.status, 401, "development demo credentials must not work in production");
