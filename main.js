@@ -104,7 +104,8 @@ function releaseInfo() {
     arch: process.arch,
     packaged: app.isPackaged,
     updateManifestUrl: safeHttpsUrl(metadata.updateManifestUrl),
-    releasePageUrl: safeHttpsUrl(metadata.releasePageUrl)
+    releasePageUrl: safeHttpsUrl(metadata.releasePageUrl),
+    cloudBackendUrl: safeHttpsUrl(metadata.cloudBackendUrl)
   };
 }
 
@@ -417,9 +418,12 @@ app.whenReady().then(() => {
     userDataPath: app.getPath('userData'),
     safeStorage
   });
+  const release = releaseInfo();
   cloudConfigStore = createCloudConfigStore({
     userDataPath: app.getPath('userData'),
-    isPackaged: app.isPackaged
+    isPackaged: app.isPackaged,
+    releaseBackendUrl: release.cloudBackendUrl || '',
+    releaseEnvironment: release.channel === 'stable' ? 'production' : 'development'
   });
   createWindow();
 
