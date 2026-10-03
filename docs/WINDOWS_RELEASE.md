@@ -38,9 +38,17 @@ Requirements for `PRODUCTION_CLOUD_URL`:
   - `durableState = true`
   - `shuttingDown = false`
 
-The release workflow also probes `/v1/billing/catalog`. A backend that still returns `BILLING_PROVIDER_NOT_CONFIGURED` is rejected.
+The release workflow also probes `GET /ready` and requires:
 
-`PRODUCTION_BILLING_READY=true` is an explicit operator acknowledgement that the real production billing adapter has been configured and tested.
+- `releaseReady = true`
+- `billing.ready = true`
+- `providerConfigured = true`
+- `checkoutReady = true`
+- `portalReady = true`
+- `invoicesReady = true`
+- `webhookReady = true`
+
+`PRODUCTION_BILLING_READY=true` remains an explicit operator acknowledgement, but it cannot override a backend that reports billing as not ready.
 
 ### Optional Preview variable
 
@@ -74,6 +82,13 @@ and then override the endpoint through Developer settings.
 ## Pre-tag checklist
 
 Before creating a Stable tag:
+
+```powershell
+npm ci
+npm run release:preflight
+```
+
+Then confirm:
 
 1. `master` must contain the intended release commit.
 2. **Backend State** workflow must be green.
