@@ -147,6 +147,8 @@ async function run() {
     assert.strictEqual(firstHealth.environment, "production");
     assert.strictEqual(firstHealth.stateDriver, "sqlite");
     assert.strictEqual(firstHealth.durableState, true);
+    assert.strictEqual(firstHealth.billing?.ready, false);
+    assert.strictEqual(firstHealth.billing?.provider, "unconfigured");
 
     const readiness = await request("/ready");
     assert.strictEqual(readiness.response.status, 200, readiness.text);
@@ -173,6 +175,16 @@ async function run() {
     assert(!opsSerialized.includes(ownerEmail));
     assert(!opsSerialized.includes(ownerPassword));
     assert(!opsSerialized.includes(dataDir));
+
+    const readiness = await request("/ready");
+    assert.strictEqual(readiness.response.status, 200, readiness.text);
+    assert.strictEqual(readiness.payload?.ready, true);
+    assert.strictEqual(readiness.payload?.releaseReady, false);
+    assert.strictEqual(readiness.payload?.checks?.billing?.ready, false);
+    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.providerConfigured, false);
+    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.checkoutReady, false);
+    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.portalReady, false);
+    assert.strictEqual(readiness.payload?.checks?.billing?.checks?.invoicesReady, false);
 
     const demo = await login("demo@viral-ai.local", "ViralAI123!");
     assert.strictEqual(demo.response.status, 401, "development demo credentials must not work in production");
