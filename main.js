@@ -47,6 +47,9 @@ const {
   checkForUpdate,
   downloadVerifiedInstaller
 } = require('./services/update/update-client');
+const {
+  verifySamePublisher
+} = require('./services/update/windows-signature');
 const { createDiagnosticLogger } = require('./services/diagnostics/logger');
 const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
 
@@ -658,6 +661,28 @@ ipcMain.handle('app:launch-update', async () => {
   } catch {
     lastVerifiedUpdate = null;
     return { ok: false, error: { code: 'UPDATE_INSTALLER_INVALID', details: {} } };
+  }
+
+  if (
+    app.isPackaged &&
+    process.platform === 'win32' &&
+    releaseInfo().channel === 'stable'
+  ) {
+    try {
+      await verifySamePublisher({
+        currentExecutable: process.execPath,
+        installerPath: target
+      });
+    } catch (error) {
+      console.error('[UpdateSignature]', error?.code || error?.message);
+      return {
+        ok: false,
+        error: {
+          code: error?.code || 'UPDATE_SIGNATURE_CHECK_FAILED',
+          details: {}
+        }
+      };
+    }
   }
 
   const launchError = await shell.openPath(target);
