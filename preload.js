@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   checkForUpdates: () => ipcRenderer.invoke('app:check-update'),
   downloadUpdate: () => ipcRenderer.invoke('app:download-update'),
   launchUpdate: () => ipcRenderer.invoke('app:launch-update'),
+  onUpdateProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:update-progress', listener);
+    return () => ipcRenderer.removeListener('app:update-progress', listener);
+  },
   openDiagnosticLogs: () => ipcRenderer.invoke('diagnostics:open-folder'),
   exportDiagnostics: () => ipcRenderer.invoke('diagnostics:export'),
 
