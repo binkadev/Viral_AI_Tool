@@ -42,6 +42,10 @@ const STATE_DRIVER = String(
   process.env.VIRAL_AI_STATE_DRIVER || (IS_PRODUCTION ? "sqlite" : "json")
 ).toLowerCase();
 const TRUST_PROXY = String(process.env.VIRAL_AI_TRUST_PROXY || "false").toLowerCase() === "true";
+const OPERATIONS_TOKEN = String(process.env.VIRAL_AI_OPERATIONS_TOKEN || "");
+const BACKUP_DIR = path.resolve(
+  process.env.VIRAL_AI_BACKUP_DIR || path.join(DATA_DIR, "backups")
+);
 
 if (IS_PRODUCTION && STATE_DRIVER !== "sqlite") {
   throw new Error("Production mode requires VIRAL_AI_STATE_DRIVER=sqlite.");
@@ -320,6 +324,75 @@ function checkGatewayReceipt(service, userId, clientJobId, body) {
   }
 
   return { fingerprint, receipt };
+}
+
+function operationsConfigured() {
+  return OPERATIONS_TOKEN.length >= 32;
+}
+
+function operationsAuthorized(req) {
+  if (!operationsConfigured()) return false;
+  const candidate = String(req.headers?.["x-viral-ai-ops-token"] || "");
+  return safeEqualText(candidate, OPERATIONS_TOKEN);
+}
+
+function speechOperationalSnapshot() {
+  const states = {};
+  for (const job of jobs.values()) {
+    const state = String(job?.state || "unknown");
+    states[state] = Number(states[state] || 0) + 1;
+  }
+
+  const active = [...jobs.values()].filter(job =>
+    !["completed", "failed", "cancelled"].includes(job?.state)
+  ).length;
+
+  return {
+    active,
+    totalInMemory: jobs.size,
+    states
+  };
+}
+
+function latestBackupSummary(now = Date.now()) {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) {
+      return { configured: true, available: false, latest: null };
+    }
+
+    const candidates = fs.readdirSync(BACKUP_DIR, { withFileTypes: true })
+      .filter(entry => entry.isFile() && /^state-backup-.*\.sqlite\.json$/.test(entry.name))
+      .map(entry => {
+        const manifestPath = path.join(BACKUP_DIR, entry.name);
+        let manifest = null;
+        try {
+          manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        } catch {}
+        const createdAt = Date.parse(manifest?.createdAt || "") || 0;
+        return { entry, manifest, createdAt };
+      })
+      .filter(item => item.createdAt > 0)
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    if (!candidates.length) {
+      return { configured: true, available: false, latest: null };
+    }
+
+    const latest = candidates[0];
+    return {
+      configured: true,
+      available: true,
+      latest: {
+        file: path.basename(String(latest.manifest?.file || latest.entry.name.replace(/\.json$/, ""))),
+        createdAt: new Date(latest.createdAt).toISOString(),
+        ageHours: Math.max(0, Number(((now - latest.createdAt) / 3600000).toFixed(2))),
+        sizeBytes: Number(latest.manifest?.sizeBytes || 0),
+        integrity: latest.manifest?.integrity === "ok" ? "ok" : "unknown"
+      }
+    };
+  } catch {
+    return { configured: true, available: false, latest: null, error: "BACKUP_STATUS_UNAVAILABLE" };
+  }
 }
 
 function requestIp(req) {
