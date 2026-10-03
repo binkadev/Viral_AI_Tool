@@ -130,9 +130,28 @@ jobs:
             throw "Production backend is currently shutting down."
           }
 
-          $billingProbe = Invoke-WebRequest -Uri "$base/v1/billing/catalog" -Method Get -SkipHttpErrorCheck -TimeoutSec 12
-          if ($billingProbe.StatusCode -eq 503 -and $billingProbe.Content -match "BILLING_PROVIDER_NOT_CONFIGURED") {
-            throw "Production billing provider is not configured."
+          try {
+            $readiness = Invoke-RestMethod -Uri "$base/ready" -Method Get -TimeoutSec 12
+          } catch {
+            throw "Production backend readiness check failed: $($_.Exception.Message)"
+          }
+
+          if ($readiness.ready -ne $true) {
+            throw "Production backend is not operationally ready."
+          }
+          if ($readiness.releaseReady -ne $true) {
+            throw "Production backend is operational but not release-ready."
+          }
+
+          $billing = $readiness.checks.billing
+          if ($null -eq $billing -or $billing.ready -ne $true) {
+            throw "Production billing readiness contract is not ready."
+          }
+
+          foreach ($check in @("providerConfigured", "checkoutReady", "portalReady", "invoicesReady", "webhookReady")) {
+            if ($billing.checks.$check -ne $true) {
+              throw "Production billing readiness failed: $check=false"
+            }
           }
 
       - name: Verify Windows release assets
