@@ -37,6 +37,7 @@ const state = {
     loadedAt: 0,
     checking: false,
     downloading: false,
+    downloadProgress: null,
     downloaded: null,
     downloadError: null,
     update: null
@@ -2886,6 +2887,12 @@ async function downloadReleaseUpdate() {
   if (!window.desktopAPI?.downloadUpdate || state.release.downloading) return;
 
   state.release.downloading = true;
+  state.release.downloadProgress = {
+    phase: "starting",
+    downloadedBytes: 0,
+    totalBytes: 0,
+    percent: 0
+  };
   state.release.downloaded = null;
   state.release.downloadError = null;
   if (state.page === "settings") render();
@@ -2901,6 +2908,9 @@ async function downloadReleaseUpdate() {
     state.release.downloadError = "UPDATE_DOWNLOAD_FAILED";
   } finally {
     state.release.downloading = false;
+    if (!state.release.downloaded && state.release.downloadError) {
+      state.release.downloadProgress = null;
+    }
   }
 
   if (state.page === "settings") render();
@@ -3053,6 +3063,26 @@ function settingsPage() {
           : '';
         const available = state.release.update?.code === "UPDATE_AVAILABLE";
         const downloaded = Boolean(state.release.downloaded);
+        const progress = state.release.downloadProgress;
+        const progressStatus = state.release.downloading && progress
+          ? '<div class="release-download-progress">' +
+              '<div class="release-download-progress-head"><b>' +
+                escapeHtml(progress.phase === "verifying"
+                  ? t("settings.updateVerifying")
+                  : t("settings.updateDownloadingProgress", {
+                      percent: Math.max(0, Math.min(100, Number(progress.percent || 0)))
+                    })) +
+              '</b><span>' +
+                escapeHtml(t("settings.updateDownloadBytes", {
+                  current: formatBytes(Number(progress.downloadedBytes || 0)),
+                  total: formatBytes(Number(progress.totalBytes || 0))
+                })) +
+              '</span></div>' +
+              '<div class="release-download-progress-track"><span style="width:' +
+                Math.max(0, Math.min(100, Number(progress.percent || 0))) + '%"></span></div>' +
+            '</div>'
+          : '';
+
         const downloadStatus = state.release.downloadError
           ? '<div class="release-update-status warning"><div><b>' +
               t("settings.updateDownloadFailedTitle") + '</b><span>' +
@@ -3064,7 +3094,7 @@ function settingsPage() {
                 })) + '</b><span>' + t("settings.updateVerifiedBody") + '</span></div></div>'
             : '';
 
-        return status + downloadStatus +
+        return status + progressStatus + downloadStatus +
           '<div class="release-actions">' +
             '<button id="checkReleaseUpdate" class="button ghost" type="button"' +
               (state.release.checking || state.release.downloading ? ' disabled' : '') + '>' +
@@ -5601,6 +5631,19 @@ if (window.desktopAPI) {
     toast(t("download.dropped", { count: files.length }));
     jobs.forEach(enrichJob);
   });
+  if (window.desktopAPI.onUpdateProgress) {
+    window.desktopAPI.onUpdateProgress((payload) => {
+      state.release.downloadProgress = {
+        phase: String(payload?.phase || "downloading"),
+        downloadedBytes: Number(payload?.downloadedBytes || 0),
+        totalBytes: Number(payload?.totalBytes || 0),
+        percent: Math.max(0, Math.min(100, Number(payload?.percent || 0))),
+        version: payload?.version || null
+      };
+      if (state.page === "settings") render();
+    });
+  }
+
   if (window.desktopAPI.onRenderProgress) {
     window.desktopAPI.onRenderProgress((payload) => {
       const job = state.jobs.find(item => item.id === payload?.jobId);
