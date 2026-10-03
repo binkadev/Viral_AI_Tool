@@ -542,7 +542,12 @@ ipcMain.handle('app:check-update', async () => {
       current,
       manifestUrl: current.updateManifestUrl,
       allowPreview: current.channel === 'preview',
-      allowLocalhost: !app.isPackaged
+      allowLocalhost: !app.isPackaged,
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('app:update-progress', progress);
+        }
+      }
     });
 
     return {
@@ -562,7 +567,7 @@ ipcMain.handle('app:check-update', async () => {
   }
 });
 
-ipcMain.handle('app:download-update', async () => {
+ipcMain.handle('app:download-update', async (event) => {
   const current = releaseInfo();
 
   if (!current.updateManifestUrl) {
