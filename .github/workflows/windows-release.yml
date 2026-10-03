@@ -39,8 +39,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-release-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: windows-release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stable_candidate && 'stable-candidate' || 'validation' }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !(github.event_name == 'workflow_dispatch' && inputs.stable_candidate) }}
 
 jobs:
   build-windows:
