@@ -542,12 +542,7 @@ ipcMain.handle('app:check-update', async () => {
       current,
       manifestUrl: current.updateManifestUrl,
       allowPreview: current.channel === 'preview',
-      allowLocalhost: !app.isPackaged,
-      onProgress: progress => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('app:update-progress', progress);
-        }
-      }
+      allowLocalhost: !app.isPackaged
     });
 
     return {
@@ -583,7 +578,12 @@ ipcMain.handle('app:download-update', async (event) => {
       manifestUrl: current.updateManifestUrl,
       outputDir: path.join(app.getPath('userData'), 'updates'),
       allowPreview: current.channel === 'preview',
-      allowLocalhost: !app.isPackaged
+      allowLocalhost: !app.isPackaged,
+      onProgress: progress => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('app:update-progress', progress);
+        }
+      }
     });
 
     lastVerifiedUpdate = {
