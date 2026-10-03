@@ -340,6 +340,52 @@ async function waitForWorkToStop(timeoutMs = 2500) {
   }
 }
 
+let backgroundUpdateCheckStarted = false;
+
+async function runBackgroundUpdateCheck() {
+  if (backgroundUpdateCheckStarted) return;
+  backgroundUpdateCheckStarted = true;
+
+  const current = releaseInfo();
+  if (
+    !app.isPackaged ||
+    !current.updateManifestUrl ||
+    !["stable", "preview"].includes(current.channel)
+  ) {
+    return;
+  }
+
+  try {
+    const result = await checkForUpdate({
+      current,
+      manifestUrl: current.updateManifestUrl,
+      allowPreview: current.channel === "preview",
+      allowLocalhost: false
+    });
+
+    diagnosticLogger?.info("update.background_checked", {
+      code: result?.decision?.code || null,
+      version: result?.decision?.version || null,
+      channel: current.channel
+    });
+
+    if (
+      result?.decision?.code === "UPDATE_AVAILABLE" &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      mainWindow.webContents.send("app:update-available", {
+        decision: result.decision,
+        manifest: result.manifest
+      });
+    }
+  } catch (error) {
+    diagnosticLogger?.info("update.background_failed", {
+      code: error?.code || "UPDATE_REQUEST_FAILED"
+    });
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
@@ -361,6 +407,11 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.webContents.once('did-finish-load', () => {
+    setTimeout(() => {
+      runBackgroundUpdateCheck().catch(() => {});
+    }, 12000);
+  });
 
   mainWindow.on('close', async event => {
     if (forceClose || getActiveWorkCount() === 0) return;
