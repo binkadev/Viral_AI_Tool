@@ -2902,7 +2902,14 @@ async function downloadReleaseUpdate() {
     if (response?.ok) {
       state.release.downloaded = response.data || null;
     } else {
-      state.release.downloadError = response?.error?.code || "UPDATE_DOWNLOAD_FAILED";
+      const code = response?.error?.code || "UPDATE_DOWNLOAD_FAILED";
+      if (code === "UPDATE_DOWNLOAD_CANCELLED") {
+        state.release.downloadError = null;
+        state.release.downloadProgress = null;
+        toast(t("settings.updateDownloadCancelled"));
+      } else {
+        state.release.downloadError = code;
+      }
     }
   } catch {
     state.release.downloadError = "UPDATE_DOWNLOAD_FAILED";
@@ -2914,6 +2921,21 @@ async function downloadReleaseUpdate() {
   }
 
   if (state.page === "settings") render();
+}
+
+async function cancelReleaseUpdateDownload() {
+  if (!state.release.downloading || !window.desktopAPI?.cancelUpdateDownload) return;
+
+  state.release.downloadProgress = {
+    ...(state.release.downloadProgress || {}),
+    phase: "cancelling"
+  };
+  if (state.page === "settings") render();
+
+  const response = await window.desktopAPI.cancelUpdateDownload();
+  if (!response?.ok) {
+    toast(t("settings.updateCancelFailed"));
+  }
 }
 
 async function launchReleaseUpdate() {
@@ -3104,6 +3126,13 @@ function settingsPage() {
               ? '<button id="downloadReleaseUpdate" class="button primary" type="button"' +
                   (state.release.downloading ? ' disabled' : '') + '>' +
                   (state.release.downloading ? t("settings.updateDownloading") : t("settings.updateDownload")) +
+                '</button>'
+              : '') +
+            (available && !downloaded && state.release.downloading
+              ? '<button id="cancelReleaseUpdateDownload" class="button ghost" type="button">' +
+                  (state.release.downloadProgress?.phase === "cancelling"
+                    ? t("settings.updateDownloadCancelling")
+                    : t("settings.updateCancelDownload")) +
                 '</button>'
               : '') +
             (available && downloaded
@@ -5431,6 +5460,11 @@ function bind() {
 
   const downloadReleaseUpdateButton = $("downloadReleaseUpdate");
   if (downloadReleaseUpdateButton) downloadReleaseUpdateButton.onclick = () => downloadReleaseUpdate();
+
+  const cancelReleaseUpdateDownloadButton = $("cancelReleaseUpdateDownload");
+  if (cancelReleaseUpdateDownloadButton) {
+    cancelReleaseUpdateDownloadButton.onclick = () => cancelReleaseUpdateDownload();
+  }
 
   const installReleaseUpdateButton = $("installReleaseUpdate");
   if (installReleaseUpdateButton) installReleaseUpdateButton.onclick = () => launchReleaseUpdate();
