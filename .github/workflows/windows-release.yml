@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      production_audit:
+        description: "Audit production backend/billing and build unsigned internal Windows artifact"
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - master
@@ -41,8 +46,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stable_candidate && 'stable-candidate' || 'validation' }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !(github.event_name == 'workflow_dispatch' && inputs.stable_candidate) }}
+  group: windows-release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stable_candidate && 'stable-candidate' || github.event_name == 'workflow_dispatch' && inputs.production_audit && 'production-audit' || 'validation' }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !(github.event_name == 'workflow_dispatch' && (inputs.stable_candidate || inputs.production_audit)) }}
 
 jobs:
   build-windows:
@@ -55,6 +60,7 @@ jobs:
       PRODUCTION_BILLING_READY: ${{ vars.PRODUCTION_BILLING_READY }}
       PREVIEW_CLOUD_URL: ${{ vars.PREVIEW_CLOUD_URL }}
       STABLE_CANDIDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.stable_candidate }}
+      PRODUCTION_AUDIT: ${{ github.event_name == 'workflow_dispatch' && inputs.production_audit }}
 
     steps:
       - name: Checkout
@@ -68,6 +74,14 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Validate manual release mode
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if ($env:STABLE_CANDIDATE -eq "true" -and $env:PRODUCTION_AUDIT -eq "true") {
+            throw "Choose only one manual mode: stable_candidate or production_audit."
+          }
 
       - name: Verify release tag matches package version
         if: startsWith(github.ref, 'refs/tags/')
@@ -105,6 +119,19 @@ jobs:
             throw "Stable Candidate commit $env:GITHUB_SHA is not the current master commit $masterSha."
           }
 
+      - name: Verify Production Audit commit is current master
+        if: env.PRODUCTION_AUDIT == 'true'
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne "refs/heads/master") {
+            throw "Production Audit must be dispatched from master."
+          }
+          git fetch origin master --depth=1
+          $masterSha = (git rev-parse origin/master).Trim()
+          if ($env:GITHUB_SHA -ne $masterSha) {
+            throw "Production Audit commit $env:GITHUB_SHA is not the current master commit $masterSha."
+          }
+
       - name: Require Windows code signing for Stable release
         if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
@@ -126,11 +153,11 @@ jobs:
           Write-Host "Windows code-signing credentials are configured."
 
       - name: Verify production release configuration
-        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
+        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true' || env.PRODUCTION_AUDIT == 'true'
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:PRODUCTION_CLOUD_URL)) {
-            throw "Tagged Stable releases require repository variable PRODUCTION_CLOUD_URL."
+            throw "Production release checks require repository variable PRODUCTION_CLOUD_URL."
           }
 
           $cloudUri = $null
@@ -145,7 +172,7 @@ jobs:
           }
 
           if ($env:PRODUCTION_BILLING_READY -ne "true") {
-            throw "Tagged Stable releases require PRODUCTION_BILLING_READY=true."
+            throw "Production release checks require PRODUCTION_BILLING_READY=true."
           }
 
           $base = $env:PRODUCTION_CLOUD_URL.TrimEnd("/")
