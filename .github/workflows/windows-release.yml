@@ -37,6 +37,9 @@ jobs:
     env:
       CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      PRODUCTION_CLOUD_URL: ${{ vars.PRODUCTION_CLOUD_URL }}
+      PRODUCTION_BILLING_READY: ${{ vars.PRODUCTION_BILLING_READY }}
+      PREVIEW_CLOUD_URL: ${{ vars.PREVIEW_CLOUD_URL }}
 
     steps:
       - name: Checkout
@@ -82,6 +85,51 @@ jobs:
             throw "Tagged releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD repository secrets."
           }
 
+      - name: Verify production release configuration
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PRODUCTION_CLOUD_URL)) {
+            throw "Tagged Stable releases require repository variable PRODUCTION_CLOUD_URL."
+          }
+
+          $cloudUri = $null
+          if (-not [System.Uri]::TryCreate($env:PRODUCTION_CLOUD_URL, [System.UriKind]::Absolute, [ref]$cloudUri)) {
+            throw "PRODUCTION_CLOUD_URL is not a valid absolute URL."
+          }
+          if ($cloudUri.Scheme -ne "https") {
+            throw "PRODUCTION_CLOUD_URL must use HTTPS."
+          }
+          if (-not [string]::IsNullOrEmpty($cloudUri.UserInfo)) {
+            throw "PRODUCTION_CLOUD_URL must not contain credentials."
+          }
+
+          if ($env:PRODUCTION_BILLING_READY -ne "true") {
+            throw "Tagged Stable releases require PRODUCTION_BILLING_READY=true."
+          }
+
+          $base = $env:PRODUCTION_CLOUD_URL.TrimEnd("/")
+          try {
+            $health = Invoke-RestMethod -Uri "$base/health" -Method Get -TimeoutSec 12
+          } catch {
+            throw "Production backend health check failed: $($_.Exception.Message)"
+          }
+
+          if ($health.environment -ne "production") {
+            throw "Production backend health reports environment=$($health.environment)."
+          }
+          if ($health.stateDriver -ne "sqlite" -or $health.durableState -ne $true) {
+            throw "Production backend must report durable SQLite state."
+          }
+          if ($health.shuttingDown -eq $true) {
+            throw "Production backend is currently shutting down."
+          }
+
+          $billingProbe = Invoke-WebRequest -Uri "$base/v1/billing/catalog" -Method Get -SkipHttpErrorCheck -TimeoutSec 12
+          if ($billingProbe.StatusCode -eq 503 -and $billingProbe.Content -match "BILLING_PROVIDER_NOT_CONFIGURED") {
+            throw "Production billing provider is not configured."
+          }
+
       - name: Verify Windows release assets
         run: npm run test:release-assets
 
@@ -114,6 +162,17 @@ jobs:
         run: |
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
+          $cloudBackendUrl = if ($channel -eq "stable") {
+            $env:PRODUCTION_CLOUD_URL
+          } else {
+            $env:PREVIEW_CLOUD_URL
+          }
+          if ([string]::IsNullOrWhiteSpace($cloudBackendUrl)) {
+            $cloudBackendUrl = $null
+          } else {
+            $cloudBackendUrl = $cloudBackendUrl.TrimEnd("/")
+          }
+
           $info = [ordered]@{
             schemaVersion = 1
             channel = $channel
@@ -122,6 +181,7 @@ jobs:
             source = "github-actions"
             updateManifestUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json"
             releasePageUrl = "https://github.com/binkadev/Viral_AI_Tool/releases/latest"
+            cloudBackendUrl = $cloudBackendUrl
           }
           $info | ConvertTo-Json | Set-Content -Path release-info.json -Encoding utf8
           Get-Content release-info.json
