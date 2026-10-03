@@ -60,6 +60,7 @@ let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
 let lastVerifiedUpdate = null;
+let activeUpdateDownloadController = null;
 let diagnosticLogger = null;
 let removeDiagnosticProcessHandlers = null;
 let removeDiagnosticConsoleCapture = null;
@@ -616,12 +617,21 @@ ipcMain.handle('app:check-update', async () => {
 ipcMain.handle('app:download-update', async (event) => {
   const current = releaseInfo();
 
+  if (activeUpdateDownloadController) {
+    return {
+      ok: false,
+      error: { code: 'UPDATE_DOWNLOAD_IN_PROGRESS', details: {} }
+    };
+  }
+
   if (!current.updateManifestUrl) {
     return {
       ok: false,
       error: { code: 'UPDATE_NOT_CONFIGURED', details: {} }
     };
   }
+
+  activeUpdateDownloadController = new AbortController();
 
   try {
     const result = await downloadVerifiedInstaller({
@@ -634,7 +644,8 @@ ipcMain.handle('app:download-update', async (event) => {
         if (!event.sender.isDestroyed()) {
           event.sender.send('app:update-progress', progress);
         }
-      }
+      },
+      signal: activeUpdateDownloadController.signal
     });
 
     lastVerifiedUpdate = {
@@ -664,6 +675,24 @@ ipcMain.handle('app:download-update', async (event) => {
           ? { status: error.details.status || null }
           : {}
       }
+    };
+  } finally {
+    activeUpdateDownloadController = null;
+  }
+});
+
+ipcMain.handle('app:cancel-update-download', async () => {
+  if (!activeUpdateDownloadController) {
+    return { ok: true, data: { cancelled: false } };
+  }
+
+  try {
+    activeUpdateDownloadController.abort();
+    return { ok: true, data: { cancelled: true } };
+  } catch {
+    return {
+      ok: false,
+      error: { code: 'UPDATE_CANCEL_FAILED', details: {} }
     };
   }
 });
