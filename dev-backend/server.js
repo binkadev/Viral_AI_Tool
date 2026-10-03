@@ -43,9 +43,6 @@ const STATE_DRIVER = String(
 ).toLowerCase();
 const TRUST_PROXY = String(process.env.VIRAL_AI_TRUST_PROXY || "false").toLowerCase() === "true";
 const OPERATIONS_TOKEN = String(process.env.VIRAL_AI_OPERATIONS_TOKEN || "");
-const BACKUP_DIR = path.resolve(
-  process.env.VIRAL_AI_BACKUP_DIR || path.join(DATA_DIR, "backups")
-);
 
 if (IS_PRODUCTION && STATE_DRIVER !== "sqlite") {
   throw new Error("Production mode requires VIRAL_AI_STATE_DRIVER=sqlite.");
@@ -77,6 +74,9 @@ const MAX_DURATION_SECONDS = Math.max(
 const DATA_DIR = process.env.VIRAL_AI_DEV_DATA_DIR
   ? path.resolve(process.env.VIRAL_AI_DEV_DATA_DIR)
   : path.join(__dirname, "data");
+const BACKUP_DIR = path.resolve(
+  process.env.VIRAL_AI_BACKUP_DIR || path.join(DATA_DIR, "backups")
+);
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const STATE_FILE = path.join(
   DATA_DIR,
