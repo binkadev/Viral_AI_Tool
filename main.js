@@ -109,7 +109,10 @@ function releaseInfo() {
     packaged: app.isPackaged,
     updateManifestUrl: safeHttpsUrl(metadata.updateManifestUrl),
     releasePageUrl: safeHttpsUrl(metadata.releasePageUrl),
-    cloudBackendUrl: safeHttpsUrl(metadata.cloudBackendUrl)
+    cloudBackendUrl: safeHttpsUrl(metadata.cloudBackendUrl),
+    cloudEnvironment: ["development", "production"].includes(String(metadata.cloudEnvironment || "").toLowerCase())
+      ? String(metadata.cloudEnvironment).toLowerCase()
+      : (channel === "stable" ? "production" : "development")
   };
 }
 
@@ -478,7 +481,7 @@ app.whenReady().then(() => {
     userDataPath: app.getPath('userData'),
     isPackaged: app.isPackaged,
     releaseBackendUrl: release.cloudBackendUrl || '',
-    releaseEnvironment: release.channel === 'stable' ? 'production' : 'development'
+    releaseEnvironment: release.cloudEnvironment || (release.channel === 'stable' ? 'production' : 'development')
   });
   createWindow();
 
