@@ -49,6 +49,61 @@ VIRAL_AI_TRUST_PROXY=true
 
 This allows per-client rate limiting and audit IPs to use the first `X-Forwarded-For` value. Do not enable this when untrusted clients can connect directly to the backend.
 
+## Monitoring and readiness
+
+Use the unauthenticated readiness endpoint for load-balancer or container readiness probes:
+
+```text
+GET /ready
+```
+
+A ready production instance returns HTTP 200 with:
+
+- `ready = true`
+- `environment = production`
+- `stateDriver = sqlite`
+- `checks.stateReadable = true`
+- `checks.shuttingDown = false`
+
+During controlled shutdown or if durable state cannot be read, `/ready` returns HTTP 503.
+
+For deeper operational monitoring, configure a random token of at least 32 characters:
+
+```text
+VIRAL_AI_OPERATIONS_TOKEN=<long random token>
+```
+
+Then query:
+
+```bash
+curl -H "x-viral-ai-ops-token: $VIRAL_AI_OPERATIONS_TOKEN" \
+  https://api.example.com/v1/internal/ops/status
+```
+
+The protected operations response contains only aggregate technical data:
+
+- uptime
+- memory usage
+- access/refresh session counts
+- Speech/Translation/Voice job counts by state
+- provider configured flags
+- billing webhook configured flag
+- latest backup timestamp, age, size, and integrity marker
+
+It does not include account email, passwords, tokens, Cloud URLs, filesystem paths, video names, transcripts, translations, or generated voice content.
+
+Recommended alerts:
+
+- `/ready` is non-200 for more than 2–5 minutes
+- process restarts unexpectedly
+- memory grows continuously beyond the deployment limit
+- job counts remain stuck in non-terminal states
+- required production AI provider is not configured
+- billing webhook becomes unconfigured
+- latest verified backup age exceeds your recovery objective
+
+Keep the operations token in a secret manager and do not put it in desktop clients, URLs, dashboards, or source control.
+
 ## Billing
 
 Development checkout is intentionally unavailable when `VIRAL_AI_ENV=production`.
@@ -153,7 +208,7 @@ The current backend is a hardened single-node baseline. Remaining production wor
 
 - real payment provider adapter
 - external secret manager integration in deployment
-- operational monitoring/alerting
+- external alert delivery/dashboard integration
 - off-host backup scheduling and restore-drill automation
 - multi-instance coordination or migration to a shared database if horizontal scaling is required
 - final penetration/security review
