@@ -1729,10 +1729,6 @@ async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
   const method = req.method || "GET";
 
-  if (shuttingDown && url.pathname !== "/health") {
-    return error(res, 503, "SERVER_SHUTTING_DOWN");
-  }
-
   if (method === "GET" && url.pathname === "/health") {
     return json(res, 200, {
       ok: true,
@@ -1749,9 +1745,81 @@ async function handle(req, res) {
     });
   }
 
+  if (method === "GET" && url.pathname === "/ready") {
+    let stateReadable = false;
+    try {
+      durableState.snapshot();
+      stateReadable = true;
+    } catch {}
+
+    const ready =
+      !shuttingDown &&
+      stateReadable &&
+      (!IS_PRODUCTION || STATE_DRIVER === "sqlite");
+
+    return json(res, ready ? 200 : 503, {
+      ready,
+      service: "viral-ai-backend",
+      environment: IS_PRODUCTION ? "production" : "development",
+      stateDriver: STATE_DRIVER,
+      checks: {
+        stateReadable,
+        shuttingDown
+      }
+    });
+  }
+
+  if (shuttingDown) {
+    return error(res, 503, "SERVER_SHUTTING_DOWN");
+  }
+
   if (requestRateLimited(req, "general")) {
     audit("rate_limit.general", req, { method, path: url.pathname });
     return error(res, 429, "RATE_LIMITED");
+  }
+
+  if (method === "GET" && url.pathname === "/v1/internal/ops/status") {
+    if (!operationsConfigured()) {
+      return error(res, 503, "OPERATIONS_NOT_CONFIGURED");
+    }
+
+    if (!operationsAuthorized(req)) {
+      audit("operations.unauthorized", req, {});
+      return error(res, 401, "OPERATIONS_UNAUTHORIZED");
+    }
+
+    const memory = process.memoryUsage();
+    return json(res, 200, {
+      ok: true,
+      at: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      environment: IS_PRODUCTION ? "production" : "development",
+      stateDriver: STATE_DRIVER,
+      shuttingDown,
+      memory: {
+        rssBytes: Number(memory.rss || 0),
+        heapUsedBytes: Number(memory.heapUsed || 0),
+        heapTotalBytes: Number(memory.heapTotal || 0)
+      },
+      sessions: {
+        access: accessTokens.size,
+        refresh: refreshTokens.size
+      },
+      jobs: {
+        speech: speechOperationalSnapshot(),
+        translation: translationJobs.operationalSnapshot?.() || null,
+        voice: voiceJobs.operationalSnapshot?.() || null
+      },
+      providers: {
+        speechConfigured: speechProvider.isConfigured(),
+        translationConfigured: translationProvider.isConfigured(),
+        voiceConfigured: voiceProvider.isConfigured()
+      },
+      billing: {
+        webhookConfigured: Boolean(billingSecret())
+      },
+      backups: latestBackupSummary()
+    });
   }
 
   if (IS_PRODUCTION && url.pathname.startsWith("/v1/billing/")) {
