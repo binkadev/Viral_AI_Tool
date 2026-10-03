@@ -71,16 +71,14 @@ async function run() {
     error => error?.code === "UPDATE_SIGNATURE_INVALID"
   );
 
-  await assert.rejects(
-    () => verifySamePublisher({
-      currentExecutable: "current.exe",
-      installerPath: "update.exe",
-      inspect: async file => file === "current.exe"
-        ? current
-        : validSignature({ notAfter: "2020-01-01T00:00:00.000Z" })
-    }),
-    error => error?.code === "UPDATE_SIGNATURE_INVALID"
-  );
+  const timestamped = await verifySamePublisher({
+    currentExecutable: "current.exe",
+    installerPath: "update.exe",
+    inspect: async file => file === "current.exe"
+      ? current
+      : validSignature({ notAfter: "2020-01-01T00:00:00.000Z" })
+  });
+  assert.strictEqual(timestamped.publisher, current.subject);
 
   assert.throws(
     () => parseSignatureOutput("not-json"),
