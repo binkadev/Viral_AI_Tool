@@ -167,9 +167,11 @@ for (const required of [
   "RELEASE-MANIFEST.json",
   "SHA256SUMS.txt",
   "gh release view",
-  "already exists; reusing it for this rerun",
+  "--draft",
+  "Refusing to mutate published Stable assets",
   "gh release create",
-  "gh release upload"
+  "gh release upload",
+  "gh release edit"
 ]) {
   assert(workflow.includes(required), "Windows release workflow is missing: " + required);
 }
