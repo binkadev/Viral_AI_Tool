@@ -114,9 +114,22 @@ Until a real provider adapter is connected, billing-management endpoints return:
 BILLING_PROVIDER_NOT_CONFIGURED
 ```
 
+The backend exposes a provider-neutral billing readiness contract through `/ready`.
+
+For a paid Stable release, all of these must be true:
+
+- `providerConfigured`
+- `checkoutReady`
+- `portalReady`
+- `invoicesReady`
+- `webhookReady`
+
+`VIRAL_AI_BILLING_PROVIDER` names the intended provider adapter, but setting the variable alone does **not** make billing ready. A real adapter must register working capabilities in code.
+
 Signed lifecycle events require:
 
 ```text
+VIRAL_AI_BILLING_PROVIDER=<provider-id>
 VIRAL_AI_BILLING_WEBHOOK_SECRET=<long random secret>
 ```
 
