@@ -142,15 +142,6 @@ function assertValidSignature(signature, role) {
     );
   }
 
-  if (
-    signature.notAfter &&
-    Date.parse(signature.notAfter) <= Date.now()
-  ) {
-    throw signatureError(
-      "UPDATE_SIGNATURE_INVALID",
-      role + " signing certificate is expired."
-    );
-  }
 }
 
 async function verifySamePublisher({
