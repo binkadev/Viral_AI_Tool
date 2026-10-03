@@ -21,7 +21,8 @@
     "test:release-readiness": "node tests/release-readiness.test.js",
     "test:generated-manifest": "node tests/generated-manifest.test.js",
     "test:update-client": "node tests/update-client.test.js",
-    "test:diagnostics": "node tests/diagnostics.test.js"
+    "test:diagnostics": "node tests/diagnostics.test.js",
+    "test:cloud-release-config": "node tests/cloud-release-config.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
