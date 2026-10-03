@@ -13,6 +13,52 @@ const checkoutSessions = new Map();
 const portalSessions = new Map();
 const invoices = new Map();
 
+let runtime = {
+  environment: "development",
+  providerId: "development",
+  providerConfigured: true,
+  checkoutReady: true,
+  portalReady: true,
+  invoicesReady: true
+};
+
+function configureRuntime(options = {}) {
+  const environment = String(options.environment || "development").toLowerCase();
+  const production = environment === "production";
+  const providerId = String(
+    options.providerId || (production ? "unconfigured" : "development")
+  ).trim().toLowerCase();
+
+  runtime = {
+    environment,
+    providerId,
+    providerConfigured: production ? Boolean(options.providerConfigured) : true,
+    checkoutReady: production ? Boolean(options.checkoutReady) : true,
+    portalReady: production ? Boolean(options.portalReady) : true,
+    invoicesReady: production ? Boolean(options.invoicesReady) : true
+  };
+
+  return publicReadiness();
+}
+
+function publicReadiness({ webhookConfigured = false } = {}) {
+  const development = runtime.environment !== "production";
+  const checks = {
+    providerConfigured: development ? true : runtime.providerConfigured,
+    checkoutReady: development ? true : runtime.checkoutReady,
+    portalReady: development ? true : runtime.portalReady,
+    invoicesReady: development ? true : runtime.invoicesReady,
+    webhookReady: development ? true : Boolean(webhookConfigured)
+  };
+
+  return {
+    environment: runtime.environment,
+    provider: runtime.providerId,
+    ready: Object.values(checks).every(Boolean),
+    checks
+  };
+}
+
 let persistence = {
   load: null,
   save: null
@@ -289,6 +335,8 @@ module.exports = {
   listInvoices,
   checkoutAmount,
   configurePersistence,
+  configureRuntime,
+  publicReadiness,
   pruneExpiredSessions,
   BillingError: Error
 };
