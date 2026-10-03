@@ -21,6 +21,8 @@ on:
       - "tests/release-readiness.test.js"
       - "tests/generated-manifest.test.js"
       - "tests/update-client.test.js"
+      - "tests/windows-signature.test.js"
+      - "tests/windows-signature.integration.test.js"
       - "tests/diagnostics.test.js"
       - "tests/cloud-release-config.test.js"
       - "tests/render-pipeline.integration.test.js"
