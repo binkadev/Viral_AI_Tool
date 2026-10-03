@@ -54,6 +54,7 @@ function createCloudConfigStore({
       environment,
       backendUrl,
       source,
+      locked: source === "environment" || (source === "release" && !developerSettingsVisible),
       developerSettingsVisible
     };
   }
@@ -87,7 +88,7 @@ function createCloudConfigStore({
     const current = read();
     const safeEnvironment = normalizeEnvironment(environment);
 
-    if (["environment", "release"].includes(current.source)) {
+    if (current.locked) {
       return {
         ok: false,
         code: "CLOUD_CONFIG_ENV_LOCKED",
@@ -121,8 +122,9 @@ function createCloudConfigStore({
   }
 
   function clear() {
-    if (["environment", "release"].includes(read().source)) {
-      return { ok: false, code: "CLOUD_CONFIG_ENV_LOCKED", data: read() };
+    const current = read();
+    if (current.locked) {
+      return { ok: false, code: "CLOUD_CONFIG_ENV_LOCKED", data: current };
     }
     try { fs.rmSync(filePath, { force: true }); } catch {}
     return { ok: true, data: read() };
