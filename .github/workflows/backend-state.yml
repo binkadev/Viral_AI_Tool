@@ -58,3 +58,4 @@ jobs:
           node --check preload.js
           node --check renderer/app.js
           node --check renderer/i18n.js
+          node --check scripts/release-preflight.js
