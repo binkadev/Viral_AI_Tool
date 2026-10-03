@@ -3507,3 +3507,39 @@ html[data-scale="compact"] .hero p{font-size:13px}
     flex-direction:column;
   }
 }
+
+
+.release-download-progress{
+  margin-top:14px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.release-download-progress-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.release-download-progress-head b{
+  font-size:10px;
+}
+.release-download-progress-head span{
+  color:var(--text-faint);
+  font-size:9px;
+}
+.release-download-progress-track{
+  height:7px;
+  margin-top:9px;
+  overflow:hidden;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--text-faint) 12%,transparent);
+}
+.release-download-progress-track > span{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:var(--accent);
+  transition:width .18s ease;
+}
