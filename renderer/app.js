@@ -2921,6 +2921,17 @@ async function launchReleaseUpdate() {
       return;
     }
 
+    if (["UPDATE_SIGNATURE_INVALID", "UPDATE_PUBLISHER_MISMATCH", "UPDATE_SIGNATURE_CHECK_FAILED"].includes(code)) {
+      await showNotice({
+        title: t("settings.updateSignatureTitle"),
+        body: code === "UPDATE_PUBLISHER_MISMATCH"
+          ? t("settings.updatePublisherMismatchBody")
+          : t("settings.updateSignatureBody"),
+        buttonLabel: t("common.close")
+      });
+      return;
+    }
+
     await showNotice({
       title: t("settings.updateInstallFailedTitle"),
       body: t("settings.updateInstallFailedBody"),
