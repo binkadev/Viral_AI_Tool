@@ -54,6 +54,9 @@ All notable product and release-engineering changes are tracked here.
 - Tagged Stable releases require Windows code-signing secrets.
 - Stable installers embed a locked production Cloud endpoint from release metadata.
 - Stable release tags now verify production backend health and billing readiness before packaging.
+- Added an explicit provider-neutral billing readiness contract (`providerConfigured`, `checkoutReady`, `portalReady`, `invoicesReady`, `webhookReady`) and require `releaseReady=true` for Stable tags.
+- Windows validation now re-runs for `dev-backend/**` changes.
+- Added `npm run release:preflight` for one-command source-level release checks.
 
 ### Release status
 
