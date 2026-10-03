@@ -76,7 +76,56 @@ With SQLite production mode, the data directory contains:
 - `audit.jsonl` — sanitized audit events
 - temporary provider upload/output directories where applicable
 
-Back up `state.sqlite` using a SQLite-safe backup procedure. Do not copy only the main database file while the service is actively writing unless the backup tooling accounts for WAL state.
+Do not copy only the main database file while the service is actively writing.
+
+### Online backup
+
+The repository includes a SQLite online-backup command:
+
+```bash
+VIRAL_AI_DEV_DATA_DIR=/var/lib/viral-ai-tool \
+VIRAL_AI_BACKUP_DIR=/var/backups/viral-ai-tool \
+VIRAL_AI_BACKUP_KEEP=14 \
+npm run backup:state
+```
+
+The command:
+
+- uses SQLite's online backup API rather than copying the live WAL database
+- runs `PRAGMA integrity_check` on the new backup
+- calculates SHA-256
+- writes a sidecar JSON manifest
+- keeps only the configured number of newest backups
+
+A successful backup produces:
+
+```text
+state-backup-YYYYMMDDTHHMMSSZ-xxxxxxxx.sqlite
+state-backup-YYYYMMDDTHHMMSSZ-xxxxxxxx.sqlite.json
+```
+
+### Verify a backup
+
+```bash
+npm run verify:state-backup -- /var/backups/viral-ai-tool/state-backup-....sqlite
+```
+
+Verification checks SQLite integrity, required schema, file size, SHA-256, and available state sections.
+
+### Restore procedure
+
+Restore is intentionally not automated into the running service. A restore is destructive and should require an operator decision.
+
+1. Stop the backend cleanly.
+2. Verify the selected backup with `verify:state-backup`.
+3. Keep the current `state.sqlite`, `state.sqlite-wal`, and `state.sqlite-shm` as an incident copy.
+4. Copy the verified backup to a new `state.sqlite` in the configured data directory.
+5. Remove stale WAL/SHM files belonging to the old database only after the old database files have been preserved.
+6. Start the backend.
+7. Check `/health`.
+8. Verify account login, subscription state, quota, and recent billing/audit behavior before reopening normal traffic.
+
+Never overwrite the live database while the backend process is running.
 
 ## Restart behavior
 
@@ -105,6 +154,6 @@ The current backend is a hardened single-node baseline. Remaining production wor
 - real payment provider adapter
 - external secret manager integration in deployment
 - operational monitoring/alerting
-- database backup/restore automation
+- off-host backup scheduling and restore-drill automation
 - multi-instance coordination or migration to a shared database if horizontal scaling is required
 - final penetration/security review
