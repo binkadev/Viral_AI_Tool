@@ -55,8 +55,10 @@ All notable product and release-engineering changes are tracked here.
 - Stable installers embed a locked production Cloud endpoint from release metadata.
 - Stable release tags now verify production backend health and billing readiness before packaging.
 - Added an explicit provider-neutral billing readiness contract (`providerConfigured`, `checkoutReady`, `portalReady`, `invoicesReady`, `webhookReady`) and require `releaseReady=true` for Stable tags.
-- Windows validation now re-runs for `dev-backend/**` changes.
+- Windows validation now re-runs for `dev-backend/**`, release-script, and changelog changes.
 - Added `npm run release:preflight` for one-command source-level release checks.
+- Added a manual Stable Candidate dry run that exercises production URL, billing readiness, Windows signing, Authenticode, and updater publisher guards without creating a tag or public GitHub Release.
+- Stable publication is draft-first: required assets upload before publication, reruns may reuse an incomplete draft, and already-published Stable assets are protected from mutation.
 
 ### Release status
 
