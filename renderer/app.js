@@ -3149,14 +3149,14 @@ function settingsPage() {
         '<div class="dev-account-hint"><span>DEV</span><code>' + escapeHtml(t("settings.devAccountHint")) + '</code></div>' +
         '<div class="developer-cloud-grid">' +
           '<div class="speech-field"><label class="label" for="cloudEnvironment">' + t("settings.environment") + '</label>' +
-            '<select id="cloudEnvironment" class="select"' + (cloudConfig.source === "environment" ? " disabled" : "") + '>' +
+            '<select id="cloudEnvironment" class="select"' + (cloudConfig.locked ? " disabled" : "") + '>' +
               option("development", t("settings.environmentDevelopment"), state.cloud.draftEnvironment || cloudConfig.environment || "development") +
               option("production", t("settings.environmentProduction"), state.cloud.draftEnvironment || cloudConfig.environment || "development") +
             '</select></div>' +
           '<div class="speech-field cloud-url-field"><label class="label" for="cloudBackendUrl">' + t("settings.backendUrl") + '</label>' +
             '<input id="cloudBackendUrl" class="input" type="url" spellcheck="false" autocomplete="off" placeholder="http://localhost:3000" value="' +
-              escapeHtml(state.cloud.draftBackendUrl ?? cloudConfig.backendUrl ?? "") + '"' + (cloudConfig.source === "environment" ? " readonly" : "") + '>' +
-            '<small>' + escapeHtml(cloudConfig.source === "environment" ? t("settings.cloudEnvLocked") : t("settings.backendUrlHelp")) + '</small></div>' +
+              escapeHtml(state.cloud.draftBackendUrl ?? cloudConfig.backendUrl ?? "") + '"' + (cloudConfig.locked ? " readonly" : "") + '>' +
+            '<small>' + escapeHtml(cloudConfig.locked ? t("settings.cloudEnvLocked") : t("settings.backendUrlHelp")) + '</small></div>' +
         '</div>' +
         '<div class="cloud-test-strip ' + testClass + '"><span class="cloud-test-dot"></span><div><b>' + escapeHtml(testLabel) + '</b><span>' +
           escapeHtml(test?.status ? t("settings.cloudHttpStatus", { status: test.status }) : t("settings.cloudTestHint")) + '</span></div></div>' +
@@ -3177,7 +3177,7 @@ function settingsPage() {
         '</div>' +
         '<div class="developer-actions">' +
           '<button id="testCloudConnection" class="button ghost" type="button">' + t("settings.testConnection") + '</button>' +
-          (cloudConfig.source === "environment" ? "" :
+          (cloudConfig.locked ? "" :
             '<button id="saveCloudConfig" class="button primary" type="button">' + t("settings.saveCloudConfig") + '</button>') +
         '</div>' +
       '</div>'
