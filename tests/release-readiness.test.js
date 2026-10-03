@@ -43,6 +43,11 @@ assert(
   String(pkg.scripts?.dist || "").includes("--publish never"),
   "electron-builder must not auto-publish release artifacts."
 );
+assert.strictEqual(
+  pkg.scripts?.["release:preflight"],
+  "node scripts/release-preflight.js",
+  "Release preflight command must remain available."
+);
 
 assert.strictEqual(info.schemaVersion, 1);
 assert(
@@ -134,6 +139,7 @@ for (const required of [
 }
 
 for (const required of [
+  '"dev-backend/**"',
   "Verify tagged release commit is on master",
   "Require Windows code signing for tagged release",
   "Verify production release configuration",
