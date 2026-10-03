@@ -121,6 +121,70 @@ async function testVerifiedDownloadAndCleanup() {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
+async function testCancelledDownloadCleansPartialFile() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "viral-ai-update-cancel-"));
+  const payload = Buffer.alloc(128 * 1024, 7);
+  const digest = crypto.createHash("sha256").update(payload).digest("hex");
+  const manifest = manifestFor(payload, digest);
+  const external = new AbortController();
+
+  await assert.rejects(
+    () => withMockFetch(async (rawUrl, options = {}) => {
+      const url = String(rawUrl || "");
+
+      if (url.includes("RELEASE-MANIFEST.json")) {
+        const text = JSON.stringify(manifest);
+        return {
+          ok: true,
+          status: 200,
+          headers: headers({ "content-length": Buffer.byteLength(text) }),
+          async text() { return text; }
+        };
+      }
+
+      const networkSignal = options.signal;
+      return {
+        ok: true,
+        status: 200,
+        url: "https://release-assets.githubusercontent.com/github-production-release-asset/test",
+        headers: headers({ "content-length": payload.length }),
+        body: {
+          async *[Symbol.asyncIterator]() {
+            yield payload.subarray(0, payload.length / 2);
+            await new Promise(resolve => setTimeout(resolve, 5));
+
+            if (networkSignal?.aborted) {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              throw error;
+            }
+
+            yield payload.subarray(payload.length / 2);
+          }
+        }
+      };
+    }, () => downloadVerifiedInstaller({
+      current: { version: "0.14.0", channel: "stable" },
+      manifestUrl: "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json",
+      outputDir: root,
+      signal: external.signal,
+      onProgress: event => {
+        if (event.phase === "downloading" && event.downloadedBytes > 0) {
+          external.abort();
+        }
+      }
+    })),
+    error => error?.code === "UPDATE_DOWNLOAD_CANCELLED"
+  );
+
+  assert.strictEqual(
+    fs.readdirSync(root).filter(name => name.endsWith(".exe") || name.includes(".part-")).length,
+    0
+  );
+
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
 async function testChecksumMismatch() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "viral-ai-update-bad-"));
   const payload = Buffer.from("installer", "utf8");
@@ -164,6 +228,7 @@ async function testChecksumMismatch() {
 
 (async () => {
   await testVerifiedDownloadAndCleanup();
+  await testCancelledDownloadCleansPartialFile();
   await testChecksumMismatch();
   console.log("Update client tests passed.");
 })().catch(error => {
