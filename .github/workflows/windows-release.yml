@@ -21,6 +21,7 @@ on:
       - "tests/release-readiness.test.js"
       - "tests/generated-manifest.test.js"
       - "tests/update-client.test.js"
+      - "tests/cloud-release-config.test.js"
       - ".github/workflows/windows-release.yml"
 
 permissions:
@@ -156,6 +157,9 @@ jobs:
 
       - name: Run diagnostics privacy tests
         run: npm run test:diagnostics
+
+      - name: Run embedded Cloud release config tests
+        run: npm run test:cloud-release-config
 
       - name: Prepare embedded release metadata
         shell: pwsh
