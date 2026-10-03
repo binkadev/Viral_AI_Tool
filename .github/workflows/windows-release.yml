@@ -157,6 +157,9 @@ jobs:
       - name: Run update client tests
         run: npm run test:update-client
 
+      - name: Run Windows update signature tests
+        run: npm run test:update-signature
+
       - name: Run diagnostics privacy tests
         run: npm run test:diagnostics
 
