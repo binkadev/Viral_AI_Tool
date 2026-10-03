@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getVersionInfo: () => ipcRenderer.invoke('app:version-info'),
   checkForUpdates: () => ipcRenderer.invoke('app:check-update'),
   downloadUpdate: () => ipcRenderer.invoke('app:download-update'),
+  cancelUpdateDownload: () => ipcRenderer.invoke('app:cancel-update-download'),
   launchUpdate: () => ipcRenderer.invoke('app:launch-update'),
   onUpdateProgress: callback => {
     if (typeof callback !== 'function') return () => {};
