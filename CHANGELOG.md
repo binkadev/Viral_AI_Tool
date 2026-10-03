@@ -52,6 +52,8 @@ All notable product and release-engineering changes are tracked here.
 - Added Windows installer silent install/uninstall smoke tests.
 - Added release-readiness and Windows icon structure regression tests.
 - Tagged Stable releases require Windows code-signing secrets.
+- Stable installers embed a locked production Cloud endpoint from release metadata.
+- Stable release tags now verify production backend health and billing readiness before packaging.
 
 ### Release status
 
