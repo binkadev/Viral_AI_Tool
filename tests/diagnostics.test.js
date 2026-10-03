@@ -135,7 +135,8 @@ function testConsoleCaptureAndBundleAllowlist() {
       source: "github-actions",
       email: "must-not-enter@example.com",
       accessToken: "must-not-enter",
-      backendUrl: "https://private.example.test"
+      backendUrl: "https://private.example.test",
+      cloudBackendUrl: "https://embedded-cloud.example.test"
     },
     runtime: {
       platform: "win32",
@@ -166,6 +167,7 @@ function testConsoleCaptureAndBundleAllowlist() {
     "must-not-enter@example.com",
     "must-not-enter",
     "private.example.test",
+    "embedded-cloud.example.test",
     "hidden-token",
     "person@example.com",
     "private.mp4",
