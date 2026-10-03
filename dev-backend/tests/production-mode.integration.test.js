@@ -185,6 +185,7 @@ async function run() {
     assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.checkoutReady, false);
     assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.portalReady, false);
     assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.invoicesReady, false);
+    assert.strictEqual(billingReadiness.payload?.checks?.billing?.checks?.webhookReady, false);
 
     const demo = await login("demo@viral-ai.local", "ViralAI123!");
     assert.strictEqual(demo.response.status, 401, "development demo credentials must not work in production");
