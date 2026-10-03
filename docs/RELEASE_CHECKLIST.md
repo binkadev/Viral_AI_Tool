@@ -160,29 +160,29 @@ Confirm:
 - [ ] Uninstaller completes.
 - [ ] User-owned source videos remain untouched.
 
-## 8. Unsigned Production Audit
+## 8. Private Commercial / Early Access
 
 When Windows code-signing credentials are not available yet, run **Windows Release** manually from GitHub Actions on `master` with:
 
 ```text
 stable_candidate = false
-production_audit = true
+private_commercial = true
 ```
 
-This mode intentionally keeps Windows signing disabled while still exercising the production-side release gates:
+This mode intentionally keeps Windows signing disabled while embedding and validating the real production Cloud backend. It is intended for private commercial/early-access users before the public signed Stable launch:
 
 - [ ] Current commit is the latest `master`.
 - [ ] `PRODUCTION_CLOUD_URL` exists and is valid HTTPS.
-- [ ] `PRODUCTION_BILLING_READY=true`.
 - [ ] Production `/health` responds and reports production + durable SQLite state.
+- [ ] Cloud Speech, Translation and Voice providers report configured.
 - [ ] Production `/ready` responds with `ready=true`.
-- [ ] Billing readiness contract is fully ready.
+- [ ] Automated billing may remain unavailable for this private build; accounts/plans must be provisioned explicitly until public billing is connected.
 - [ ] Normal release-policy, backend, updater, diagnostics, Cloud-config and render tests pass.
 - [ ] Unsigned Windows installer builds and passes install/launch/uninstall smoke test.
 - [ ] Preview/internal artifact uploads successfully.
 - [ ] No tag or GitHub Release is created.
 
-The resulting artifact is for internal validation only. It is not a public Stable release and does not replace the later signed Stable Candidate run.
+The resulting artifact is an unsigned private-commercial build. It may use real production Cloud APIs and real account/quota enforcement, but Windows may show an Unknown publisher/SmartScreen warning. It is not the public signed Stable release and does not replace the later signed Stable Candidate run.
 
 ## 9. Stable Candidate dry run
 
