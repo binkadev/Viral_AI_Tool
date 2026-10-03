@@ -71,6 +71,12 @@ Do not weaken the signing guard merely to make a release pass.
 For a paid public launch:
 
 - [ ] Real billing provider adapter is connected.
+- [ ] Production `/ready` reports `releaseReady: true`.
+- [ ] Billing readiness reports `providerConfigured: true`.
+- [ ] Billing readiness reports `checkoutReady: true`.
+- [ ] Billing readiness reports `portalReady: true`.
+- [ ] Billing readiness reports `invoicesReady: true`.
+- [ ] Billing readiness reports `webhookReady: true`.
 - [ ] Development checkout/portal is unavailable in production.
 - [ ] Billing webhook secret is stored in the production secret manager.
 - [ ] Signed lifecycle webhook has been tested.
