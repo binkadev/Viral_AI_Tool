@@ -57,6 +57,7 @@ All notable product and release-engineering changes are tracked here.
 - Added an explicit provider-neutral billing readiness contract (`providerConfigured`, `checkoutReady`, `portalReady`, `invoicesReady`, `webhookReady`) and require `releaseReady=true` for Stable tags.
 - Windows validation now re-runs for `dev-backend/**`, release-script, and changelog changes.
 - Added `npm run release:preflight` for one-command source-level release checks.
+- Added an unsigned Production Audit mode that validates production HTTPS/backend/billing readiness and builds an internal Windows artifact without requiring a code-signing certificate.
 - Added a manual Stable Candidate dry run that exercises production URL, billing readiness, Windows signing, Authenticode, and updater publisher guards without creating a tag or public GitHub Release.
 - Stable publication is draft-first: required assets upload before publication, reruns may reuse an incomplete draft, and already-published Stable assets are protected from mutation.
 
