@@ -26,6 +26,8 @@ Các phần nền tảng chính đã hoạt động:
 - Audit log, rate limit, idempotency và restart recovery
 - Verified Windows updater với SHA-256
 - Windows NSIS build, installer smoke-test và release CI
+- Provider-neutral billing readiness contract cho Stable release
+- One-command source release preflight: `npm run release:preflight`
 
 ## Chạy development trên Windows
 
