@@ -12,7 +12,12 @@ function normalizeUrl(value) {
   return value.trim().replace(/\/+$/, "");
 }
 
-function createCloudConfigStore({ userDataPath, isPackaged }) {
+function createCloudConfigStore({
+  userDataPath,
+  isPackaged,
+  releaseBackendUrl = "",
+  releaseEnvironment = "production"
+}) {
   const filePath = path.join(userDataPath, "cloud-config.json");
 
   function read() {
@@ -22,13 +27,34 @@ function createCloudConfigStore({ userDataPath, isPackaged }) {
     } catch {}
 
     const envUrl = normalizeUrl(process.env.VIRAL_AI_CLOUD_URL || "");
-    const environment = normalizeEnvironment(raw?.environment);
+    const embeddedUrl = normalizeUrl(releaseBackendUrl || "");
+    const developerSettingsVisible = !isPackaged || process.env.VIRAL_AI_DEV_MODE === "1";
+
+    const source = envUrl
+      ? "environment"
+      : embeddedUrl && isPackaged && !developerSettingsVisible
+        ? "release"
+        : raw?.backendUrl
+          ? "saved"
+          : embeddedUrl
+            ? "release"
+            : "unset";
+
+    const backendUrl =
+      source === "environment" ? envUrl :
+      source === "release" ? embeddedUrl :
+      normalizeUrl(raw?.backendUrl || "");
+
+    const environment =
+      source === "release"
+        ? normalizeEnvironment(releaseEnvironment)
+        : normalizeEnvironment(raw?.environment);
 
     return {
       environment,
-      backendUrl: envUrl || normalizeUrl(raw?.backendUrl || ""),
-      source: envUrl ? "environment" : raw?.backendUrl ? "saved" : "unset",
-      developerSettingsVisible: !isPackaged || process.env.VIRAL_AI_DEV_MODE === "1"
+      backendUrl,
+      source,
+      developerSettingsVisible
     };
   }
 
@@ -61,7 +87,7 @@ function createCloudConfigStore({ userDataPath, isPackaged }) {
     const current = read();
     const safeEnvironment = normalizeEnvironment(environment);
 
-    if (current.source === "environment") {
+    if (["environment", "release"].includes(current.source)) {
       return {
         ok: false,
         code: "CLOUD_CONFIG_ENV_LOCKED",
@@ -95,7 +121,7 @@ function createCloudConfigStore({ userDataPath, isPackaged }) {
   }
 
   function clear() {
-    if (read().source === "environment") {
+    if (["environment", "release"].includes(read().source)) {
       return { ok: false, code: "CLOUD_CONFIG_ENV_LOCKED", data: read() };
     }
     try { fs.rmSync(filePath, { force: true }); } catch {}
