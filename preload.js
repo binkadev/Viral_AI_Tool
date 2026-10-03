@@ -15,6 +15,12 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     ipcRenderer.on('app:update-progress', listener);
     return () => ipcRenderer.removeListener('app:update-progress', listener);
   },
+  onUpdateAvailable: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:update-available', listener);
+    return () => ipcRenderer.removeListener('app:update-available', listener);
+  },
   openDiagnosticLogs: () => ipcRenderer.invoke('diagnostics:open-folder'),
   exportDiagnostics: () => ipcRenderer.invoke('diagnostics:export'),
 
