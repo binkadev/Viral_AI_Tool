@@ -16,6 +16,7 @@ on:
     paths:
       - "package.json"
       - "package-lock.json"
+      - "CHANGELOG.md"
       - "main.js"
       - "preload.js"
       - "release-info.json"
