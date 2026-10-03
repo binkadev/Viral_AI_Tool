@@ -425,6 +425,19 @@ billing.configurePersistence({
   save: value => durableState.set("billing", value)
 });
 
+billing.configureRuntime({
+  environment: IS_PRODUCTION ? "production" : "development",
+  providerId: IS_PRODUCTION
+    ? String(process.env.VIRAL_AI_BILLING_PROVIDER || "unconfigured").trim().toLowerCase()
+    : "development",
+  // No production payment adapter is registered in this baseline yet.
+  // These capabilities must be switched by a real provider adapter, not by UI state.
+  providerConfigured: false,
+  checkoutReady: false,
+  portalReady: false,
+  invoicesReady: false
+});
+
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
 }
@@ -581,6 +594,12 @@ function error(res, status, code) {
 
 function billingSecret() {
   return String(process.env.VIRAL_AI_BILLING_WEBHOOK_SECRET || "").trim();
+}
+
+function billingReadiness() {
+  return billing.publicReadiness({
+    webhookConfigured: Boolean(billingSecret())
+  });
 }
 
 function pruneBillingEvents() {
@@ -1741,7 +1760,8 @@ async function handle(req, res) {
       environment: IS_PRODUCTION ? "production" : "development",
       trustProxy: TRUST_PROXY,
       stateRecovered: Boolean(durableState.recovery?.()),
-      shuttingDown
+      shuttingDown,
+      billing: billingReadiness()
     });
   }
 
@@ -1756,15 +1776,19 @@ async function handle(req, res) {
       !shuttingDown &&
       stateReadable &&
       (!IS_PRODUCTION || STATE_DRIVER === "sqlite");
+    const billingState = billingReadiness();
+    const releaseReady = ready && (!IS_PRODUCTION || billingState.ready);
 
     return json(res, ready ? 200 : 503, {
       ready,
+      releaseReady,
       service: "viral-ai-backend",
       environment: IS_PRODUCTION ? "production" : "development",
       stateDriver: STATE_DRIVER,
       checks: {
         stateReadable,
-        shuttingDown
+        shuttingDown,
+        billing: billingState
       }
     });
   }
@@ -1815,9 +1839,7 @@ async function handle(req, res) {
         translationConfigured: translationProvider.isConfigured(),
         voiceConfigured: voiceProvider.isConfigured()
       },
-      billing: {
-        webhookConfigured: Boolean(billingSecret())
-      },
+      billing: billingReadiness(),
       backups: latestBackupSummary()
     });
   }
