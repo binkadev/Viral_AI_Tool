@@ -133,7 +133,8 @@ async function downloadVerifiedInstaller({
   allowPreview = false,
   allowLocalhost = false,
   timeoutMs = 2 * 60 * 1000,
-  onProgress = null
+  onProgress = null,
+  signal = null
 }) {
   const manifest = await fetchManifest(manifestUrl, { allowLocalhost });
   const decision = canOfferUpdate(current, manifest, { allowPreview });
@@ -174,7 +175,18 @@ async function downloadVerifiedInstaller({
   const target = path.join(root, safeName);
   const partial = target + ".part-" + process.pid + "-" + Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timeoutTriggered = false;
+  let externalAbortHandler = null;
+  const timer = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, timeoutMs);
+
+  if (signal) {
+    externalAbortHandler = () => controller.abort();
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", externalAbortHandler, { once: true });
+  }
 
   let stream = null;
   let total = 0;
@@ -293,6 +305,9 @@ async function downloadVerifiedInstaller({
 
     if (error instanceof UpdateClientError) throw error;
     if (error?.name === "AbortError") {
+      if (signal?.aborted && !timeoutTriggered) {
+        throw updateError("UPDATE_DOWNLOAD_CANCELLED", "Installer download was cancelled.");
+      }
       throw updateError("UPDATE_DOWNLOAD_TIMEOUT", "Installer download timed out.");
     }
     throw updateError("UPDATE_DOWNLOAD_FAILED", "Installer download failed.", {
@@ -300,6 +315,9 @@ async function downloadVerifiedInstaller({
     });
   } finally {
     clearTimeout(timer);
+    if (signal && externalAbortHandler) {
+      try { signal.removeEventListener("abort", externalAbortHandler); } catch {}
+    }
   }
 }
 
