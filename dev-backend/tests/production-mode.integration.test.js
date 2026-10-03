@@ -12,6 +12,7 @@ const baseUrl = "http://127.0.0.1:" + port;
 
 const ownerEmail = "owner@example.test";
 const ownerPassword = "Production-Test-Password-123!";
+const operationsToken = "ops-test-token-abcdefghijklmnopqrstuvwxyz-123456";
 
 let child = null;
 let capturedStdout = "";
@@ -43,6 +44,7 @@ async function startServer({ bootstrap = false } = {}) {
     VIRAL_AI_DEV_DATA_DIR: dataDir,
     VIRAL_AI_ENV: "production",
     VIRAL_AI_STATE_DRIVER: "sqlite",
+    VIRAL_AI_OPERATIONS_TOKEN: operationsToken,
     OPENAI_API_KEY: "",
     VIRAL_AI_TRANSLATION_API_KEY: "",
     VIRAL_AI_VOICE_API_KEY: ""
@@ -108,7 +110,7 @@ async function stopServer() {
   });
 }
 
-async function request(pathname, { method = "GET", body, accessToken } = {}) {
+async function request(pathname, { method = "GET", body, accessToken, operationsToken: opsToken } = {}) {
   const headers = {
     accept: "application/json",
     "x-viral-ai-client": "production-integration",
@@ -116,6 +118,7 @@ async function request(pathname, { method = "GET", body, accessToken } = {}) {
   };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (accessToken) headers.authorization = "Bearer " + accessToken;
+  if (opsToken) headers["x-viral-ai-ops-token"] = opsToken;
 
   const response = await fetch(baseUrl + pathname, {
     method,
@@ -144,6 +147,32 @@ async function run() {
     assert.strictEqual(firstHealth.environment, "production");
     assert.strictEqual(firstHealth.stateDriver, "sqlite");
     assert.strictEqual(firstHealth.durableState, true);
+
+    const readiness = await request("/ready");
+    assert.strictEqual(readiness.response.status, 200, readiness.text);
+    assert.strictEqual(readiness.payload?.ready, true);
+    assert.strictEqual(readiness.payload?.checks?.stateReadable, true);
+
+    const opsDenied = await request("/v1/internal/ops/status");
+    assert.strictEqual(opsDenied.response.status, 401);
+    assert.strictEqual(opsDenied.payload?.error?.code, "OPERATIONS_UNAUTHORIZED");
+
+    const ops = await request("/v1/internal/ops/status", {
+      operationsToken
+    });
+    assert.strictEqual(ops.response.status, 200, ops.text);
+    assert.strictEqual(ops.payload?.ok, true);
+    assert.strictEqual(ops.payload?.environment, "production");
+    assert.strictEqual(ops.payload?.stateDriver, "sqlite");
+    assert(ops.payload?.memory?.rssBytes > 0);
+    assert(ops.payload?.jobs?.speech);
+    assert(ops.payload?.jobs?.translation);
+    assert(ops.payload?.jobs?.voice);
+
+    const opsSerialized = JSON.stringify(ops.payload);
+    assert(!opsSerialized.includes(ownerEmail));
+    assert(!opsSerialized.includes(ownerPassword));
+    assert(!opsSerialized.includes(dataDir));
 
     const demo = await login("demo@viral-ai.local", "ViralAI123!");
     assert.strictEqual(demo.response.status, 401, "development demo credentials must not work in production");
