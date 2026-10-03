@@ -5644,6 +5644,24 @@ if (window.desktopAPI) {
     });
   }
 
+  if (window.desktopAPI.onUpdateAvailable) {
+    window.desktopAPI.onUpdateAvailable((payload) => {
+      const decision = payload?.decision || {};
+      state.release.update = {
+        ...decision,
+        manifest: payload?.manifest || null
+      };
+
+      if (decision?.code === "UPDATE_AVAILABLE") {
+        toast(t("settings.updateAvailableToast", {
+          version: decision.version || "—"
+        }));
+      }
+
+      if (state.page === "settings") render();
+    });
+  }
+
   if (window.desktopAPI.onRenderProgress) {
     window.desktopAPI.onRenderProgress((payload) => {
       const job = state.jobs.find(item => item.id === payload?.jobId);
