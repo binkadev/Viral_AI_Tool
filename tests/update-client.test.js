@@ -98,12 +98,19 @@ async function testVerifiedDownloadAndCleanup() {
 
     assert.strictEqual(checked.decision.code, "UPDATE_AVAILABLE");
 
+    const progress = [];
     const result = await downloadVerifiedInstaller({
       current: { version: "0.14.0", channel: "stable" },
       manifestUrl: "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json",
-      outputDir: root
+      outputDir: root,
+      onProgress: event => progress.push(event)
     });
 
+    assert.strictEqual(progress[0]?.phase, "starting");
+    assert(progress.some(event => event.phase === "downloading" && event.percent > 0));
+    assert(progress.some(event => event.phase === "verifying" && event.percent === 100));
+    assert.strictEqual(progress.at(-1)?.phase, "verified");
+    assert.strictEqual(progress.at(-1)?.totalBytes, payload.length);
     assert.strictEqual(result.sha256, digest);
     assert.strictEqual(fs.readFileSync(result.filePath).toString("utf8"), payload.toString("utf8"));
     assert(!fs.existsSync(path.join(root, "old-version.exe")));
