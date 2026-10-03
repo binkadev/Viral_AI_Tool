@@ -204,6 +204,8 @@ After GitHub Release is created:
 - [ ] `SHA256SUMS.txt` is attached.
 - [ ] `RELEASE-MANIFEST.json` is attached.
 - [ ] Release notes are correct.
+- [ ] Release was assembled as a draft and published only after all required assets uploaded successfully.
+- [ ] A rerun cannot replace assets on an already published Stable release.
 - [ ] Manifest installer URL points to this exact tagged release.
 - [ ] SHA-256 in manifest matches the uploaded installer.
 - [ ] Release page opens from the app.
