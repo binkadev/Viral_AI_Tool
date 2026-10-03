@@ -109,9 +109,21 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
-            throw "Tagged releases require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD repository secrets."
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
+            $missing += "WINDOWS_CSC_LINK"
           }
+          if ([string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
+            $missing += "WINDOWS_CSC_KEY_PASSWORD"
+          }
+
+          if ($missing.Count -gt 0) {
+            $names = $missing -join ", "
+            Write-Host "::error title=Windows code signing is not configured::Missing GitHub repository secret(s): $names"
+            throw "Stable release is blocked until Windows code-signing secrets are configured."
+          }
+
+          Write-Host "Windows code-signing credentials are configured."
 
       - name: Verify production release configuration
         if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
