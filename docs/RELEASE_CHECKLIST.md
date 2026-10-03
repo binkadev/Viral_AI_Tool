@@ -160,7 +160,30 @@ Confirm:
 - [ ] Uninstaller completes.
 - [ ] User-owned source videos remain untouched.
 
-## 8. Stable tag workflow
+## 8. Stable Candidate dry run
+
+Before creating the first Stable tag, run **Windows Release** manually from GitHub Actions on `master` with:
+
+```text
+stable_candidate = true
+```
+
+This dry run intentionally does **not** create a tag or GitHub Release. It must exercise the production-only guards first:
+
+- [ ] Current commit is the latest `master`.
+- [ ] Windows signing secrets are available.
+- [ ] `PRODUCTION_CLOUD_URL` is valid HTTPS.
+- [ ] `PRODUCTION_BILLING_READY=true`.
+- [ ] Production `/health` and `/ready` checks pass.
+- [ ] Production billing readiness contract passes.
+- [ ] Installer and packaged application have valid Authenticode signatures.
+- [ ] Live updater publisher/signature rule passes.
+- [ ] Stable-shaped release metadata and manifest validation pass.
+- [ ] Stable Candidate artifact is uploaded for inspection.
+
+Do not create `v0.14.0` until this dry run is green.
+
+## 9. Stable tag workflow
 
 Only create the Stable tag after all mandatory items above pass.
 
@@ -173,7 +196,7 @@ The tagged workflow must enforce:
 - installer/application Authenticode signatures are valid
 - generated manifest passes app update policy
 
-## 9. Published release verification
+## 10. Published release verification
 
 After GitHub Release is created:
 
@@ -185,7 +208,7 @@ After GitHub Release is created:
 - [ ] SHA-256 in manifest matches the uploaded installer.
 - [ ] Release page opens from the app.
 
-## 10. Update verification
+## 11. Update verification
 
 From the previous Stable build:
 
@@ -200,7 +223,7 @@ From the previous Stable build:
 - [ ] Old app exits cleanly.
 - [ ] Updated app reports the new Stable version.
 
-## 11. Rollback and incident readiness
+## 12. Rollback and incident readiness
 
 Before publishing:
 
