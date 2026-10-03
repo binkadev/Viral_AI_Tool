@@ -54,6 +54,10 @@ assert(
   ["development", "preview", "stable"].includes(info.channel),
   "release-info channel is invalid."
 );
+assert(
+  ["development", "production"].includes(info.cloudEnvironment || "development"),
+  "release-info Cloud environment is invalid."
+);
 assert.strictEqual(
   info.updateManifestUrl,
   "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json"
@@ -142,13 +146,18 @@ for (const required of [
   '"dev-backend/**"',
   "Verify tagged release commit is on master",
   "stable_candidate",
-  "production_audit",
+  "private_commercial",
   "Verify Stable Candidate commit is current master",
-  "Verify Production Audit commit is current master",
-  "Choose only one manual mode: stable_candidate or production_audit.",
+  "Verify Private Commercial commit is current master",
+  "Choose only one manual mode: stable_candidate or private_commercial.",
   "Require Windows code signing for Stable release",
   "Verify production release configuration",
   "PRODUCTION_CLOUD_URL",
+  "PRIVATE_COMMERCIAL",
+  "cloudEnvironment",
+  "speechProviderConfigured",
+  "translationProviderConfigured",
+  "voiceProviderConfigured",
   "PRODUCTION_BILLING_READY",
   "Production backend health check failed",
   "releaseReady",
