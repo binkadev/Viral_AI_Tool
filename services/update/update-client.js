@@ -132,7 +132,8 @@ async function downloadVerifiedInstaller({
   outputDir,
   allowPreview = false,
   allowLocalhost = false,
-  timeoutMs = 2 * 60 * 1000
+  timeoutMs = 2 * 60 * 1000,
+  onProgress = null
 }) {
   const manifest = await fetchManifest(manifestUrl, { allowLocalhost });
   const decision = canOfferUpdate(current, manifest, { allowPreview });
@@ -145,6 +146,22 @@ async function downloadVerifiedInstaller({
   }
 
   const installer = decision.installer;
+  const reportProgress = payload => {
+    if (typeof onProgress !== "function") return;
+    try {
+      onProgress({
+        version: decision.version,
+        totalBytes: installer.sizeBytes,
+        ...payload
+      });
+    } catch {}
+  };
+
+  reportProgress({
+    phase: "starting",
+    downloadedBytes: 0,
+    percent: 0
+  });
   const safeName = path.basename(installer.file);
   if (!safeName.toLowerCase().endsWith(".exe") || safeName !== installer.file) {
     throw updateError("UPDATE_INSTALLER_INVALID", "Installer filename is invalid.");
@@ -161,6 +178,7 @@ async function downloadVerifiedInstaller({
 
   let stream = null;
   let total = 0;
+  let lastProgressAt = 0;
   const hash = crypto.createHash("sha256");
 
   try {
@@ -207,6 +225,16 @@ async function downloadVerifiedInstaller({
 
       hash.update(buffer);
       if (!stream.write(buffer)) await once(stream, "drain");
+
+      const now = Date.now();
+      if (now - lastProgressAt >= 150 || total === installer.sizeBytes) {
+        lastProgressAt = now;
+        reportProgress({
+          phase: "downloading",
+          downloadedBytes: total,
+          percent: Math.max(0, Math.min(100, Math.round((total / installer.sizeBytes) * 100)))
+        });
+      }
     }
 
     stream.end();
@@ -216,6 +244,12 @@ async function downloadVerifiedInstaller({
     if (total !== installer.sizeBytes) {
       throw updateError("UPDATE_SIZE_MISMATCH", "Installer size does not match manifest.");
     }
+
+    reportProgress({
+      phase: "verifying",
+      downloadedBytes: total,
+      percent: 100
+    });
 
     const digest = hash.digest("hex");
     if (digest !== installer.sha256) {
@@ -238,6 +272,12 @@ async function downloadVerifiedInstaller({
         }
       }
     } catch {}
+
+    reportProgress({
+      phase: "verified",
+      downloadedBytes: total,
+      percent: 100
+    });
 
     return {
       version: decision.version,
