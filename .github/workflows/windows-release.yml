@@ -315,6 +315,22 @@ jobs:
           Write-Host "Installer signer: $($installerSignature.SignerCertificate.Subject)"
           Write-Host "Application signer: $($appSignature.SignerCertificate.Subject)"
 
+      - name: Verify updater publisher rule for tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release -File -Filter "*.exe" | Where-Object {
+            $_.Name -notlike "__uninstaller-*"
+          } | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Signed Windows installer was not produced."
+          }
+
+          $env:VIRAL_AI_CURRENT_EXE = (Resolve-Path "release\win-unpacked\Viral AI Tool.exe").Path
+          $env:VIRAL_AI_UPDATE_INSTALLER = $installer.FullName
+          npm run test:update-signature-live
+
       - name: Generate release manifest and SHA-256 checksums
         shell: pwsh
         run: |
