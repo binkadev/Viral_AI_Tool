@@ -2,6 +2,12 @@ name: Windows Release
 
 on:
   workflow_dispatch:
+    inputs:
+      stable_candidate:
+        description: "Run Stable release guards without creating a tag or GitHub Release"
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - master
@@ -46,6 +52,7 @@ jobs:
       PRODUCTION_CLOUD_URL: ${{ vars.PRODUCTION_CLOUD_URL }}
       PRODUCTION_BILLING_READY: ${{ vars.PRODUCTION_BILLING_READY }}
       PREVIEW_CLOUD_URL: ${{ vars.PREVIEW_CLOUD_URL }}
+      STABLE_CANDIDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.stable_candidate }}
 
     steps:
       - name: Checkout
@@ -83,8 +90,21 @@ jobs:
             throw "Stable tag commit $env:GITHUB_SHA is not the current master commit $masterSha."
           }
 
-      - name: Require Windows code signing for tagged release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Verify Stable Candidate commit is current master
+        if: env.STABLE_CANDIDATE == 'true'
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne "refs/heads/master") {
+            throw "Stable Candidate dry run must be dispatched from master."
+          }
+          git fetch origin master --depth=1
+          $masterSha = (git rev-parse origin/master).Trim()
+          if ($env:GITHUB_SHA -ne $masterSha) {
+            throw "Stable Candidate commit $env:GITHUB_SHA is not the current master commit $masterSha."
+          }
+
+      - name: Require Windows code signing for Stable release
+        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
@@ -92,7 +112,7 @@ jobs:
           }
 
       - name: Verify production release configuration
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:PRODUCTION_CLOUD_URL)) {
@@ -195,7 +215,7 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
+          $channel = if ($env:GITHUB_REF -like "refs/tags/*" -or $env:STABLE_CANDIDATE -eq "true") { "stable" } else { "preview" }
           $cloudBackendUrl = if ($channel -eq "stable") {
             $env:PRODUCTION_CLOUD_URL
           } else {
@@ -307,8 +327,8 @@ jobs:
             Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Verify Authenticode signatures for tagged release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Verify Authenticode signatures for Stable release
+        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
         run: |
           $installer = Get-ChildItem release -File -Filter "*.exe" | Where-Object {
@@ -337,8 +357,8 @@ jobs:
           Write-Host "Installer signer: $($installerSignature.SignerCertificate.Subject)"
           Write-Host "Application signer: $($appSignature.SignerCertificate.Subject)"
 
-      - name: Verify updater publisher rule for tagged release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Verify updater publisher rule for Stable release
+        if: startsWith(github.ref, 'refs/tags/') || env.STABLE_CANDIDATE == 'true'
         shell: pwsh
         run: |
           $installer = Get-ChildItem release -File -Filter "*.exe" | Where-Object {
@@ -357,7 +377,7 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $channel = if ($env:GITHUB_REF -like "refs/tags/*") { "stable" } else { "preview" }
+          $channel = if ($env:GITHUB_REF -like "refs/tags/*" -or $env:STABLE_CANDIDATE -eq "true") { "stable" } else { "preview" }
           $files = Get-ChildItem release -File | Where-Object {
             $_.Extension -in ".exe", ".blockmap" -or $_.Name -eq "latest.yml"
           }
