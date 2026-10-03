@@ -15,6 +15,7 @@ on:
       - "release-info.json"
       - "renderer/**"
       - "services/**"
+      - "dev-backend/**"
       - "assets/**"
       - "tests/release-policy.test.js"
       - "tests/release-assets.test.js"
