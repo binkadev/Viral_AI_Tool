@@ -21,6 +21,7 @@ on:
       - "tests/release-readiness.test.js"
       - "tests/generated-manifest.test.js"
       - "tests/update-client.test.js"
+      - "tests/diagnostics.test.js"
       - "tests/cloud-release-config.test.js"
       - ".github/workflows/windows-release.yml"
 
