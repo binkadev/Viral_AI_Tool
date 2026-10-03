@@ -27,6 +27,10 @@ const releasePolicy = fs.readFileSync(
   path.join(root, "services", "update", "release-policy.js"),
   "utf8"
 );
+const cloudConfigStore = fs.readFileSync(
+  path.join(root, "services", "cloud", "config-store.js"),
+  "utf8"
+);
 
 assert(/^\d+\.\d+\.\d+$/.test(pkg.version), "Release baseline version must be X.Y.Z.");
 assert.strictEqual(pkg.build?.appId, "com.viralai.tool");
@@ -52,6 +56,11 @@ assert.strictEqual(
 assert.strictEqual(
   info.releasePageUrl,
   "https://github.com/binkadev/Viral_AI_Tool/releases/latest"
+);
+assert(
+  info.cloudBackendUrl === null ||
+  (typeof info.cloudBackendUrl === "string" && info.cloudBackendUrl.startsWith("https://")),
+  "Embedded Cloud backend must be null or HTTPS."
 );
 
 for (const required of [
@@ -116,8 +125,22 @@ for (const required of [
 }
 
 for (const required of [
+  "releaseBackendUrl",
+  'source === "release"',
+  "locked:",
+  "CLOUD_CONFIG_ENV_LOCKED"
+]) {
+  assert(cloudConfigStore.includes(required), "Cloud release config is missing: " + required);
+}
+
+for (const required of [
   "Verify tagged release commit is on master",
   "Require Windows code signing for tagged release",
+  "Verify production release configuration",
+  "PRODUCTION_CLOUD_URL",
+  "PRODUCTION_BILLING_READY",
+  "Production backend health check failed",
+  "BILLING_PROVIDER_NOT_CONFIGURED",
   "WINDOWS_CSC_LINK",
   "WINDOWS_CSC_KEY_PASSWORD",
   "Smoke-test Windows installer",
