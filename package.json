@@ -25,7 +25,8 @@
     "test:cloud-release-config": "node tests/cloud-release-config.test.js",
     "test:backend-backup": "node dev-backend/tests/sqlite-backup.test.js",
     "backup:state": "node dev-backend/maintenance/state-backup.js backup",
-    "verify:state-backup": "node dev-backend/maintenance/state-backup.js verify"
+    "verify:state-backup": "node dev-backend/maintenance/state-backup.js verify",
+    "test:render-e2e": "node tests/render-pipeline.integration.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
