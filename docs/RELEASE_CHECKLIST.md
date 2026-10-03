@@ -90,6 +90,14 @@ If public billing is intentionally not launched yet, purchase UI must not imply 
 
 ## 5. Automated release tests
 
+Run the source-level preflight first:
+
+```text
+npm run release:preflight
+```
+
+This command checks version/lockfile/changelog/icon/release metadata and the core release-policy/update/privacy tests in one pass. It does not replace external Stable checks such as Windows signing, production HTTPS/backend readiness, real billing readiness, or a clean-machine installer smoke test.
+
 The intended release commit must pass:
 
 ```text
