@@ -430,12 +430,31 @@ function cancelAllForShutdown() {
   return cancelled;
 }
 
+function operationalSnapshot() {
+  const states = {};
+  for (const job of jobs.values()) {
+    const state = String(job?.state || "unknown");
+    states[state] = Number(states[state] || 0) + 1;
+  }
+
+  const active = [...jobs.values()].filter(job =>
+    !["completed", "failed", "cancelled"].includes(job?.state)
+  ).length;
+
+  return {
+    active,
+    totalInMemory: jobs.size,
+    states
+  };
+}
+
 module.exports = {
   status,
   create,
   get,
   cancel,
   cancelAllForShutdown,
+  operationalSnapshot,
   configureQuotaHooks,
   TranslationJobError
 };
