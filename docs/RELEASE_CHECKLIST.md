@@ -175,8 +175,10 @@ This mode intentionally keeps Windows signing disabled while embedding and valid
 - [ ] `PRODUCTION_CLOUD_URL` exists and is valid HTTPS.
 - [ ] Production `/health` responds and reports production + durable SQLite state.
 - [ ] Cloud Speech, Translation and Voice providers report configured.
+- [ ] `adminProvisioningConfigured=true`.
+- [ ] At least one non-owner early-access account has been provisioned and can log in.
 - [ ] Production `/ready` responds with `ready=true`.
-- [ ] Automated billing may remain unavailable for this private build; accounts/plans must be provisioned explicitly until public billing is connected.
+- [ ] Automated billing may remain unavailable for this private build; accounts/plans are provisioned explicitly until public billing is connected.
 - [ ] Normal release-policy, backend, updater, diagnostics, Cloud-config and render tests pass.
 - [ ] Unsigned Windows installer builds and passes install/launch/uninstall smoke test.
 - [ ] Preview/internal artifact uploads successfully.
