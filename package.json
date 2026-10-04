@@ -29,7 +29,8 @@
     "backup:state": "node dev-backend/maintenance/state-backup.js backup",
     "verify:state-backup": "node dev-backend/maintenance/state-backup.js verify",
     "test:render-e2e": "node tests/render-pipeline.integration.test.js",
-    "release:preflight": "node scripts/release-preflight.js"
+    "release:preflight": "node scripts/release-preflight.js",
+    "test:deployment-config": "node tests/deployment-config.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
