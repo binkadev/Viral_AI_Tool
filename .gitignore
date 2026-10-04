@@ -8,5 +8,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!deploy/.env.production.example
 
 dev-backend/data/
