@@ -40,6 +40,7 @@ on:
       - "tests/windows-signature.integration.test.js"
       - "tests/diagnostics.test.js"
       - "tests/cloud-release-config.test.js"
+      - "tests/cloud-speech-upload.test.js"
       - "tests/deployment-config.test.js"
       - "tests/render-pipeline.integration.test.js"
       - ".github/workflows/windows-release.yml"
@@ -268,6 +269,9 @@ jobs:
 
       - name: Run production deployment config tests
         run: npm run test:deployment-config
+
+      - name: Run Cloud speech upload routing tests
+        run: npm run test:cloud-speech-upload
 
       - name: Run localized render end-to-end test
         run: npm run test:render-e2e
