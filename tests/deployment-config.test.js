@@ -11,6 +11,7 @@ const caddy = fs.readFileSync(path.join(root, "deploy", "Caddyfile"), "utf8");
 const envExample = fs.readFileSync(path.join(root, "deploy", ".env.production.example"), "utf8");
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 const server = fs.readFileSync(path.join(root, "dev-backend", "server.js"), "utf8");
+const railway = JSON.parse(fs.readFileSync(path.join(root, "railway.json"), "utf8"));
 
 for (const required of [
   "FROM node:22",
@@ -65,3 +66,9 @@ assert(server.includes("VIRAL_AI_ADMIN_TOKEN"), "Private-commercial provisioning
 assert(server.includes("adminProvisioningConfigured"), "Health readiness must expose provisioning configuration.");
 
 console.log("Production deployment configuration tests passed.");
+
+assert.strictEqual(railway.build?.builder, "DOCKERFILE");
+assert.strictEqual(railway.build?.dockerfilePath, "deploy/backend.Dockerfile");
+assert.strictEqual(railway.deploy?.healthcheckPath, "/ready");
+assert.strictEqual(railway.deploy?.restartPolicyType, "ALWAYS");
+assert(server.includes("process.env.PORT"), "Backend must support platform-provided PORT.");
