@@ -50,8 +50,10 @@ for (const required of [
   "VIRAL_AI_ADMIN_TOKEN=",
   "VIRAL_AI_OPERATIONS_TOKEN=",
   "OPENAI_API_KEY=",
-  "VIRAL_AI_TRANSLATION_API_KEY=",
-  "VIRAL_AI_VOICE_API_KEY="
+  "OPENAI_BASE_URL=https://api.openai.com",
+  "VIRAL_AI_OPENAI_TRANSCRIBE_MODEL=whisper-1",
+  "VIRAL_AI_OPENAI_TRANSLATION_MODEL=gpt-5-mini",
+  "VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts"
 ]) {
   assert(envExample.includes(required), "Production environment template is missing: " + required);
 }
