@@ -39,6 +39,9 @@ jobs:
       - name: Test diagnostics privacy
         run: npm run test:diagnostics
 
+      - name: Test production deployment config
+        run: npm run test:deployment-config
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
