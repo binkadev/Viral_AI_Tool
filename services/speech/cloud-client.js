@@ -303,7 +303,7 @@ class CloudSpeechClient {
 
     let url;
     try {
-      url = new URL(upload.url);
+      url = new URL(upload.url, this.baseUrl());
     } catch {
       throw cloudError("CLOUD_UPLOAD_INVALID", "Upload URL is invalid.");
     }
