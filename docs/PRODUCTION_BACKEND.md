@@ -49,6 +49,63 @@ VIRAL_AI_TRUST_PROXY=true
 
 This allows per-client rate limiting and audit IPs to use the first `X-Forwarded-For` value. Do not enable this when untrusted clients can connect directly to the backend.
 
+## Container deployment baseline
+
+The repository includes a production container baseline under `deploy/`:
+
+- `backend.Dockerfile` — Node 22 backend image running as the non-root `node` user.
+- `docker-compose.production.yml` — backend + Caddy HTTPS reverse proxy.
+- `Caddyfile` — automatic TLS termination and reverse proxy to the private backend network.
+- `.env.production.example` — production environment template.
+
+The backend container is **not** published directly to the host Internet. Only Caddy publishes ports 80/443.
+
+Typical single-server bootstrap:
+
+```bash
+cp deploy/.env.production.example deploy/.env.production
+```
+
+Edit `deploy/.env.production` and set at minimum:
+
+```text
+VIRAL_AI_DOMAIN=api.your-domain.example
+VIRAL_AI_BOOTSTRAP_EMAIL=<owner email>
+VIRAL_AI_BOOTSTRAP_PASSWORD=<long random first-boot password>
+VIRAL_AI_ADMIN_TOKEN=<different random token, at least 32 chars>
+VIRAL_AI_OPERATIONS_TOKEN=<different random token, at least 32 chars>
+OPENAI_API_KEY=<server-side API key>
+```
+
+Then start the stack from the repository root:
+
+```bash
+docker compose --env-file deploy/.env.production \
+  -f deploy/docker-compose.production.yml \
+  up -d --build
+```
+
+Point the DNS A/AAAA record for `VIRAL_AI_DOMAIN` at the server before starting Caddy so TLS can be issued.
+
+Verify:
+
+```bash
+curl https://api.your-domain.example/health
+curl https://api.your-domain.example/ready
+```
+
+For a Private Commercial build, `/health` must report:
+
+- `environment = production`
+- `stateDriver = sqlite`
+- `durableState = true`
+- `speechProviderConfigured = true`
+- `translationProviderConfigured = true`
+- `voiceProviderConfigured = true`
+- `adminProvisioningConfigured = true`
+
+After the first owner login succeeds, remove `VIRAL_AI_BOOTSTRAP_PASSWORD` from `deploy/.env.production` and restart the backend. Do not remove the persisted SQLite volume.
+
 ## Monitoring and readiness
 
 Use the unauthenticated readiness endpoint for load-balancer or container readiness probes:
@@ -103,6 +160,67 @@ Recommended alerts:
 - latest verified backup age exceeds your recovery objective
 
 Keep the operations token in a secret manager and do not put it in desktop clients, URLs, dashboards, or source control.
+
+## Private Commercial account provisioning
+
+Private Commercial / Early Access does not expose public signup. Accounts are provisioned by the operator through a protected backend endpoint.
+
+Configure a separate random token of at least 32 characters:
+
+```text
+VIRAL_AI_ADMIN_TOKEN=<long random token>
+```
+
+This token is server/operator-only:
+
+- never embed it in the Electron app;
+- never send it to an end user;
+- never put it in GitHub source, URLs, logs, or screenshots;
+- store it in the deployment secret environment.
+
+Create an account:
+
+```http
+POST /v1/internal/admin/users
+x-viral-ai-admin-token: <admin token>
+content-type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "<temporary strong password>",
+  "name": "Early User",
+  "planId": "creator"
+}
+```
+
+Supported plan IDs are currently:
+
+```text
+free
+creator
+creator_pro
+business
+```
+
+A successful request creates:
+
+- an independent user ID;
+- salted/scrypt password hash;
+- active subscription state;
+- the plan's monthly quota;
+- zeroed usage counters.
+
+The user then signs in through the normal desktop login flow. The admin token is not required by the desktop client.
+
+The endpoint rejects:
+
+- missing/incorrect admin token;
+- duplicate email;
+- malformed email;
+- passwords shorter than 12 characters;
+- unknown plan IDs.
+
+Production integration tests verify that provisioned accounts can log in, retain their plan and survive a backend restart.
 
 ## Billing
 
