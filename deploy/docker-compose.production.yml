@@ -1,0 +1,62 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      VIRAL_AI_ENV: production
+      VIRAL_AI_STATE_DRIVER: sqlite
+      VIRAL_AI_BIND_HOST: 0.0.0.0
+      VIRAL_AI_DEV_PORT: 3000
+      VIRAL_AI_DEV_DATA_DIR: /var/lib/viral-ai-tool
+      VIRAL_AI_BACKUP_DIR: /var/backups/viral-ai-tool
+      VIRAL_AI_TRUST_PROXY: "true"
+    volumes:
+      - viral_ai_data:/var/lib/viral-ai-tool
+      - viral_ai_backups:/var/backups/viral-ai-tool
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - viral_ai_internal
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      VIRAL_AI_DOMAIN: ${VIRAL_AI_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - viral_ai_internal
+
+networks:
+  viral_ai_internal:
+    driver: bridge
+
+volumes:
+  viral_ai_data:
+  viral_ai_backups:
+  caddy_data:
+  caddy_config:
