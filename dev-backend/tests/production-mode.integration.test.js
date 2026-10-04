@@ -16,6 +16,7 @@ const operationsToken = "ops-test-token-abcdefghijklmnopqrstuvwxyz-123456";
 const adminToken = "admin-test-token-abcdefghijklmnopqrstuvwxyz-123456";
 const earlyUserEmail = "early-user@example.test";
 const earlyUserPassword = "Early-User-Password-123!";
+const earlyUserResetPassword = "Early-User-New-Password-456!";
 
 let child = null;
 let capturedStdout = "";
@@ -245,6 +246,24 @@ async function run() {
     assert.strictEqual(earlyUser.payload?.user?.email, earlyUserEmail);
     assert.strictEqual(earlyUser.payload?.user?.planId, "creator");
 
+    const resetPassword = await request("/v1/internal/admin/users/reset-password", {
+      method: "POST",
+      adminToken,
+      body: {
+        email: earlyUserEmail,
+        newPassword: earlyUserResetPassword
+      }
+    });
+    assert.strictEqual(resetPassword.response.status, 200, resetPassword.text);
+    assert.strictEqual(resetPassword.payload?.ok, true);
+    assert.strictEqual(resetPassword.payload?.user?.email, earlyUserEmail);
+
+    const oldPasswordAfterReset = await login(earlyUserEmail, earlyUserPassword);
+    assert.strictEqual(oldPasswordAfterReset.response.status, 401);
+
+    const newPasswordAfterReset = await login(earlyUserEmail, earlyUserResetPassword);
+    assert.strictEqual(newPasswordAfterReset.response.status, 200, newPasswordAfterReset.text);
+
     const billing = await request("/v1/billing/catalog", {
       accessToken: owner.payload.accessToken
     });
@@ -264,7 +283,7 @@ async function run() {
     const ownerAfterRestart = await login(ownerEmail, ownerPassword);
     assert.strictEqual(ownerAfterRestart.response.status, 200, ownerAfterRestart.text);
 
-    const earlyUserAfterRestart = await login(earlyUserEmail, earlyUserPassword);
+    const earlyUserAfterRestart = await login(earlyUserEmail, earlyUserResetPassword);
     assert.strictEqual(earlyUserAfterRestart.response.status, 200, earlyUserAfterRestart.text);
     assert.strictEqual(earlyUserAfterRestart.payload?.user?.planId, "creator");
 
