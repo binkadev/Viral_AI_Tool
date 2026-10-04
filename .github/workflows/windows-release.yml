@@ -194,6 +194,10 @@ jobs:
             }
           }
 
+          if ($health.adminProvisioningConfigured -ne $true) {
+            throw "Private Commercial Cloud is not ready: adminProvisioningConfigured=false"
+          }
+
           try {
             $readiness = Invoke-RestMethod -Uri "$base/ready" -Method Get -TimeoutSec 12
           } catch {
