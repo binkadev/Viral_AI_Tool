@@ -56,7 +56,8 @@ const commands = [
   ["Update client", ["npm", ["run", "test:update-client"]]],
   ["Diagnostics privacy", ["npm", ["run", "test:diagnostics"]]],
   ["Cloud release config", ["npm", ["run", "test:cloud-release-config"]]],
-  ["Deployment config", ["npm", ["run", "test:deployment-config"]]]
+  ["Deployment config", ["npm", ["run", "test:deployment-config"]]],
+  ["Cloud speech upload routing", ["npm", ["run", "test:cloud-speech-upload"]]]
 ];
 
 for (const [name, [command, args]] of commands) {
