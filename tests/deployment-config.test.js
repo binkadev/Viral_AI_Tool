@@ -6,6 +6,7 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const dockerfile = fs.readFileSync(path.join(root, "deploy", "backend.Dockerfile"), "utf8");
+const rootDockerfile = fs.readFileSync(path.join(root, "Dockerfile"), "utf8");
 const compose = fs.readFileSync(path.join(root, "deploy", "docker-compose.production.yml"), "utf8");
 const caddy = fs.readFileSync(path.join(root, "deploy", "Caddyfile"), "utf8");
 const envExample = fs.readFileSync(path.join(root, "deploy", ".env.production.example"), "utf8");
@@ -68,7 +69,11 @@ assert(server.includes("adminProvisioningConfigured"), "Health readiness must ex
 console.log("Production deployment configuration tests passed.");
 
 assert.strictEqual(railway.build?.builder, "DOCKERFILE");
-assert.strictEqual(railway.build?.dockerfilePath, "deploy/backend.Dockerfile");
+assert.strictEqual(railway.build?.dockerfilePath, "Dockerfile");
 assert.strictEqual(railway.deploy?.healthcheckPath, "/ready");
 assert.strictEqual(railway.deploy?.restartPolicyType, "ALWAYS");
 assert(server.includes("process.env.PORT"), "Backend must support platform-provided PORT.");
+
+assert(rootDockerfile.includes("FROM node:22"), "Root Railway Dockerfile must use Node 22.");
+assert(rootDockerfile.includes("VIRAL_AI_DEV_DATA_DIR=/data"), "Root Railway Dockerfile must use the persistent /data path.");
+assert(rootDockerfile.includes('CMD ["node", "dev-backend/server.js"]'), "Root Railway Dockerfile start command is missing.");
