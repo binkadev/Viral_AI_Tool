@@ -35,7 +35,7 @@ const {
   assertSubscriptionAccess
 } = require("./subscriptions");
 
-const HOST = "127.0.0.1";
+const HOST = String(process.env.VIRAL_AI_BIND_HOST || "127.0.0.1").trim() || "127.0.0.1";
 const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
 const IS_PRODUCTION = String(process.env.VIRAL_AI_ENV || "development").toLowerCase() === "production";
 const STATE_DRIVER = String(
@@ -1825,6 +1825,7 @@ async function handle(req, res) {
       speechProviderConfigured: speechProvider.isConfigured(),
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured(),
+      adminProvisioningConfigured: adminConfigured(),
       durableState: true,
       stateDriver: STATE_DRIVER,
       environment: IS_PRODUCTION ? "production" : "development",
