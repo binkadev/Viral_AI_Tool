@@ -60,6 +60,7 @@ All notable product and release-engineering changes are tracked here.
 - Added an unsigned Private Commercial / Early Access mode that embeds the real production Cloud backend, requires Cloud Speech/Translation/Voice readiness, and builds a distributable Windows artifact without requiring code signing or automated billing.
 - Added operator-only Private Commercial account provisioning with independent login, plan/quota state, duplicate protection, and production restart persistence tests.
 - Added a production Docker/Caddy baseline with private backend networking, automatic HTTPS termination, durable SQLite/backup volumes, non-root backend runtime, and deployment regression tests.
+- Deployment validation is cross-platform across Linux backend CI and Windows release CI.
 - Added a manual Stable Candidate dry run that exercises production URL, billing readiness, Windows signing, Authenticode, and updater publisher guards without creating a tag or public GitHub Release.
 - Stable publication is draft-first: required assets upload before publication, reruns may reuse an incomplete draft, and already-published Stable assets are protected from mutation.
 
