@@ -1524,7 +1524,10 @@ function ensureUploadTarget(job) {
   }
 
   return {
-    url: "http://" + HOST + ":" + PORT + "/v1/dev-upload/" + job.uploadToken,
+    // Keep this relative so desktop clients resolve it against the configured
+    // Cloud backend origin. Never expose an internal bind host such as
+    // 0.0.0.0 or a container-only Railway port to external clients.
+    url: "/v1/dev-upload/" + job.uploadToken,
     method: "PUT",
     headers: {
       "content-type": "audio/flac"
