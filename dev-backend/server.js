@@ -43,6 +43,7 @@ const STATE_DRIVER = String(
 ).toLowerCase();
 const TRUST_PROXY = String(process.env.VIRAL_AI_TRUST_PROXY || "false").toLowerCase() === "true";
 const OPERATIONS_TOKEN = String(process.env.VIRAL_AI_OPERATIONS_TOKEN || "");
+const ADMIN_TOKEN = String(process.env.VIRAL_AI_ADMIN_TOKEN || "");
 
 if (IS_PRODUCTION && STATE_DRIVER !== "sqlite") {
   throw new Error("Production mode requires VIRAL_AI_STATE_DRIVER=sqlite.");
@@ -336,6 +337,16 @@ function operationsAuthorized(req) {
   return safeEqualText(candidate, OPERATIONS_TOKEN);
 }
 
+function adminConfigured() {
+  return ADMIN_TOKEN.length >= 32;
+}
+
+function adminAuthorized(req) {
+  if (!adminConfigured()) return false;
+  const candidate = String(req.headers?.["x-viral-ai-admin-token"] || "");
+  return safeEqualText(candidate, ADMIN_TOKEN);
+}
+
 function speechOperationalSnapshot() {
   const states = {};
   for (const job of jobs.values()) {
@@ -440,6 +451,65 @@ billing.configureRuntime({
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
+}
+
+function createProvisionedUser({ email, password, name, planId = "free" } = {}) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "");
+  const safeName = String(name || "").trim().slice(0, 120);
+  const requestedPlan = String(planId || "free").trim();
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail) || normalizedEmail.length > 254) {
+    const error = new Error("Account email is invalid.");
+    error.code = "ACCOUNT_EMAIL_INVALID";
+    throw error;
+  }
+  if (safePassword.length < 12 || safePassword.length > 256) {
+    const error = new Error("Account password must contain between 12 and 256 characters.");
+    error.code = "ACCOUNT_PASSWORD_INVALID";
+    throw error;
+  }
+  if (!isKnownPlan(requestedPlan)) {
+    const error = new Error("Account plan is invalid.");
+    error.code = "PLAN_INVALID";
+    throw error;
+  }
+
+  const plan = resolvePlan(requestedPlan);
+  const salt = crypto.randomBytes(16).toString("hex");
+  const now = Date.now();
+
+  return {
+    id: "usr_" + newToken(12),
+    email: normalizedEmail,
+    name: safeName || normalizedEmail.split("@")[0].slice(0, 120),
+    role: "member",
+    planId: plan.id,
+    plan: plan.displayName,
+    subscription: createSubscription({
+      planId: plan.id,
+      status: "active",
+      now,
+      periodDays: 30,
+      graceDays: 3
+    }),
+    salt,
+    passwordHash: hashPassword(safePassword, salt),
+    quota: {
+      totalMinutes: plan.monthlyMinutes,
+      usedMinutes: 0,
+      remainingMinutes: plan.monthlyMinutes,
+      resetAt: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    usage: {
+      speechMinutes: 0,
+      translationMinutes: 0,
+      voiceMinutes: 0,
+      exportMinutes: 0
+    },
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString()
+  };
 }
 
 function seedUser() {
@@ -1842,6 +1912,71 @@ async function handle(req, res) {
       billing: billingReadiness(),
       backups: latestBackupSummary()
     });
+  }
+
+  if (method === "POST" && url.pathname === "/v1/internal/admin/users") {
+    if (!adminConfigured()) {
+      return error(res, 503, "ADMIN_NOT_CONFIGURED");
+    }
+
+    if (requestRateLimited(req, "admin-user-create", 20)) {
+      audit("rate_limit.admin_user_create", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
+
+    if (!adminAuthorized(req)) {
+      audit("admin.user_create.unauthorized", req, {});
+      return error(res, 401, "ADMIN_UNAUTHORIZED");
+    }
+
+    try {
+      const body = await readJson(req);
+      const candidate = createProvisionedUser({
+        email: body.email,
+        password: body.password,
+        name: body.name,
+        planId: body.planId
+      });
+
+      if (users.has(candidate.email)) {
+        return error(res, 409, "ACCOUNT_EXISTS");
+      }
+
+      users.set(candidate.email, candidate);
+      persistUsers();
+
+      audit("admin.user.created", req, {
+        userId: candidate.id,
+        email: candidate.email,
+        planId: candidate.planId
+      });
+
+      return json(res, 201, {
+        user: {
+          id: candidate.id,
+          email: candidate.email,
+          name: candidate.name,
+          planId: candidate.planId,
+          plan: candidate.plan
+        },
+        subscription: publicSubscription(candidate.subscription),
+        quota: {
+          totalMinutes: candidate.quota.totalMinutes,
+          usedMinutes: candidate.quota.usedMinutes,
+          remainingMinutes: candidate.quota.remainingMinutes,
+          resetAt: candidate.quota.resetAt
+        }
+      });
+    } catch (err) {
+      const code = err?.code || "ACCOUNT_CREATE_FAILED";
+      const status = ["ACCOUNT_EMAIL_INVALID", "ACCOUNT_PASSWORD_INVALID", "PLAN_INVALID", "INVALID_JSON"].includes(code)
+        ? 400
+        : code === "BODY_TOO_LARGE"
+          ? 413
+          : 500;
+      audit("admin.user_create.failed", req, { code });
+      return error(res, status, code);
+    }
   }
 
   if (IS_PRODUCTION && url.pathname.startsWith("/v1/billing/")) {
