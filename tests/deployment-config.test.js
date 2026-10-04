@@ -24,7 +24,7 @@ for (const required of [
 }
 
 assert(
-  compose.includes('expose:\n      - "3000"'),
+  /expose:\r?\n\s*-\s*"3000"/m.test(compose),
   "Backend container must expose port 3000 only to the internal Compose network."
 );
 assert(
