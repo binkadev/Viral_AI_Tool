@@ -36,7 +36,7 @@ const {
 } = require("./subscriptions");
 
 const HOST = String(process.env.VIRAL_AI_BIND_HOST || "127.0.0.1").trim() || "127.0.0.1";
-const PORT = Number(process.env.VIRAL_AI_DEV_PORT || 3000);
+const PORT = Number(process.env.VIRAL_AI_DEV_PORT || process.env.PORT || 3000);
 const IS_PRODUCTION = String(process.env.VIRAL_AI_ENV || "development").toLowerCase() === "production";
 const STATE_DRIVER = String(
   process.env.VIRAL_AI_STATE_DRIVER || (IS_PRODUCTION ? "sqlite" : "json")
