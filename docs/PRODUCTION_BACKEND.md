@@ -106,6 +106,47 @@ For a Private Commercial build, `/health` must report:
 
 After the first owner login succeeds, remove `VIRAL_AI_BOOTSTRAP_PASSWORD` from `deploy/.env.production` and restart the backend. Do not remove the persisted SQLite volume.
 
+## Railway quick deployment
+
+For the current Private Commercial phase, Railway is the simplest supported deployment target.
+
+The repository includes `railway.json`, which tells Railway to:
+
+- build with `deploy/backend.Dockerfile`;
+- check `/ready`;
+- restart the service automatically.
+
+Recommended Railway setup:
+
+1. Create a project from the GitHub repository.
+2. Use the `master` branch.
+3. Add one persistent volume mounted at `/data`.
+4. Set:
+
+```text
+VIRAL_AI_ENV=production
+VIRAL_AI_STATE_DRIVER=sqlite
+VIRAL_AI_BIND_HOST=0.0.0.0
+VIRAL_AI_DEV_DATA_DIR=/data
+VIRAL_AI_BACKUP_DIR=/data/backups
+VIRAL_AI_TRUST_PROXY=true
+VIRAL_AI_BOOTSTRAP_EMAIL=<owner email>
+VIRAL_AI_BOOTSTRAP_PASSWORD=<first-boot strong password>
+VIRAL_AI_BOOTSTRAP_NAME=Account Owner
+VIRAL_AI_BOOTSTRAP_PLAN=creator_pro
+VIRAL_AI_OPERATIONS_TOKEN=<random 32+ chars>
+VIRAL_AI_ADMIN_TOKEN=<different random 32+ chars>
+OPENAI_API_KEY=<server-side OpenAI key>
+OPENAI_BASE_URL=https://api.openai.com
+VIRAL_AI_OPENAI_TRANSCRIBE_MODEL=whisper-1
+VIRAL_AI_OPENAI_TRANSLATION_MODEL=gpt-5-mini
+VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts
+```
+
+Generate a Railway public domain for the service. Railway terminates HTTPS for that domain, so Caddy is not required on Railway.
+
+After owner login succeeds, remove `VIRAL_AI_BOOTSTRAP_PASSWORD` and redeploy. Keep the volume attached; it contains the production SQLite state and backups.
+
 ## Monitoring and readiness
 
 Use the unauthenticated readiness endpoint for load-balancer or container readiness probes:
