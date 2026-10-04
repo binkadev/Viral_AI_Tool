@@ -28,6 +28,7 @@ on:
       - "renderer/**"
       - "services/**"
       - "dev-backend/**"
+      - "deploy/**"
       - "scripts/**"
       - "assets/**"
       - "tests/release-policy.test.js"
@@ -39,6 +40,7 @@ on:
       - "tests/windows-signature.integration.test.js"
       - "tests/diagnostics.test.js"
       - "tests/cloud-release-config.test.js"
+      - "tests/deployment-config.test.js"
       - "tests/render-pipeline.integration.test.js"
       - ".github/workflows/windows-release.yml"
 
@@ -263,6 +265,9 @@ jobs:
 
       - name: Run embedded Cloud release config tests
         run: npm run test:cloud-release-config
+
+      - name: Run production deployment config tests
+        run: npm run test:deployment-config
 
       - name: Run localized render end-to-end test
         run: npm run test:render-e2e
