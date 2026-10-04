@@ -1074,6 +1074,27 @@ function revokeSession(userId, sessionId) {
   return removed;
 }
 
+function revokeAllSessionsForUser(userId) {
+  let removed = false;
+
+  for (const [key, record] of refreshTokens.entries()) {
+    if (record?.userId === userId) {
+      refreshTokens.delete(key);
+      removed = true;
+    }
+  }
+
+  for (const [token, record] of accessTokens.entries()) {
+    if (record?.userId === userId) {
+      accessTokens.delete(token);
+      removed = true;
+    }
+  }
+
+  if (removed) persistRefreshSessions();
+  return removed;
+}
+
 function authenticate(req) {
   const token = bearerToken(req);
   if (!token) return null;
@@ -1976,6 +1997,74 @@ async function handle(req, res) {
           ? 413
           : 500;
       audit("admin.user_create.failed", req, { code });
+      return error(res, status, code);
+    }
+  }
+
+  if (method === "POST" && url.pathname === "/v1/internal/admin/users/reset-password") {
+    if (!adminConfigured()) {
+      return error(res, 503, "ADMIN_NOT_CONFIGURED");
+    }
+
+    if (requestRateLimited(req, "admin-password-reset", 20)) {
+      audit("rate_limit.admin_password_reset", req, {});
+      return error(res, 429, "RATE_LIMITED");
+    }
+
+    if (!adminAuthorized(req)) {
+      audit("admin.password_reset.unauthorized", req, {});
+      return error(res, 401, "ADMIN_UNAUTHORIZED");
+    }
+
+    try {
+      const body = await readJson(req);
+      const email = String(body.email || "").trim().toLowerCase();
+      const newPassword = String(body.newPassword || "");
+
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) {
+        return error(res, 400, "ACCOUNT_EMAIL_INVALID");
+      }
+      if (newPassword.length < 12 || newPassword.length > 256) {
+        return error(res, 400, "ACCOUNT_PASSWORD_INVALID");
+      }
+
+      const user = users.get(email);
+      if (!user) {
+        return error(res, 404, "ACCOUNT_NOT_FOUND");
+      }
+
+      const salt = crypto.randomBytes(16).toString("hex");
+      user.salt = salt;
+      user.passwordHash = hashPassword(newPassword, salt);
+      user.updatedAt = new Date().toISOString();
+
+      revokeAllSessionsForUser(user.id);
+      persistUsers();
+
+      audit("admin.password_reset.completed", req, {
+        userId: user.id,
+        email: user.email
+      });
+
+      return json(res, 200, {
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          planId: user.planId,
+          plan: user.plan
+        },
+        sessionsRevoked: true
+      });
+    } catch (err) {
+      const code = err?.code || "PASSWORD_RESET_FAILED";
+      const status = code === "INVALID_JSON"
+        ? 400
+        : code === "BODY_TOO_LARGE"
+          ? 413
+          : 500;
+      audit("admin.password_reset.failed", req, { code });
       return error(res, status, code);
     }
   }
