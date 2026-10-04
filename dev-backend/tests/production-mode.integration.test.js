@@ -13,6 +13,9 @@ const baseUrl = "http://127.0.0.1:" + port;
 const ownerEmail = "owner@example.test";
 const ownerPassword = "Production-Test-Password-123!";
 const operationsToken = "ops-test-token-abcdefghijklmnopqrstuvwxyz-123456";
+const adminToken = "admin-test-token-abcdefghijklmnopqrstuvwxyz-123456";
+const earlyUserEmail = "early-user@example.test";
+const earlyUserPassword = "Early-User-Password-123!";
 
 let child = null;
 let capturedStdout = "";
@@ -45,6 +48,7 @@ async function startServer({ bootstrap = false } = {}) {
     VIRAL_AI_ENV: "production",
     VIRAL_AI_STATE_DRIVER: "sqlite",
     VIRAL_AI_OPERATIONS_TOKEN: operationsToken,
+    VIRAL_AI_ADMIN_TOKEN: adminToken,
     OPENAI_API_KEY: "",
     VIRAL_AI_TRANSLATION_API_KEY: "",
     VIRAL_AI_VOICE_API_KEY: ""
@@ -110,7 +114,7 @@ async function stopServer() {
   });
 }
 
-async function request(pathname, { method = "GET", body, accessToken, operationsToken: opsToken } = {}) {
+async function request(pathname, { method = "GET", body, accessToken, operationsToken: opsToken, adminToken: adminSecret } = {}) {
   const headers = {
     accept: "application/json",
     "x-viral-ai-client": "production-integration",
@@ -119,6 +123,7 @@ async function request(pathname, { method = "GET", body, accessToken, operations
   if (body !== undefined) headers["content-type"] = "application/json";
   if (accessToken) headers.authorization = "Bearer " + accessToken;
   if (opsToken) headers["x-viral-ai-ops-token"] = opsToken;
+  if (adminSecret) headers["x-viral-ai-admin-token"] = adminSecret;
 
   const response = await fetch(baseUrl + pathname, {
     method,
@@ -194,6 +199,52 @@ async function run() {
     assert.strictEqual(owner.response.status, 200, owner.text);
     assert(owner.payload?.accessToken);
 
+    const unauthorizedProvision = await request("/v1/internal/admin/users", {
+      method: "POST",
+      body: {
+        email: earlyUserEmail,
+        password: earlyUserPassword,
+        name: "Early User",
+        planId: "creator"
+      }
+    });
+    assert.strictEqual(unauthorizedProvision.response.status, 401);
+    assert.strictEqual(unauthorizedProvision.payload?.error?.code, "ADMIN_UNAUTHORIZED");
+
+    const provision = await request("/v1/internal/admin/users", {
+      method: "POST",
+      adminToken,
+      body: {
+        email: earlyUserEmail,
+        password: earlyUserPassword,
+        name: "Early User",
+        planId: "creator"
+      }
+    });
+    assert.strictEqual(provision.response.status, 201, provision.text);
+    assert.strictEqual(provision.payload?.user?.email, earlyUserEmail);
+    assert.strictEqual(provision.payload?.user?.planId, "creator");
+    assert.strictEqual(provision.payload?.quota?.totalMinutes, 500);
+    assert.strictEqual(provision.payload?.quota?.usedMinutes, 0);
+
+    const duplicateProvision = await request("/v1/internal/admin/users", {
+      method: "POST",
+      adminToken,
+      body: {
+        email: earlyUserEmail,
+        password: earlyUserPassword,
+        name: "Early User",
+        planId: "creator"
+      }
+    });
+    assert.strictEqual(duplicateProvision.response.status, 409);
+    assert.strictEqual(duplicateProvision.payload?.error?.code, "ACCOUNT_EXISTS");
+
+    const earlyUser = await login(earlyUserEmail, earlyUserPassword);
+    assert.strictEqual(earlyUser.response.status, 200, earlyUser.text);
+    assert.strictEqual(earlyUser.payload?.user?.email, earlyUserEmail);
+    assert.strictEqual(earlyUser.payload?.user?.planId, "creator");
+
     const billing = await request("/v1/billing/catalog", {
       accessToken: owner.payload.accessToken
     });
@@ -212,6 +263,10 @@ async function run() {
 
     const ownerAfterRestart = await login(ownerEmail, ownerPassword);
     assert.strictEqual(ownerAfterRestart.response.status, 200, ownerAfterRestart.text);
+
+    const earlyUserAfterRestart = await login(earlyUserEmail, earlyUserPassword);
+    assert.strictEqual(earlyUserAfterRestart.response.status, 200, earlyUserAfterRestart.text);
+    assert.strictEqual(earlyUserAfterRestart.payload?.user?.planId, "creator");
 
     console.log("Production mode integration tests passed.");
   } finally {
