@@ -10,10 +10,12 @@ const css = fs.readFileSync(path.join(root, "renderer", "core-capabilities.css")
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const bootstrap = fs.readFileSync(path.join(root, "renderer", "core-bootstrap.js"), "utf8");
 
-for (const page of ["ai-video", "automation", "workflow", "workflow-builder", "monitor"]) {
+for (const page of ["automation", "workflow", "workflow-builder", "monitor", "editor", "voice"]) {
   assert(guard.includes('"' + page + '"'), "Deferred page must be capability-guarded: " + page);
   assert(css.includes('[data-page="' + page + '"]'), "Deferred page must be hidden from the core UI: " + page);
 }
+
+assert(!css.includes('[data-page="ai-video"]'), "The production Core Editor route must remain visible.");
 
 for (const required of [
   'dataset.coreCapability = capability',
