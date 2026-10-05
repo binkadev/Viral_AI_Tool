@@ -1,0 +1,438 @@
+/* Core Product UX Refactor
+   This file intentionally overrides only the AI-video workspace. Backend/service UI
+   remains intact and is moved into collapsible advanced sections by core-editor.js. */
+
+#page.core-product-page {
+  padding-bottom: 28px;
+}
+
+.core-product-page > .core-editor-shell {
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr) 310px;
+  min-height:calc(100vh - 170px);
+  gap:12px;
+  align-items:stretch;
+}
+
+.core-editor-shell.left-collapsed { grid-template-columns:0 minmax(0,1fr) 310px; }
+.core-editor-shell.right-collapsed { grid-template-columns:220px minmax(0,1fr) 0; }
+.core-editor-shell.left-collapsed.right-collapsed { grid-template-columns:0 minmax(0,1fr) 0; }
+
+.core-left-panel,
+.core-right-panel,
+.core-center-panel {
+  min-width:0;
+  min-height:0;
+}
+
+.core-left-panel,
+.core-right-panel {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--surface);
+  box-shadow:var(--shadow-xs);
+}
+
+.core-left-panel { padding:12px; }
+.core-right-panel { padding:12px; }
+.core-editor-shell.left-collapsed .core-left-panel,
+.core-editor-shell.right-collapsed .core-right-panel {
+  visibility:hidden;
+  opacity:0;
+  overflow:hidden;
+  padding:0;
+  border:0;
+}
+
+.core-center-panel {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  overflow:hidden;
+}
+
+.core-panel-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.core-panel-head h3,
+.core-panel-head h4 { margin:0; }
+.core-panel-head h3 { font-size:12px; }
+.core-panel-head h4 { font-size:11px; }
+.core-panel-head p { margin:2px 0 0;color:var(--text-faint);font-size:8px; }
+
+.core-collapse-button {
+  width:30px;height:30px;
+  display:grid;place-items:center;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-solid);
+  color:var(--text-soft);
+  cursor:pointer;
+}
+
+.core-panel-restore {
+  position:absolute;
+  z-index:8;
+  top:8px;
+  width:30px;height:30px;
+  display:none;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:9px;
+  background:rgba(10,14,24,.76);
+  color:#fff;
+  cursor:pointer;
+  backdrop-filter:blur(8px);
+}
+.core-panel-restore.left { left:8px; }
+.core-panel-restore.right { right:8px; }
+.core-editor-shell.left-collapsed .core-panel-restore.left,
+.core-editor-shell.right-collapsed .core-panel-restore.right { display:grid; }
+
+.core-asset-card {
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.core-asset-card b { display:block;font-size:10px;word-break:break-word; }
+.core-asset-card span { display:block;margin-top:4px;color:var(--text-faint);font-size:8px;line-height:1.45; }
+.core-asset-empty { color:var(--text-faint);font-size:9px;line-height:1.5; }
+
+.core-workflow-list {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.core-workflow-step {
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+  padding:8px;
+  border-radius:10px;
+  border:1px solid transparent;
+  background:transparent;
+}
+.core-workflow-step .step-index {
+  width:22px;height:22px;
+  display:grid;place-items:center;
+  border-radius:50%;
+  background:var(--surface-strong);
+  color:var(--text-soft);
+  font-size:8px;
+  font-weight:800;
+}
+.core-workflow-step b { display:block;font-size:9px; }
+.core-workflow-step small { display:block;margin-top:2px;color:var(--text-faint);font-size:7px; }
+.core-workflow-step .step-state { font-size:7px;color:var(--text-faint); }
+.core-workflow-step.complete .step-index { background:color-mix(in srgb,var(--success) 16%,var(--surface-solid));color:var(--success); }
+.core-workflow-step.active,
+.core-workflow-step.ready { border-color:color-mix(in srgb,var(--accent) 24%,var(--line));background:color-mix(in srgb,var(--accent) 5%,var(--surface)); }
+.core-workflow-step.failed { border-color:color-mix(in srgb,var(--danger) 26%,var(--line));background:color-mix(in srgb,var(--danger) 5%,var(--surface)); }
+.core-workflow-step.blocked { opacity:.56; }
+
+/* Preview is the primary visual surface. No crop/cover/transform is allowed here. */
+.core-preview-frame {
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+  border:1px solid color-mix(in srgb,var(--line) 82%,#000);
+  border-radius:16px;
+  background:#080b12;
+  box-shadow:var(--shadow-sm);
+}
+
+.core-preview-frame .preview,
+.core-preview-frame .preview.preview-real,
+.core-preview-stage {
+  position:relative !important;
+  width:100% !important;
+  height:clamp(360px,52vh,720px) !important;
+  min-height:300px !important;
+  max-height:72vh !important;
+  aspect-ratio:auto !important;
+  overflow:hidden !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:#080b12 !important;
+  transform:none !important;
+}
+.core-preview-frame .preview::before,
+.core-preview-frame .preview::after { display:none !important; }
+
+.core-preview-frame .preview-video,
+.core-preview-stage video {
+  position:absolute !important;
+  inset:0 !important;
+  z-index:1 !important;
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  transform:none !important;
+  scale:1 !important;
+  margin:0 !important;
+  background:#080b12 !important;
+}
+
+.core-player-controls {
+  display:grid;
+  grid-template-columns:auto auto minmax(120px,1fr) auto auto;
+  gap:8px;
+  align-items:center;
+  padding:9px 10px;
+  border-top:1px solid rgba(255,255,255,.08);
+  background:#0c101a;
+  color:#e8edf7;
+}
+.core-player-controls button {
+  min-width:30px;height:30px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:8px;
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  cursor:pointer;
+}
+.core-player-controls button:disabled { opacity:.45;cursor:not-allowed; }
+.core-player-time { font-variant-numeric:tabular-nums;font-size:9px;color:#bac3d4;white-space:nowrap; }
+.core-player-seek {
+  width:100%;
+  accent-color:var(--accent);
+  cursor:pointer;
+}
+
+.core-timeline-panel {
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  padding:10px;
+  box-shadow:var(--shadow-xs);
+}
+.core-timeline-ruler {
+  position:relative;
+  height:42px;
+  margin-top:8px;
+  overflow:hidden;
+  border-radius:9px;
+  background:var(--surface-strong);
+  cursor:pointer;
+}
+.core-timeline-segment {
+  position:absolute;
+  top:8px;
+  height:26px;
+  min-width:2px;
+  border:0;
+  border-radius:5px;
+  background:color-mix(in srgb,var(--accent) 24%,var(--surface-solid));
+  opacity:.78;
+  cursor:pointer;
+}
+.core-timeline-segment.is-active { background:var(--accent);opacity:1; }
+.core-timeline-playhead {
+  position:absolute;
+  z-index:4;
+  top:0;bottom:0;
+  width:2px;
+  left:0;
+  background:#fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.25);
+  pointer-events:none;
+}
+
+.core-transcript-panel {
+  min-height:180px;
+  max-height:38vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  box-shadow:var(--shadow-xs);
+}
+.core-transcript-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+}
+.core-transcript-head b { font-size:10px; }
+.core-transcript-head span { color:var(--text-faint);font-size:8px; }
+.core-transcript-list {
+  overflow:auto;
+  padding:6px;
+  scroll-behavior:smooth;
+}
+.core-transcript-row {
+  display:grid;
+  grid-template-columns:54px minmax(0,1fr);
+  gap:8px;
+  align-items:start;
+  padding:7px;
+  border:1px solid transparent;
+  border-radius:9px;
+  cursor:pointer;
+}
+.core-transcript-row:hover { background:var(--surface-soft); }
+.core-transcript-row.is-active {
+  border-color:color-mix(in srgb,var(--accent) 32%,var(--line));
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface));
+}
+.core-transcript-row.is-edited::after {
+  content:"Edited";
+  grid-column:2;
+  color:var(--warning);
+  font-size:7px;
+}
+.core-transcript-time {
+  padding-top:6px;
+  color:var(--text-faint);
+  font-size:8px;
+  font-variant-numeric:tabular-nums;
+}
+.core-transcript-fields {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:5px;
+}
+.core-transcript-fields.has-translation { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.core-transcript-field {
+  width:100%;
+  min-height:38px;
+  resize:vertical;
+  padding:7px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface-solid);
+  color:var(--text);
+  font:inherit;
+  font-size:9px;
+  line-height:1.45;
+}
+.core-transcript-field:focus {
+  outline:none;
+  border-color:color-mix(in srgb,var(--accent) 45%,var(--line));
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 8%,transparent);
+}
+.core-transcript-empty {
+  padding:22px 14px;
+  text-align:center;
+  color:var(--text-faint);
+  font-size:9px;
+}
+
+.core-actions {
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+.core-action {
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+  width:100%;
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-solid);
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+}
+.core-action:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 28%,var(--line)); }
+.core-action:disabled { cursor:not-allowed;opacity:.52; }
+.core-action-icon {
+  width:28px;height:28px;
+  display:grid;place-items:center;
+  border-radius:8px;
+  background:var(--surface-strong);
+  color:var(--accent);
+  font-size:10px;
+}
+.core-action-copy b { display:block;font-size:9px; }
+.core-action-copy small { display:block;margin-top:2px;color:var(--text-faint);font-size:7px;line-height:1.35; }
+.core-action-state { font-size:7px;color:var(--text-faint); }
+.core-action.failed { border-color:color-mix(in srgb,var(--danger) 28%,var(--line)); }
+.core-action.complete .core-action-state { color:var(--success); }
+
+.core-properties-stack {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.core-properties-stack .stack { display:flex;flex-direction:column;gap:8px; }
+.core-properties-stack .mini-card { margin:0; }
+
+.core-advanced-services {
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+}
+.core-advanced-services > summary {
+  padding:9px 10px;
+  cursor:pointer;
+  color:var(--text-soft);
+  font-size:8px;
+  font-weight:700;
+}
+.core-advanced-services-body { padding:0 8px 8px; }
+.core-advanced-services-body > .card { margin:8px 0 0;box-shadow:none; }
+
+/* Hide the old top-level workflow/editor headings after their real DOM nodes are
+   moved into the new workspace. They remain available to the existing handlers. */
+.core-product-page .core-source-hidden { display:none !important; }
+
+.core-preview-frame:fullscreen,
+.core-preview-frame:-webkit-full-screen {
+  width:100vw !important;
+  height:100vh !important;
+  border-radius:0;
+  background:#000;
+}
+.core-preview-frame:fullscreen .preview,
+.core-preview-frame:-webkit-full-screen .preview {
+  height:calc(100vh - 50px) !important;
+  max-height:none !important;
+}
+
+@media (max-width:1380px) {
+  .core-product-page > .core-editor-shell { grid-template-columns:190px minmax(0,1fr) 270px; }
+  .core-editor-shell.left-collapsed { grid-template-columns:0 minmax(0,1fr) 270px; }
+  .core-editor-shell.right-collapsed { grid-template-columns:190px minmax(0,1fr) 0; }
+}
+
+@media (max-width:1120px) {
+  .core-product-page > .core-editor-shell,
+  .core-editor-shell.left-collapsed,
+  .core-editor-shell.right-collapsed,
+  .core-editor-shell.left-collapsed.right-collapsed {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .core-left-panel,
+  .core-right-panel { max-height:260px; }
+  .core-editor-shell.left-collapsed .core-left-panel,
+  .core-editor-shell.right-collapsed .core-right-panel { display:none; }
+  .core-preview-frame .preview,
+  .core-preview-frame .preview.preview-real,
+  .core-preview-stage { height:clamp(300px,48vh,620px) !important; }
+}
