@@ -1,9 +1,10 @@
 /* Core capability guard: never present deferred/prototype actions as production-ready. */
-[data-page="ai-video"],
 [data-page="automation"],
 [data-page="workflow"],
 [data-page="workflow-builder"],
-[data-page="monitor"]{
+[data-page="monitor"],
+[data-page="editor"],
+[data-page="voice"]{
   display:none!important;
 }
 
