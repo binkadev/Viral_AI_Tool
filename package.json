@@ -31,7 +31,9 @@
     "test:render-e2e": "node tests/render-pipeline.integration.test.js",
     "release:preflight": "node scripts/release-preflight.js",
     "test:deployment-config": "node tests/deployment-config.test.js",
-    "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js"
+    "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js",
+    "test:core-editor": "node tests/core-editor.test.js",
+    "check:core-editor": "node --check renderer/core-editor-model.js && node --check renderer/core-editor.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
