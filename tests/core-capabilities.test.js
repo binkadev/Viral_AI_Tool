@@ -18,17 +18,25 @@ for (const page of ["automation", "workflow", "workflow-builder", "monitor", "ed
 assert(!css.includes('[data-page="ai-video"]'), "The production Core Editor route must remain visible.");
 
 for (const required of [
-  'dataset.coreCapability = capability',
+  'setDatasetIfChanged(button, "coreCapability", capability)',
   'mark(urlAnalyze, "coming-soon")',
   'mark(legacyTts, "coming-soon")',
   'document.querySelectorAll(".nav-badge").forEach(node => node.remove())',
   'button.disabled || button.getAttribute("aria-disabled") === "true"',
   'data-job-action',
   'data-core-play',
-  'data-core-fullscreen'
+  'data-core-fullscreen',
+  'new MutationObserver(queueScan)',
+  'observer.observe(page, { childList: true, subtree: true })',
+  'requestAnimationFrame(() => {'
 ]) {
   assert(guard.includes(required), "Capability guard is missing behavior: " + required);
 }
+
+assert(!guard.includes('attributeFilter: ["disabled", "aria-disabled"]'),
+  "Capability guard must not observe the attributes it mutates; that can freeze the renderer.");
+assert(!guard.includes("new MutationObserver(scan)"),
+  "Capability observer must be scheduled/coalesced instead of recursively scanning synchronously.");
 
 assert(bootstrap.includes("prototypeNames"), "Startup bootstrap must continue removing prototype jobs from persisted state.");
 assert(index.includes('href="core-capabilities.css"'));
