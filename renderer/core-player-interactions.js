@@ -2,6 +2,7 @@
   "use strict";
 
   let activeScrub = null;
+  let suppressClickUntil = 0;
 
   function activeVideoFor(node) {
     const host = node?.closest?.(".preview.core-player-host, .preview.preview-real");
@@ -22,6 +23,14 @@
   function wireTrack(track) {
     if (!(track instanceof HTMLElement) || track.dataset.coreScrubWired === "true") return;
     track.dataset.coreScrubWired = "true";
+
+    // A segment already owns a click handler in the base player. Pointer scrubbing
+    // must win so a synthetic click after pointerup cannot jump back to segment start.
+    track.addEventListener("click", event => {
+      if (Date.now() > suppressClickUntil) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
 
     track.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
@@ -45,6 +54,7 @@
       try { track.releasePointerCapture(event.pointerId); } catch {}
       const video = activeScrub.video;
       activeScrub = null;
+      suppressClickUntil = Date.now() + 350;
       video.dispatchEvent(new Event("seeked"));
     };
 
@@ -52,6 +62,7 @@
     track.addEventListener("pointercancel", event => {
       if (!activeScrub || activeScrub.track !== track || activeScrub.pointerId !== event.pointerId) return;
       activeScrub = null;
+      suppressClickUntil = Date.now() + 350;
     });
   }
 
