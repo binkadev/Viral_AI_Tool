@@ -1,7 +1,11 @@
 (function installCoreCapabilityGuard() {
   "use strict";
 
-  const DEFERRED_PAGES = new Set(["ai-video", "automation", "workflow", "workflow-builder", "monitor"]);
+  // `ai-video` is the legacy internal route name for the real Core Editor
+  // (Speech -> Translation -> Voice -> Render). Do not hide it as a prototype.
+  // Standalone legacy editor/voice pages remain hidden to avoid duplicate or
+  // decorative surfaces getting ahead of the production workflow.
+  const DEFERRED_PAGES = new Set(["automation", "workflow", "workflow-builder", "monitor", "editor", "voice"]);
   const FUNCTIONAL_IDS = new Set([
     "quickProject",
     "langMenuButton",
