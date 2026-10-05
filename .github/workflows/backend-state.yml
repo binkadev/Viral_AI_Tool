@@ -45,6 +45,9 @@ jobs:
       - name: Test Cloud speech upload routing
         run: npm run test:cloud-speech-upload
 
+      - name: Test core player synchronization
+        run: npm run test:core-player
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -60,8 +63,11 @@ jobs:
           node --check services/update/release-policy.js
           node --check services/update/update-client.js
           node --check tests/release-policy.test.js
+          node --check tests/core-player.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
           node --check renderer/i18n.js
+          node --check renderer/core-player-model.js
+          node --check renderer/core-player.js
           node --check scripts/release-preflight.js
