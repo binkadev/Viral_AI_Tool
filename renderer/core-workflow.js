@@ -198,6 +198,7 @@
   const start = () => {
     const page = document.getElementById("page");
     if (page) observer.observe(page, { childList: true, subtree: true, attributes: false });
+    window.addEventListener("viral-ai:core-state-changed", queueRefresh);
     queueRefresh();
     window.setInterval(queueRefresh, 900);
   };
