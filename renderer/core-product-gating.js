@@ -36,15 +36,15 @@
     if (navButton) {
       const spans = navButton.querySelectorAll("span");
       const label = spans.length > 1 ? spans[1] : null;
-      if (label) label.textContent = c.editor;
+      if (label && label.textContent !== c.editor) label.textContent = c.editor;
       navButton.title = c.openEditor;
     }
 
     if (state.page === "ai-video") {
       const title = document.getElementById("pageTitle");
       const breadcrumb = document.getElementById("breadcrumb");
-      if (title) title.textContent = c.editor;
-      if (breadcrumb) breadcrumb.textContent = c.breadcrumb;
+      if (title && title.textContent !== c.editor) title.textContent = c.editor;
+      if (breadcrumb && breadcrumb.textContent !== c.breadcrumb) breadcrumb.textContent = c.breadcrumb;
     }
 
     document.querySelectorAll('#page button[data-page="ai-video"], #page .tool-card[data-page="ai-video"], #page .suggestion-row[data-page="ai-video"]').forEach(node => {
