@@ -54,6 +54,15 @@ assert.strictEqual(edited.result.segments[0].translatedText, "xin chao", "editor
 assert.strictEqual(edited.result.segments[0].status, "source-edited");
 assert.strictEqual(edited.result.text, "hello edited world");
 
+const reopened = model.normalizeDocument(JSON.parse(JSON.stringify(edited.result)));
+assert.strictEqual(reopened.segments[0].sourceText, "hello edited", "edited text must survive project reopen");
+assert.strictEqual(reopened.segments[0].start, 1.25, "start timestamp must survive project reopen");
+assert.strictEqual(reopened.segments[0].end, 2.75, "end timestamp must survive project reopen");
+assert.strictEqual(reopened.segments[0].speaker, "S1", "speaker must survive project reopen");
+assert.strictEqual(reopened.segments[0].voice, "alloy", "voice assignment must survive project reopen");
+assert.strictEqual(reopened.segments[0].translatedText, "xin chao", "translated text field must survive project reopen");
+assert.strictEqual(reopened.segments[0].status, "source-edited", "segment status must survive project reopen");
+
 const same = model.applySourceEdit(edited.result, { segmentId: "s1", text: "hello edited" });
 assert.strictEqual(same.changed, false);
 
@@ -81,4 +90,4 @@ assert(workflow.includes('window.addEventListener("viral-ai:core-state-changed",
 assert(index.includes('src="core-transcript-model.js"'));
 assert(index.includes('src="core-transcript-state.js"'));
 
-console.log("Core transcript edit model and state invalidation tests passed.");
+console.log("Core transcript editing, state invalidation and reopen persistence tests passed.");
