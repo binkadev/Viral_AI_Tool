@@ -27,6 +27,7 @@ function createCloudConfigStore({
     } catch {}
 
     const envUrl = normalizeUrl(process.env.VIRAL_AI_CLOUD_URL || "");
+    const envEnvironment = normalizeEnvironment(String(process.env.VIRAL_AI_CLOUD_ENV || "").toLowerCase());
     const embeddedUrl = normalizeUrl(releaseBackendUrl || "");
     const developerSettingsVisible = !isPackaged || process.env.VIRAL_AI_DEV_MODE === "1";
 
@@ -46,9 +47,11 @@ function createCloudConfigStore({
       normalizeUrl(raw?.backendUrl || "");
 
     const environment =
-      source === "release"
-        ? normalizeEnvironment(releaseEnvironment)
-        : normalizeEnvironment(raw?.environment);
+      source === "environment"
+        ? envEnvironment
+        : source === "release"
+          ? normalizeEnvironment(releaseEnvironment)
+          : normalizeEnvironment(raw?.environment);
 
     return {
       environment,
