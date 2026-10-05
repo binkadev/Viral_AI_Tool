@@ -1,0 +1,50 @@
+/* Stability layer for the Core Editor.
+   Keep capability/state corrections separate from the visual refactor so the
+   production editor can be rolled back independently if needed. */
+
+.core-workflow-step.stale,
+.core-action.stale {
+  border-color:color-mix(in srgb,var(--warning) 34%,var(--line));
+  background:color-mix(in srgb,var(--warning) 7%,var(--surface));
+}
+
+.core-workflow-step.stale .step-state,
+.core-action.stale .core-action-state {
+  color:var(--warning);
+}
+
+.core-stale-notice {
+  margin:8px 10px 2px;
+  padding:8px 10px;
+  border:1px solid color-mix(in srgb,var(--warning) 30%,var(--line));
+  border-radius:9px;
+  background:color-mix(in srgb,var(--warning) 7%,var(--surface));
+  color:var(--text-soft);
+  font-size:8px;
+  line-height:1.45;
+}
+
+.core-transcript-panel.is-downstream-stale [data-segment-field="translation"] {
+  opacity:.58;
+  cursor:not-allowed;
+}
+
+/* Final containment guard: preview dimensions may change when side panels,
+   the desktop window or fullscreen state changes, but media geometry never
+   switches to cover/crop or inherits a zoom transform from legacy styles. */
+.core-editor-shell .core-preview-frame,
+.core-editor-shell .core-preview-stage {
+  min-width:0;
+  min-height:0;
+}
+
+.core-editor-shell .core-preview-frame .preview-video {
+  width:100% !important;
+  height:100% !important;
+  object-fit:contain !important;
+  object-position:50% 50% !important;
+  transform:none !important;
+  translate:none !important;
+  rotate:none !important;
+  scale:1 !important;
+}
