@@ -76,7 +76,7 @@ assert.strictEqual(derived.controls.render.enabled, false);
 for (const selector of ["#speechStart", "#translationStart", "#voiceStart", "#render", "#export"]) {
   assert(workflow.includes(selector), "Core workflow must gate " + selector);
 }
-assert(workflow.includes('data.coreCapability = "coming-soon"'), "Unimplemented controls must be labeled coming soon.");
+assert(workflow.includes('dataset.coreCapability = "coming-soon"'), "Unimplemented controls must be labeled coming soon.");
 assert(workflow.includes('event.stopImmediatePropagation()'), "Quick project must not fall through to the legacy AI-video route.");
 assert(coreEditorCss.includes('[data-page="ai-video"]'), "AI Video entry points must stay out of the core UI pass.");
 assert(coreEditorCss.includes('[data-page="workflow"]'), "Workflow Builder entry points must stay out of the core UI pass.");
