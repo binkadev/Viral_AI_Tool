@@ -37,6 +37,20 @@
     return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
   }
 
+  function fitContain(mediaWidth, mediaHeight, boxWidth, boxHeight) {
+    const mw = Math.max(0, finite(mediaWidth, 0));
+    const mh = Math.max(0, finite(mediaHeight, 0));
+    const bw = Math.max(0, finite(boxWidth, 0));
+    const bh = Math.max(0, finite(boxHeight, 0));
+    if (!mw || !mh || !bw || !bh) return { width: 0, height: 0, scale: 0 };
+    const scale = Math.min(bw / mw, bh / mh);
+    return {
+      width: mw * scale,
+      height: mh * scale,
+      scale
+    };
+  }
+
   function normalizeSegments(segments, duration = 0) {
     const safeDuration = Math.max(0, finite(duration, 0));
     const list = Array.isArray(segments) ? segments : [];
@@ -87,6 +101,7 @@
     clampTime,
     parseTimeLabel,
     formatClock,
+    fitContain,
     normalizeSegments,
     activeSegmentIndex,
     seekRatio
