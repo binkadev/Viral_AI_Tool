@@ -38,7 +38,8 @@
     "test:core-layout": "node tests/core-layout.test.js",
     "test:core-capabilities": "node tests/core-capabilities.test.js",
     "test:core-job-model": "node tests/core-job-model.test.js",
-    "test:core-media-restore": "node tests/core-media-restore.test.js"
+    "test:core-media-restore": "node tests/core-media-restore.test.js",
+    "test:core-product-shell": "node tests/core-product-shell.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
