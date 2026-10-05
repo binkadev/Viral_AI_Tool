@@ -35,7 +35,8 @@
     "test:core-player": "node tests/core-player.test.js",
     "test:core-transcript": "node tests/core-transcript.test.js",
     "test:core-workflow": "node tests/core-workflow.test.js",
-    "test:core-layout": "node tests/core-layout.test.js"
+    "test:core-layout": "node tests/core-layout.test.js",
+    "test:core-capabilities": "node tests/core-capabilities.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
