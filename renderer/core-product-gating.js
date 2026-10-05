@@ -2,6 +2,7 @@
   "use strict";
 
   const Jobs = globalThis.CoreJobStatus;
+  const Errors = globalThis.CoreErrorState;
   if (!Jobs) return;
 
   const HIDDEN_MAIN_PAGES = new Set(["voice", "editor", "automation"]);
@@ -91,6 +92,11 @@
       button.classList.remove("active", "ready", "complete");
       button.classList.add("failed");
       setStateText(stateNode, display);
+      if (Errors) {
+        const friendly = Errors.describe(job?.failureCode, state.locale);
+        button.title = friendly.title + " — " + friendly.body;
+        button.dataset.retryable = friendly.retryable ? "true" : "false";
+      }
     }
     if (stateCode === "cancelled" || stateCode === "interrupted") {
       setStateText(stateNode, display);
@@ -139,8 +145,6 @@
     syncGenericJobStates();
   }
 
-  // render() rebuilds navigation/page content. Normalize capability exposure after
-  // every render without replacing any backend or workflow implementation.
   const observer = new MutationObserver(() => normalizeCoreProductSurface());
   observer.observe(document.body, { childList: true, subtree: true });
 
