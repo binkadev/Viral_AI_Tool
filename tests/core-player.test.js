@@ -22,12 +22,16 @@ for (const media of [
   [1920, 1080],
   [1080, 1920],
   [1080, 1080],
-  [3840, 1600]
+  [3840, 1600],
+  [720, 1280],
+  [2560, 1080]
 ]) {
-  const fitted = model.fitContain(media[0], media[1], 960, 540);
-  assert(fitted.width <= 960 + 0.001, "contain width must remain inside preview");
-  assert(fitted.height <= 540 + 0.001, "contain height must remain inside preview");
-  assert(Math.abs((fitted.width / fitted.height) - (media[0] / media[1])) < 0.0001, "contain fit must preserve aspect ratio");
+  for (const box of [[960, 540], [540, 960], [720, 720], [1230, 480]]) {
+    const fitted = model.fitContain(media[0], media[1], box[0], box[1]);
+    assert(fitted.width <= box[0] + 0.001, "contain width must remain inside preview");
+    assert(fitted.height <= box[1] + 0.001, "contain height must remain inside preview");
+    assert(Math.abs((fitted.width / fitted.height) - (media[0] / media[1])) < 0.0001, "contain fit must preserve aspect ratio");
+  }
 }
 
 const segments = model.normalizeSegments([
@@ -43,6 +47,7 @@ assert.strictEqual(model.activeSegmentIndex(segments, 0), 0);
 assert.strictEqual(model.activeSegmentIndex(segments, 1.99), 0);
 assert.strictEqual(model.activeSegmentIndex(segments, 2), 1);
 assert.strictEqual(model.activeSegmentIndex(segments, 7.9), 2);
+assert.strictEqual(model.activeSegmentIndex(segments, 8), 2);
 
 for (const required of [
   "object-fit:contain!important",
@@ -50,6 +55,9 @@ for (const required of [
   "transform:none!important",
   ":fullscreen",
   ".transcript-row.is-active",
+  ".core-player-timeline",
+  ".core-timeline-playhead",
+  ".core-timeline-segment.is-active",
   "max-height:min(42vh,420px)"
 ]) {
   assert(css.includes(required), "Core editor CSS is missing: " + required);
@@ -59,19 +67,27 @@ for (const eventName of ["loadedmetadata", "durationchange", "timeupdate", "seek
   assert(player.includes('"' + eventName + '"'), "Player must subscribe to " + eventName);
 }
 for (const required of [
-  "video.currentTime =",
+  "video.currentTime = target",
+  "video.currentTime, video.duration",
   "model.activeSegmentIndex",
   "scrollIntoView",
   "contenteditable",
   "requestFullscreen",
   "video.controls = false",
-  "viral-ai:transcript-edit"
+  "viral-ai:transcript-edit",
+  "requestVideoFrameCallback",
+  "ResizeObserver",
+  "data-core-timeline-track",
+  "data-core-playhead",
+  "seekVideo(video, ratio * video.duration)",
+  "video.currentTime is the single source of truth"
 ]) {
   assert(player.includes(required), "Core player is missing behavior: " + required);
 }
 
+assert(!player.includes("setInterval("), "Player synchronization must not use an independent timer clock.");
 assert(index.includes('href="core-editor.css"'));
 assert(index.includes('src="core-player-model.js"'));
 assert(index.includes('src="core-player.js"'));
 
-console.log("Core player geometry and synchronization tests passed.");
+console.log("Core player geometry, timeline and synchronization tests passed.");
