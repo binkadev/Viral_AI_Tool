@@ -1,0 +1,88 @@
+html.core-left-collapsed{--sidebar:70px}
+
+.core-panel-toggle{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface);
+  color:var(--text-soft);
+  cursor:pointer;
+  box-shadow:var(--shadow-xs);
+}
+.core-panel-toggle:hover{background:var(--surface-solid);color:var(--text);border-color:var(--line-strong)}
+
+.core-left-toggle{margin-inline-end:10px}
+
+html.core-left-collapsed .sidebar{
+  padding-inline:9px;
+}
+html.core-left-collapsed .sidebar .brand{
+  justify-content:center;
+  padding-inline:0;
+}
+html.core-left-collapsed .sidebar .brand > div:not(.brand-mark),
+html.core-left-collapsed .sidebar .workspace,
+html.core-left-collapsed .sidebar .sidebar-bottom,
+html.core-left-collapsed .sidebar .nav-group,
+html.core-left-collapsed .sidebar .nav-item > span:not(.nav-icon){
+  display:none!important;
+}
+html.core-left-collapsed .sidebar .nav-item{
+  justify-content:center;
+  padding-inline:0;
+}
+html.core-left-collapsed .sidebar .nav-icon{
+  margin:0;
+}
+
+.core-editor-layout{
+  grid-template-columns:minmax(0,1fr) clamp(270px,24vw,340px)!important;
+  align-items:start;
+}
+.core-editor-layout.core-right-collapsed{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+.core-editor-layout.core-right-collapsed > .core-properties-panel{
+  display:none!important;
+}
+
+.core-right-toggle{
+  position:absolute;
+  z-index:7;
+  top:12px;
+  right:12px;
+  background:rgba(8,11,18,.72);
+  border-color:rgba(255,255,255,.12);
+  color:#fff;
+  backdrop-filter:blur(12px);
+}
+
+.core-transcript-dock{
+  grid-column:1 / -1;
+  width:100%;
+  min-width:0;
+  margin-top:0!important;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--surface);
+  box-shadow:var(--shadow-xs);
+}
+
+.core-transcript-dock .speech-result-head{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:var(--surface);
+}
+
+@media(max-width:980px){
+  html.core-left-collapsed{--sidebar:0px}
+  html.core-left-collapsed .sidebar{display:none}
+  .core-editor-layout{grid-template-columns:minmax(0,1fr)!important}
+  .core-properties-panel{order:3}
+  .core-transcript-dock{order:2}
+}
