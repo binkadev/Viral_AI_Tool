@@ -103,8 +103,9 @@
       }
     }
 
-    if (time < finite(segments[0]?.start)) return 0;
-    return segments.length - 1;
+    // Silence is a real playback state. Do not highlight an unrelated transcript
+    // row before the first utterance, between segments, or after the last one.
+    return -1;
   }
 
   function isBusy(job) {
@@ -135,14 +136,19 @@
     voiceJob,
     voiceResult,
     jobs,
-    editorTouched = false
+    editorTouched = false,
+    translationStale = false,
+    voiceStale = false
   } = {}) {
     const imported = Boolean(source?.sourcePath && source?.fileState !== "missing" && source?.fileState !== "trashed");
     const analyzed = imported && Boolean(source?.meta) && source?.mediaState !== "reading" && source?.mediaState !== "failed";
     const transcriptReady = Boolean(speechResult?.segments?.length || String(speechResult?.text || "").trim());
-    const localized = Boolean(translationResult?.segments?.length);
-    const voiced = Boolean(voiceResult?.segments?.length);
-    const rendered = completedRenderForSource(jobs, source?.sourcePath);
+    const hasTranslation = Boolean(translationResult?.segments?.length);
+    const hasVoice = Boolean(voiceResult?.segments?.length);
+    const localized = hasTranslation && !translationStale;
+    const voiced = hasVoice && localized && !voiceStale;
+    const existingRender = completedRenderForSource(jobs, source?.sourcePath);
+    const rendered = existingRender && !translationStale && !voiceStale ? existingRender : null;
 
     const status = (complete, busy, hasFailed, ready) => {
       if (complete) return "complete";
@@ -174,12 +180,16 @@
       },
       {
         id: "localize",
-        status: status(localized, isBusy(translationJob) || isBusy(voiceJob), failed(translationJob) || failed(voiceJob), transcriptReady),
+        status: translationStale && hasTranslation
+          ? "stale"
+          : status(localized, isBusy(translationJob) || isBusy(voiceJob), failed(translationJob) || failed(voiceJob), transcriptReady),
         enabled: transcriptReady
       },
       {
         id: "render",
-        status: status(Boolean(rendered), false, false, localized && voiced),
+        status: (translationStale || voiceStale) && (hasTranslation || hasVoice || existingRender)
+          ? "stale"
+          : status(Boolean(rendered), false, false, localized && voiced),
         enabled: localized && voiced,
         rendered
       }
@@ -189,6 +199,10 @@
       imported,
       analyzed,
       transcriptReady,
+      hasTranslation,
+      hasVoice,
+      translationStale: Boolean(translationStale),
+      voiceStale: Boolean(voiceStale),
       localized,
       voiced,
       rendered,
