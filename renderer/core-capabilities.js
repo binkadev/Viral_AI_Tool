@@ -45,23 +45,42 @@
         };
   }
 
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
+  function setDatasetIfChanged(node, key, value) {
+    if (!(node instanceof HTMLElement)) return;
+    const next = String(value);
+    if (node.dataset[key] !== next) node.dataset[key] = next;
+  }
+
+  function setDisabledIfChanged(button, value) {
+    const next = Boolean(value);
+    if (button.disabled !== next) button.disabled = next;
+  }
+
   function mark(button, capability, reason = "") {
     if (!(button instanceof HTMLButtonElement)) return;
-    button.dataset.coreCapability = capability;
+    setDatasetIfChanged(button, "coreCapability", capability);
 
     if (capability === "coming-soon") {
-      button.disabled = true;
-      button.setAttribute("aria-disabled", "true");
-      button.dataset.coreDisabledReason = reason || copy().comingSoon;
-      button.title = button.dataset.coreDisabledReason;
+      const disabledReason = reason || copy().comingSoon;
+      setDisabledIfChanged(button, true);
+      setAttrIfChanged(button, "aria-disabled", "true");
+      setDatasetIfChanged(button, "coreDisabledReason", disabledReason);
+      if (button.title !== disabledReason) button.title = disabledReason;
       button.classList.add("core-coming-soon-control");
       return;
     }
 
     if (capability === "disabled") {
-      button.setAttribute("aria-disabled", "true");
-      button.dataset.coreDisabledReason = reason || button.title || copy().disabled;
-      if (!button.title) button.title = button.dataset.coreDisabledReason;
+      const disabledReason = reason || button.title || copy().disabled;
+      setAttrIfChanged(button, "aria-disabled", "true");
+      setDatasetIfChanged(button, "coreDisabledReason", disabledReason);
+      if (!button.title) button.title = disabledReason;
       return;
     }
 
@@ -72,8 +91,8 @@
     document.querySelectorAll("[data-page]").forEach(node => {
       if (!(node instanceof HTMLElement)) return;
       if (!DEFERRED_PAGES.has(String(node.dataset.page || ""))) return;
-      node.hidden = true;
-      node.setAttribute("aria-hidden", "true");
+      if (!node.hidden) node.hidden = true;
+      setAttrIfChanged(node, "aria-hidden", "true");
       if (node instanceof HTMLButtonElement) mark(node, "coming-soon");
     });
 
@@ -86,9 +105,9 @@
     // until the values are backed by real persisted jobs/usage data.
     document.querySelectorAll(".dashboard-stats").forEach(node => {
       if (!(node instanceof HTMLElement)) return;
-      node.hidden = true;
-      node.setAttribute("aria-hidden", "true");
-      node.dataset.coreCapability = "coming-soon";
+      if (!node.hidden) node.hidden = true;
+      setAttrIfChanged(node, "aria-hidden", "true");
+      setDatasetIfChanged(node, "coreCapability", "coming-soon");
     });
   }
 
@@ -136,12 +155,28 @@
     classifyCoreButtons();
   }
 
-  const observer = new MutationObserver(scan);
+  let scanQueued = false;
+  function queueScan() {
+    if (scanQueued) return;
+    scanQueued = true;
+    requestAnimationFrame(() => {
+      scanQueued = false;
+      scan();
+    });
+  }
+
+  const observer = new MutationObserver(queueScan);
   const start = () => {
     const page = document.getElementById("page");
     const nav = document.getElementById("nav");
-    if (page) observer.observe(page, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
+
+    // Observe structural rerenders only. Watching `disabled` / `aria-disabled`
+    // while the guard itself writes those attributes can create a self-triggering
+    // MutationObserver loop that starves the renderer event loop.
+    if (page) observer.observe(page, { childList: true, subtree: true });
     if (nav) observer.observe(nav, { childList: true, subtree: true });
+
+    window.addEventListener("viral-ai:core-state-changed", queueScan);
     scan();
   };
 
