@@ -39,8 +39,11 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci
+      - name: Install locked dependencies for contract tests
+        # The desktop app intentionally ships a Windows-only sherpa runtime.
+        # Linux CI does not execute that native binary; --force lets npm install
+        # the lockfile so cross-platform JS/backend contracts can still run.
+        run: npm ci --force
 
       - name: Keep production Cloud speech regression green
         run: npm run test:cloud-speech-upload
