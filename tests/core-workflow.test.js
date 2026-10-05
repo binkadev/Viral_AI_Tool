@@ -57,15 +57,38 @@ assert.strictEqual(derived.controls.voice.enabled, true);
 assert.strictEqual(derived.controls.render.enabled, true);
 assert.strictEqual(derived.controls.export.enabled, false);
 
+const rendering = {
+  id: "render-working",
+  isRenderOutput: true,
+  sourcePath: source.sourcePath,
+  outputPath: "C:/output.partial.mp4",
+  status: "processing"
+};
+derived = model.derive({ jobs: [source, rendering], speech: { result: transcript }, translation: { result: translated } });
+assert.strictEqual(derived.jobs.render, "processing");
+assert.strictEqual(derived.stages[5].status, "processing");
+assert.strictEqual(derived.controls.speech.enabled, false);
+assert.strictEqual(derived.controls.translate.enabled, false);
+assert.strictEqual(derived.controls.voice.enabled, false);
+assert.strictEqual(derived.controls.render.enabled, false);
+assert.strictEqual(derived.controls.export.enabled, false);
+
 const output = {
   id: "render-1",
   isRenderOutput: true,
+  sourcePath: source.sourcePath,
   outputPath: "C:/output.mp4",
   status: "completed"
 };
 derived = model.derive({ jobs: [source, output], speech: { result: transcript }, translation: { result: translated } });
 assert.strictEqual(derived.stages[5].status, "completed");
 assert.strictEqual(derived.controls.export.enabled, true);
+
+const failedRender = { ...output, id: "render-failed", status: "failed" };
+derived = model.derive({ jobs: [source, failedRender], speech: { result: transcript }, translation: { result: translated } });
+assert.strictEqual(derived.jobs.render, "failed");
+assert.strictEqual(derived.stages[5].status, "failed");
+assert.strictEqual(derived.controls.export.enabled, false);
 
 const missing = { ...source, fileState: "missing" };
 derived = model.derive({ jobs: [missing], speech: { result: transcript }, translation: { result: translated } });
@@ -86,4 +109,4 @@ assert(index.includes('href="core-workflow.css"'));
 assert(index.includes('src="core-workflow-model.js"'));
 assert(index.includes('src="core-workflow.js"'));
 
-console.log("Core workflow gating tests passed.");
+console.log("Core workflow and render gating tests passed.");
