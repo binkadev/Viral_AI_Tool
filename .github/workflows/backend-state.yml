@@ -45,6 +45,9 @@ jobs:
       - name: Test Cloud speech upload routing
         run: npm run test:cloud-speech-upload
 
+      - name: Test reusable core async states
+        run: npm run test:core-job-model
+
       - name: Test core player synchronization
         run: npm run test:core-player
 
@@ -56,6 +59,9 @@ jobs:
 
       - name: Test core editor layout
         run: npm run test:core-layout
+
+      - name: Test core capability guard
+        run: npm run test:core-capabilities
 
       - name: Syntax check hardened backend
         run: |
@@ -72,19 +78,24 @@ jobs:
           node --check services/update/release-policy.js
           node --check services/update/update-client.js
           node --check tests/release-policy.test.js
+          node --check tests/core-job-model.test.js
           node --check tests/core-player.test.js
           node --check tests/core-transcript.test.js
           node --check tests/core-workflow.test.js
           node --check tests/core-layout.test.js
+          node --check tests/core-capabilities.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
           node --check renderer/i18n.js
+          node --check renderer/core-job-model.js
           node --check renderer/core-player-model.js
           node --check renderer/core-player.js
+          node --check renderer/core-player-interactions.js
           node --check renderer/core-transcript-model.js
           node --check renderer/core-transcript-state.js
           node --check renderer/core-workflow-model.js
           node --check renderer/core-workflow.js
           node --check renderer/core-layout.js
+          node --check renderer/core-capabilities.js
           node --check scripts/release-preflight.js
