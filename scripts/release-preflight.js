@@ -13,26 +13,14 @@ function check(name, ok, detail) {
   checks.push({ name, ok: Boolean(ok), detail: String(detail || "") });
 }
 
-check(
-  "Version format",
-  /^\d+\.\d+\.\d+$/.test(pkg.version),
-  pkg.version
-);
+check("Version format", /^\d+\.\d+\.\d+$/.test(pkg.version), pkg.version);
 check(
   "Lockfile version",
   lock.version === pkg.version && lock.packages?.[""]?.version === pkg.version,
   "package=" + pkg.version + " lock=" + lock.version + " root=" + (lock.packages?.[""]?.version || "missing")
 );
-check(
-  "Changelog entry",
-  changelog.includes("## " + pkg.version),
-  "CHANGELOG.md contains ## " + pkg.version
-);
-check(
-  "Windows icon",
-  fs.existsSync(path.join(root, pkg.build?.win?.icon || "")),
-  pkg.build?.win?.icon || "missing"
-);
+check("Changelog entry", changelog.includes("## " + pkg.version), "CHANGELOG.md contains ## " + pkg.version);
+check("Windows icon", fs.existsSync(path.join(root, pkg.build?.win?.icon || "")), pkg.build?.win?.icon || "missing");
 check(
   "Stable manifest URL",
   releaseInfo.updateManifestUrl === "https://github.com/binkadev/Viral_AI_Tool/releases/latest/download/RELEASE-MANIFEST.json",
@@ -43,11 +31,7 @@ check(
   releaseInfo.releasePageUrl === "https://github.com/binkadev/Viral_AI_Tool/releases/latest",
   releaseInfo.releasePageUrl
 );
-check(
-  "Electron builder publish disabled",
-  String(pkg.scripts?.dist || "").includes("--publish never"),
-  pkg.scripts?.dist || "missing"
-);
+check("Electron builder publish disabled", String(pkg.scripts?.dist || "").includes("--publish never"), pkg.scripts?.dist || "missing");
 
 const commands = [
   ["Release policy", ["npm", ["run", "test:release-policy"]]],
@@ -63,23 +47,17 @@ const commands = [
   ["Core transcript editing", ["npm", ["run", "test:core-transcript"]]],
   ["Core workflow gating", ["npm", ["run", "test:core-workflow"]]],
   ["Core editor layout", ["npm", ["run", "test:core-layout"]]],
-  ["Core capability guard", ["npm", ["run", "test:core-capabilities"]]]
+  ["Core capability guard", ["npm", ["run", "test:core-capabilities"]]],
+  ["Core project reopen recovery", ["npm", ["run", "test:core-media-restore"]]]
 ];
 
 for (const [name, [command, args]] of commands) {
   const bin = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;
-  const result = spawnSync(bin, args, {
-    cwd: root,
-    encoding: "utf8",
-    stdio: "pipe"
-  });
-
+  const result = spawnSync(bin, args, { cwd: root, encoding: "utf8", stdio: "pipe" });
   check(
     name,
     result.status === 0,
-    result.status === 0
-      ? "passed"
-      : (result.stderr || result.stdout || "failed").trim().slice(-800)
+    result.status === 0 ? "passed" : (result.stderr || result.stdout || "failed").trim().slice(-800)
   );
 }
 
@@ -87,18 +65,11 @@ const width = Math.max(...checks.map(item => item.name.length), 10);
 console.log("");
 console.log("Viral AI Tool release preflight — v" + pkg.version);
 console.log("=".repeat(64));
-
 for (const item of checks) {
-  console.log(
-    (item.ok ? "PASS" : "FAIL") + "  " +
-    item.name.padEnd(width) + "  " +
-    item.detail
-  );
+  console.log((item.ok ? "PASS" : "FAIL") + "  " + item.name.padEnd(width) + "  " + item.detail);
 }
-
 const failures = checks.filter(item => !item.ok);
 console.log("=".repeat(64));
-
 if (failures.length) {
   console.error(failures.length + " preflight check(s) failed.");
   process.exitCode = 1;
