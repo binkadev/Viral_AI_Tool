@@ -1,20 +1,33 @@
 (function attachCoreWorkflowModel(root, factory) {
-  const api = factory();
+  const dependency = (typeof module !== "undefined" && module.exports)
+    ? require("./core-job-model")
+    : root?.ViralCoreJobModel;
+  const api = factory(dependency);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreWorkflowModel = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreWorkflowModel() {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreWorkflowModel(jobModel) {
   "use strict";
 
-  const BUSY = new Set(["validating", "preparing", "uploading", "queued", "processing", "translating", "generating", "downloading", "rendering", "cancelling"]);
+  function canonicalJobState(job) {
+    if (jobModel?.stateOf) return jobModel.stateOf(job);
+    const value = String(job?.status || job?.state || "idle").toLowerCase();
+    if (["validating", "preparing"].includes(value)) return "preparing";
+    if (value === "uploading") return "uploading";
+    if (["queued", "processing", "translating", "generating", "downloading", "rendering", "cancelling"].includes(value)) return "processing";
+    if (["completed", "complete", "done", "success"].includes(value)) return "completed";
+    if (["failed", "error", "interrupted", "stale"].includes(value)) return "failed";
+    if (["cancelled", "canceled"].includes(value)) return "cancelled";
+    return "idle";
+  }
 
   function jobState(job) {
-    const value = String(job?.status || job?.state || "idle").toLowerCase();
-    if (BUSY.has(value)) return "processing";
-    if (["completed", "complete", "done", "success"].includes(value)) return "completed";
-    if (["failed", "error"].includes(value)) return "failed";
-    if (["cancelled", "canceled"].includes(value)) return "cancelled";
-    if (["interrupted", "stale"].includes(value)) return "failed";
-    return "idle";
+    const state = canonicalJobState(job);
+    return ["preparing", "uploading"].includes(state) ? "processing" : state;
+  }
+
+  function isBusy(job) {
+    if (jobModel?.isBusy) return jobModel.isBusy(job);
+    return ["preparing", "uploading", "processing"].includes(canonicalJobState(job));
   }
 
   function latestSourceJob(saved) {
@@ -123,7 +136,13 @@
       }
     ];
 
-    const anyBusy = [speechState, translationState, voiceState, renderState].includes("processing");
+    const anyBusy = Boolean(
+      (!speechResult && isBusy(speechJob)) ||
+      (!translationResult && isBusy(translationJob)) ||
+      (!voiceResult && isBusy(voiceJob)) ||
+      (!renderOutput && isBusy(renderJob))
+    );
+
     const controls = {
       speech: {
         enabled: analyzed && !anyBusy,
@@ -159,10 +178,10 @@
       stages,
       controls,
       jobs: {
-        speech: speechState,
-        translation: translationState,
-        voice: voiceState,
-        render: renderState
+        speech: speechResult ? "completed" : canonicalJobState(speechJob),
+        translation: translationResult ? "completed" : canonicalJobState(translationJob),
+        voice: voiceResult ? "completed" : canonicalJobState(voiceJob),
+        render: renderOutput ? "completed" : canonicalJobState(renderJob)
       }
     };
   }
