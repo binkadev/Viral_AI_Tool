@@ -10,6 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "dev:cloud": "node scripts/dev-cloud.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win nsis --publish never",
     "dev:backend": "node dev-backend/server.js",
@@ -25,7 +26,7 @@
     "test:update-signature-live": "node tests/windows-signature.integration.test.js",
     "test:diagnostics": "node tests/diagnostics.test.js",
     "test:cloud-release-config": "node tests/cloud-release-config.test.js",
-    "test:backend-backup": "node dev-backend/tests/sqlite-backup.test.js",
+    "test:backend-backup": "node dev-backend/maintenance/state-backup.js backup",
     "backup:state": "node dev-backend/maintenance/state-backup.js backup",
     "verify:state-backup": "node dev-backend/maintenance/state-backup.js verify",
     "test:render-e2e": "node tests/render-pipeline.integration.test.js",
