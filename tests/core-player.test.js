@@ -8,6 +8,7 @@ const model = require("../renderer/core-player-model");
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf8");
 const player = fs.readFileSync(path.join(root, "renderer", "core-player.js"), "utf8");
+const interactions = fs.readFileSync(path.join(root, "renderer", "core-player-interactions.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 assert.strictEqual(model.parseTimeLabel("01:30"), 90);
@@ -26,7 +27,15 @@ for (const media of [
   [720, 1280],
   [2560, 1080]
 ]) {
-  for (const box of [[960, 540], [540, 960], [720, 720], [1230, 480]]) {
+  for (const box of [
+    [960, 540],
+    [540, 960],
+    [720, 720],
+    [1230, 480],
+    [420, 240],
+    [240, 420],
+    [1600, 900]
+  ]) {
     const fitted = model.fitContain(media[0], media[1], box[0], box[1]);
     assert(fitted.width <= box[0] + 0.001, "contain width must remain inside preview");
     assert(fitted.height <= box[1] + 0.001, "contain height must remain inside preview");
@@ -85,9 +94,26 @@ for (const required of [
   assert(player.includes(required), "Core player is missing behavior: " + required);
 }
 
+for (const required of [
+  "pointerdown",
+  "pointermove",
+  "pointerup",
+  "setPointerCapture",
+  "video.currentTime = ratio * duration",
+  "ArrowLeft",
+  "ArrowRight",
+  "event.shiftKey ? -10 : -5",
+  "event.shiftKey ? 10 : 5",
+  "video.paused"
+]) {
+  assert(interactions.includes(required), "Core player interactions are missing: " + required);
+}
+
 assert(!player.includes("setInterval("), "Player synchronization must not use an independent timer clock.");
+assert(!interactions.includes("setInterval("), "Scrubbing must not introduce a second playback clock.");
 assert(index.includes('href="core-editor.css"'));
 assert(index.includes('src="core-player-model.js"'));
 assert(index.includes('src="core-player.js"'));
+assert(index.includes('src="core-player-interactions.js"'));
 
-console.log("Core player geometry, timeline and synchronization tests passed.");
+console.log("Core player geometry, timeline, scrubbing and synchronization tests passed.");
