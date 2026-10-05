@@ -48,6 +48,9 @@ jobs:
       - name: Test core player synchronization
         run: npm run test:core-player
 
+      - name: Test core workflow gating
+        run: npm run test:core-workflow
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -64,10 +67,13 @@ jobs:
           node --check services/update/update-client.js
           node --check tests/release-policy.test.js
           node --check tests/core-player.test.js
+          node --check tests/core-workflow.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
           node --check renderer/i18n.js
           node --check renderer/core-player-model.js
           node --check renderer/core-player.js
+          node --check renderer/core-workflow-model.js
+          node --check renderer/core-workflow.js
           node --check scripts/release-preflight.js
