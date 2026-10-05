@@ -123,7 +123,8 @@
       job?.sourcePath === sourcePath &&
       String(job?.status || "") === "completed" &&
       job?.fileState !== "missing" &&
-      job?.fileState !== "trashed"
+      job?.fileState !== "trashed" &&
+      job?.stale !== true
     ) || null;
   }
 
