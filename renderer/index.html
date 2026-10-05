@@ -43,7 +43,7 @@
       <div class="workspace">
         <div>
           <span id="workspaceLabel">Không gian làm việc</span>
-          <strong>Hoàng Studio</strong>
+          <strong>Core Project</strong>
         </div>
         <i aria-hidden="true"></i>
       </div>
@@ -51,14 +51,14 @@
       <nav id="nav" aria-label="Primary"></nav>
 
       <div class="sidebar-bottom">
-        <div class="credit-card">
-          <div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>2,480</b></div>
-          <div class="bar animated-progress"><i style="width:66%"></i></div>
-          <small><span>66%</span> <span id="remainingLabel">còn lại</span></small>
+        <div class="credit-card" data-core-placeholder="account-usage">
+          <div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>—</b></div>
+          <div class="bar"><i style="width:0%"></i></div>
+          <small><span>—</span> <span id="remainingLabel">còn lại</span></small>
         </div>
-        <div class="profile">
-          <div class="avatar">NH</div>
-          <div><b>Nhựt Hoàng</b><span>Creator Pro</span></div>
+        <div class="profile" data-core-placeholder="account-profile">
+          <div class="avatar">•</div>
+          <div><b>Cloud account</b><span>Chưa đồng bộ</span></div>
         </div>
       </div>
     </aside>
@@ -115,6 +115,7 @@
   <div id="modal" class="modal-backdrop hidden"></div>
 
   <script src="i18n.js"></script>
+  <script src="core-bootstrap.js"></script>
   <script src="app.js"></script>
   <script src="core-player-model.js"></script>
   <script src="core-player.js"></script>
