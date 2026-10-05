@@ -13,7 +13,7 @@
     if (["completed", "complete", "done", "success"].includes(value)) return "completed";
     if (["failed", "error"].includes(value)) return "failed";
     if (["cancelled", "canceled"].includes(value)) return "cancelled";
-    if (["interrupted"].includes(value)) return "failed";
+    if (["interrupted", "stale"].includes(value)) return "failed";
     return "idle";
   }
 
@@ -38,13 +38,20 @@
     return String(job.sourcePath) === String(source.sourcePath);
   }
 
-  function latestRenderOutput(saved) {
+  function latestRenderJob(saved, source) {
     const jobs = Array.isArray(saved?.jobs) ? saved.jobs : [];
     for (let index = jobs.length - 1; index >= 0; index -= 1) {
       const job = jobs[index];
-      if (job?.isRenderOutput && jobState(job) === "completed" && job?.outputPath) return job;
+      if (!job?.isRenderOutput) continue;
+      if (source?.sourcePath && job.sourcePath && String(job.sourcePath) !== String(source.sourcePath)) continue;
+      return job;
     }
     return null;
+  }
+
+  function latestRenderOutput(saved, source) {
+    const job = latestRenderJob(saved, source);
+    return job && jobState(job) === "completed" && job?.outputPath ? job : null;
   }
 
   function derive(saved = {}) {
@@ -59,11 +66,13 @@
     const translationJob = jobMatches(saved?.translation?.job, source) ? saved.translation.job : null;
     const voiceResult = resultMatches(saved?.voice?.result, source) ? saved.voice.result : null;
     const voiceJob = jobMatches(saved?.voice?.job, source) ? saved.voice.job : null;
-    const renderOutput = latestRenderOutput(saved);
+    const renderJob = latestRenderJob(saved, source);
+    const renderOutput = latestRenderOutput(saved, source);
 
     const speechState = speechResult ? "completed" : jobState(speechJob);
     const translationState = translationResult ? "completed" : jobState(translationJob);
     const voiceState = voiceResult ? "completed" : jobState(voiceJob);
+    const renderState = renderOutput ? "completed" : jobState(renderJob);
 
     const stages = [
       {
@@ -101,12 +110,20 @@
       {
         id: "render",
         label: "RENDER",
-        status: renderOutput ? "completed" : !translationResult ? "blocked" : "active",
-        reason: renderOutput ? "Đã có file render thành công." : translationResult ? "Đủ input tối thiểu để render." : "Cần bản dịch trước."
+        status: renderState === "idle" ? (!translationResult ? "blocked" : "active") : renderState,
+        reason: renderOutput
+          ? "Đã có file render thành công."
+          : renderState === "processing"
+            ? "Đang render video."
+            : renderState === "failed"
+              ? "Render chưa hoàn tất. Hãy kiểm tra lỗi và thử lại."
+              : translationResult
+                ? "Đủ input tối thiểu để render."
+                : "Cần bản dịch trước."
       }
     ];
 
-    const anyBusy = [speechState, translationState, voiceState].includes("processing");
+    const anyBusy = [speechState, translationState, voiceState, renderState].includes("processing");
     const controls = {
       speech: {
         enabled: analyzed && !anyBusy,
@@ -125,8 +142,8 @@
         reason: missingSource ? "File nguồn không còn tồn tại." : !translationResult ? "Cần bản dịch trước khi render." : anyBusy ? "Hãy chờ tác vụ hiện tại hoàn tất." : ""
       },
       export: {
-        enabled: Boolean(renderOutput),
-        reason: renderOutput ? "" : "Chỉ Export sau khi render thành công."
+        enabled: Boolean(renderOutput) && renderState === "completed",
+        reason: renderOutput ? "" : renderState === "processing" ? "Đang render; Export sẽ mở khi hoàn tất." : "Chỉ Export sau khi render thành công."
       }
     };
 
@@ -137,16 +154,18 @@
       speechResult,
       translationResult,
       voiceResult,
+      renderJob,
       renderOutput,
       stages,
       controls,
       jobs: {
         speech: speechState,
         translation: translationState,
-        voice: voiceState
+        voice: voiceState,
+        render: renderState
       }
     };
   }
 
-  return { derive, jobState, latestSourceJob, latestRenderOutput };
+  return { derive, jobState, latestSourceJob, latestRenderJob, latestRenderOutput };
 });
