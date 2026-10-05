@@ -7,6 +7,8 @@
   const EDIT_STORE_KEY = "viral-ai-core-transcript-edits-v1";
   const enhancedVideos = new WeakSet();
   const enhancedRows = new WeakSet();
+  const frameCallbacks = new WeakMap();
+  const resizeObservers = new WeakMap();
   let activeVideo = null;
   let lastActiveRow = null;
   let rafId = 0;
@@ -40,9 +42,15 @@
       const text = row.querySelector("p");
       return {
         id: row.dataset.segmentId || ("segment-" + (index + 1)),
-        start: model.parseTimeLabel(time?.textContent),
+        start: Number.isFinite(Number(row.dataset.start))
+          ? Number(row.dataset.start)
+          : model.parseTimeLabel(time?.textContent),
         end: Number(row.dataset.end || 0),
-        text: String(text?.textContent || "")
+        text: String(text?.textContent || ""),
+        translatedText: String(row.dataset.translatedText || ""),
+        speaker: row.dataset.speaker || null,
+        voice: row.dataset.voice || null,
+        status: row.dataset.status || "ready"
       };
     });
     const normalized = model.normalizeSegments(raw, Number(video?.duration || 0));
@@ -92,6 +100,13 @@
     }
   }
 
+  function seekVideo(video, time, { forceScroll = true } = {}) {
+    if (!video) return;
+    const target = model.clampTime(time, video.duration);
+    if (Math.abs(Number(video.currentTime || 0) - target) > 0.002) video.currentTime = target;
+    updateFromPlayback(video, { forceScroll });
+  }
+
   function enhanceTranscriptRows(video) {
     const { rows } = parseRows(video);
     rows.forEach(row => {
@@ -111,16 +126,14 @@
         if (!activeVideo || event.defaultPrevented) return;
         if (isTextSelectionInside(row)) return;
         if (event.target instanceof HTMLElement && event.target.closest("p[contenteditable]")) return;
-        activeVideo.currentTime = model.clampTime(Number(row.dataset.start || 0), activeVideo.duration);
-        updateFromPlayback(activeVideo, { forceScroll: true });
+        seekVideo(activeVideo, Number(row.dataset.start || 0));
       });
 
       row.addEventListener("keydown", event => {
         if (!activeVideo) return;
         if ((event.key === "Enter" || event.key === " ") && event.target === row) {
           event.preventDefault();
-          activeVideo.currentTime = model.clampTime(Number(row.dataset.start || 0), activeVideo.duration);
-          updateFromPlayback(activeVideo, { forceScroll: true });
+          seekVideo(activeVideo, Number(row.dataset.start || 0));
         }
       });
 
@@ -139,6 +152,10 @@
     return video.closest(".preview")?.querySelector(".core-player-controls") || null;
   }
 
+  function timelineFor(video) {
+    return video.closest(".preview")?.querySelector(".core-player-timeline") || null;
+  }
+
   function setPlayingUi(video) {
     const controls = controlsFor(video);
     const play = controls?.querySelector("[data-core-play]");
@@ -147,6 +164,62 @@
       play.setAttribute("aria-label", video.paused ? "Play" : "Pause");
       play.title = video.paused ? "Play" : "Pause";
     }
+  }
+
+  function segmentSignature(segments, duration) {
+    return [Number(duration || 0).toFixed(3)]
+      .concat(segments.map(segment => [segment.id, Number(segment.start).toFixed(3), Number(segment.end).toFixed(3)].join(":")))
+      .join("|");
+  }
+
+  function renderTimelineSegments(video) {
+    const timeline = timelineFor(video);
+    if (!timeline) return;
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const { segments } = parseRows(video);
+    const track = timeline.querySelector("[data-core-timeline-track]");
+    if (!track) return;
+
+    const signature = segmentSignature(segments, duration);
+    if (track.dataset.signature === signature) return;
+    track.dataset.signature = signature;
+
+    track.querySelectorAll(".core-timeline-segment").forEach(node => node.remove());
+    if (!duration || !segments.length) return;
+
+    segments.forEach((segment, index) => {
+      const start = model.clampTime(segment.start, duration);
+      const end = model.clampTime(Math.max(segment.end, start), duration);
+      const segmentButton = document.createElement("button");
+      segmentButton.type = "button";
+      segmentButton.className = "core-timeline-segment";
+      segmentButton.dataset.segmentIndex = String(index);
+      segmentButton.dataset.start = String(start);
+      segmentButton.style.left = String(model.seekRatio(start, duration) * 100) + "%";
+      segmentButton.style.width = String(Math.max(0.35, model.seekRatio(end - start, duration) * 100)) + "%";
+      segmentButton.title = model.formatClock(start) + " – " + model.formatClock(end);
+      segmentButton.setAttribute("aria-label", "Seek to transcript segment " + (index + 1));
+      segmentButton.addEventListener("click", event => {
+        event.stopPropagation();
+        seekVideo(video, start);
+      });
+      track.appendChild(segmentButton);
+    });
+  }
+
+  function updateTimeline(video, currentTime, duration, activeIndex) {
+    const timeline = timelineFor(video);
+    if (!timeline) return;
+    renderTimelineSegments(video);
+
+    const playhead = timeline.querySelector("[data-core-playhead]");
+    if (playhead) playhead.style.left = String(model.seekRatio(currentTime, duration) * 100) + "%";
+
+    timeline.querySelectorAll(".core-timeline-segment").forEach((segment, index) => {
+      const active = index === activeIndex;
+      segment.classList.toggle("is-active", active);
+      segment.setAttribute("aria-current", active ? "true" : "false");
+    });
   }
 
   function updateTranscript(video, currentTime, forceScroll) {
@@ -169,12 +242,15 @@
       }
       lastActiveRow = activeRow;
     }
+
+    return activeIndex;
   }
 
   function updateFromPlayback(video, { forceScroll = false } = {}) {
     if (!video || video !== activeVideo) return;
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
+      // video.currentTime is the single source of truth for player, timeline and transcript.
       const current = model.clampTime(video.currentTime, video.duration);
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const controls = controlsFor(video);
@@ -183,8 +259,31 @@
       if (seek) seek.value = String(Math.round(model.seekRatio(current, duration) * 1000));
       if (time) time.textContent = model.formatClock(current) + " / " + model.formatClock(duration);
       setPlayingUi(video);
-      updateTranscript(video, current, forceScroll);
+      const activeIndex = updateTranscript(video, current, forceScroll);
+      updateTimeline(video, current, duration, activeIndex);
     });
+  }
+
+  function stopFrameSync(video) {
+    const id = frameCallbacks.get(video);
+    if (id != null && typeof video.cancelVideoFrameCallback === "function") {
+      try { video.cancelVideoFrameCallback(id); } catch {}
+    }
+    frameCallbacks.delete(video);
+  }
+
+  function startFrameSync(video) {
+    stopFrameSync(video);
+    if (typeof video.requestVideoFrameCallback !== "function" || video.paused || video.ended) return;
+    const tick = () => {
+      if (video !== activeVideo || video.paused || video.ended) {
+        stopFrameSync(video);
+        return;
+      }
+      updateFromPlayback(video);
+      frameCallbacks.set(video, video.requestVideoFrameCallback(tick));
+    };
+    frameCallbacks.set(video, video.requestVideoFrameCallback(tick));
   }
 
   async function toggleFullscreen(host) {
@@ -192,6 +291,27 @@
       if (document.fullscreenElement) await document.exitFullscreen();
       else if (host?.requestFullscreen) await host.requestFullscreen();
     } catch {}
+  }
+
+  function makeTimeline(video, host) {
+    let timeline = host.querySelector(".core-player-timeline");
+    if (timeline) return timeline;
+
+    timeline = document.createElement("div");
+    timeline.className = "core-player-timeline";
+    timeline.setAttribute("aria-label", "Transcript timeline");
+    timeline.innerHTML = '<div class="core-timeline-track" data-core-timeline-track><span class="core-timeline-playhead" data-core-playhead></span></div>';
+    host.appendChild(timeline);
+
+    const track = timeline.querySelector("[data-core-timeline-track]");
+    track?.addEventListener("click", event => {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+      const rect = track.getBoundingClientRect();
+      if (!rect.width) return;
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      seekVideo(video, ratio * video.duration);
+    });
+    return timeline;
   }
 
   function makeControls(video, host) {
@@ -222,8 +342,7 @@
     seek?.addEventListener("input", () => {
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       if (!duration) return;
-      video.currentTime = model.clampTime((Number(seek.value) / 1000) * duration, duration);
-      updateFromPlayback(video, { forceScroll: true });
+      seekVideo(video, (Number(seek.value) / 1000) * duration);
     });
 
     controls.querySelector("[data-core-fullscreen]")?.addEventListener("click", () => toggleFullscreen(host));
@@ -232,9 +351,9 @@
 
   function enhanceVideo(video) {
     if (!(video instanceof HTMLVideoElement)) return;
-    activeVideo = video;
     const host = video.closest(".preview");
     if (!host) return;
+    activeVideo = video;
 
     host.classList.add("core-player-host");
     video.classList.add("core-player-media");
@@ -246,17 +365,30 @@
     video.style.objectPosition = "center center";
     video.style.transform = "none";
     video.style.scale = "1";
+    makeTimeline(video, host);
     makeControls(video, host);
     enhanceTranscriptRows(video);
+    renderTimelineSegments(video);
+
+    if (!resizeObservers.has(video) && typeof ResizeObserver === "function") {
+      const observer = new ResizeObserver(() => updateFromPlayback(video));
+      observer.observe(host);
+      resizeObservers.set(video, observer);
+    }
 
     if (enhancedVideos.has(video)) {
       updateFromPlayback(video);
+      if (!video.paused) startFrameSync(video);
       return;
     }
     enhancedVideos.add(video);
 
     ["loadedmetadata", "durationchange", "timeupdate", "seeking", "seeked", "play", "pause", "ended"].forEach(name => {
-      video.addEventListener(name, () => updateFromPlayback(video, { forceScroll: name === "seeked" }));
+      video.addEventListener(name, () => {
+        if (name === "play") startFrameSync(video);
+        if (name === "pause" || name === "ended") stopFrameSync(video);
+        updateFromPlayback(video, { forceScroll: name === "seeked" });
+      });
     });
 
     video.addEventListener("loadedmetadata", () => {
@@ -264,6 +396,7 @@
         host.style.setProperty("--core-video-ratio", video.videoWidth + " / " + video.videoHeight);
         host.dataset.videoRatio = (video.videoWidth / video.videoHeight).toFixed(4);
       }
+      renderTimelineSegments(video);
       updateFromPlayback(video);
     });
 
