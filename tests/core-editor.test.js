@@ -4,12 +4,14 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const model = require("../renderer/core-editor-model");
+const jobs = require("../renderer/core-job-status");
 
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf8");
 const stabilityCss = fs.readFileSync(path.join(root, "renderer", "core-editor-stability.css"), "utf8");
 const ui = fs.readFileSync(path.join(root, "renderer", "core-editor.js"), "utf8");
 const stabilityUi = fs.readFileSync(path.join(root, "renderer", "core-editor-stability.js"), "utf8");
+const productGating = fs.readFileSync(path.join(root, "renderer", "core-product-gating.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 function closeTo(actual, expected, epsilon = 0.001) {
@@ -149,7 +151,7 @@ function closeTo(actual, expected, epsilon = 0.001) {
 
 // Old completed renders can be invalidated without deleting them from history.
 {
-  const jobs = [{
+  const renderJobs = [{
     isRenderOutput: true,
     sourcePath: "C:/video.mp4",
     outputPath: "C:/out.mp4",
@@ -157,7 +159,22 @@ function closeTo(actual, expected, epsilon = 0.001) {
     fileState: "available",
     stale: true
   }];
-  assert.strictEqual(model.completedRenderForSource(jobs, "C:/video.mp4"), null);
+  assert.strictEqual(model.completedRenderForSource(renderJobs, "C:/video.mp4"), null);
+}
+
+// Generic async status is reusable across Speech / Translation / Voice / Render.
+{
+  assert.strictEqual(jobs.fromJob({ status: "preparing" }, false), "preparing");
+  assert.strictEqual(jobs.fromJob({ status: "uploading" }, false), "uploading");
+  assert.strictEqual(jobs.fromJob({ status: "translating" }, false), "translating");
+  assert.strictEqual(jobs.fromJob({ status: "generating" }, false), "generating");
+  assert.strictEqual(jobs.fromJob({ status: "failed" }, false), "failed");
+  assert.strictEqual(jobs.fromJob({ status: "processing" }, true), "completed");
+  assert.strictEqual(jobs.isBusy("uploading"), true);
+  assert.strictEqual(jobs.isBusy("failed"), false);
+  assert.strictEqual(jobs.capabilityState(true, true), "functional");
+  assert.strictEqual(jobs.capabilityState(false, true), "disabled");
+  assert.strictEqual(jobs.capabilityState(true, false), "coming-soon");
 }
 
 // Static browser contracts: contain-first rendering, one playback clock, seek both ways,
@@ -183,10 +200,21 @@ assert(stabilityUi.includes('markRenderedOutputsStale'));
 assert(stabilityUi.includes('Model.findActiveSegmentIndex(segments, currentTime)'));
 assert(!stabilityUi.includes("render();"));
 
+// Capability layer removes prototype-only main routes, labels real controls, and
+// explicitly marks unimplemented chrome instead of leaving a dead clickable button.
+assert(productGating.includes('new Set(["voice", "editor", "automation"])'));
+assert(productGating.includes('dataset.capabilityState = "coming-soon"'));
+assert(productGating.includes('Jobs.capabilityState(!button.disabled, true)'));
+assert(productGating.includes('serviceState("transcribe"'));
+assert(productGating.includes('serviceState("translate"'));
+assert(productGating.includes('serviceState("voice"'));
+
 assert(index.includes('core-editor.css'));
 assert(index.includes('core-editor-stability.css'));
 assert(index.includes('core-editor-model.js'));
+assert(index.includes('core-job-status.js'));
 assert(index.includes('core-editor.js'));
 assert(index.includes('core-editor-stability.js'));
+assert(index.includes('core-product-gating.js'));
 
-console.log("Core editor player, workflow and transcript tests passed.");
+console.log("Core editor player, workflow, capability and transcript tests passed.");
