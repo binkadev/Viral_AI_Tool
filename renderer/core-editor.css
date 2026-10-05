@@ -233,8 +233,8 @@
   bottom:78px;
 }
 
-/* Features intentionally deferred from the core-product pass must not look ready. */
-[data-page="ai-video"],
+/* Only genuinely deferred workflow surfaces stay hidden.
+   The legacy internal route `ai-video` is now the production Core Editor. */
 [data-page="workflow"],
 [data-page="workflow-builder"]{
   display:none!important;
