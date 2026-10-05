@@ -45,10 +45,64 @@
   max-height:100%!important;
   object-fit:contain!important;
   object-position:center center!important;
+  aspect-ratio:auto!important;
   transform:none!important;
   scale:1!important;
   margin:0!important;
   background:#090d16!important;
+}
+
+.core-player-timeline{
+  position:absolute;
+  z-index:4;
+  left:14px;
+  right:14px;
+  bottom:66px;
+  height:26px;
+  display:flex;
+  align-items:center;
+  padding:5px 6px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;
+  background:rgba(7,10,17,.70);
+  backdrop-filter:blur(12px);
+}
+
+.core-timeline-track{
+  position:relative;
+  width:100%;
+  height:14px;
+  overflow:hidden;
+  border-radius:7px;
+  background:rgba(255,255,255,.10);
+  cursor:pointer;
+}
+
+.core-timeline-segment{
+  position:absolute;
+  top:2px;
+  bottom:2px;
+  min-width:2px;
+  padding:0;
+  border:0;
+  border-radius:4px;
+  background:rgba(255,255,255,.26);
+  cursor:pointer;
+  transition:background .12s ease,transform .12s ease;
+}
+.core-timeline-segment:hover{background:rgba(255,255,255,.42)}
+.core-timeline-segment.is-active{background:var(--accent);transform:scaleY(1.12)}
+
+.core-timeline-playhead{
+  position:absolute;
+  z-index:3;
+  top:0;
+  bottom:0;
+  width:2px;
+  margin-left:-1px;
+  background:#fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 0 8px rgba(255,255,255,.55);
+  pointer-events:none;
 }
 
 .core-player-controls{
@@ -161,6 +215,7 @@
   width:100vw!important;
   height:100vh!important;
   max-height:none!important;
+  min-height:100vh!important;
   border-radius:0!important;
   border:0!important;
   background:#000!important;
@@ -170,6 +225,12 @@
   left:24px;
   right:24px;
   bottom:22px;
+}
+
+.preview.core-player-host:fullscreen .core-player-timeline{
+  left:26px;
+  right:26px;
+  bottom:78px;
 }
 
 /* Features intentionally deferred from the core-product pass must not look ready. */
@@ -187,6 +248,12 @@
 @media (max-width:980px){
   .editor-grid{grid-template-columns:minmax(0,1fr)!important}
   .preview.core-player-host,.preview.preview-real{height:clamp(280px,48vh,520px);max-height:none}
+}
+
+@media (max-width:680px){
+  .core-player-controls{grid-template-columns:36px minmax(70px,1fr) 36px}
+  .core-player-time{display:none}
+  .core-player-timeline{left:10px;right:10px}
 }
 
 @media (max-height:760px){
