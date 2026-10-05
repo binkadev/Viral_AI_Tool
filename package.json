@@ -33,7 +33,7 @@
     "test:deployment-config": "node tests/deployment-config.test.js",
     "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js",
     "test:core-editor": "node tests/core-editor.test.js",
-    "check:core-editor": "node --check renderer/core-editor-model.js && node --check renderer/core-editor.js && node --check renderer/core-editor-stability.js"
+    "check:core-editor": "node --check renderer/core-editor-model.js && node --check renderer/core-job-status.js && node --check renderer/core-editor.js && node --check renderer/core-editor-stability.js && node --check renderer/core-product-gating.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
