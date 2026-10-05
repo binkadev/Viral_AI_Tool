@@ -63,6 +63,9 @@ jobs:
       - name: Test core capability guard
         run: npm run test:core-capabilities
 
+      - name: Test core product shell
+        run: npm run test:core-product-shell
+
       - name: Test project reopen media recovery
         run: npm run test:core-media-restore
 
@@ -87,6 +90,7 @@ jobs:
           node --check tests/core-workflow.test.js
           node --check tests/core-layout.test.js
           node --check tests/core-capabilities.test.js
+          node --check tests/core-product-shell.test.js
           node --check tests/core-media-restore.test.js
           node --check main.js
           node --check preload.js
@@ -103,4 +107,5 @@ jobs:
           node --check renderer/core-layout.js
           node --check renderer/core-capabilities.js
           node --check renderer/core-media-restore.js
+          node --check renderer/core-product-shell.js
           node --check scripts/release-preflight.js
