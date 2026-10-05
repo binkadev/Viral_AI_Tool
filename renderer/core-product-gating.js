@@ -75,21 +75,25 @@
     });
   }
 
+  function setStateText(node, value) {
+    if (node && node.textContent !== value) node.textContent = value;
+  }
+
   function serviceState(actionId, job, hasResult) {
     const button = document.querySelector('.core-editor-shell [data-core-action="' + actionId + '"]');
     if (!button) return;
     const stateCode = Jobs.fromJob(job, hasResult);
     const stateNode = button.querySelector(".core-action-state");
-    if (stateNode && Jobs.isBusy(stateCode)) {
-      stateNode.textContent = Jobs.label(stateCode, state.locale);
-    }
+    const display = Jobs.label(stateCode, state.locale);
+
+    if (stateNode && Jobs.isBusy(stateCode)) setStateText(stateNode, display);
     if (stateCode === "failed") {
       button.classList.remove("active", "ready", "complete");
       button.classList.add("failed");
-      if (stateNode) stateNode.textContent = Jobs.label(stateCode, state.locale);
+      setStateText(stateNode, display);
     }
     if (stateCode === "cancelled" || stateCode === "interrupted") {
-      if (stateNode) stateNode.textContent = Jobs.label(stateCode, state.locale);
+      setStateText(stateNode, display);
     }
   }
 
