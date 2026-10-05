@@ -96,7 +96,9 @@ jobs:
           foreach ($required in @(
             "\renderer\core-editor.js",
             "\renderer\core-editor-model.js",
+            "\renderer\core-editor-stability.js",
             "\renderer\core-editor.css",
+            "\renderer\core-editor-stability.css",
             "\renderer\index.html"
           )) {
             if ($listing -notcontains $required) {
