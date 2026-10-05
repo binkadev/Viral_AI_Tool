@@ -32,7 +32,8 @@
     "release:preflight": "node scripts/release-preflight.js",
     "test:deployment-config": "node tests/deployment-config.test.js",
     "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js",
-    "test:core-player": "node tests/core-player.test.js"
+    "test:core-player": "node tests/core-player.test.js",
+    "test:core-workflow": "node tests/core-workflow.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
