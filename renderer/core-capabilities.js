@@ -77,6 +77,17 @@
     document.querySelectorAll(".nav-badge").forEach(node => node.remove());
   }
 
+  function hidePrototypeData() {
+    // Dashboard KPI values are still static legacy demo numbers. Hide the block
+    // until the values are backed by real persisted jobs/usage data.
+    document.querySelectorAll(".dashboard-stats").forEach(node => {
+      if (!(node instanceof HTMLElement)) return;
+      node.hidden = true;
+      node.setAttribute("aria-hidden", "true");
+      node.dataset.coreCapability = "coming-soon";
+    });
+  }
+
   function guardKnownPlaceholders() {
     const urlAnalyze = document.getElementById("analyze");
     if (urlAnalyze instanceof HTMLButtonElement) mark(urlAnalyze, "coming-soon");
@@ -116,6 +127,7 @@
 
   function scan() {
     hideDeferredPages();
+    hidePrototypeData();
     guardKnownPlaceholders();
     classifyCoreButtons();
   }
