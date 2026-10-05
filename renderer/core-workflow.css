@@ -1,0 +1,99 @@
+.core-workflow-shell{
+  margin:0 0 14px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:color-mix(in srgb,var(--surface-solid) 88%,var(--bg));
+  box-shadow:var(--shadow-xs);
+}
+
+.core-workflow-title{
+  margin-bottom:9px;
+  color:var(--text-faint);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.core-workflow-rail{
+  display:grid;
+  grid-template-columns:auto minmax(14px,1fr) auto minmax(14px,1fr) auto minmax(14px,1fr) auto minmax(14px,1fr) auto minmax(14px,1fr) auto;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+
+.core-workflow-stage{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  color:var(--text-soft);
+}
+
+.core-stage-index{
+  width:24px;
+  height:24px;
+  flex:0 0 24px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid var(--line-strong);
+  background:var(--surface-soft);
+  color:var(--text-faint);
+  font-size:10px;
+  font-weight:900;
+}
+
+.core-stage-copy{display:flex;flex-direction:column;min-width:0}
+.core-stage-copy b{font-size:9px;letter-spacing:.05em;white-space:nowrap}
+.core-stage-copy small{margin-top:2px;font-size:8px;color:var(--text-faint);white-space:nowrap}
+.core-stage-link{height:1px;background:var(--line-strong);min-width:12px}
+
+.core-workflow-stage.is-completed .core-stage-index{background:color-mix(in srgb,var(--success) 14%,var(--surface));border-color:color-mix(in srgb,var(--success) 42%,var(--line));color:var(--success)}
+.core-workflow-stage.is-completed + .core-stage-link{background:color-mix(in srgb,var(--success) 55%,var(--line))}
+.core-workflow-stage.is-active .core-stage-index{background:color-mix(in srgb,var(--accent) 13%,var(--surface));border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 8%,transparent)}
+.core-workflow-stage.is-active .core-stage-copy b{color:var(--text)}
+.core-workflow-stage.is-processing .core-stage-index{background:color-mix(in srgb,var(--accent-2) 13%,var(--surface));border-color:color-mix(in srgb,var(--accent-2) 45%,var(--line));color:var(--accent-2)}
+.core-workflow-stage.is-failed .core-stage-index{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-color:color-mix(in srgb,var(--danger) 44%,var(--line));color:var(--danger)}
+.core-workflow-stage.is-blocked{opacity:.55}
+.core-workflow-stage.is-cancelled{opacity:.7}
+
+button.core-gated:disabled{
+  cursor:not-allowed!important;
+  opacity:.48!important;
+  filter:saturate(.55);
+  box-shadow:none!important;
+  transform:none!important;
+}
+
+.core-coming-soon{
+  margin-left:auto;
+  padding:2px 5px;
+  border-radius:999px;
+  background:var(--surface-strong);
+  color:var(--text-faint);
+  font-size:7px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.command-palette:disabled{
+  cursor:not-allowed;
+  opacity:.62;
+}
+
+@media(max-width:1180px){
+  .core-workflow-rail{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+  }
+  .core-stage-link{display:none}
+  .core-workflow-stage{padding:7px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft)}
+}
+
+@media(max-width:760px){
+  .core-workflow-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
