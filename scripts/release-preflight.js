@@ -48,6 +48,7 @@ const commands = [
   ["Core workflow gating", ["npm", ["run", "test:core-workflow"]]],
   ["Core editor layout", ["npm", ["run", "test:core-layout"]]],
   ["Core capability guard", ["npm", ["run", "test:core-capabilities"]]],
+  ["Core product shell", ["npm", ["run", "test:core-product-shell"]]],
   ["Core project reopen recovery", ["npm", ["run", "test:core-media-restore"]]]
 ];
 
