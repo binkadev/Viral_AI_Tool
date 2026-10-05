@@ -58,10 +58,12 @@ const commands = [
   ["Cloud release config", ["npm", ["run", "test:cloud-release-config"]]],
   ["Deployment config", ["npm", ["run", "test:deployment-config"]]],
   ["Cloud speech upload routing", ["npm", ["run", "test:cloud-speech-upload"]]],
+  ["Core async job states", ["npm", ["run", "test:core-job-model"]]],
   ["Core player synchronization", ["npm", ["run", "test:core-player"]]],
   ["Core transcript editing", ["npm", ["run", "test:core-transcript"]]],
   ["Core workflow gating", ["npm", ["run", "test:core-workflow"]]],
-  ["Core editor layout", ["npm", ["run", "test:core-layout"]]]
+  ["Core editor layout", ["npm", ["run", "test:core-layout"]]],
+  ["Core capability guard", ["npm", ["run", "test:core-capabilities"]]]
 ];
 
 for (const [name, [command, args]] of commands) {
