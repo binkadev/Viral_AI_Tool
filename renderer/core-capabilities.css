@@ -1,0 +1,43 @@
+/* Core capability guard: never present deferred/prototype actions as production-ready. */
+[data-page="ai-video"],
+[data-page="automation"],
+[data-page="workflow"],
+[data-page="workflow-builder"],
+[data-page="monitor"]{
+  display:none!important;
+}
+
+button[data-core-capability="disabled"],
+button[data-core-capability="coming-soon"]{
+  cursor:not-allowed!important;
+}
+
+button[data-core-capability="coming-soon"]{
+  opacity:.58;
+  filter:saturate(.62);
+}
+
+button[data-core-capability="disabled"]{
+  opacity:.62;
+}
+
+.core-coming-soon-control{
+  position:relative;
+}
+
+.core-coming-soon-control::after{
+  content:"Soon";
+  margin-inline-start:7px;
+  padding:2px 5px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  color:var(--text-faint);
+  background:var(--surface-soft);
+  font-size:8px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:.04em;
+  vertical-align:middle;
+}
+
+html[lang="vi"] .core-coming-soon-control::after{content:"Sắp có"}
