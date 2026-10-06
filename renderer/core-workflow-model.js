@@ -115,24 +115,34 @@
       {
         id: "localize",
         label: "LOCALIZE",
-        status: !speechResult ? "blocked" : translationState === "idle" ? "active" : translationState,
-        reason: translationResult
-          ? (voiceResult ? "Bản dịch và giọng đã sẵn sàng." : "Bản dịch đã sẵn sàng; Voice là tùy chọn.")
-          : "Dịch transcript trước khi tạo Voice/Subtitle."
+        status: !speechResult
+          ? "blocked"
+          : !translationResult
+            ? (translationState === "idle" ? "active" : translationState)
+            : voiceState === "idle"
+              ? "active"
+              : voiceState,
+        reason: voiceResult
+          ? "Bản dịch và AI Voice đã sẵn sàng."
+          : translationResult
+            ? "Bản dịch đã sẵn sàng. Bản dubbing hiện tại cần tạo AI Voice trước khi Render."
+            : "Dịch transcript trước khi tạo Voice/Subtitle."
       },
       {
         id: "render",
         label: "RENDER",
-        status: renderState === "idle" ? (!translationResult ? "blocked" : "active") : renderState,
+        status: renderState === "idle" ? (!voiceResult ? "blocked" : "active") : renderState,
         reason: renderOutput
           ? "Đã có file render thành công."
           : renderState === "processing"
             ? "Đang render video."
             : renderState === "failed"
               ? "Render chưa hoàn tất. Hãy kiểm tra lỗi và thử lại."
-              : translationResult
-                ? "Đủ input tối thiểu để render."
-                : "Cần bản dịch trước."
+              : voiceResult
+                ? "Đã đủ input cho pipeline dubbing hiện tại."
+                : translationResult
+                  ? "Cần AI Voice trước khi render bản dubbing hiện tại."
+                  : "Cần bản dịch trước."
       }
     ];
 
@@ -157,8 +167,16 @@
         reason: !translationResult ? "Cần bản dịch trước." : anyBusy ? "Đang có tác vụ xử lý." : ""
       },
       render: {
-        enabled: Boolean(source && translationResult) && !missingSource && !anyBusy,
-        reason: missingSource ? "File nguồn không còn tồn tại." : !translationResult ? "Cần bản dịch trước khi render." : anyBusy ? "Hãy chờ tác vụ hiện tại hoàn tất." : ""
+        enabled: Boolean(source && translationResult && voiceResult) && !missingSource && !anyBusy,
+        reason: missingSource
+          ? "File nguồn không còn tồn tại."
+          : !translationResult
+            ? "Cần bản dịch trước khi render."
+            : !voiceResult
+              ? "Cần AI Voice trước khi render bản dubbing hiện tại."
+              : anyBusy
+                ? "Hãy chờ tác vụ hiện tại hoàn tất."
+                : ""
       },
       export: {
         enabled: Boolean(renderOutput) && renderState === "completed",
