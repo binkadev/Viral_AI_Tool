@@ -12,6 +12,8 @@ const bottomJs = fs.readFileSync(path.join(root, "renderer", "core-editor-bottom
 const bottomCss = fs.readFileSync(path.join(root, "renderer", "core-editor-bottom-dock.css"), "utf8");
 const assetsJs = fs.readFileSync(path.join(root, "renderer", "core-editor-assets.js"), "utf8");
 const assetsCss = fs.readFileSync(path.join(root, "renderer", "core-editor-assets.css"), "utf8");
+const selectionJs = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.js"), "utf8");
+const selectionCss = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 for (const required of [
@@ -98,12 +100,26 @@ for (const required of [
   assert(assetsCss.includes(required), "Assets panel CSS missing: " + required);
 }
 
+for (const required of [
+  "is-selected",
+  "transcript-list .transcript-row",
+  "core-bottom-segment",
+  "viral-ai:editor-segment-selected",
+  "aria-selected"
+]) {
+  assert(selectionJs.includes(required), "Selection bridge missing: " + required);
+}
+assert(selectionCss.includes(".core-bottom-segment.is-selected"));
+assert(selectionCss.includes(".transcript-row.is-selected"));
+
 assert(index.includes('href="core-layout.css"'));
 assert(index.includes('href="premium-preview.css"'));
 assert(index.includes('href="core-editor-bottom-dock.css"'));
 assert(index.includes('href="core-editor-assets.css"'));
+assert(index.includes('href="core-editor-selection.css"'));
 assert(index.includes('src="core-layout.js"'));
 assert(index.includes('src="core-editor-bottom-dock.js"'));
 assert(index.includes('src="core-editor-assets.js"'));
+assert(index.includes('src="core-editor-selection.js"'));
 
-console.log("Core editor workspace v2 layout tests passed.");
+console.log("Core editor workspace v2 layout and selection tests passed.");
