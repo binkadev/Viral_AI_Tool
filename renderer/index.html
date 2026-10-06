@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi" data-theme="aurora-light" data-motion="balanced" data-scale="comfortable">
+<html lang="vi" data-theme="aurora-light" data-motion="balanced" data-scale="comfortable" data-startup="booting">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -23,6 +23,7 @@
     })();
   </script>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="core-startup-experience.css" />
   <link rel="stylesheet" href="core-editor.css" />
   <link rel="stylesheet" href="core-workflow.css" />
   <link rel="stylesheet" href="core-layout.css" />
@@ -45,6 +46,18 @@
   <link rel="stylesheet" href="core-editor-timeline-interactions.css" />
 </head>
 <body>
+  <div id="appStartup" class="app-startup" role="presentation" aria-hidden="true">
+    <div class="startup-grid"></div>
+    <div class="startup-brand">
+      <div class="startup-logo-shell"><img src="brand-mark.svg" alt="" /></div>
+      <div class="startup-wordmark">
+        <strong>VIRAL AI</strong>
+        <span>CREATOR STUDIO</span>
+      </div>
+      <div class="startup-progress" aria-hidden="true"><i></i></div>
+    </div>
+  </div>
+
   <div class="ambient-layer" aria-hidden="true">
     <span class="ambient ambient-a"></span>
     <span class="ambient ambient-b"></span>
@@ -53,7 +66,7 @@
 
   <header class="titlebar">
     <div class="drag">
-      <div class="app-icon">V</div>
+      <div class="app-icon viral-brand-icon"><img src="brand-mark.svg" alt="" /></div>
       <strong>Viral AI Tool</strong>
       <span id="desktopPill" class="desktop-pill">Ứng dụng desktop</span>
     </div>
@@ -67,7 +80,7 @@
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">V</div>
+        <div class="brand-mark viral-brand-mark"><img src="brand-mark.svg" alt="" /></div>
         <div>
           <div class="brand-name">VIRAL AI</div>
           <div class="brand-sub">CREATOR STUDIO</div>
@@ -178,5 +191,6 @@
   <script src="core-editor-output-state.js"></script>
   <script src="core-editor-timeline-interactions.js"></script>
   <script src="core-editor-shortcuts.js"></script>
+  <script src="core-startup-experience.js"></script>
 </body>
 </html>
