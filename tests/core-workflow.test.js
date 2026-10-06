@@ -136,6 +136,10 @@ for (const selector of ["#speechStart", "#translationStart", "#voiceStart", "#re
 }
 assert(workflow.includes('dataset.coreCapability = "coming-soon"'), "Unimplemented controls must be labeled coming soon.");
 assert(workflow.includes('event.stopImmediatePropagation()'), "Quick project must not fall through to the legacy AI-video route.");
+assert(workflow.includes('import: "IMPORT"'), "English workflow stage labels must be explicit.");
+assert(workflow.includes('import: "NHẬP"'), "Vietnamese workflow stage labels must be explicit.");
+assert(workflow.includes("stageReason(stage, derived, c)"), "Workflow stage reasons must be localized in the UI layer.");
+assert(workflow.includes('controlReason("render"'), "Disabled render guidance must be localized in the UI layer.");
 assert(!coreEditorCss.includes('[data-page="ai-video"]'), "The production Core Editor route must remain visible.");
 assert(coreEditorCss.includes('[data-page="workflow"]'), "Workflow Builder entry points must stay out of the core UI pass.");
 assert(css.includes(".core-workflow-stage.is-failed"));
