@@ -1,0 +1,406 @@
+/* Premium AI Creative Studio visual prototype for Core Editor only.
+ * Scoped by html.core-editor-premium so other product screens stay unchanged.
+ */
+
+html.core-editor-premium{
+  --bg:#090b0f;
+  --bg-soft:#0d1016;
+  --surface:rgba(18,22,29,.82);
+  --surface-solid:#11151c;
+  --surface-soft:#151a22;
+  --surface-strong:#1b212b;
+  --line:rgba(255,255,255,.065);
+  --line-strong:rgba(255,255,255,.11);
+  --text:#f2f3f5;
+  --text-soft:#a7adb8;
+  --text-faint:#6f7784;
+  --accent:#8a7cff;
+  --accent-2:#67b9ff;
+  --accent-3:#59d2b0;
+  --accent-4:#e7b56d;
+  --accent-5:#b874ff;
+  --accent-contrast:#fff;
+  --success:#58d6a5;
+  --warning:#e8bb69;
+  --danger:#ff7f91;
+  --sidebar-bg:rgba(10,13,18,.92);
+  --topbar-bg:rgba(9,11,15,.84);
+  --studio-ease:cubic-bezier(.22,1,.36,1);
+  --studio-fast:150ms;
+  --studio-card:200ms;
+  --studio-panel:280ms;
+  --studio-page:450ms;
+}
+
+html.core-editor-premium body{
+  background:
+    radial-gradient(circle at 55% 24%,rgba(102,92,255,.075),transparent 29%),
+    radial-gradient(circle at 83% 70%,rgba(74,142,255,.055),transparent 27%),
+    linear-gradient(180deg,#0b0d12 0%,#090b0f 58%,#080a0d 100%);
+}
+
+html.core-editor-premium body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  opacity:.18;
+  background-image:
+    radial-gradient(circle at 20% 20%,rgba(255,255,255,.035) 0 1px,transparent 1.2px),
+    radial-gradient(circle at 80% 55%,rgba(255,255,255,.022) 0 1px,transparent 1.2px);
+  background-size:4px 4px,5px 5px;
+  mix-blend-mode:soft-light;
+}
+
+html.core-editor-premium .ambient-layer{opacity:.46}
+html.core-editor-premium .ambient{filter:blur(110px);animation:none!important}
+html.core-editor-premium .ambient-a{background:#6d5cff;opacity:.13}
+html.core-editor-premium .ambient-b{background:#387dff;opacity:.10}
+html.core-editor-premium .ambient-c{background:#a85bff;opacity:.08}
+
+html.core-editor-premium .titlebar{
+  background:rgba(8,10,14,.92);
+  border-bottom:1px solid rgba(255,255,255,.055);
+  color:var(--text);
+  box-shadow:0 1px 0 rgba(255,255,255,.015);
+}
+
+html.core-editor-premium .desktop-pill{
+  color:#bbb3ff;
+  border-color:rgba(138,124,255,.22);
+  background:rgba(138,124,255,.075);
+}
+
+html.core-editor-premium .sidebar{
+  background:
+    linear-gradient(180deg,rgba(16,19,25,.96),rgba(10,13,18,.94)),
+    var(--sidebar-bg);
+  border-inline-end:1px solid rgba(255,255,255,.055);
+  box-shadow:18px 0 50px rgba(0,0,0,.12);
+}
+
+html.core-editor-premium .brand-name,
+html.core-editor-premium .workspace strong,
+html.core-editor-premium .profile b{color:var(--text)}
+
+html.core-editor-premium .workspace,
+html.core-editor-premium .credit-card{
+  border-color:rgba(255,255,255,.065);
+  background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 10px 30px rgba(0,0,0,.12);
+}
+
+html.core-editor-premium .nav-item{
+  color:#8c94a3;
+  transition:background var(--studio-fast) var(--studio-ease),color var(--studio-fast) var(--studio-ease),transform var(--studio-fast) var(--studio-ease);
+}
+html.core-editor-premium .nav-item:hover{
+  color:#d9dce2;
+  background:rgba(255,255,255,.038);
+  transform:translateX(2px);
+}
+html.core-editor-premium .nav-item.active{
+  color:#f1f2f5;
+  background:linear-gradient(90deg,rgba(138,124,255,.13),rgba(103,185,255,.055));
+  box-shadow:inset 0 0 0 1px rgba(138,124,255,.10);
+}
+html.core-editor-premium .nav-icon{
+  background:rgba(255,255,255,.035)!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+}
+
+html.core-editor-premium .topbar{
+  background:rgba(10,12,17,.76);
+  border-bottom-color:rgba(255,255,255,.055);
+  box-shadow:0 12px 30px rgba(0,0,0,.08);
+}
+
+html.core-editor-premium .command-palette,
+html.core-editor-premium .select-trigger,
+html.core-editor-premium .button.ghost{
+  background:rgba(255,255,255,.035);
+  border-color:rgba(255,255,255,.07);
+  color:var(--text-soft);
+  box-shadow:inset 0 1px rgba(255,255,255,.025);
+}
+
+html.core-editor-premium .page{
+  color:var(--text);
+}
+
+html.core-editor-premium .core-editor-docked-page{
+  position:relative;
+  isolation:isolate;
+}
+html.core-editor-premium .core-editor-docked-page::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:38px 3% 12%;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 52% 27%,rgba(111,92,255,.11),transparent 28%),
+    radial-gradient(circle at 78% 36%,rgba(60,126,255,.055),transparent 24%),
+    radial-gradient(circle at 46% 82%,rgba(165,94,255,.05),transparent 28%);
+  filter:blur(34px);
+}
+
+html.core-editor-premium .core-workflow-shell{
+  border-color:rgba(255,255,255,.06);
+  background:linear-gradient(180deg,rgba(21,25,32,.78),rgba(14,17,23,.72));
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 14px 34px rgba(0,0,0,.12);
+  backdrop-filter:blur(18px) saturate(120%);
+}
+html.core-editor-premium .core-stage-index{
+  background:#141820;
+  border-color:rgba(255,255,255,.09);
+}
+html.core-editor-premium .core-stage-link{background:rgba(255,255,255,.08)}
+html.core-editor-premium .core-workflow-stage.is-active .core-stage-index{
+  background:rgba(138,124,255,.13);
+  border-color:rgba(138,124,255,.38);
+  box-shadow:0 0 0 4px rgba(138,124,255,.06),0 0 22px rgba(138,124,255,.10);
+}
+html.core-editor-premium .core-workflow-stage.is-completed .core-stage-index{
+  background:rgba(88,214,165,.10);
+  border-color:rgba(88,214,165,.28);
+}
+
+html.core-editor-premium .core-editor-focus-section{
+  animation:studioEditorEnter var(--studio-page) var(--studio-ease) both;
+}
+
+html.core-editor-premium .core-editor-assets-panel,
+html.core-editor-premium .core-editor-inspector,
+html.core-editor-premium .core-editor-bottom-dock{
+  border-color:rgba(255,255,255,.065);
+  background:linear-gradient(180deg,rgba(18,22,29,.88),rgba(13,16,22,.84));
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.035),
+    0 22px 60px rgba(0,0,0,.16);
+  backdrop-filter:blur(18px) saturate(118%);
+}
+
+html.core-editor-premium .core-editor-assets-panel{animation:studioPanelIn var(--studio-panel) var(--studio-ease) 40ms both}
+html.core-editor-premium .core-editor-inspector{animation:studioPanelIn var(--studio-panel) var(--studio-ease) 90ms both}
+html.core-editor-premium .core-editor-bottom-dock{animation:studioDockIn var(--studio-panel) var(--studio-ease) 120ms both}
+
+html.core-editor-premium .core-assets-head,
+html.core-editor-premium .core-inspector-tabs,
+html.core-editor-premium .core-bottom-dock-head{
+  background:rgba(255,255,255,.022);
+  border-color:rgba(255,255,255,.055);
+}
+
+html.core-editor-premium .core-asset-item{
+  color:var(--text);
+  border-color:rgba(255,255,255,.055);
+  background:rgba(255,255,255,.025);
+  box-shadow:inset 0 1px rgba(255,255,255,.018);
+}
+html.core-editor-premium .core-asset-item:hover:not(:disabled){
+  transform:translateY(-2px);
+  border-color:rgba(138,124,255,.20);
+  background:rgba(255,255,255,.045);
+  box-shadow:0 12px 30px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.028);
+}
+html.core-editor-premium .core-asset-icon{
+  color:#b8b1ff;
+  background:linear-gradient(145deg,rgba(138,124,255,.15),rgba(103,185,255,.07));
+  box-shadow:inset 0 0 0 1px rgba(138,124,255,.10);
+}
+
+html.core-editor-premium .preview.core-player-host,
+html.core-editor-premium .preview.preview-real{
+  position:relative;
+  border:1px solid rgba(255,255,255,.075)!important;
+  background:
+    radial-gradient(circle at 50% 42%,rgba(92,79,255,.10),transparent 29%),
+    radial-gradient(circle at 50% 62%,rgba(47,91,160,.07),transparent 36%),
+    linear-gradient(180deg,#0c1017,#090c12)!important;
+  box-shadow:
+    0 34px 80px rgba(0,0,0,.30),
+    0 0 0 1px rgba(0,0,0,.34),
+    inset 0 1px rgba(255,255,255,.04)!important;
+}
+html.core-editor-premium .preview.core-player-host::before{
+  content:"";
+  position:absolute;
+  inset:12% 18%;
+  pointer-events:none;
+  background:radial-gradient(circle,rgba(115,98,255,.12),transparent 64%);
+  filter:blur(28px);
+  opacity:.7;
+}
+html.core-editor-premium .preview-video,
+html.core-editor-premium video.core-player-media{
+  z-index:1;
+  filter:drop-shadow(0 18px 38px rgba(0,0,0,.28));
+}
+html.core-editor-premium .core-player-timeline,
+html.core-editor-premium .core-player-controls{
+  z-index:3;
+  background:rgba(10,13,18,.72)!important;
+  border-color:rgba(255,255,255,.07)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025),0 12px 26px rgba(0,0,0,.18)!important;
+  backdrop-filter:blur(14px);
+}
+
+html.core-editor-premium .core-inspector-tab,
+html.core-editor-premium .core-bottom-tab{
+  color:#7f8795;
+  transition:transform var(--studio-fast) var(--studio-ease),background var(--studio-fast) var(--studio-ease),color var(--studio-fast) var(--studio-ease),box-shadow var(--studio-fast) var(--studio-ease);
+}
+html.core-editor-premium .core-inspector-tab:hover:not(.is-active),
+html.core-editor-premium .core-bottom-tab:hover:not(.is-active){
+  color:#d8dbe1;
+  background:rgba(255,255,255,.035);
+}
+html.core-editor-premium .core-inspector-tab.is-active,
+html.core-editor-premium .core-bottom-tab.is-active{
+  color:#d8d5ff;
+  background:rgba(138,124,255,.105);
+  box-shadow:inset 0 0 0 1px rgba(138,124,255,.13),0 8px 22px rgba(0,0,0,.12);
+}
+
+html.core-editor-premium .core-inspector-card,
+html.core-editor-premium .core-inspector-static,
+html.core-editor-premium .core-inspector-card .speech-field,
+html.core-editor-premium .core-inspector-card .voice-language-summary,
+html.core-editor-premium .core-inspector-card [class*="connection-panel"],
+html.core-editor-premium .core-inspector-card [class*="connection-row"]{
+  color:var(--text);
+}
+
+html.core-editor-premium .core-inspector-card .select,
+html.core-editor-premium .core-inspector-card input,
+html.core-editor-premium .core-inspector-card select,
+html.core-editor-premium .core-inspector-card textarea{
+  color:var(--text);
+  background:#121720!important;
+  border-color:rgba(255,255,255,.07)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.02);
+}
+
+html.core-editor-premium .core-inspector-card .cloud-connection,
+html.core-editor-premium .core-inspector-card .speech-cloud-panel,
+html.core-editor-premium .core-inspector-card .translation-connection,
+html.core-editor-premium .core-inspector-card .voice-connection,
+html.core-editor-premium .core-inspector-card [class*="connection-panel"],
+html.core-editor-premium .core-inspector-card [class*="connection-row"]{
+  background:rgba(255,255,255,.02)!important;
+  border-color:rgba(255,255,255,.055)!important;
+}
+
+html.core-editor-premium .core-timeline-workspace{
+  border-color:rgba(255,255,255,.055);
+  background:#0f131a;
+}
+html.core-editor-premium .core-track-labels,
+html.core-editor-premium .core-time-ruler{
+  background:#11151d;
+  border-color:rgba(255,255,255,.055);
+}
+html.core-editor-premium .core-track-lane{
+  border-color:rgba(255,255,255,.045);
+  background:
+    repeating-linear-gradient(90deg,transparent 0,transparent 9.9%,rgba(255,255,255,.028) 10%),
+    #0d1117;
+}
+html.core-editor-premium .core-ruler-tick i{background:rgba(255,255,255,.12)}
+html.core-editor-premium .core-ruler-tick time{color:#646d7d}
+html.core-editor-premium .core-source-clip{
+  color:#d9e2ff;
+  background:linear-gradient(180deg,rgba(84,126,226,.44),rgba(58,90,166,.31));
+  box-shadow:inset 0 0 0 1px rgba(122,162,255,.18);
+}
+html.core-editor-premium .core-audio-clip{
+  color:#d6fff0;
+  background:linear-gradient(180deg,rgba(57,151,123,.42),rgba(40,112,91,.28));
+  box-shadow:inset 0 0 0 1px rgba(91,209,172,.17);
+}
+html.core-editor-premium .core-bottom-segment{
+  color:#e2deff;
+  background:linear-gradient(180deg,rgba(128,105,255,.43),rgba(88,69,190,.28));
+  box-shadow:inset 0 0 0 1px rgba(156,140,255,.18);
+}
+html.core-editor-premium .core-bottom-segment.is-active{
+  color:white;
+  background:linear-gradient(180deg,rgba(143,119,255,.82),rgba(104,78,229,.68));
+  box-shadow:inset 0 0 0 1px rgba(194,185,255,.22),0 6px 18px rgba(91,70,214,.22);
+}
+html.core-editor-premium .core-bottom-segment.is-selected{
+  outline:1px solid rgba(222,217,255,.72);
+  outline-offset:1px;
+}
+
+html.core-editor-premium .core-bottom-resize-handle::after{background:rgba(255,255,255,.10)}
+html.core-editor-premium .core-bottom-resize-handle:hover::after{background:rgba(138,124,255,.42)}
+
+html.core-editor-premium .core-bottom-collapse,
+html.core-editor-premium .core-assets-head button{
+  color:#9ca4b2;
+  border-color:rgba(255,255,255,.065);
+  background:rgba(255,255,255,.025);
+}
+html.core-editor-premium .core-bottom-collapse:hover,
+html.core-editor-premium .core-assets-head button:hover{
+  color:#e7e9ed;
+  border-color:rgba(138,124,255,.20);
+  background:rgba(255,255,255,.045);
+}
+
+html.core-editor-premium .core-editor-bottom-dock .core-transcript-dock .speech-result-head{
+  background:rgba(16,20,27,.92);
+}
+html.core-editor-premium .transcript-row{
+  border-color:rgba(255,255,255,.05)!important;
+  background:rgba(255,255,255,.018)!important;
+}
+html.core-editor-premium .transcript-row:hover{
+  background:rgba(255,255,255,.032)!important;
+}
+html.core-editor-premium .transcript-row.is-selected{
+  border-color:rgba(138,124,255,.30)!important;
+  background:rgba(138,124,255,.07)!important;
+}
+html.core-editor-premium .transcript-row.is-active{
+  box-shadow:inset 3px 0 #8a7cff;
+}
+
+html.core-editor-premium .button.primary{
+  background:linear-gradient(135deg,#796cff,#6e7dff 52%,#58b5ff);
+  box-shadow:0 10px 28px rgba(103,102,255,.20);
+}
+html.core-editor-premium .button.primary:hover{
+  box-shadow:0 14px 34px rgba(103,102,255,.27);
+}
+
+@keyframes studioEditorEnter{
+  from{opacity:0;transform:translateY(10px);filter:blur(5px)}
+  to{opacity:1;transform:translateY(0);filter:blur(0)}
+}
+@keyframes studioPanelIn{
+  from{opacity:0;transform:translateY(8px) scale(.992);filter:blur(4px)}
+  to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+}
+@keyframes studioDockIn{
+  from{opacity:0;transform:translateY(10px);filter:blur(4px)}
+  to{opacity:1;transform:translateY(0);filter:blur(0)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  html.core-editor-premium .core-editor-focus-section,
+  html.core-editor-premium .core-editor-assets-panel,
+  html.core-editor-premium .core-editor-inspector,
+  html.core-editor-premium .core-editor-bottom-dock{
+    animation:none!important;
+  }
+  html.core-editor-premium .nav-item,
+  html.core-editor-premium .core-asset-item,
+  html.core-editor-premium .core-inspector-tab,
+  html.core-editor-premium .core-bottom-tab{
+    transition:none!important;
+  }
+}
