@@ -13,6 +13,15 @@
     }
   }
 
+  function catalog(key, fallback) {
+    try {
+      const value = window.I18N?.t?.(locale(), key);
+      return typeof value === "string" && value !== key ? value : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   function copy() {
     return locale() === "en"
       ? {
@@ -52,6 +61,14 @@
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
+  }
+
+  function workflowSnapshot() {
+    try {
+      return window.ViralCoreWorkflowModel?.derive?.(appState() || {}) || null;
+    } catch {
+      return null;
+    }
   }
 
   function latestSource() {
@@ -232,6 +249,78 @@
     });
   }
 
+  function actionState(button) {
+    if (!(button instanceof HTMLButtonElement)) return "blocked";
+    const value = String(button.textContent || "");
+    if (button.dataset.coreJobState === "processing" || /Stop|Dừng|Hủy|Cancel/i.test(value)) return "processing";
+    if (button.disabled) return "blocked";
+    return "ready";
+  }
+
+  function outputActionState(button) {
+    const renderState = String(workflowSnapshot()?.jobs?.render || "idle");
+    if (["preparing", "uploading", "processing"].includes(renderState)) return "processing";
+    return actionState(button);
+  }
+
+  function stageStatusLabel(value) {
+    const fallback = locale() === "en"
+      ? { ready: "Ready", processing: "Processing", blocked: "Not ready" }
+      : { ready: "Sẵn sàng", processing: "Đang xử lý", blocked: "Chưa sẵn sàng" };
+    if (value === "processing") return catalog("common.processing", fallback.processing);
+    if (value === "blocked") return catalog("translation.notReady", fallback.blocked);
+    return catalog("translation.ready", fallback.ready);
+  }
+
+  function syncWorkflowActions(page) {
+    const stages = [
+      ["speech", "#speechStart, #speechStop"],
+      ["translate", "#translationStart, #translationStop"],
+      ["voice", "#voiceStart, #voiceStop"],
+      ["output", "#render"]
+    ];
+
+    stages.forEach(([stage, selector]) => {
+      const button = page?.querySelector?.(selector);
+      const tab = page?.querySelector?.('.core-inspector-tab[data-inspector-tab="' + stage + '"]');
+      const value = stage === "output" ? outputActionState(button) : actionState(button);
+
+      if (button instanceof HTMLButtonElement) {
+        button.classList.add("core-commercial-action");
+        button.dataset.commercialActionState = value;
+        button.setAttribute("aria-busy", value === "processing" ? "true" : "false");
+      }
+
+      if (!(tab instanceof HTMLButtonElement)) return;
+      tab.setAttribute("data-commercial-stage-state", value);
+      tab.classList.toggle("has-commercial-active", value === "processing");
+      tab.classList.toggle("is-commercial-blocked", value === "blocked");
+
+      let dot = tab.querySelector(":scope > .core-commercial-stage-dot");
+      if (!dot) {
+        dot = document.createElement("span");
+        dot.className = "core-commercial-stage-dot";
+        dot.setAttribute("aria-hidden", "true");
+        tab.appendChild(dot);
+      }
+
+      if (!tab.dataset.commercialBaseLabel) {
+        tab.dataset.commercialBaseLabel = String(tab.textContent || "").trim();
+      }
+      const base = tab.dataset.commercialBaseLabel || String(tab.textContent || "").trim();
+      const status = stageStatusLabel(value);
+      tab.title = base + " · " + status;
+      tab.setAttribute("aria-label", tab.title);
+    });
+
+    page?.querySelectorAll?.(".core-inspector-card").forEach(card => {
+      if (!(card instanceof HTMLElement)) return;
+      const processing = card.querySelector('[data-commercial-action-state="processing"]');
+      const available = card.querySelector('[data-commercial-action-state="ready"]');
+      card.dataset.commercialCardState = processing ? "processing" : available ? "ready" : "idle";
+    });
+  }
+
   function classifyToast(toast) {
     if (!(toast instanceof HTMLElement)) return;
     const value = String(toast.textContent || "").toLowerCase();
@@ -262,6 +351,7 @@
     syncAssets(page);
     syncMediaState(page);
     syncConnectionPanels(page);
+    syncWorkflowActions(page);
     wireToast();
   }
 
@@ -276,7 +366,7 @@
     if (page) {
       new MutationObserver(queue).observe(page, {
         attributes: true,
-        attributeFilter: ["class", "data-core-media-state"],
+        attributeFilter: ["class", "data-core-media-state", "disabled", "data-core-job-state"],
         childList: true,
         subtree: true
       });

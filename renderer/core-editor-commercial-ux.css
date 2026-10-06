@@ -106,6 +106,7 @@ html.core-editor-premium .core-commercial-media-card{
   box-shadow:0 20px 56px rgba(0,0,0,.34);
   text-align:center;
   pointer-events:auto;
+  animation:coreCommercialCardIn 180ms cubic-bezier(.22,1,.36,1) both;
 }
 
 html.core-editor-premium .core-commercial-media-icon{
@@ -256,6 +257,94 @@ html.core-editor-premium .core-inspector-pane{
   scrollbar-color:#33415e transparent;
 }
 
+html.core-editor-premium .core-inspector-pane.is-active{
+  animation:coreCommercialPaneIn 150ms cubic-bezier(.22,1,.36,1) both;
+}
+
+html.core-editor-premium .core-inspector-tab{
+  position:relative;
+  gap:7px;
+}
+
+html.core-editor-premium .core-commercial-stage-dot{
+  width:7px;
+  height:7px;
+  flex:0 0 7px;
+  border-radius:999px;
+  background:#647087;
+  box-shadow:0 0 0 3px transparent;
+  transition:background 140ms ease,box-shadow 140ms ease,transform 140ms ease;
+}
+
+html.core-editor-premium .core-inspector-tab[data-commercial-stage-state="ready"] .core-commercial-stage-dot{
+  background:#33c27f;
+  box-shadow:0 0 0 3px rgba(51,194,127,.09);
+}
+
+html.core-editor-premium .core-inspector-tab[data-commercial-stage-state="blocked"] .core-commercial-stage-dot{
+  background:#667188;
+}
+
+html.core-editor-premium .core-inspector-tab[data-commercial-stage-state="processing"] .core-commercial-stage-dot{
+  background:#7c8cff;
+  box-shadow:0 0 0 4px rgba(124,140,255,.12);
+  animation:coreCommercialPulse 1.4s ease-in-out infinite;
+}
+
+html.core-editor-premium .core-inspector-tab.has-commercial-active{
+  color:#fff;
+}
+
+html.core-editor-premium .core-inspector-card[data-commercial-card-state="processing"]{
+  border-color:rgba(124,140,255,.28);
+  box-shadow:inset 0 1px 0 rgba(124,140,255,.05);
+}
+
+html.core-editor-premium .core-commercial-action{
+  position:relative;
+  transition:transform 120ms ease,background 160ms ease,border-color 160ms ease,box-shadow 160ms ease;
+}
+
+html.core-editor-premium .core-commercial-action:active:not(:disabled){
+  transform:translateY(1px) scale(.995);
+}
+
+html.core-editor-premium .core-commercial-action[data-commercial-action-state="processing"]{
+  padding-inline-end:38px!important;
+  border-color:rgba(124,140,255,.42)!important;
+  cursor:progress;
+}
+
+html.core-editor-premium .core-commercial-action[data-commercial-action-state="processing"]::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  right:13px;
+  width:13px;
+  height:13px;
+  margin-top:-7px;
+  border:2px solid rgba(255,255,255,.32);
+  border-top-color:#fff;
+  border-radius:999px;
+  animation:coreCommercialSpin .75s linear infinite;
+}
+
+html.core-editor-premium .core-commercial-action[data-commercial-action-state="blocked"]{
+  filter:saturate(.65);
+}
+
+html.core-editor-premium .core-asset-item{
+  transition:background 150ms ease,border-color 150ms ease,transform 120ms ease,box-shadow 150ms ease;
+}
+
+html.core-editor-premium .core-asset-item:active:not(:disabled){
+  transform:scale(.985);
+}
+
+html.core-editor-premium .core-editor-assets-panel{
+  transition:width 190ms cubic-bezier(.22,1,.36,1),min-width 190ms cubic-bezier(.22,1,.36,1),max-width 190ms cubic-bezier(.22,1,.36,1),border-color 160ms ease;
+}
+
 html.core-editor-premium .core-inspector-card .speech-card-head h3,
 html.core-editor-premium .core-inspector-card > h3,
 html.core-editor-premium .core-inspector-static > h3{
@@ -288,6 +377,11 @@ html.core-editor-premium .toast{
   font-weight:500;
 }
 
+html.core-editor-premium .toast.show,
+html.core-editor-premium .toast.is-visible{
+  animation:coreCommercialToastIn 180ms cubic-bezier(.22,1,.36,1) both;
+}
+
 html.core-editor-premium .toast[data-tone="success"]{
   border-color:rgba(51,194,127,.30);
   box-shadow:inset 3px 0 #33c27f,0 16px 40px rgba(0,0,0,.28);
@@ -303,6 +397,28 @@ html.core-editor-premium .toast[data-tone="info"]{
   box-shadow:inset 3px 0 #61a8ff,0 16px 40px rgba(0,0,0,.28);
 }
 
+@keyframes coreCommercialPaneIn{
+  from{opacity:.25;transform:translateY(4px)}
+  to{opacity:1;transform:none}
+}
+
+@keyframes coreCommercialCardIn{
+  from{opacity:0;transform:translateY(7px) scale(.99)}
+  to{opacity:1;transform:none}
+}
+
+@keyframes coreCommercialToastIn{
+  from{opacity:0;transform:translateY(8px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+
+@keyframes coreCommercialSpin{to{transform:rotate(360deg)}}
+
+@keyframes coreCommercialPulse{
+  0%,100%{transform:scale(1);opacity:1}
+  50%{transform:scale(.84);opacity:.65}
+}
+
 @media (max-width:1199px){
   html.core-editor-premium .core-editor-assets-panel .core-assets-head strong,
   html.core-editor-premium .core-editor-assets-panel .core-assets-section-label,
@@ -313,5 +429,15 @@ html.core-editor-premium .toast[data-tone="info"]{
 }
 
 @media (prefers-reduced-motion:reduce){
-  html.core-editor-premium .core-commercial-media-action{transition:none!important}
+  html.core-editor-premium .core-commercial-media-action,
+  html.core-editor-premium .core-editor-assets-panel,
+  html.core-editor-premium .core-asset-item,
+  html.core-editor-premium .core-commercial-action,
+  html.core-editor-premium .core-commercial-stage-dot{transition:none!important}
+  html.core-editor-premium .core-commercial-media-card,
+  html.core-editor-premium .core-inspector-pane.is-active,
+  html.core-editor-premium .toast.show,
+  html.core-editor-premium .toast.is-visible,
+  html.core-editor-premium .core-inspector-tab[data-commercial-stage-state="processing"] .core-commercial-stage-dot,
+  html.core-editor-premium .core-commercial-action[data-commercial-action-state="processing"]::after{animation:none!important}
 }

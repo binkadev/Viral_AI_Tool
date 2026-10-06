@@ -23,7 +23,18 @@ for (const required of [
   "data-commercial-media-action",
   "typeof addFiles === \"function\"",
   "dataset.fileState",
-  "classifyToast"
+  "classifyToast",
+  "syncWorkflowActions",
+  'setAttribute("data-commercial-stage-state"',
+  "commercialActionState",
+  "core-commercial-stage-dot",
+  'setAttribute("aria-busy"',
+  "window.I18N?.t",
+  'catalog("common.processing"',
+  'catalog("translation.notReady"',
+  "ViralCoreWorkflowModel?.derive",
+  "workflowSnapshot()?.jobs?.render",
+  'if (!(button instanceof HTMLButtonElement)) return "blocked"'
 ]) {
   assert(js.includes(required), "Commercial UX JS missing: " + required);
 }
@@ -34,7 +45,14 @@ for (const required of [
   ".core-commercial-connection-badge",
   '[data-commercial-connection-state="ready"]',
   '.toast[data-tone="error"]',
-  '.core-editor-assets-panel.is-collapsed'
+  '.core-editor-assets-panel.is-collapsed',
+  ".core-commercial-stage-dot",
+  '[data-commercial-stage-state="processing"]',
+  '[data-commercial-action-state="processing"]',
+  "coreCommercialPaneIn",
+  "coreCommercialSpin",
+  "coreCommercialPulse",
+  "prefers-reduced-motion"
 ]) {
   assert(css.includes(required), "Commercial UX CSS missing: " + required);
 }
