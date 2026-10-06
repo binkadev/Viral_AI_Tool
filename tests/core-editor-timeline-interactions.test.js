@@ -6,10 +6,12 @@ const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
 const js = read("renderer/core-editor-timeline-interactions.js");
+const shortcuts = read("renderer/core-editor-shortcuts.js");
 const css = read("renderer/core-editor-timeline-interactions.css");
 const index = read("renderer/index.html");
 
 assert.doesNotThrow(() => new Function(js), "Timeline interaction JS must parse.");
+assert.doesNotThrow(() => new Function(shortcuts), "Editor shortcuts JS must parse.");
 
 for (const required of [
   "activeVideo(page = editorPage())",
@@ -34,6 +36,19 @@ for (const required of [
 }
 
 for (const required of [
+  "coreShortcutWired",
+  "ArrowLeft",
+  "ArrowRight",
+  "event.shiftKey ? 1 : 5",
+  "seekBy(media, delta)",
+  "viral-ai:editor-shortcut-seek",
+  "aria-keyshortcuts",
+  "contenteditable='plaintext-only'"
+]) {
+  assert(shortcuts.includes(required), "Editor shortcuts JS missing: " + required);
+}
+
+for (const required of [
   ".core-editor-bottom-dock.is-scrubbing",
   ".core-timeline-stage.is-zooming",
   ".core-bottom-segment.is-selected",
@@ -46,5 +61,6 @@ for (const required of [
 
 assert(index.includes('href="core-editor-timeline-interactions.css"'), "Timeline interaction CSS must be loaded.");
 assert(index.includes('src="core-editor-timeline-interactions.js"'), "Timeline interaction JS must be loaded.");
+assert(index.includes('src="core-editor-shortcuts.js"'), "Editor shortcuts JS must be loaded.");
 
 console.log("core-editor-timeline-interactions tests passed");
