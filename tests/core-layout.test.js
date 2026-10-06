@@ -108,7 +108,12 @@ for (const required of [
   "transcript-list .transcript-row",
   "core-bottom-segment",
   "viral-ai:editor-segment-selected",
-  "aria-selected"
+  "aria-selected",
+  "dispatchSelection(index, source)",
+  "moveTranscriptSelection",
+  "ArrowUp",
+  "ArrowDown",
+  'dispatchSelection(index, "transcript")'
 ]) {
   assert(selectionJs.includes(required), "Selection bridge missing: " + required);
 }
