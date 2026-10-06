@@ -46,7 +46,8 @@
     "test:core-editor-focus": "node tests/core-editor-focus.test.js",
     "test:core-editor-workbench": "node tests/core-editor-workbench.test.js",
     "test:core-editor-commercial-ux": "node tests/core-editor-commercial-ux.test.js",
-    "test:core-editor-activity": "node tests/core-editor-activity.test.js"
+    "test:core-editor-activity": "node tests/core-editor-activity.test.js",
+    "test:core-editor-output-state": "node tests/core-editor-output-state.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
