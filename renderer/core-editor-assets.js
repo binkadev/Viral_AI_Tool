@@ -37,6 +37,17 @@
         };
   }
 
+  function appState() {
+    try { return typeof state !== "undefined" ? state : null; }
+    catch { return null; }
+  }
+
+  function currentSource() {
+    const current = appState();
+    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
+    return jobs.find(job => job?.sourcePath && !job?.isRenderOutput) || null;
+  }
+
   function basename(value) {
     const raw = String(value || "");
     if (!raw) return "—";
@@ -49,11 +60,13 @@
     }
   }
 
-  function durationFor(video) {
+  function durationFor(video, source) {
     const nativeDuration = Number(video?.duration);
     if (Number.isFinite(nativeDuration) && nativeDuration > 0) return nativeDuration;
     const hint = Number(video?.dataset?.coreDurationHint || 0);
-    return Number.isFinite(hint) && hint > 0 ? hint : 0;
+    if (Number.isFinite(hint) && hint > 0) return hint;
+    const stored = Number(source?.meta?.duration || 0);
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
   }
 
   function formatDuration(seconds) {
@@ -122,16 +135,23 @@
   function updatePanel(panel, grid) {
     const c = copy();
     const video = grid.querySelector("video.preview-video, video.core-player-media");
+    const source = currentSource();
     const name = panel.querySelector("[data-source-name]");
     const meta = panel.querySelector("[data-source-meta]");
     const transcript = panel.querySelector("[data-transcript-asset]");
     const transcriptStatus = panel.querySelector("[data-transcript-status]");
 
-    if (name) name.textContent = basename(video?.currentSrc || video?.src);
+    const sourceName = source?.name || source?.sourcePath || video?.currentSrc || video?.src;
+    if (name) name.textContent = basename(sourceName);
+
     if (meta) {
-      const width = Number(video?.videoWidth || 0);
-      const height = Number(video?.videoHeight || 0);
-      const duration = durationFor(video);
+      const nativeWidth = Number(video?.videoWidth || 0);
+      const nativeHeight = Number(video?.videoHeight || 0);
+      const storedWidth = Number(source?.meta?.width || 0);
+      const storedHeight = Number(source?.meta?.height || 0);
+      const width = nativeWidth > 0 ? nativeWidth : storedWidth;
+      const height = nativeHeight > 0 ? nativeHeight : storedHeight;
+      const duration = durationFor(video, source);
       const dimensions = width > 0 && height > 0 ? width + "×" + height : "—";
       meta.textContent = dimensions + " · " + formatDuration(duration);
     }
@@ -151,7 +171,11 @@
     if (!(page instanceof HTMLElement) || !page.classList.contains("core-editor-workbench-page")) return;
     const focus = page.querySelector(":scope > .core-editor-focus-section");
     const grid = focus?.querySelector(".editor-grid");
-    if (!(grid instanceof HTMLElement) || !grid.querySelector("video.preview-video, video.core-player-media")) return;
+    if (!(grid instanceof HTMLElement)) return;
+
+    const video = grid.querySelector("video.preview-video, video.core-player-media");
+    const source = currentSource();
+    if (!video && !source) return;
 
     const panel = ensurePanel(grid);
     updatePanel(panel, grid);
