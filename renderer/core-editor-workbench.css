@@ -10,34 +10,35 @@
 .core-editor-workbench-page .core-editor-focus-section .stack{
   width:100%;
   min-width:0;
-  max-height:clamp(430px,56vh,650px);
-  overflow:auto;
-  overscroll-behavior:contain;
-  scrollbar-width:thin;
-  padding-right:2px;
+  max-height:none;
+  overflow:visible;
+  padding-right:0;
 }
 
 .core-editor-inspector{
   width:100%;
   min-width:0;
+  max-height:clamp(430px,56vh,650px);
   box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
   border:1px solid rgba(111,121,148,.12);
   border-radius:16px;
   background:rgba(255,255,255,.72);
   box-shadow:0 14px 34px rgba(26,32,48,.055), inset 0 1px rgba(255,255,255,.78);
   overflow:hidden;
   backdrop-filter:blur(16px);
+  overflow-anchor:none;
 }
 
 .core-inspector-tabs{
+  flex:0 0 auto;
   display:grid;
   grid-template-columns:repeat(4,minmax(0,1fr));
   gap:4px;
   padding:6px;
   border-bottom:1px solid rgba(111,121,148,.10);
-  background:rgba(245,247,253,.72);
-  position:sticky;
-  top:0;
+  background:rgba(245,247,253,.94);
   z-index:5;
 }
 
@@ -82,7 +83,16 @@
 
 .core-inspector-tab.is-blocked:not(.is-active){opacity:.64}
 
-.core-inspector-panes,
+.core-inspector-panes{
+  min-width:0;
+  min-height:0;
+  flex:1 1 auto;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  overflow-anchor:none;
+}
+
 .core-inspector-pane,
 .core-inspector-card,
 .core-inspector-card *{
@@ -101,6 +111,12 @@
   box-shadow:none!important;
   background:transparent!important;
   padding:2px!important;
+}
+
+.core-inspector-static{
+  width:100%;
+  margin:0 0 10px!important;
+  box-sizing:border-box;
 }
 
 .core-inspector-card .speech-card-head{
@@ -254,12 +270,13 @@
   .core-editor-workbench-page .core-editor-focus-section .editor-grid{
     grid-template-columns:minmax(0,1fr)!important;
   }
-  .core-editor-workbench-page .core-editor-focus-section .stack{
+  .core-editor-inspector{
     max-height:none;
-    overflow:visible;
-    position:static;
+    margin-top:4px;
   }
-  .core-editor-inspector{margin-top:4px}
+  .core-inspector-panes{
+    overflow:visible;
+  }
 }
 
 @media (max-width:620px){
