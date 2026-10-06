@@ -63,6 +63,19 @@
     }
   }
 
+  function moveTranscriptSelection(row, delta) {
+    const transcriptRows = rows();
+    const current = transcriptRows.indexOf(row);
+    if (current < 0 || !transcriptRows.length) return false;
+    const next = Math.max(0, Math.min(transcriptRows.length - 1, current + delta));
+    const target = transcriptRows[next];
+    if (!(target instanceof HTMLElement)) return false;
+    applySelection(next, { scrollTranscript: true });
+    dispatchSelection(next, "transcript");
+    target.focus({ preventScroll: true });
+    return true;
+  }
+
   function reapply() {
     queued = false;
     const count = rows().length;
@@ -80,10 +93,18 @@
     document.addEventListener("click", event => selectFromTarget(event.target), true);
     document.addEventListener("keydown", event => {
       if (!(event.target instanceof HTMLElement)) return;
-      if ((event.key === "Enter" || event.key === " ") && event.target.matches(".transcript-list .transcript-row")) {
+      if (!event.target.matches(".transcript-list .transcript-row")) return;
+
+      if (event.key === "Enter" || event.key === " ") {
         const index = indexOfRow(event.target);
         applySelection(index);
         dispatchSelection(index, "transcript");
+        return;
+      }
+
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        const delta = event.key === "ArrowUp" ? -1 : 1;
+        if (moveTranscriptSelection(event.target, delta)) event.preventDefault();
       }
     }, true);
 
