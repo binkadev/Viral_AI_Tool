@@ -18,6 +18,8 @@
       ? {
           ready: "Ready",
           needsSetup: "Needs setup",
+          running: "Running",
+          unavailable: "Unavailable",
           sourceMissingTitle: "Source video is unavailable",
           sourceMissingBody: "The original file may have been moved, renamed, or deleted. Your project data and completed processing are still kept.",
           sourceTrashedTitle: "Source video was moved to Recycle Bin",
@@ -34,6 +36,8 @@
       : {
           ready: "Sẵn sàng",
           needsSetup: "Cần thiết lập",
+          running: "Đang xử lý",
+          unavailable: "Chưa khả dụng",
           sourceMissingTitle: "Video nguồn không còn khả dụng",
           sourceMissingBody: "File gốc có thể đã bị di chuyển, đổi tên hoặc xóa. Dữ liệu dự án và các bước đã xử lý vẫn được giữ nguyên.",
           sourceTrashedTitle: "Video nguồn đã được chuyển vào Thùng rác",
@@ -232,6 +236,70 @@
     });
   }
 
+  function actionState(button) {
+    if (!(button instanceof HTMLButtonElement)) return "unavailable";
+    const value = String(button.textContent || "");
+    if (button.dataset.coreJobState === "processing" || /Stop|Dừng|Hủy|Cancel/i.test(value)) return "processing";
+    if (button.disabled) return "blocked";
+    return "ready";
+  }
+
+  function stageStatusLabel(value, c) {
+    if (value === "processing") return c.running;
+    if (value === "blocked") return c.unavailable;
+    return c.ready;
+  }
+
+  function syncWorkflowActions(page) {
+    const c = copy();
+    const stages = [
+      ["speech", "#speechStart, #speechStop"],
+      ["translate", "#translationStart, #translationStop"],
+      ["voice", "#voiceStart, #voiceStop"],
+      ["output", "#render"]
+    ];
+
+    stages.forEach(([stage, selector]) => {
+      const button = page?.querySelector?.(selector);
+      const tab = page?.querySelector?.('.core-inspector-tab[data-inspector-tab="' + stage + '"]');
+      const value = actionState(button);
+
+      if (button instanceof HTMLButtonElement) {
+        button.classList.add("core-commercial-action");
+        button.dataset.commercialActionState = value;
+        button.setAttribute("aria-busy", value === "processing" ? "true" : "false");
+      }
+
+      if (!(tab instanceof HTMLButtonElement)) return;
+      tab.dataset.commercialStageState = value;
+      tab.classList.toggle("has-commercial-active", value === "processing");
+      tab.classList.toggle("is-commercial-blocked", value === "blocked");
+
+      let dot = tab.querySelector(":scope > .core-commercial-stage-dot");
+      if (!dot) {
+        dot = document.createElement("span");
+        dot.className = "core-commercial-stage-dot";
+        dot.setAttribute("aria-hidden", "true");
+        tab.appendChild(dot);
+      }
+
+      if (!tab.dataset.commercialBaseLabel) {
+        tab.dataset.commercialBaseLabel = String(tab.textContent || "").trim();
+      }
+      const base = tab.dataset.commercialBaseLabel || String(tab.textContent || "").trim();
+      const status = stageStatusLabel(value, c);
+      tab.title = base + " · " + status;
+      tab.setAttribute("aria-label", tab.title);
+    });
+
+    page?.querySelectorAll?.(".core-inspector-card").forEach(card => {
+      if (!(card instanceof HTMLElement)) return;
+      const processing = card.querySelector('[data-commercial-action-state="processing"]');
+      const available = card.querySelector('[data-commercial-action-state="ready"]');
+      card.dataset.commercialCardState = processing ? "processing" : available ? "ready" : "idle";
+    });
+  }
+
   function classifyToast(toast) {
     if (!(toast instanceof HTMLElement)) return;
     const value = String(toast.textContent || "").toLowerCase();
@@ -262,6 +330,7 @@
     syncAssets(page);
     syncMediaState(page);
     syncConnectionPanels(page);
+    syncWorkflowActions(page);
     wireToast();
   }
 
@@ -276,7 +345,7 @@
     if (page) {
       new MutationObserver(queue).observe(page, {
         attributes: true,
-        attributeFilter: ["class", "data-core-media-state"],
+        attributeFilter: ["class", "data-core-media-state", "disabled", "data-core-job-state"],
         childList: true,
         subtree: true
       });
