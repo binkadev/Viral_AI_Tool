@@ -81,6 +81,15 @@ jobs:
       - name: Test Core Editor inspector workbench
         run: npm run test:core-editor-workbench
 
+      - name: Test commercial Core Editor UX states
+        run: npm run test:core-editor-commercial-ux
+
+      - name: Test unified Core Editor activity state
+        run: npm run test:core-editor-activity
+
+      - name: Test completed render output state
+        run: npm run test:core-editor-output-state
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -108,6 +117,9 @@ jobs:
           node --check tests/core-media-health.test.js
           node --check tests/core-editor-focus.test.js
           node --check tests/core-editor-workbench.test.js
+          node --check tests/core-editor-commercial-ux.test.js
+          node --check tests/core-editor-activity.test.js
+          node --check tests/core-editor-output-state.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
@@ -120,6 +132,10 @@ jobs:
           node --check renderer/core-editor-stability.js
           node --check renderer/core-editor-focus.js
           node --check renderer/core-editor-workbench.js
+          node --check renderer/core-editor-commercial-ux.js
+          node --check renderer/core-editor-processing-mode.js
+          node --check renderer/core-editor-activity.js
+          node --check renderer/core-editor-output-state.js
           node --check renderer/core-media-health.js
           node --check renderer/core-transcript-model.js
           node --check renderer/core-transcript-state.js
