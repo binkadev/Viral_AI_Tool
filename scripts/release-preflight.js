@@ -56,7 +56,8 @@ const commands = [
   ["Core editor inspector", ["npm", ["run", "test:core-editor-workbench"]]],
   ["Commercial editor UX", ["npm", ["run", "test:core-editor-commercial-ux"]]],
   ["Unified editor activity", ["npm", ["run", "test:core-editor-activity"]]],
-  ["Completed output state", ["npm", ["run", "test:core-editor-output-state"]]]
+  ["Completed output state", ["npm", ["run", "test:core-editor-output-state"]]],
+  ["Timeline interaction sync", ["npm", ["run", "test:core-editor-timeline-interactions"]]]
 ];
 
 for (const [name, [command, args]] of commands) {
