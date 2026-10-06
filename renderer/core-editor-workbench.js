@@ -21,7 +21,7 @@
     return VALID_TABS.has(value) ? value : "speech";
   }
 
-  function setSelectedTab(value) {
+  function setSelectedTab(value, { resetScroll = false } = {}) {
     if (!VALID_TABS.has(value)) return;
     localStorage.setItem(TAB_KEY, value);
     document.querySelectorAll(".core-inspector-tab").forEach(button => {
@@ -35,11 +35,19 @@
       pane.classList.toggle("is-active", active);
       pane.hidden = !active;
     });
+    if (resetScroll) {
+      document.querySelectorAll(".core-inspector-panes").forEach(scroller => {
+        scroller.scrollTop = 0;
+      });
+    }
   }
 
   function ensureInspector(side) {
     let inspector = side.querySelector(":scope > .core-editor-inspector");
-    if (inspector instanceof HTMLElement) return inspector;
+    if (inspector instanceof HTMLElement) {
+      if (side.firstElementChild !== inspector) side.prepend(inspector);
+      return inspector;
+    }
 
     const c = copy();
     inspector = document.createElement("section");
@@ -58,10 +66,11 @@
         '<div class="core-inspector-pane" data-inspector-pane="voice" role="tabpanel"></div>' +
         '<div class="core-inspector-pane" data-inspector-pane="output" role="tabpanel"><div class="core-output-actions"></div></div>' +
       '</div>';
-    side.appendChild(inspector);
+    side.prepend(inspector);
+    side.scrollTop = 0;
 
     inspector.querySelectorAll(".core-inspector-tab").forEach(button => {
-      button.addEventListener("click", () => setSelectedTab(button.dataset.inspectorTab));
+      button.addEventListener("click", () => setSelectedTab(button.dataset.inspectorTab, { resetScroll: true }));
       button.addEventListener("keydown", event => {
         if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
@@ -69,12 +78,25 @@
         const current = order.indexOf(button.dataset.inspectorTab);
         const delta = event.key === "ArrowRight" ? 1 : -1;
         const next = order[(current + delta + order.length) % order.length];
-        setSelectedTab(next);
+        setSelectedTab(next, { resetScroll: true });
         inspector.querySelector('[data-inspector-tab="' + next + '"]')?.focus();
       });
     });
     setSelectedTab(selectedTab());
     return inspector;
+  }
+
+  function moveStaticSideContent(side, inspector) {
+    const outputPane = inspector.querySelector('[data-inspector-pane="output"]');
+    const actions = inspector.querySelector(".core-output-actions");
+    if (!(outputPane instanceof HTMLElement)) return;
+
+    Array.from(side.children).forEach(child => {
+      if (!(child instanceof HTMLElement) || child === inspector) return;
+      child.classList.add("core-inspector-static");
+      if (actions instanceof HTMLElement) outputPane.insertBefore(child, actions);
+      else outputPane.appendChild(child);
+    });
   }
 
   function closestCard(control) {
@@ -136,6 +158,7 @@
     if (!(focus instanceof HTMLElement) || !(grid instanceof HTMLElement) || !(side instanceof HTMLElement)) return;
 
     const inspector = ensureInspector(side);
+    moveStaticSideContent(side, inspector);
     moveCard(page, inspector, "#speechMode", "speech");
     moveCard(page, inspector, "#translationMode", "translate");
     moveCard(page, inspector, "#voiceMode", "voice");
