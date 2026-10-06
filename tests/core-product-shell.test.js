@@ -10,13 +10,16 @@ const shell = fs.readFileSync(path.join(root, "renderer", "core-product-shell.js
 const css = fs.readFileSync(path.join(root, "renderer", "core-product-shell.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const capabilities = fs.readFileSync(path.join(root, "renderer", "core-capabilities.css"), "utf8");
+const startupJs = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.js"), "utf8");
+const startupCss = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.css"), "utf8");
+const brandMark = fs.readFileSync(path.join(root, "renderer", "brand-mark.svg"), "utf8");
 
 for (const required of [
   "LEGACY_DEMO_NAMES",
   "removeLegacyDemoJobs",
   "current.jobs.filter(job => !job?.isRenderOutput)",
   'data-core-capability="coming-soon"',
-  'current.page = hasSourceVideo() ? "ai-video" : "download"',
+  'const startupPage = hasSourceVideo() ? "ai-video" : "download"',
   '{ id: "download", icon: "⇩", label: "core-import" }',
   '{ id: "ai-video", icon: "◫", label: "core-editor" }',
   'pages.download = function coreImportPage()'
@@ -47,6 +50,38 @@ assert(
   index.indexOf(themeBootstrap) < index.indexOf(firstStylesheet),
   "Theme bootstrap must execute before the first stylesheet to prevent light/dark first-paint switching."
 );
+
+assert.doesNotThrow(() => new Function(startupJs), "Premium startup JS must parse.");
+assert(index.includes('data-startup="booting"'), "The document must begin in a protected startup state.");
+assert(index.includes('id="appStartup"'), "Premium startup overlay must be present in the shell.");
+assert(index.includes('href="core-startup-experience.css"'), "Premium startup CSS must be loaded.");
+assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS must be loaded.");
+assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
+assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
+
+for (const required of [
+  'root.dataset.startup = "booting"',
+  'root.dataset.startup = "revealing"',
+  'root.dataset.startup = "ready"',
+  'window.setTimeout(reveal, 2800)',
+  'prefers-reduced-motion: reduce',
+  'viral-ai:startup-complete',
+  'core-page-enter'
+]) {
+  assert(startupJs.includes(required) || startupCss.includes(required), "Premium startup behavior missing: " + required);
+}
+
+for (const required of [
+  ".app-startup",
+  "startupLogoReveal",
+  "startupAuroraA",
+  "startupSidebarIn",
+  "startupNavItemIn",
+  "prefers-reduced-motion",
+  'html[data-motion="reduced"]'
+]) {
+  assert(startupCss.includes(required), "Premium startup CSS missing: " + required);
+}
 
 class FakeElement {
   constructor() {
@@ -83,7 +118,7 @@ vm.createContext(context);
 vm.runInContext(`
   const state = {
     locale: "vi",
-    page: "dashboard",
+    page: "library",
     jobs: [
       { name: "source.mp4", sourcePath: "C:/source.mp4", isRenderOutput: false },
       { name: "rendered.mp4", outputPath: "C:/rendered.mp4", isRenderOutput: true }
@@ -102,7 +137,11 @@ vm.runInContext(`
 `, context);
 vm.runInContext(shell, context);
 
-assert.strictEqual(vm.runInContext("state.page", context), "ai-video", "A reopened project with a source must land in Core Editor.");
+assert.strictEqual(
+  vm.runInContext("state.page", context),
+  "ai-video",
+  "A reopened project with a source must land in Core Editor even when the previous page was passive."
+);
 assert.deepStrictEqual(
   Array.from(vm.runInContext("navItems.filter(x => x.id).map(x => x.id)", context)),
   ["download", "ai-video", "library", "accounts", "usage", "billing", "settings"],
