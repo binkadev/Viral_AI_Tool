@@ -22,6 +22,14 @@
           current: "Core workflow",
           comingSoon: "Coming soon",
           importVideo: "Import video",
+          stages: {
+            import: "IMPORT",
+            analyze: "ANALYZE",
+            transcript: "TRANSCRIPT",
+            edit: "EDIT",
+            localize: "LOCALIZE",
+            render: "RENDER"
+          },
           states: {
             completed: "Done",
             processing: "Working",
@@ -30,12 +38,54 @@
             blocked: "Locked",
             active: "Ready",
             idle: "Waiting"
+          },
+          reasons: {
+            importActive: "Choose a source video to start.",
+            importDone: "The source video is ready.",
+            importMissing: "The source video is no longer available.",
+            analyzeWorking: "Checking video metadata and media information.",
+            analyzeDone: "Video metadata is ready.",
+            analyzeBlocked: "Import an available source video first.",
+            transcriptReady: "Run speech recognition to create the transcript.",
+            transcriptWorking: "Speech recognition is running.",
+            transcriptDone: "Transcript and timestamps are ready.",
+            transcriptBlocked: "A valid analyzed video is required first.",
+            editReady: "Review and edit the transcript before localization.",
+            editDone: "Transcript editing is available while localization continues.",
+            editBlocked: "Create the transcript first.",
+            localizeTranslate: "Translate the transcript before generating AI Voice.",
+            localizeVoice: "Translation is ready. Generate AI Voice next.",
+            localizeWorking: "Localization is being processed.",
+            localizeDone: "Translation and AI Voice are ready.",
+            localizeBlocked: "Create the transcript first.",
+            renderReady: "All required localized inputs are ready to render.",
+            renderWorking: "Rendering the final localized video.",
+            renderDone: "The rendered output is ready.",
+            renderFailed: "Rendering did not finish. Review the issue and retry.",
+            renderBlocked: "Complete translation and AI Voice first.",
+            busyControl: "Another processing step is currently running.",
+            missingSourceControl: "The source video is unavailable.",
+            analyzeControl: "Wait until the video analysis is ready.",
+            transcriptControl: "Create the transcript first.",
+            translationControl: "Complete translation first.",
+            voiceControl: "Generate AI Voice first.",
+            renderWaitControl: "Wait for the current processing step to finish.",
+            exportWorking: "Rendering is still in progress. Export will unlock when it finishes.",
+            exportControl: "Export becomes available after a successful render."
           }
         }
       : {
           current: "Quy trình chính",
           comingSoon: "Sắp có",
           importVideo: "Nhập video",
+          stages: {
+            import: "NHẬP",
+            analyze: "PHÂN TÍCH",
+            transcript: "LỜI NÓI",
+            edit: "CHỈNH SỬA",
+            localize: "LOCALIZE",
+            render: "RENDER"
+          },
           states: {
             completed: "Đã xong",
             processing: "Đang xử lý",
@@ -44,6 +94,40 @@
             blocked: "Chưa mở",
             active: "Sẵn sàng",
             idle: "Đang chờ"
+          },
+          reasons: {
+            importActive: "Chọn video nguồn để bắt đầu.",
+            importDone: "Video nguồn đã sẵn sàng.",
+            importMissing: "Video nguồn hiện không còn khả dụng.",
+            analyzeWorking: "Đang kiểm tra metadata và thông tin media của video.",
+            analyzeDone: "Metadata video đã sẵn sàng.",
+            analyzeBlocked: "Cần nhập một video nguồn khả dụng trước.",
+            transcriptReady: "Chạy nhận diện lời nói để tạo transcript.",
+            transcriptWorking: "Đang nhận diện lời nói.",
+            transcriptDone: "Transcript và timestamp đã sẵn sàng.",
+            transcriptBlocked: "Cần video hợp lệ và đã phân tích trước.",
+            editReady: "Kiểm tra và chỉnh transcript trước khi localize.",
+            editDone: "Bạn vẫn có thể chỉnh transcript trong khi tiếp tục localize.",
+            editBlocked: "Cần tạo transcript trước.",
+            localizeTranslate: "Dịch transcript trước khi tạo Giọng AI.",
+            localizeVoice: "Bản dịch đã sẵn sàng. Tiếp theo hãy tạo Giọng AI.",
+            localizeWorking: "Đang xử lý nội dung localize.",
+            localizeDone: "Bản dịch và Giọng AI đã sẵn sàng.",
+            localizeBlocked: "Cần tạo transcript trước.",
+            renderReady: "Đã đủ dữ liệu localize để render.",
+            renderWorking: "Đang render video localize cuối.",
+            renderDone: "File render đã sẵn sàng.",
+            renderFailed: "Render chưa hoàn tất. Hãy kiểm tra trạng thái và thử lại.",
+            renderBlocked: "Cần hoàn tất bản dịch và Giọng AI trước.",
+            busyControl: "Đang có một bước xử lý khác chạy.",
+            missingSourceControl: "Video nguồn hiện không khả dụng.",
+            analyzeControl: "Hãy chờ video phân tích xong.",
+            transcriptControl: "Cần tạo transcript trước.",
+            translationControl: "Cần hoàn tất bản dịch trước.",
+            voiceControl: "Cần tạo Giọng AI trước.",
+            renderWaitControl: "Hãy chờ bước xử lý hiện tại hoàn tất.",
+            exportWorking: "Video vẫn đang render. Export sẽ mở khi render hoàn tất.",
+            exportControl: "Export chỉ mở sau khi render thành công."
           }
         };
   }
@@ -60,6 +144,60 @@
     if (status === "cancelled") return "×";
     if (status === "active") return "•";
     return "○";
+  }
+
+  function stageReason(stage, derived, c) {
+    const r = c.reasons;
+    if (stage.id === "import") {
+      if (stage.status === "failed") return r.importMissing;
+      return stage.status === "completed" ? r.importDone : r.importActive;
+    }
+    if (stage.id === "analyze") {
+      if (stage.status === "completed") return r.analyzeDone;
+      if (stage.status === "processing") return r.analyzeWorking;
+      return r.analyzeBlocked;
+    }
+    if (stage.id === "transcript") {
+      if (stage.status === "completed") return r.transcriptDone;
+      if (stage.status === "processing") return r.transcriptWorking;
+      if (stage.status === "blocked") return r.transcriptBlocked;
+      return r.transcriptReady;
+    }
+    if (stage.id === "edit") {
+      if (stage.status === "blocked") return r.editBlocked;
+      return stage.status === "completed" ? r.editDone : r.editReady;
+    }
+    if (stage.id === "localize") {
+      if (stage.status === "blocked") return r.localizeBlocked;
+      if (stage.status === "completed") return r.localizeDone;
+      if (stage.status === "processing") return r.localizeWorking;
+      return derived.translationResult ? r.localizeVoice : r.localizeTranslate;
+    }
+    if (stage.id === "render") {
+      if (stage.status === "completed") return r.renderDone;
+      if (stage.status === "processing") return r.renderWorking;
+      if (stage.status === "failed") return r.renderFailed;
+      if (stage.status === "active") return r.renderReady;
+      return r.renderBlocked;
+    }
+    return "";
+  }
+
+  function controlReason(kind, derived, policy, c) {
+    if (policy?.enabled) return "";
+    const r = c.reasons;
+    const busy = Object.values(derived.jobs || {}).some(value => ["preparing", "uploading", "processing"].includes(value));
+    if (derived.missingSource) return r.missingSourceControl;
+    if (kind === "speech") return !derived.analyzed ? r.analyzeControl : busy ? r.busyControl : policy?.reason || "";
+    if (kind === "translate") return !derived.speechResult ? r.transcriptControl : busy ? r.busyControl : policy?.reason || "";
+    if (kind === "voice") return !derived.translationResult ? r.translationControl : busy ? r.busyControl : policy?.reason || "";
+    if (kind === "render") {
+      if (!derived.translationResult) return r.translationControl;
+      if (!derived.voiceResult) return r.voiceControl;
+      return busy ? r.renderWaitControl : policy?.reason || "";
+    }
+    if (kind === "export") return derived.jobs?.render === "processing" ? r.exportWorking : r.exportControl;
+    return policy?.reason || "";
   }
 
   function ensureWorkflowRail(derived, saved) {
@@ -80,16 +218,19 @@
     }
 
     const c = copy();
+    rail.setAttribute("aria-label", c.current);
     rail.innerHTML =
       '<div class="core-workflow-title">' + c.current + '</div>' +
       '<div class="core-workflow-rail">' +
-        derived.stages.map((stage, index) =>
-          '<div class="core-workflow-stage is-' + stage.status + '" data-core-stage="' + stage.id + '" title="' + escapeAttr(stage.reason) + '">' +
+        derived.stages.map((stage, index) => {
+          const reason = stageReason(stage, derived, c);
+          const label = c.stages[stage.id] || stage.label;
+          return '<div class="core-workflow-stage is-' + stage.status + '" data-core-stage="' + stage.id + '" title="' + escapeAttr(reason) + '">' +
             '<span class="core-stage-index">' + statusIcon(stage.status) + '</span>' +
-            '<span class="core-stage-copy"><b>' + stage.label + '</b><small>' + (c.states[stage.status] || stage.status) + '</small></span>' +
+            '<span class="core-stage-copy"><b>' + label + '</b><small>' + (c.states[stage.status] || stage.status) + '</small></span>' +
           '</div>' +
-          (index < derived.stages.length - 1 ? '<span class="core-stage-link" aria-hidden="true"></span>' : '')
-        ).join("") +
+          (index < derived.stages.length - 1 ? '<span class="core-stage-link" aria-hidden="true"></span>' : '');
+        }).join("") +
       '</div>';
   }
 
@@ -101,7 +242,7 @@
       .replace(/>/g, "&gt;");
   }
 
-  function applyGate(selector, policy) {
+  function applyGate(selector, policy, reason) {
     const button = document.querySelector(selector);
     if (!(button instanceof HTMLButtonElement) || !policy) return;
 
@@ -111,9 +252,9 @@
     button.classList.toggle("core-gated", shouldDisable);
     button.dataset.coreCapability = policy.enabled ? "functional" : "disabled";
 
-    if (shouldDisable && policy.reason) {
-      button.title = policy.reason;
-      button.dataset.coreDisabledReason = policy.reason;
+    if (shouldDisable && reason) {
+      button.title = reason;
+      button.dataset.coreDisabledReason = reason;
     } else {
       if (button.dataset.coreDisabledReason && button.title === button.dataset.coreDisabledReason) button.removeAttribute("title");
       delete button.dataset.coreDisabledReason;
@@ -121,11 +262,12 @@
   }
 
   function applyControlPolicy(derived) {
-    applyGate("#speechStart", derived.controls.speech);
-    applyGate("#translationStart", derived.controls.translate);
-    applyGate("#voiceStart", derived.controls.voice);
-    applyGate("#render", derived.controls.render);
-    applyGate("#export", derived.controls.export);
+    const c = copy();
+    applyGate("#speechStart", derived.controls.speech, controlReason("speech", derived, derived.controls.speech, c));
+    applyGate("#translationStart", derived.controls.translate, controlReason("translate", derived, derived.controls.translate, c));
+    applyGate("#voiceStart", derived.controls.voice, controlReason("voice", derived, derived.controls.voice, c));
+    applyGate("#render", derived.controls.render, controlReason("render", derived, derived.controls.render, c));
+    applyGate("#export", derived.controls.export, controlReason("export", derived, derived.controls.export, c));
   }
 
   function markComingSoon() {
