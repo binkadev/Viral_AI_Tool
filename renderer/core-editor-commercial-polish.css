@@ -314,6 +314,25 @@ html.core-editor-premium [data-variant="danger"]{color:#f29a9a}
 html.core-editor-premium .danger:hover,
 html.core-editor-premium [data-variant="danger"]:hover{background:rgba(227,106,106,.10);border-color:rgba(227,106,106,.28)}
 
+/* Grid sizing has to override the older workspace-polish rules, not only panel width. */
+@media (min-width:1440px) and (min-height:720px){
+  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{
+    grid-template-columns:232px minmax(0,1fr) 336px!important;
+    gap:12px!important;
+  }
+  html.core-editor-premium .core-editor-assets-grid:has(> .core-editor-assets-panel.is-collapsed){
+    grid-template-columns:68px minmax(0,1fr) 336px!important;
+  }
+}
+@media (min-width:1200px) and (max-width:1439px){
+  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{
+    grid-template-columns:220px minmax(0,1fr) 320px!important;
+  }
+  html.core-editor-premium .core-editor-assets-grid:has(> .core-editor-assets-panel.is-collapsed){
+    grid-template-columns:68px minmax(0,1fr) 320px!important;
+  }
+}
+
 /* Responsive: collapse secondary visual weight instead of shrinking text. */
 @media (max-width:1439px){
   html.core-editor-premium .core-editor-assets-panel{width:220px;min-width:220px}
