@@ -14,6 +14,7 @@ const assetsJs = fs.readFileSync(path.join(root, "renderer", "core-editor-assets
 const assetsCss = fs.readFileSync(path.join(root, "renderer", "core-editor-assets.css"), "utf8");
 const selectionJs = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.js"), "utf8");
 const selectionCss = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.css"), "utf8");
+const workspacePolishCss = fs.readFileSync(path.join(root, "renderer", "core-editor-workspace-polish.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 for (const required of [
@@ -112,14 +113,27 @@ for (const required of [
 assert(selectionCss.includes(".core-bottom-segment.is-selected"));
 assert(selectionCss.includes(".transcript-row.is-selected"));
 
+for (const required of [
+  "100dvh",
+  "core-editor-docked-page.core-editor-assets-page",
+  "grid-template-columns:clamp(180px,13vw,210px) minmax(0,1fr) clamp(320px,23vw,360px)",
+  "--core-bottom-dock-height:176px",
+  "height:100%!important",
+  "max-height:none!important",
+  "max-height:719px"
+]) {
+  assert(workspacePolishCss.includes(required), "Workspace polish missing: " + required);
+}
+
 assert(index.includes('href="core-layout.css"'));
 assert(index.includes('href="premium-preview.css"'));
 assert(index.includes('href="core-editor-bottom-dock.css"'));
 assert(index.includes('href="core-editor-assets.css"'));
 assert(index.includes('href="core-editor-selection.css"'));
+assert(index.includes('href="core-editor-workspace-polish.css"'));
 assert(index.includes('src="core-layout.js"'));
 assert(index.includes('src="core-editor-bottom-dock.js"'));
 assert(index.includes('src="core-editor-assets.js"'));
 assert(index.includes('src="core-editor-selection.js"'));
 
-console.log("Core editor workspace v2 layout and selection tests passed.");
+console.log("Core editor workspace v2 layout, selection and viewport polish tests passed.");
