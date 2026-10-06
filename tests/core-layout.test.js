@@ -15,6 +15,8 @@ const assetsCss = fs.readFileSync(path.join(root, "renderer", "core-editor-asset
 const selectionJs = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.js"), "utf8");
 const selectionCss = fs.readFileSync(path.join(root, "renderer", "core-editor-selection.css"), "utf8");
 const workspacePolishCss = fs.readFileSync(path.join(root, "renderer", "core-editor-workspace-polish.css"), "utf8");
+const premiumThemeJs = fs.readFileSync(path.join(root, "renderer", "core-editor-premium-theme.js"), "utf8");
+const premiumThemeCss = fs.readFileSync(path.join(root, "renderer", "core-editor-premium-theme.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 for (const required of [
@@ -125,15 +127,40 @@ for (const required of [
   assert(workspacePolishCss.includes(required), "Workspace polish missing: " + required);
 }
 
+for (const required of [
+  "core-editor-premium",
+  "core-editor-docked-page",
+  "MutationObserver",
+  "classList.toggle"
+]) {
+  assert(premiumThemeJs.includes(required), "Premium theme switch missing: " + required);
+}
+
+for (const required of [
+  "html.core-editor-premium",
+  "--studio-ease:cubic-bezier(.22,1,.36,1)",
+  ".core-editor-assets-panel",
+  ".core-editor-inspector",
+  ".core-editor-bottom-dock",
+  ".preview.core-player-host",
+  ".core-timeline-workspace",
+  "prefers-reduced-motion"
+]) {
+  assert(premiumThemeCss.includes(required), "Premium theme CSS missing: " + required);
+}
+assert(!premiumThemeCss.includes("object-fit:cover"), "Premium theme must never crop media with object-fit: cover.");
+
 assert(index.includes('href="core-layout.css"'));
 assert(index.includes('href="premium-preview.css"'));
 assert(index.includes('href="core-editor-bottom-dock.css"'));
 assert(index.includes('href="core-editor-assets.css"'));
 assert(index.includes('href="core-editor-selection.css"'));
 assert(index.includes('href="core-editor-workspace-polish.css"'));
+assert(index.includes('href="core-editor-premium-theme.css"'));
 assert(index.includes('src="core-layout.js"'));
 assert(index.includes('src="core-editor-bottom-dock.js"'));
 assert(index.includes('src="core-editor-assets.js"'));
 assert(index.includes('src="core-editor-selection.js"'));
+assert(index.includes('src="core-editor-premium-theme.js"'));
 
-console.log("Core editor workspace v2 layout, selection and viewport polish tests passed.");
+console.log("Core editor workspace v2, viewport polish and Premium Dark prototype tests passed.");
