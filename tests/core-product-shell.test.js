@@ -38,6 +38,16 @@ assert(index.includes('src="core-product-shell.js"'), "Core product shell JS mus
 assert(css.includes(".core-import-primary"), "Core import UI styles must be present.");
 assert(!capabilities.includes('[data-page="ai-video"]'), "Core Editor must not be hidden by capability CSS.");
 
+const themeBootstrap = 'localStorage.getItem("viral-ai-tool-state")';
+const firstStylesheet = 'href="styles.css"';
+assert(index.includes(themeBootstrap), "Saved appearance must be restored during head bootstrap.");
+assert(index.includes('new Set(["aurora-light", "pearl-light", "midnight"])'), "Theme bootstrap must accept only supported appearances.");
+assert(index.includes("root.dataset.theme = saved.appearance"), "Theme bootstrap must restore the saved appearance.");
+assert(
+  index.indexOf(themeBootstrap) < index.indexOf(firstStylesheet),
+  "Theme bootstrap must execute before the first stylesheet to prevent light/dark first-paint switching."
+);
+
 class FakeElement {
   constructor() {
     this.innerHTML = "";

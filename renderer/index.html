@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Viral AI Tool</title>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      try {
+        const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
+        const themes = new Set(["aurora-light", "pearl-light", "midnight"]);
+        const motions = new Set(["balanced", "expressive", "reduced"]);
+        const scales = new Set(["compact", "comfortable", "large"]);
+        if (themes.has(saved.appearance)) root.dataset.theme = saved.appearance;
+        if (motions.has(saved.motion)) root.dataset.motion = saved.motion;
+        if (scales.has(saved.scale)) root.dataset.scale = saved.scale;
+        if (["vi", "en"].includes(saved.locale)) root.lang = saved.locale;
+      } catch {
+        // Keep the safe HTML defaults when stored UI preferences are unavailable.
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="core-editor.css" />
   <link rel="stylesheet" href="core-workflow.css" />
