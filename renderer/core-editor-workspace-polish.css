@@ -1,0 +1,97 @@
+/* Final Core Editor workspace proportion pass.
+ * Layout-only: no player, transcript, cloud, workflow or render behavior changes.
+ */
+
+@media (min-width:1321px) and (min-height:720px){
+  .core-editor-docked-page.core-editor-assets-page{
+    height:max(680px,calc(100dvh - var(--titlebar) - 90px));
+    min-height:0;
+    padding-bottom:14px!important;
+    overflow:hidden;
+  }
+
+  .core-editor-docked-page > .core-workflow-shell{
+    flex:0 0 auto;
+  }
+
+  .core-editor-docked-page > .core-editor-focus-section{
+    flex:1 1 auto;
+    min-height:0;
+    margin:10px 0 10px;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .core-editor-focus-section > .section-head{
+    flex:0 0 auto;
+    margin-bottom:8px;
+  }
+
+  .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{
+    flex:1 1 auto;
+    min-height:0;
+    height:100%;
+    grid-template-columns:clamp(180px,13vw,210px) minmax(0,1fr) clamp(320px,23vw,360px)!important;
+    gap:12px!important;
+    align-items:stretch!important;
+  }
+
+  .core-editor-assets-grid:has(> .core-editor-assets-panel.is-collapsed){
+    grid-template-columns:48px minmax(0,1fr) clamp(320px,23vw,360px)!important;
+  }
+
+  .core-editor-assets-panel,
+  .core-editor-inspector,
+  .core-editor-focus-section .stack{
+    height:100%;
+    min-height:0;
+    max-height:none;
+  }
+
+  .core-editor-focus-section .preview.core-player-host,
+  .core-editor-focus-section .preview.preview-real{
+    height:100%!important;
+    min-height:0!important;
+    max-height:none!important;
+  }
+
+  .core-editor-inspector{
+    max-height:none;
+  }
+
+  .core-editor-bottom-dock{
+    --core-bottom-dock-height:176px;
+    flex:0 0 var(--core-bottom-dock-height);
+    height:var(--core-bottom-dock-height);
+  }
+}
+
+/* Medium desktop: prioritize the viewer and inspector, keep normal page scrolling. */
+@media (min-width:1121px) and (max-width:1480px){
+  .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{
+    grid-template-columns:170px minmax(0,1fr) 340px!important;
+  }
+  .core-editor-assets-grid:has(> .core-editor-assets-panel.is-collapsed){
+    grid-template-columns:48px minmax(0,1fr) 340px!important;
+  }
+  .core-editor-bottom-dock{--core-bottom-dock-height:168px}
+}
+
+/* Do not force a fixed-height workbench once panels begin stacking. */
+@media (max-width:1320px), (max-height:719px){
+  .core-editor-docked-page.core-editor-assets-page{
+    height:auto;
+    min-height:calc(100dvh - var(--titlebar) - 90px);
+    overflow:visible;
+  }
+
+  .core-editor-docked-page > .core-editor-focus-section{
+    flex:0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .core-editor-assets-panel,
+  .core-editor-inspector,
+  .core-editor-bottom-dock{transition:none!important}
+}
