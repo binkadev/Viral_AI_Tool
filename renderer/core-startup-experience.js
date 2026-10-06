@@ -5,6 +5,7 @@
   let revealed = false;
   let pageObserver = null;
   let pageTimer = 0;
+  let revealClassTimer = 0;
 
   function reducedMotion() {
     if (root.dataset.motion === "reduced") return true;
@@ -20,6 +21,7 @@
 
   function animatePage(page) {
     if (!(page instanceof HTMLElement) || reducedMotion()) return;
+    if (root.classList.contains("startup-reveal-once")) return;
     page.classList.remove("core-page-enter");
     void page.offsetWidth;
     page.classList.add("core-page-enter");
@@ -52,6 +54,12 @@
     window.setTimeout(() => {
       splash?.remove?.();
       root.dataset.startup = "ready";
+      root.classList.add("startup-reveal-once");
+      clearTimeout(revealClassTimer);
+      revealClassTimer = window.setTimeout(
+        () => root.classList.remove("startup-reveal-once"),
+        reducedMotion() ? 20 : 1150
+      );
       wirePageTransitions();
       window.dispatchEvent(new CustomEvent("viral-ai:startup-complete"));
     }, finishDelay);
