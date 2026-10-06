@@ -1,0 +1,23 @@
+/* Selection is distinct from playback-active state. */
+
+.core-bottom-segment.is-selected{
+  outline:1px solid rgba(81,75,230,.72);
+  outline-offset:1px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 0 0 2px rgba(100,92,245,.10);
+}
+
+.core-editor-bottom-dock .transcript-row.is-selected{
+  border-color:rgba(100,92,245,.28)!important;
+  background:rgba(101,94,245,.055)!important;
+  box-shadow:inset 3px 0 rgba(101,94,245,.58);
+}
+
+.core-editor-bottom-dock .transcript-row.is-active.is-selected{
+  border-color:rgba(84,78,224,.38)!important;
+  background:rgba(101,94,245,.09)!important;
+}
+
+@media(prefers-reduced-motion:reduce){
+  .core-bottom-segment.is-selected,
+  .core-editor-bottom-dock .transcript-row.is-selected{transition:none!important}
+}
