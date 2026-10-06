@@ -92,15 +92,19 @@
 
   function moveRender(page, inspector) {
     const render = page.querySelector("#render");
+    const legacyHead = render instanceof HTMLElement ? render.closest(".section-head") : null;
+    const legacyWorkflow = legacyHead?.nextElementSibling instanceof HTMLElement && legacyHead.nextElementSibling.classList.contains("workflow")
+      ? legacyHead.nextElementSibling
+      : page.querySelector(":scope > .workflow");
     const target = inspector.querySelector(".core-output-actions");
+
+    if (legacyHead instanceof HTMLElement) legacyHead.classList.add("core-editor-legacy-workflow");
+    if (legacyWorkflow instanceof HTMLElement) legacyWorkflow.classList.add("core-editor-legacy-workflow");
+
     if (render instanceof HTMLButtonElement && target instanceof HTMLElement && render.parentElement !== target) {
       target.appendChild(render);
       render.classList.add("core-inspector-render");
     }
-
-    const legacyHead = page.querySelector(".section-head:has(#render)");
-    if (legacyHead instanceof HTMLElement) legacyHead.classList.add("core-editor-legacy-workflow");
-    page.querySelectorAll(":scope > .workflow").forEach(workflow => workflow.classList.add("core-editor-legacy-workflow"));
   }
 
   function markCurrentStage(page) {
@@ -117,8 +121,7 @@
       if (!(tabButton instanceof HTMLButtonElement)) continue;
       const busy = /Stop|Dừng|Hủy|Cancel/i.test(button.textContent || "") || button.dataset.coreJobState === "processing";
       tabButton.classList.toggle("has-active-job", busy);
-      const blocked = button.disabled;
-      tabButton.classList.toggle("is-blocked", blocked);
+      tabButton.classList.toggle("is-blocked", button.disabled);
     }
   }
 
