@@ -1,0 +1,219 @@
+/* Premium Core Editor preview surface.
+ * Visual-only: do not change playback/media state semantics here.
+ */
+
+:root {
+  --preview-ease: cubic-bezier(.22, 1, .36, 1);
+  --preview-border: rgba(255, 255, 255, .075);
+  --preview-border-strong: rgba(255, 255, 255, .11);
+  --preview-surface: #080b11;
+  --preview-surface-2: #0c1119;
+  --preview-text: rgba(242, 245, 250, .92);
+  --preview-muted: rgba(184, 192, 205, .64);
+}
+
+.core-preview,
+.editor-preview,
+.preview-stage,
+.preview-player,
+.video-preview-shell {
+  position: relative;
+  min-width: 0;
+}
+
+/* The stage should feel like a studio canvas instead of one giant black block. */
+.preview-stage,
+.preview-player,
+.video-preview-shell {
+  overflow: hidden;
+  border: 1px solid var(--preview-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(70% 78% at 50% 42%, rgba(91, 101, 255, .12), transparent 58%),
+    radial-gradient(48% 46% at 55% 62%, rgba(44, 151, 255, .07), transparent 65%),
+    linear-gradient(180deg, var(--preview-surface-2), var(--preview-surface));
+  box-shadow:
+    0 24px 70px rgba(3, 7, 16, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .035);
+  transition:
+    border-color 200ms var(--preview-ease),
+    box-shadow 280ms var(--preview-ease),
+    transform 280ms var(--preview-ease);
+}
+
+.preview-stage::before,
+.preview-player::before,
+.video-preview-shell::before {
+  content: "";
+  position: absolute;
+  inset: 7% 17% 17%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(111, 116, 255, .11), transparent 66%);
+  filter: blur(34px);
+  opacity: .8;
+}
+
+/* Keep the canvas large enough to edit, but stop portrait media from making the page feel endless. */
+.preview-stage,
+.preview-player,
+.video-preview-shell {
+  min-height: 360px;
+  height: clamp(390px, 55vh, 680px);
+}
+
+/* Media is always fully visible. Letter/pillar boxing is intentional. */
+.preview-stage video,
+.preview-player video,
+.video-preview-shell video,
+video.preview-video {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain !important;
+  object-position: center center;
+  background: transparent !important;
+  transform: none !important;
+  border-radius: 12px;
+}
+
+/* Avoid the video itself touching the outer stage edge on portrait/square sources. */
+.preview-stage > video,
+.preview-player > video,
+.video-preview-shell > video {
+  padding: 12px 12px 58px;
+  box-sizing: border-box;
+}
+
+/* Controls become a quiet floating dock instead of a second heavy rectangle. */
+.preview-controls,
+.player-controls,
+.video-controls {
+  position: absolute;
+  z-index: 5;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 13px;
+  background: rgba(8, 11, 17, .72);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, .26),
+    inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.preview-controls button,
+.player-controls button,
+.video-controls button {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 9px;
+  transition:
+    transform 150ms var(--preview-ease),
+    background-color 150ms var(--preview-ease),
+    border-color 150ms var(--preview-ease);
+}
+
+.preview-controls button:hover,
+.player-controls button:hover,
+.video-controls button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, .075);
+}
+
+.preview-controls input[type="range"],
+.player-controls input[type="range"],
+.video-controls input[type="range"] {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.preview-controls .time,
+.preview-controls .player-time,
+.player-controls .time,
+.video-controls .time {
+  color: var(--preview-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* If a separate timeline scrub strip sits above the control dock, keep it subtle. */
+.preview-timeline,
+.player-timeline,
+.timeline-scrub {
+  position: absolute;
+  z-index: 4;
+  left: 16px;
+  right: 16px;
+  bottom: 62px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .055);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .4);
+}
+
+/* Right-side preview properties should not squeeze the canvas excessively. */
+.core-editor-layout,
+.editor-layout,
+.project-editor-layout {
+  min-width: 0;
+}
+
+.core-editor-layout > *,
+.editor-layout > *,
+.project-editor-layout > * {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .preview-stage,
+  .preview-player,
+  .video-preview-shell {
+    height: clamp(340px, 50vh, 560px);
+  }
+}
+
+@media (max-width: 820px) {
+  .preview-stage,
+  .preview-player,
+  .video-preview-shell {
+    min-height: 300px;
+    height: min(52vh, 500px);
+    border-radius: 14px;
+  }
+
+  .preview-stage > video,
+  .preview-player > video,
+  .video-preview-shell > video {
+    padding: 8px 8px 56px;
+  }
+
+  .preview-controls,
+  .player-controls,
+  .video-controls {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-stage,
+  .preview-player,
+  .video-preview-shell,
+  .preview-controls button,
+  .player-controls button,
+  .video-controls button {
+    transition: none !important;
+  }
+}
