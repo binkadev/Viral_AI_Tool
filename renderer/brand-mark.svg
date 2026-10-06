@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Viral AI</title>
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#54E7FF"/>
+      <stop offset="0.46" stop-color="#6D70FF"/>
+      <stop offset="1" stop-color="#F26CCB"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="18" y1="16" x2="46" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAF0FF" stop-opacity="0.88"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#5967FF" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#bg)" filter="url(#shadow)"/>
+  <path d="M24 18.5c0-1.75 1.92-2.82 3.41-1.91l21.05 12.86c1.43.87 1.43 2.95 0 3.82L27.41 46.13C25.92 47.04 24 45.97 24 44.22V18.5Z" fill="url(#shine)"/>
+  <path d="M18.2 23.5c0-1.45 1.56-2.35 2.81-1.62l15.75 9.22c1.23.72 1.23 2.5 0 3.22l-15.75 9.22c-1.25.73-2.81-.17-2.81-1.62V23.5Z" fill="#FFFFFF" fill-opacity="0.38"/>
+  <circle cx="18" cy="18" r="7" fill="#FFFFFF" fill-opacity="0.12"/>
+</svg>

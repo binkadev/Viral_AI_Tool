@@ -1,0 +1,367 @@
+html[data-startup="booting"],
+html[data-startup="revealing"] {
+  background:#070B18;
+}
+
+html[data-startup="booting"] body,
+html[data-startup="revealing"] body {
+  overflow:hidden;
+}
+
+.viral-brand-icon,
+.viral-brand-mark {
+  position:relative;
+  overflow:visible;
+  isolation:isolate;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+
+.viral-brand-icon img,
+.viral-brand-mark img {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 7px 16px rgba(91,103,255,.22));
+}
+
+.viral-brand-mark::after {
+  content:"";
+  position:absolute;
+  inset:8%;
+  border-radius:32%;
+  background:radial-gradient(circle,rgba(106,117,255,.28),transparent 68%);
+  filter:blur(12px);
+  z-index:-1;
+  opacity:.8;
+}
+
+.app-startup {
+  position:fixed;
+  inset:0;
+  z-index:99999;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 22% 76%,rgba(33,180,255,.16),transparent 34%),
+    radial-gradient(circle at 79% 23%,rgba(237,84,193,.16),transparent 31%),
+    radial-gradient(circle at 50% 52%,rgba(99,91,255,.13),transparent 29%),
+    linear-gradient(145deg,#060A16 0%,#0B1022 46%,#080B18 100%);
+  color:#fff;
+  opacity:1;
+  transition:opacity .48s cubic-bezier(.22,.61,.36,1),visibility .48s;
+}
+
+.app-startup::before,
+.app-startup::after {
+  content:"";
+  position:absolute;
+  width:min(78vw,900px);
+  height:min(42vw,510px);
+  border-radius:50%;
+  filter:blur(42px);
+  opacity:.42;
+  pointer-events:none;
+}
+
+.app-startup::before {
+  left:-18%;
+  bottom:-20%;
+  background:linear-gradient(100deg,transparent 12%,rgba(50,205,255,.5) 48%,rgba(91,91,255,.18) 82%,transparent);
+  transform:rotate(9deg);
+  animation:startupAuroraA 7s ease-in-out infinite alternate;
+}
+
+.app-startup::after {
+  right:-20%;
+  top:-21%;
+  background:linear-gradient(105deg,transparent 10%,rgba(115,82,255,.25) 42%,rgba(255,100,188,.45) 67%,transparent);
+  transform:rotate(-16deg);
+  animation:startupAuroraB 8s ease-in-out infinite alternate;
+}
+
+.startup-grid {
+  position:absolute;
+  inset:0;
+  opacity:.11;
+  background-image:
+    linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(circle at center,#000 0%,transparent 72%);
+}
+
+.startup-brand {
+  position:relative;
+  z-index:2;
+  display:flex;
+  min-width:260px;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+  text-align:center;
+}
+
+.startup-logo-shell {
+  position:relative;
+  width:92px;
+  height:92px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:28px;
+  background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.055));
+  box-shadow:
+    0 24px 65px rgba(12,22,65,.52),
+    inset 0 1px 0 rgba(255,255,255,.21);
+  backdrop-filter:blur(18px);
+  animation:startupLogoReveal .76s cubic-bezier(.16,1,.3,1) both;
+}
+
+.startup-logo-shell::before {
+  content:"";
+  position:absolute;
+  inset:-24px;
+  border-radius:40px;
+  background:radial-gradient(circle,rgba(77,202,255,.17),rgba(112,85,255,.12) 45%,transparent 71%);
+  filter:blur(12px);
+  z-index:-1;
+  animation:startupPulse 2.8s ease-in-out infinite;
+}
+
+.startup-logo-shell img {
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+.startup-wordmark {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  animation:startupCopyReveal .7s .13s cubic-bezier(.16,1,.3,1) both;
+}
+
+.startup-wordmark strong {
+  font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Arial,sans-serif;
+  font-size:24px;
+  line-height:1;
+  letter-spacing:.15em;
+  font-weight:760;
+}
+
+.startup-progress {
+  position:relative;
+  width:172px;
+  height:3px;
+  margin-top:10px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(255,255,255,.1);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.2);
+  animation:startupCopyReveal .7s .23s both;
+}
+
+.startup-progress i {
+  position:absolute;
+  inset:0 auto 0 0;
+  width:44%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#46DFFF,#7770FF,#F36CCB);
+  box-shadow:0 0 18px rgba(102,120,255,.65);
+  animation:startupLoad 1.15s cubic-bezier(.3,.8,.2,1) infinite;
+}
+
+.app-startup.is-exiting {
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+.app-startup.is-exiting .startup-brand {
+  transform:scale(.97);
+  opacity:.75;
+  transition:transform .45s ease,opacity .45s ease;
+}
+
+html[data-startup="booting"] .titlebar,
+html[data-startup="booting"] .shell,
+html[data-startup="revealing"] .titlebar,
+html[data-startup="revealing"] .shell {
+  opacity:0;
+}
+
+html[data-startup="ready"].startup-reveal-once .titlebar {
+  animation:startupTitlebarIn .6s cubic-bezier(.16,1,.3,1) both;
+}
+
+html[data-startup="ready"].startup-reveal-once .sidebar {
+  animation:startupSidebarIn .72s .05s cubic-bezier(.16,1,.3,1) both;
+}
+
+html[data-startup="ready"].startup-reveal-once .topbar {
+  animation:startupTopbarIn .68s .1s cubic-bezier(.16,1,.3,1) both;
+}
+
+html[data-startup="ready"].startup-reveal-once #page {
+  animation:startupPageIn .72s .15s cubic-bezier(.16,1,.3,1) both;
+}
+
+html[data-startup="ready"].startup-reveal-once .nav-item {
+  animation:startupNavItemIn .46s cubic-bezier(.16,1,.3,1) both;
+}
+
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(1){animation-delay:.12s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(2){animation-delay:.16s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(3){animation-delay:.20s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(4){animation-delay:.24s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(5){animation-delay:.28s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(6){animation-delay:.32s}
+html[data-startup="ready"].startup-reveal-once .nav-item:nth-of-type(7){animation-delay:.36s}
+
+#page.core-page-enter {
+  animation:corePageTransitionIn .42s cubic-bezier(.16,1,.3,1) both;
+}
+
+.nav-item,
+.button,
+.card,
+.workspace,
+.command-palette,
+.select-trigger,
+.profile,
+.credit-card {
+  transition:
+    transform .22s cubic-bezier(.2,.8,.2,1),
+    box-shadow .22s ease,
+    border-color .22s ease,
+    background-color .22s ease,
+    opacity .22s ease;
+}
+
+.nav-item:not(:disabled):active,
+.button:not(:disabled):active,
+.command-palette:not(:disabled):active,
+.select-trigger:not(:disabled):active {
+  transform:scale(.975);
+}
+
+.brand:hover .viral-brand-mark img,
+.drag:hover .viral-brand-icon img {
+  transform:translateY(-1px) scale(1.035);
+  filter:drop-shadow(0 10px 22px rgba(92,103,255,.34));
+}
+
+.viral-brand-icon img,
+.viral-brand-mark img {
+  transition:transform .32s cubic-bezier(.16,1,.3,1),filter .32s ease;
+}
+
+@keyframes startupLogoReveal {
+  from { opacity:0; transform:translateY(14px) scale(.84) rotate(-4deg); filter:blur(5px); }
+  to { opacity:1; transform:none; filter:none; }
+}
+
+@keyframes startupCopyReveal {
+  from { opacity:0; transform:translateY(9px); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes startupPulse {
+  0%,100% { transform:scale(.96); opacity:.58; }
+  50% { transform:scale(1.09); opacity:1; }
+}
+
+@keyframes startupLoad {
+  0% { left:-46%; transform:scaleX(.72); }
+  45% { transform:scaleX(1.1); }
+  100% { left:104%; transform:scaleX(.82); }
+}
+
+@keyframes startupAuroraA {
+  from { transform:translate3d(-2%,2%,0) rotate(9deg) scale(.98); }
+  to { transform:translate3d(9%,-5%,0) rotate(14deg) scale(1.1); }
+}
+
+@keyframes startupAuroraB {
+  from { transform:translate3d(2%,-2%,0) rotate(-16deg) scale(.96); }
+  to { transform:translate3d(-9%,7%,0) rotate(-11deg) scale(1.09); }
+}
+
+@keyframes startupTitlebarIn {
+  from { opacity:0; transform:translateY(-10px); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes startupSidebarIn {
+  from { opacity:0; transform:translateX(-18px); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes startupTopbarIn {
+  from { opacity:0; transform:translateY(-14px); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes startupPageIn {
+  from { opacity:0; transform:translateY(12px) scale(.994); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes corePageTransitionIn {
+  from { opacity:0; transform:translateY(10px) scale(.996); }
+  to { opacity:1; transform:none; }
+}
+
+@keyframes startupNavItemIn {
+  from { opacity:0; transform:translateX(-8px); }
+  to { opacity:1; transform:none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-startup::before,
+  .app-startup::after,
+  .startup-logo-shell,
+  .startup-logo-shell::before,
+  .startup-wordmark,
+  .startup-progress,
+  .startup-progress i,
+  html[data-startup="ready"].startup-reveal-once .titlebar,
+  html[data-startup="ready"].startup-reveal-once .sidebar,
+  html[data-startup="ready"].startup-reveal-once .topbar,
+  html[data-startup="ready"].startup-reveal-once #page,
+  html[data-startup="ready"].startup-reveal-once .nav-item,
+  #page.core-page-enter {
+    animation:none !important;
+  }
+
+  .app-startup,
+  .nav-item,
+  .button,
+  .card,
+  .workspace,
+  .command-palette,
+  .select-trigger,
+  .profile,
+  .credit-card,
+  .viral-brand-icon img,
+  .viral-brand-mark img {
+    transition-duration:.01ms !important;
+  }
+}
+
+html[data-motion="reduced"] .app-startup::before,
+html[data-motion="reduced"] .app-startup::after,
+html[data-motion="reduced"] .startup-logo-shell,
+html[data-motion="reduced"] .startup-logo-shell::before,
+html[data-motion="reduced"] .startup-wordmark,
+html[data-motion="reduced"] .startup-progress,
+html[data-motion="reduced"] .startup-progress i,
+html[data-motion="reduced"][data-startup="ready"].startup-reveal-once .titlebar,
+html[data-motion="reduced"][data-startup="ready"].startup-reveal-once .sidebar,
+html[data-motion="reduced"][data-startup="ready"].startup-reveal-once .topbar,
+html[data-motion="reduced"][data-startup="ready"].startup-reveal-once #page,
+html[data-motion="reduced"][data-startup="ready"].startup-reveal-once .nav-item {
+  animation:none !important;
+}
