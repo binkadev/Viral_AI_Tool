@@ -8,6 +8,7 @@ const model = require("../renderer/core-player-model");
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf8");
 const player = fs.readFileSync(path.join(root, "renderer", "core-player.js"), "utf8");
+const rebind = fs.readFileSync(path.join(root, "renderer", "core-player-rebind.js"), "utf8");
 const interactions = fs.readFileSync(path.join(root, "renderer", "core-player-interactions.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
@@ -95,6 +96,20 @@ for (const required of [
 }
 
 for (const required of [
+  'setProperty("object-fit", "contain", "important")',
+  'setProperty("object-position", "center center", "important")',
+  'setProperty("transform", "none", "important")',
+  "data-core-playhead",
+  "corePlaybackState",
+  "coreMediaReady",
+  "querySelectorAll(\"#page video.preview-video, #page video.core-player-media\")",
+  "seekToRatio(video",
+  '"play", "pause", "ended"'
+]) {
+  assert(rebind.includes(required), "Core player rebind is missing hardening behavior: " + required);
+}
+
+for (const required of [
   "pointerdown",
   "pointermove",
   "pointerup",
@@ -111,9 +126,11 @@ for (const required of [
 
 assert(!player.includes("setInterval("), "Player synchronization must not use an independent timer clock.");
 assert(!interactions.includes("setInterval("), "Scrubbing must not introduce a second playback clock.");
+assert(!rebind.includes("setInterval("), "Player rebind must stay synchronized to media events instead of an independent timer clock.");
 assert(index.includes('href="core-editor.css"'));
 assert(index.includes('src="core-player-model.js"'));
 assert(index.includes('src="core-player.js"'));
 assert(index.includes('src="core-player-interactions.js"'));
+assert(index.includes('src="core-player-rebind.js"'));
 
 console.log("Core player geometry, timeline, scrubbing and synchronization tests passed.");

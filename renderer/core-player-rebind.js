@@ -35,23 +35,63 @@
       String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
   }
 
+  function normalizeVideoSurface(video) {
+    if (!(video instanceof HTMLVideoElement)) return;
+    const host = video.closest(".preview");
+    if (!(host instanceof HTMLElement)) return;
+
+    video.style.setProperty("object-fit", "contain", "important");
+    video.style.setProperty("object-position", "center center", "important");
+    video.style.setProperty("max-width", "100%", "important");
+    video.style.setProperty("max-height", "100%", "important");
+    video.style.setProperty("width", "100%", "important");
+    video.style.setProperty("height", "100%", "important");
+    video.style.setProperty("transform", "none", "important");
+
+    host.dataset.coreMediaFit = "contain";
+  }
+
   function refresh(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
     if (!(host instanceof HTMLElement)) return;
 
+    normalizeVideoSurface(video);
+
     const duration = effectiveDuration(video);
-    const current = Math.max(0, Math.min(Number(video.currentTime || 0), duration || Number(video.currentTime || 0)));
+    const rawCurrent = Number(video.currentTime || 0);
+    const current = Math.max(0, Math.min(rawCurrent, duration || rawCurrent));
     const controls = host.querySelector(".core-player-controls");
     const time = controls?.querySelector("[data-core-time]");
     const seek = controls?.querySelector("[data-core-seek]");
     const playhead = host.querySelector("[data-core-playhead]");
+    const playButton = controls?.querySelector("[data-core-play], [data-core-toggle-play]");
 
-    if (time && duration > 0) time.textContent = formatClock(current) + " / " + formatClock(duration);
-    if (seek && duration > 0) seek.value = String(Math.round((current / duration) * 1000));
-    if (playhead && duration > 0) playhead.style.left = String(Math.max(0, Math.min(100, (current / duration) * 100))) + "%";
+    if (time) {
+      time.textContent = duration > 0
+        ? formatClock(current) + " / " + formatClock(duration)
+        : formatClock(current) + " / --:--";
+    }
+
+    if (seek instanceof HTMLInputElement) {
+      seek.disabled = !(duration > 0);
+      if (duration > 0) seek.value = String(Math.round((current / duration) * 1000));
+    }
+
+    if (playhead instanceof HTMLElement) {
+      playhead.style.left = duration > 0
+        ? String(Math.max(0, Math.min(100, (current / duration) * 100))) + "%"
+        : "0%";
+    }
+
+    if (playButton instanceof HTMLElement) {
+      playButton.dataset.playing = video.paused ? "false" : "true";
+      playButton.setAttribute("aria-pressed", video.paused ? "false" : "true");
+    }
 
     host.dataset.coreDurationResolved = duration > 0 ? "true" : "false";
+    host.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    host.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
   }
 
   function nudgeCorePlayer(video) {
@@ -62,51 +102,64 @@
     marker.remove();
   }
 
+  function seekToRatio(video, ratio) {
+    const duration = effectiveDuration(video);
+    if (!duration) return false;
+    const safeRatio = Math.max(0, Math.min(1, Number(ratio || 0)));
+    try {
+      video.currentTime = safeRatio * duration;
+      refresh(video);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function wire(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     refresh(video);
     if (wired.has(video)) return;
     wired.add(video);
 
-    ["loadedmetadata", "durationchange", "loadeddata", "canplay", "progress", "timeupdate", "seeking", "seeked"].forEach(name => {
+    [
+      "loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough",
+      "progress", "timeupdate", "seeking", "seeked", "play", "pause", "ended",
+      "emptied", "stalled", "suspend", "waiting", "resize"
+    ].forEach(name => {
       video.addEventListener(name, () => refresh(video));
     });
 
     const host = video.closest(".preview");
     const seek = host?.querySelector("[data-core-seek]");
     if (seek instanceof HTMLInputElement) {
-      seek.addEventListener("input", () => {
-        const nativeDuration = Number(video.duration || 0);
-        if (Number.isFinite(nativeDuration) && nativeDuration > 0) return;
+      seek.addEventListener("input", event => {
         const duration = effectiveDuration(video);
         if (!duration) return;
-        try { video.currentTime = (Number(seek.value || 0) / 1000) * duration; } catch {}
-        refresh(video);
+        event.stopPropagation();
+        seekToRatio(video, Number(seek.value || 0) / 1000);
       }, true);
     }
 
     const track = host?.querySelector("[data-core-timeline-track]");
     if (track instanceof HTMLElement) {
       track.addEventListener("click", event => {
-        const nativeDuration = Number(video.duration || 0);
-        if (Number.isFinite(nativeDuration) && nativeDuration > 0) return;
         const duration = effectiveDuration(video);
         if (!duration) return;
         const rect = track.getBoundingClientRect();
         if (!rect.width) return;
-        const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const ratio = (event.clientX - rect.left) / rect.width;
         event.preventDefault();
         event.stopImmediatePropagation();
-        try { video.currentTime = ratio * duration; } catch {}
-        refresh(video);
+        seekToRatio(video, ratio);
       }, true);
     }
   }
 
   function scan() {
     queued = false;
-    const video = document.querySelector("#page video.preview-video, #page video.core-player-media");
-    if (video instanceof HTMLVideoElement) wire(video);
+    document.querySelectorAll("#page video.preview-video, #page video.core-player-media").forEach(video => {
+      if (video instanceof HTMLVideoElement) wire(video);
+    });
   }
 
   function queue() {
@@ -117,13 +170,23 @@
 
   const start = () => {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
+    if (page) {
+      new MutationObserver(queue).observe(page, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["src", "class"]
+      });
+    }
+
+    window.addEventListener("resize", queue, { passive: true });
     window.addEventListener("viral-ai:editor-preview-preserved", () => {
-      const video = document.querySelector("#page video.preview-video, #page video.core-player-media");
-      if (video instanceof HTMLVideoElement) {
-        nudgeCorePlayer(video);
-        refresh(video);
-      }
+      document.querySelectorAll("#page video.preview-video, #page video.core-player-media").forEach(video => {
+        if (video instanceof HTMLVideoElement) {
+          nudgeCorePlayer(video);
+          refresh(video);
+        }
+      });
       queue();
     });
     queue();
