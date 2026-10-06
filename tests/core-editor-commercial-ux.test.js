@@ -7,10 +7,13 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
 const js = read("renderer/core-editor-commercial-ux.js");
 const css = read("renderer/core-editor-commercial-ux.css");
+const modeJs = read("renderer/core-editor-processing-mode.js");
+const modeCss = read("renderer/core-editor-processing-mode.css");
 const assets = read("renderer/core-editor-assets.js");
 const index = read("renderer/index.html");
 
 assert.doesNotThrow(() => new Function(js), "Commercial UX JS must parse.");
+assert.doesNotThrow(() => new Function(modeJs), "Processing mode JS must parse.");
 
 for (const required of [
   "sourceMissingTitle",
@@ -37,6 +40,26 @@ for (const required of [
 }
 
 for (const required of [
+  "Processing mode",
+  "Chế độ xử lý",
+  "current?.speech?.mode",
+  "current?.translation?.mode",
+  "current?.voice?.mode",
+  "core-commercial-mode-strip"
+]) {
+  assert(modeJs.includes(required), "Processing mode JS missing: " + required);
+}
+
+for (const required of [
+  ".core-commercial-mode-strip",
+  '[data-mode="cloud"]',
+  '[data-mode="local"]',
+  "grid-template-columns:repeat(3,minmax(0,1fr))"
+]) {
+  assert(modeCss.includes(required), "Processing mode CSS missing: " + required);
+}
+
+for (const required of [
   "function currentSource()",
   "source?.meta?.duration",
   "source?.meta?.width",
@@ -46,7 +69,13 @@ for (const required of [
   assert(assets.includes(required), "Assets missing-state support missing: " + required);
 }
 
-assert(index.includes('href="core-editor-commercial-ux.css"'), "Commercial UX CSS must be loaded.");
-assert(index.includes('src="core-editor-commercial-ux.js"'), "Commercial UX JS must be loaded.");
+for (const required of [
+  'href="core-editor-commercial-ux.css"',
+  'src="core-editor-commercial-ux.js"',
+  'href="core-editor-processing-mode.css"',
+  'src="core-editor-processing-mode.js"'
+]) {
+  assert(index.includes(required), "Editor integration missing: " + required);
+}
 
 console.log("core-editor-commercial-ux tests passed");
