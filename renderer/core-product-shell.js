@@ -8,16 +8,6 @@
     "Short_Fashion_031.mp4"
   ]);
 
-  const CORE_PAGES = new Set([
-    "download",
-    "ai-video",
-    "library",
-    "accounts",
-    "usage",
-    "billing",
-    "settings"
-  ]);
-
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
@@ -184,8 +174,12 @@
   function normalizeCurrentPage() {
     const current = appState();
     if (!current) return;
-    if (CORE_PAGES.has(String(current.page || ""))) return;
-    current.page = hasSourceVideo() ? "ai-video" : "download";
+
+    // Startup is workflow-first: resume the editor when a project source exists,
+    // otherwise land on Import. Passive pages should never be the first screen.
+    const startupPage = hasSourceVideo() ? "ai-video" : "download";
+    if (current.page === startupPage) return;
+    current.page = startupPage;
     persist();
   }
 
