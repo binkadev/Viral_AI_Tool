@@ -43,7 +43,8 @@
     "test:core-product-shell": "node tests/core-product-shell.test.js",
     "test:core-editor-stability": "node tests/core-editor-stability.test.js",
     "test:core-media-health": "node tests/core-media-health.test.js",
-    "test:core-editor-focus": "node tests/core-editor-focus.test.js"
+    "test:core-editor-focus": "node tests/core-editor-focus.test.js",
+    "test:core-editor-workbench": "node tests/core-editor-workbench.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
