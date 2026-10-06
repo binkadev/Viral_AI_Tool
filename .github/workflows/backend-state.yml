@@ -90,6 +90,9 @@ jobs:
       - name: Test completed render output state
         run: npm run test:core-editor-output-state
 
+      - name: Test timeline scrub and viewer synchronization
+        run: npm run test:core-editor-timeline-interactions
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -120,6 +123,7 @@ jobs:
           node --check tests/core-editor-commercial-ux.test.js
           node --check tests/core-editor-activity.test.js
           node --check tests/core-editor-output-state.test.js
+          node --check tests/core-editor-timeline-interactions.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
@@ -136,6 +140,7 @@ jobs:
           node --check renderer/core-editor-processing-mode.js
           node --check renderer/core-editor-activity.js
           node --check renderer/core-editor-output-state.js
+          node --check renderer/core-editor-timeline-interactions.js
           node --check renderer/core-media-health.js
           node --check renderer/core-transcript-model.js
           node --check renderer/core-transcript-state.js
