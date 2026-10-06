@@ -1,0 +1,199 @@
+/* Core Editor workbench: preview-first layout with real existing controls moved into an inspector.
+ * Layout only. Backend, job handlers and control IDs remain unchanged.
+ */
+
+.core-editor-workbench-page .core-editor-focus-section .editor-grid{
+  grid-template-columns:minmax(0,1fr) clamp(320px,25vw,390px)!important;
+  gap:14px!important;
+}
+
+.core-editor-workbench-page .core-editor-focus-section .stack{
+  max-height:clamp(430px,56vh,650px);
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding-right:2px;
+}
+
+.core-editor-inspector{
+  border:1px solid rgba(111,121,148,.12);
+  border-radius:16px;
+  background:rgba(255,255,255,.72);
+  box-shadow:0 14px 34px rgba(26,32,48,.055), inset 0 1px rgba(255,255,255,.78);
+  overflow:hidden;
+  backdrop-filter:blur(16px);
+}
+
+.core-inspector-tabs{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:4px;
+  padding:6px;
+  border-bottom:1px solid rgba(111,121,148,.10);
+  background:rgba(245,247,253,.72);
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+
+.core-inspector-tab{
+  min-width:0;
+  border:0;
+  border-radius:10px;
+  padding:8px 5px;
+  background:transparent;
+  color:var(--text-faint);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  transition:transform 150ms cubic-bezier(.22,1,.36,1),background 150ms cubic-bezier(.22,1,.36,1),color 150ms cubic-bezier(.22,1,.36,1),box-shadow 150ms cubic-bezier(.22,1,.36,1);
+}
+
+.core-inspector-tab:hover:not(.is-active){
+  background:rgba(105,111,255,.07);
+  color:var(--text);
+  transform:translateY(-1px);
+}
+
+.core-inspector-tab.is-active{
+  color:#5358dc;
+  background:rgba(255,255,255,.94);
+  box-shadow:0 5px 16px rgba(64,68,128,.10), inset 0 0 0 1px rgba(105,111,255,.13);
+}
+
+.core-inspector-tab.has-active-job::after{
+  content:"";
+  display:inline-block;
+  width:5px;
+  height:5px;
+  margin-left:5px;
+  border-radius:999px;
+  background:#6e73ff;
+  box-shadow:0 0 0 3px rgba(110,115,255,.12);
+}
+
+.core-inspector-tab.is-blocked:not(.is-active){opacity:.64}
+
+.core-inspector-panes{min-width:0}
+.core-inspector-pane{padding:10px}
+.core-inspector-pane[hidden]{display:none!important}
+
+.core-inspector-card{
+  margin:0!important;
+  border:0!important;
+  border-radius:12px!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  padding:2px!important;
+  min-width:0;
+}
+
+.core-inspector-card .speech-card-head{
+  gap:8px;
+  align-items:flex-start;
+  margin-bottom:10px;
+}
+
+.core-inspector-card .speech-card-head h3{
+  font-size:14px;
+  margin-bottom:2px;
+}
+
+.core-inspector-card .speech-card-head p{
+  font-size:11px;
+  line-height:1.45;
+  color:var(--text-faint);
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+.core-inspector-card .eyebrow{font-size:9px;margin-bottom:3px}
+
+.core-inspector-card .speech-controls,
+.core-inspector-card .translation-controls,
+.core-inspector-card .voice-top-controls{
+  grid-template-columns:1fr!important;
+  gap:8px!important;
+}
+
+.core-inspector-card .speech-field,
+.core-inspector-card .voice-language-summary{
+  min-width:0;
+}
+
+.core-inspector-card .speech-choice-help,
+.core-inspector-card .translation-warning,
+.core-inspector-card .speech-alert,
+.core-inspector-card .voice-feature-pending,
+.core-inspector-card .ai-voice-disclosure,
+.core-inspector-card .speech-job-state{
+  font-size:10px;
+}
+
+.core-inspector-card .cloud-connection,
+.core-inspector-card .speech-cloud-panel,
+.core-inspector-card .translation-connection,
+.core-inspector-card .voice-connection{
+  padding:9px!important;
+  border-radius:11px!important;
+}
+
+.core-inspector-card .button{
+  min-height:34px;
+  padding:7px 10px;
+}
+
+.core-inspector-card .select,
+.core-inspector-card input{
+  min-height:36px;
+}
+
+.core-inspector-card .voice-mapping-list{
+  max-height:210px;
+  overflow:auto;
+  scrollbar-width:thin;
+}
+
+.core-output-actions{
+  display:grid;
+  gap:8px;
+}
+
+.core-inspector-render{
+  width:100%;
+  min-height:38px;
+}
+
+.core-editor-legacy-workflow{
+  display:none!important;
+}
+
+/* The top workflow rail is the single workflow representation. */
+.core-editor-workbench-page > .workflow{
+  display:none!important;
+}
+
+@media (max-width:1260px){
+  .core-editor-workbench-page .core-editor-focus-section .editor-grid{
+    grid-template-columns:minmax(0,1fr) 320px!important;
+  }
+}
+
+@media (max-width:980px){
+  .core-editor-workbench-page .core-editor-focus-section .editor-grid{
+    grid-template-columns:1fr!important;
+  }
+  .core-editor-workbench-page .core-editor-focus-section .stack{
+    max-height:none;
+    overflow:visible;
+    position:static;
+  }
+  .core-editor-inspector{margin-top:2px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .core-inspector-tab{transition:none!important}
+}
