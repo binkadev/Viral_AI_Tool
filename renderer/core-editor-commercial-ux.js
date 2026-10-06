@@ -108,7 +108,7 @@
   }
 
   function syncMediaState(page) {
-    const host = page?.querySelector?.(".preview.core-player-host, .preview.preview-real");
+    const host = page?.querySelector?.(".preview.core-player-host, .preview.preview-real, .core-editor-focus-section .preview");
     if (!(host instanceof HTMLElement)) return;
 
     const source = latestSource();
