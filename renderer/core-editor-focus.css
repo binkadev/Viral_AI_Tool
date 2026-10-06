@@ -1,0 +1,101 @@
+/* Preview-first Core Editor hierarchy.
+ * Visual/layout only: existing workflow and media services remain untouched.
+ */
+
+.core-editor-focused-page{
+  --editor-focus-gap:14px;
+}
+
+.core-editor-focus-section{
+  margin:10px 0 18px;
+  min-width:0;
+  animation:coreFocusIn 320ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.core-editor-focus-section .section-head{
+  margin:0 0 10px;
+  padding:0 2px;
+}
+
+.core-editor-focus-section .section-head h3{
+  margin:0 0 3px;
+}
+
+.core-editor-focus-section .section-head p{
+  margin:0;
+  color:var(--text-faint);
+}
+
+.core-editor-focus-section .editor-grid{
+  grid-template-columns:minmax(0,1fr) clamp(230px,19vw,292px)!important;
+  gap:12px!important;
+  align-items:start;
+}
+
+.core-editor-focus-section .preview.core-player-host,
+.core-editor-focus-section .preview.preview-real{
+  height:clamp(360px,49vh,610px)!important;
+  min-height:340px!important;
+  max-height:calc(100vh - 250px)!important;
+}
+
+.core-editor-focus-section .stack{
+  min-width:0;
+  display:grid;
+  gap:10px;
+  align-content:start;
+  position:sticky;
+  top:10px;
+}
+
+.core-editor-focus-section .mini-card{
+  border-color:rgba(120,130,160,.14);
+  box-shadow:0 10px 28px rgba(25,31,48,.045);
+}
+
+.core-editor-secondary-panel{
+  margin-top:16px!important;
+}
+
+.core-editor-focused-page .voice-workflow-card,
+.core-editor-focused-page .speech-card{
+  scroll-margin-top:18px;
+}
+
+@keyframes coreFocusIn{
+  from{opacity:0;transform:translateY(8px);filter:blur(4px)}
+  to{opacity:1;transform:translateY(0);filter:blur(0)}
+}
+
+@media (max-width:1180px){
+  .core-editor-focus-section .editor-grid{
+    grid-template-columns:minmax(0,1fr) 248px!important;
+  }
+  .core-editor-focus-section .preview.core-player-host,
+  .core-editor-focus-section .preview.preview-real{
+    height:clamp(330px,46vh,540px)!important;
+  }
+}
+
+@media (max-width:960px){
+  .core-editor-focus-section .editor-grid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .core-editor-focus-section .stack{
+    position:static;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media (max-width:680px){
+  .core-editor-focus-section .stack{grid-template-columns:1fr}
+  .core-editor-focus-section .preview.core-player-host,
+  .core-editor-focus-section .preview.preview-real{
+    min-height:280px!important;
+    height:min(46vh,460px)!important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .core-editor-focus-section{animation:none!important}
+}
