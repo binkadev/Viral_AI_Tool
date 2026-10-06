@@ -1,0 +1,111 @@
+/* Final render output state inside the Output inspector pane. */
+
+html.core-editor-premium .core-output-state-card{
+  display:grid;
+  grid-template-columns:40px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  margin:0 0 12px;
+  padding:13px;
+  border:1px solid rgba(51,194,127,.22);
+  border-radius:14px;
+  background:rgba(51,194,127,.065);
+}
+
+html.core-editor-premium .core-output-state-card[hidden]{display:none!important}
+
+html.core-editor-premium .core-output-state-icon{
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  color:#bcefd1;
+  background:rgba(51,194,127,.10);
+  border:1px solid rgba(51,194,127,.25);
+  font-size:16px;
+  font-weight:800;
+}
+
+html.core-editor-premium .core-output-state-copy{
+  min-width:0;
+  display:grid;
+  gap:3px;
+}
+
+html.core-editor-premium .core-output-state-copy small{
+  color:#7fbf9b;
+  font-size:10px;
+  line-height:14px;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+html.core-editor-premium .core-output-state-copy b{
+  color:#f3f6fb;
+  font-size:14px;
+  line-height:20px;
+  font-weight:650;
+}
+
+html.core-editor-premium .core-output-state-copy span{
+  color:#9eabc2;
+  font-size:12px;
+  line-height:17px;
+}
+
+html.core-editor-premium .core-output-state-copy code{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#c8d4e8;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px;
+  line-height:16px;
+}
+
+html.core-editor-premium .core-output-state-action{
+  min-height:34px;
+  padding:7px 10px;
+  border:1px solid rgba(51,194,127,.24);
+  border-radius:10px;
+  color:#d9f8e6;
+  background:rgba(51,194,127,.10);
+  font:inherit;
+  font-size:12px;
+  line-height:18px;
+  font-weight:650;
+  cursor:pointer;
+}
+
+html.core-editor-premium .core-output-state-action:hover:not(:disabled){
+  background:rgba(51,194,127,.16);
+  border-color:rgba(51,194,127,.36);
+}
+
+html.core-editor-premium .core-output-state-action:disabled{opacity:.45;cursor:not-allowed}
+
+html.core-editor-premium .core-output-state-hint{
+  margin:0 0 10px;
+  padding:9px 11px;
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:10px;
+  color:#8692aa;
+  background:#101726;
+  font-size:11px;
+  line-height:16px;
+}
+
+html.core-editor-premium .core-output-state-hint[hidden]{display:none!important}
+
+@media (max-width:420px){
+  html.core-editor-premium .core-output-state-card{
+    grid-template-columns:36px minmax(0,1fr);
+  }
+  html.core-editor-premium .core-output-state-action{
+    grid-column:1 / -1;
+    width:100%;
+  }
+}
