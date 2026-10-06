@@ -80,6 +80,32 @@
     scroll.scrollLeft = clampScrollLeft(scroll, x - scroll.clientWidth * anchor);
   }
 
+  function revealSelectedClip(dock, index, { center = false } = {}) {
+    if (!(dock instanceof HTMLElement) || !Number.isInteger(index) || index < 0) return;
+    const timelinePane = dock.querySelector('[data-bottom-pane="timeline"]');
+    if (timelinePane instanceof HTMLElement && timelinePane.hidden) return;
+    const { scroll } = scrollParts(dock);
+    const clip = dock.querySelector('.core-bottom-segment[data-segment-index="' + index + '"]');
+    if (!(scroll instanceof HTMLElement) || !(clip instanceof HTMLElement)) return;
+    if (scroll.scrollWidth <= scroll.clientWidth + 2) return;
+
+    const clipLeft = clip.offsetLeft;
+    const clipRight = clipLeft + clip.offsetWidth;
+    const left = scroll.scrollLeft;
+    const right = left + scroll.clientWidth;
+    const margin = Math.min(80, Math.max(22, scroll.clientWidth * 0.12));
+    const outOfView = clipLeft < left + margin || clipRight > right - margin;
+    if (!center && !outOfView) return;
+
+    const clipCenter = clipLeft + clip.offsetWidth / 2;
+    const target = center
+      ? clipCenter - scroll.clientWidth / 2
+      : clipLeft < left + margin
+        ? clipLeft - margin
+        : clipRight - scroll.clientWidth + margin;
+    scroll.scrollLeft = clampScrollLeft(scroll, target);
+  }
+
   function panDuringScrub(dock, clientX) {
     const { scroll } = scrollParts(dock);
     if (!(scroll instanceof HTMLElement) || scroll.scrollWidth <= scroll.clientWidth) return;
@@ -321,6 +347,15 @@
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:transcript-edit", queue);
+    window.addEventListener("viral-ai:editor-segment-selected", event => {
+      const index = Number(event?.detail?.index);
+      if (!Number.isInteger(index) || index < 0) return;
+      requestAnimationFrame(() => {
+        const dock = editorPage()?.querySelector?.(".core-editor-bottom-dock");
+        if (!(dock instanceof HTMLElement)) return;
+        revealSelectedClip(dock, index, { center: event?.detail?.source === "transcript" });
+      });
+    });
     queue();
   }
 
