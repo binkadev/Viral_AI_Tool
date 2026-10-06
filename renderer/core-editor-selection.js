@@ -12,6 +12,12 @@
     return Array.from(document.querySelectorAll(".core-bottom-segment"));
   }
 
+  function dispatchSelection(index, source) {
+    window.dispatchEvent(new CustomEvent("viral-ai:editor-segment-selected", {
+      detail: { index, source }
+    }));
+  }
+
   function applySelection(index, { scrollTranscript = false } = {}) {
     const transcriptRows = rows();
     const timelineClips = clips();
@@ -45,7 +51,7 @@
     if (clip instanceof HTMLElement) {
       const index = Number(clip.dataset.segmentIndex || -1);
       applySelection(index, { scrollTranscript: true });
-      window.dispatchEvent(new CustomEvent("viral-ai:editor-segment-selected", { detail: { index, source: "timeline" } }));
+      dispatchSelection(index, "timeline");
       return;
     }
 
@@ -53,7 +59,7 @@
     if (row instanceof HTMLElement) {
       const index = indexOfRow(row);
       applySelection(index);
-      window.dispatchEvent(new CustomEvent("viral-ai:editor-segment-selected", { detail: { index, source: "transcript" } }));
+      dispatchSelection(index, "transcript");
     }
   }
 
@@ -77,6 +83,7 @@
       if ((event.key === "Enter" || event.key === " ") && event.target.matches(".transcript-list .transcript-row")) {
         const index = indexOfRow(event.target);
         applySelection(index);
+        dispatchSelection(index, "transcript");
       }
     }, true);
 
