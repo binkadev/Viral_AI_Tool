@@ -75,6 +75,9 @@ jobs:
       - name: Test Core media loading and retry states
         run: npm run test:core-media-health
 
+      - name: Test preview-first Core Editor hierarchy
+        run: npm run test:core-editor-focus
+
       - name: Syntax check hardened backend
         run: |
           node --check dev-backend/server.js
@@ -100,6 +103,7 @@ jobs:
           node --check tests/core-media-restore.test.js
           node --check tests/core-editor-stability.test.js
           node --check tests/core-media-health.test.js
+          node --check tests/core-editor-focus.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
@@ -108,7 +112,9 @@ jobs:
           node --check renderer/core-player-model.js
           node --check renderer/core-player.js
           node --check renderer/core-player-interactions.js
+          node --check renderer/core-player-rebind.js
           node --check renderer/core-editor-stability.js
+          node --check renderer/core-editor-focus.js
           node --check renderer/core-media-health.js
           node --check renderer/core-transcript-model.js
           node --check renderer/core-transcript-state.js
