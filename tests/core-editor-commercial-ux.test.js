@@ -25,10 +25,16 @@ for (const required of [
   "dataset.fileState",
   "classifyToast",
   "syncWorkflowActions",
-  "data-commercial-stage-state",
+  'setAttribute("data-commercial-stage-state"',
   "commercialActionState",
   "core-commercial-stage-dot",
-  'setAttribute("aria-busy"'
+  'setAttribute("aria-busy"',
+  "window.I18N?.t",
+  'catalog("common.processing"',
+  'catalog("translation.notReady"',
+  "ViralCoreWorkflowModel?.derive",
+  "workflowSnapshot()?.jobs?.render",
+  'if (!(button instanceof HTMLButtonElement)) return "blocked"'
 ]) {
   assert(js.includes(required), "Commercial UX JS missing: " + required);
 }
