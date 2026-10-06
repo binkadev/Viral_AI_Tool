@@ -1,0 +1,74 @@
+/* Commercial timeline interaction states.
+ * Keeps scrubbing, zooming and keyboard behavior visually explicit without changing render logic.
+ */
+
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing{
+  user-select:none;
+}
+
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-timeline-stage,
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-time-ruler,
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-track-lane,
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-source-clip{
+  cursor:ew-resize!important;
+}
+
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-bottom-playhead{
+  width:2px;
+  background:#93a0ff;
+  box-shadow:0 0 0 1px rgba(124,140,255,.12),0 0 14px rgba(124,140,255,.24);
+}
+
+html.core-editor-premium .core-editor-bottom-dock.is-scrubbing .core-bottom-playhead::before{
+  width:9px;
+  height:9px;
+  background:#93a0ff;
+}
+
+html.core-editor-premium .core-timeline-stage.is-zooming{
+  transition:none!important;
+}
+
+html.core-editor-premium .core-timeline-scroll:focus-visible,
+html.core-editor-premium .core-timeline-stage:focus-visible{
+  outline:none;
+  box-shadow:inset 0 0 0 2px rgba(124,140,255,.28);
+}
+
+html.core-editor-premium .core-bottom-segment.is-selected{
+  box-shadow:
+    inset 0 0 0 1px rgba(188,196,255,.62),
+    0 0 0 2px rgba(124,140,255,.20),
+    0 4px 12px rgba(0,0,0,.16)!important;
+}
+
+html.core-editor-premium .core-bottom-segment.is-active.is-selected{
+  box-shadow:
+    inset 0 0 0 1px rgba(228,232,255,.75),
+    0 0 0 2px rgba(124,140,255,.26),
+    0 5px 14px rgba(0,0,0,.20)!important;
+}
+
+html.core-editor-premium .core-timeline-scroll{
+  scrollbar-color:#33415e transparent;
+}
+
+html.core-editor-premium .core-timeline-scroll::-webkit-scrollbar{
+  height:8px;
+}
+
+html.core-editor-premium .core-timeline-scroll::-webkit-scrollbar-thumb{
+  border-radius:999px;
+  background:#33415e;
+}
+
+html.core-editor-premium .core-timeline-scroll::-webkit-scrollbar-thumb:hover{
+  background:#435472;
+}
+
+@media (prefers-reduced-motion:reduce){
+  html.core-editor-premium .core-bottom-playhead,
+  html.core-editor-premium .core-bottom-playhead::before{
+    transition:none!important;
+  }
+}
