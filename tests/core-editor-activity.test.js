@@ -21,9 +21,10 @@ for (const required of [
   "data-activity-retry",
   "jobModel?.describe",
   "latestRenderJob(current)",
-  "commercial-preview-retry"
-].filter(Boolean)) {
-  if (required === "commercial-preview-retry") continue;
+  "renderCanStop(active)",
+  'typeof cancelExportJob === "function"',
+  "await cancelExportJob(active.job)"
+]) {
   assert(js.includes(required), "Activity JS missing: " + required);
 }
 
