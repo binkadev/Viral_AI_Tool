@@ -19,6 +19,8 @@ for (const required of [
   "pointermove",
   "pointercancel",
   "revealPlayhead",
+  "revealSelectedClip",
+  "viral-ai:editor-segment-selected",
   "panDuringScrub",
   "lastManualScrollAt",
   "is-zooming",
