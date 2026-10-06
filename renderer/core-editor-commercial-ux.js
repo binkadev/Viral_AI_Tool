@@ -13,13 +13,20 @@
     }
   }
 
+  function catalog(key, fallback) {
+    try {
+      const value = window.I18N?.t?.(locale(), key);
+      return typeof value === "string" && value !== key ? value : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   function copy() {
     return locale() === "en"
       ? {
           ready: "Ready",
           needsSetup: "Needs setup",
-          running: "Running",
-          unavailable: "Unavailable",
           sourceMissingTitle: "Source video is unavailable",
           sourceMissingBody: "The original file may have been moved, renamed, or deleted. Your project data and completed processing are still kept.",
           sourceTrashedTitle: "Source video was moved to Recycle Bin",
@@ -36,8 +43,6 @@
       : {
           ready: "Sẵn sàng",
           needsSetup: "Cần thiết lập",
-          running: "Đang xử lý",
-          unavailable: "Chưa khả dụng",
           sourceMissingTitle: "Video nguồn không còn khả dụng",
           sourceMissingBody: "File gốc có thể đã bị di chuyển, đổi tên hoặc xóa. Dữ liệu dự án và các bước đã xử lý vẫn được giữ nguyên.",
           sourceTrashedTitle: "Video nguồn đã được chuyển vào Thùng rác",
@@ -56,6 +61,14 @@
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
+  }
+
+  function workflowSnapshot() {
+    try {
+      return window.ViralCoreWorkflowModel?.derive?.(appState() || {}) || null;
+    } catch {
+      return null;
+    }
   }
 
   function latestSource() {
@@ -237,21 +250,29 @@
   }
 
   function actionState(button) {
-    if (!(button instanceof HTMLButtonElement)) return "unavailable";
+    if (!(button instanceof HTMLButtonElement)) return "blocked";
     const value = String(button.textContent || "");
     if (button.dataset.coreJobState === "processing" || /Stop|Dừng|Hủy|Cancel/i.test(value)) return "processing";
     if (button.disabled) return "blocked";
     return "ready";
   }
 
-  function stageStatusLabel(value, c) {
-    if (value === "processing") return c.running;
-    if (value === "blocked") return c.unavailable;
-    return c.ready;
+  function outputActionState(button) {
+    const renderState = String(workflowSnapshot()?.jobs?.render || "idle");
+    if (["preparing", "uploading", "processing"].includes(renderState)) return "processing";
+    return actionState(button);
+  }
+
+  function stageStatusLabel(value) {
+    const fallback = locale() === "en"
+      ? { ready: "Ready", processing: "Processing", blocked: "Not ready" }
+      : { ready: "Sẵn sàng", processing: "Đang xử lý", blocked: "Chưa sẵn sàng" };
+    if (value === "processing") return catalog("common.processing", fallback.processing);
+    if (value === "blocked") return catalog("translation.notReady", fallback.blocked);
+    return catalog("translation.ready", fallback.ready);
   }
 
   function syncWorkflowActions(page) {
-    const c = copy();
     const stages = [
       ["speech", "#speechStart, #speechStop"],
       ["translate", "#translationStart, #translationStop"],
@@ -262,7 +283,7 @@
     stages.forEach(([stage, selector]) => {
       const button = page?.querySelector?.(selector);
       const tab = page?.querySelector?.('.core-inspector-tab[data-inspector-tab="' + stage + '"]');
-      const value = actionState(button);
+      const value = stage === "output" ? outputActionState(button) : actionState(button);
 
       if (button instanceof HTMLButtonElement) {
         button.classList.add("core-commercial-action");
@@ -271,7 +292,7 @@
       }
 
       if (!(tab instanceof HTMLButtonElement)) return;
-      tab.dataset.commercialStageState = value;
+      tab.setAttribute("data-commercial-stage-state", value);
       tab.classList.toggle("has-commercial-active", value === "processing");
       tab.classList.toggle("is-commercial-blocked", value === "blocked");
 
@@ -287,7 +308,7 @@
         tab.dataset.commercialBaseLabel = String(tab.textContent || "").trim();
       }
       const base = tab.dataset.commercialBaseLabel || String(tab.textContent || "").trim();
-      const status = stageStatusLabel(value, c);
+      const status = stageStatusLabel(value);
       tab.title = base + " · " + status;
       tab.setAttribute("aria-label", tab.title);
     });
