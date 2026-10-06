@@ -51,7 +51,12 @@ const commands = [
   ["Core product shell", ["npm", ["run", "test:core-product-shell"]]],
   ["Core project reopen recovery", ["npm", ["run", "test:core-media-restore"]]],
   ["Core persistent editor lifecycle", ["npm", ["run", "test:core-editor-stability"]]],
-  ["Core media loading states", ["npm", ["run", "test:core-media-health"]]]
+  ["Core media loading states", ["npm", ["run", "test:core-media-health"]]],
+  ["Core editor hierarchy", ["npm", ["run", "test:core-editor-focus"]]],
+  ["Core editor inspector", ["npm", ["run", "test:core-editor-workbench"]]],
+  ["Commercial editor UX", ["npm", ["run", "test:core-editor-commercial-ux"]]],
+  ["Unified editor activity", ["npm", ["run", "test:core-editor-activity"]]],
+  ["Completed output state", ["npm", ["run", "test:core-editor-output-state"]]]
 ];
 
 for (const [name, [command, args]] of commands) {
