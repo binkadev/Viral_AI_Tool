@@ -51,11 +51,26 @@ const translated = {
   segments: [{ id: "s1", start: 0, end: 2, text: "xin chao" }]
 };
 derived = model.derive({ jobs: [source], speech: { result: transcript }, translation: { result: translated } });
+assert.strictEqual(derived.stages[4].status, "active");
+assert.strictEqual(derived.stages[5].status, "blocked");
+assert.strictEqual(derived.controls.voice.enabled, true);
+assert.strictEqual(derived.controls.render.enabled, false);
+assert(derived.controls.render.reason.includes("AI Voice"));
+assert.strictEqual(derived.controls.export.enabled, false);
+
+const voiced = {
+  sourcePath: source.sourcePath,
+  segments: [{ id: "s1", start: 0, end: 2, text: "xin chao", audioPath: "C:/voice/s1.wav" }]
+};
+derived = model.derive({
+  jobs: [source],
+  speech: { result: transcript },
+  translation: { result: translated },
+  voice: { result: voiced }
+});
 assert.strictEqual(derived.stages[4].status, "completed");
 assert.strictEqual(derived.stages[5].status, "active");
-assert.strictEqual(derived.controls.voice.enabled, true);
 assert.strictEqual(derived.controls.render.enabled, true);
-assert.strictEqual(derived.controls.export.enabled, false);
 
 const rendering = {
   id: "render-working",
@@ -64,7 +79,12 @@ const rendering = {
   outputPath: "C:/output.partial.mp4",
   status: "processing"
 };
-derived = model.derive({ jobs: [source, rendering], speech: { result: transcript }, translation: { result: translated } });
+derived = model.derive({
+  jobs: [source, rendering],
+  speech: { result: transcript },
+  translation: { result: translated },
+  voice: { result: voiced }
+});
 assert.strictEqual(derived.jobs.render, "processing");
 assert.strictEqual(derived.stages[5].status, "processing");
 assert.strictEqual(derived.controls.speech.enabled, false);
@@ -80,18 +100,33 @@ const output = {
   outputPath: "C:/output.mp4",
   status: "completed"
 };
-derived = model.derive({ jobs: [source, output], speech: { result: transcript }, translation: { result: translated } });
+derived = model.derive({
+  jobs: [source, output],
+  speech: { result: transcript },
+  translation: { result: translated },
+  voice: { result: voiced }
+});
 assert.strictEqual(derived.stages[5].status, "completed");
 assert.strictEqual(derived.controls.export.enabled, true);
 
 const failedRender = { ...output, id: "render-failed", status: "failed" };
-derived = model.derive({ jobs: [source, failedRender], speech: { result: transcript }, translation: { result: translated } });
+derived = model.derive({
+  jobs: [source, failedRender],
+  speech: { result: transcript },
+  translation: { result: translated },
+  voice: { result: voiced }
+});
 assert.strictEqual(derived.jobs.render, "failed");
 assert.strictEqual(derived.stages[5].status, "failed");
 assert.strictEqual(derived.controls.export.enabled, false);
 
 const missing = { ...source, fileState: "missing" };
-derived = model.derive({ jobs: [missing], speech: { result: transcript }, translation: { result: translated } });
+derived = model.derive({
+  jobs: [missing],
+  speech: { result: transcript },
+  translation: { result: translated },
+  voice: { result: voiced }
+});
 assert.strictEqual(derived.stages[0].status, "failed");
 assert.strictEqual(derived.controls.speech.enabled, false);
 assert.strictEqual(derived.controls.render.enabled, false);
@@ -109,4 +144,4 @@ assert(index.includes('href="core-workflow.css"'));
 assert(index.includes('src="core-workflow-model.js"'));
 assert(index.includes('src="core-workflow.js"'));
 
-console.log("Core workflow and render gating tests passed.");
+console.log("Core workflow and real dubbing render gating tests passed.");
