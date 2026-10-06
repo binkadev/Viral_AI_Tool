@@ -3,11 +3,13 @@
  */
 
 .core-editor-workbench-page .core-editor-focus-section .editor-grid{
-  grid-template-columns:minmax(0,1fr) clamp(320px,25vw,390px)!important;
-  gap:14px!important;
+  grid-template-columns:minmax(0,1fr) clamp(360px,27vw,430px)!important;
+  gap:16px!important;
 }
 
 .core-editor-workbench-page .core-editor-focus-section .stack{
+  width:100%;
+  min-width:0;
   max-height:clamp(430px,56vh,650px);
   overflow:auto;
   overscroll-behavior:contain;
@@ -16,6 +18,9 @@
 }
 
 .core-editor-inspector{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
   border:1px solid rgba(111,121,148,.12);
   border-radius:16px;
   background:rgba(255,255,255,.72);
@@ -46,6 +51,8 @@
   font:inherit;
   font-size:11px;
   font-weight:700;
+  line-height:1.2;
+  white-space:nowrap;
   cursor:pointer;
   transition:transform 150ms cubic-bezier(.22,1,.36,1),background 150ms cubic-bezier(.22,1,.36,1),color 150ms cubic-bezier(.22,1,.36,1),box-shadow 150ms cubic-bezier(.22,1,.36,1);
 }
@@ -75,24 +82,42 @@
 
 .core-inspector-tab.is-blocked:not(.is-active){opacity:.64}
 
-.core-inspector-panes{min-width:0}
-.core-inspector-pane{padding:10px}
+.core-inspector-panes,
+.core-inspector-pane,
+.core-inspector-card,
+.core-inspector-card *{
+  min-width:0;
+  box-sizing:border-box;
+}
+
+.core-inspector-pane{padding:12px}
 .core-inspector-pane[hidden]{display:none!important}
 
 .core-inspector-card{
+  width:100%;
   margin:0!important;
   border:0!important;
   border-radius:12px!important;
   box-shadow:none!important;
   background:transparent!important;
   padding:2px!important;
-  min-width:0;
 }
 
 .core-inspector-card .speech-card-head{
+  display:flex!important;
+  flex-wrap:wrap;
   gap:8px;
   align-items:flex-start;
   margin-bottom:10px;
+}
+
+.core-inspector-card .speech-card-head > div:first-child{
+  flex:1 1 210px;
+}
+
+.core-inspector-card .speech-card-head > .button{
+  flex:0 0 auto;
+  white-space:nowrap;
 }
 
 .core-inspector-card .speech-card-head h3{
@@ -115,13 +140,64 @@
 .core-inspector-card .speech-controls,
 .core-inspector-card .translation-controls,
 .core-inspector-card .voice-top-controls{
-  grid-template-columns:1fr!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
   gap:8px!important;
 }
 
 .core-inspector-card .speech-field,
 .core-inspector-card .voice-language-summary{
+  width:100%;
   min-width:0;
+}
+
+/* Legacy connection/auth panels were designed for full-width cards.
+ * In the inspector they must stack vertically instead of squeezing copy into columns. */
+.core-inspector-card .cloud-connection,
+.core-inspector-card .speech-cloud-panel,
+.core-inspector-card .translation-connection,
+.core-inspector-card .voice-connection,
+.core-inspector-card [class*="connection-panel"],
+.core-inspector-card [class*="connection-row"]{
+  width:100%!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:8px!important;
+  padding:10px!important;
+  border-radius:11px!important;
+}
+
+.core-inspector-card .row,
+.core-inspector-card [class*="actions"]{
+  min-width:0;
+  flex-wrap:wrap!important;
+  gap:7px!important;
+}
+
+.core-inspector-card .button{
+  max-width:100%;
+  min-height:34px;
+  padding:7px 10px;
+  white-space:nowrap;
+  word-break:normal;
+  overflow-wrap:normal;
+}
+
+.core-inspector-card p,
+.core-inspector-card span,
+.core-inspector-card small,
+.core-inspector-card b,
+.core-inspector-card label{
+  word-break:normal;
+  overflow-wrap:break-word;
+}
+
+.core-inspector-card code,
+.core-inspector-card [class*="chip"],
+.core-inspector-card [class*="pill"]{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
 }
 
 .core-inspector-card .speech-choice-help,
@@ -130,24 +206,14 @@
 .core-inspector-card .voice-feature-pending,
 .core-inspector-card .ai-voice-disclosure,
 .core-inspector-card .speech-job-state{
+  width:100%;
   font-size:10px;
-}
-
-.core-inspector-card .cloud-connection,
-.core-inspector-card .speech-cloud-panel,
-.core-inspector-card .translation-connection,
-.core-inspector-card .voice-connection{
-  padding:9px!important;
-  border-radius:11px!important;
-}
-
-.core-inspector-card .button{
-  min-height:34px;
-  padding:7px 10px;
+  line-height:1.45;
 }
 
 .core-inspector-card .select,
 .core-inspector-card input{
+  width:100%;
   min-height:36px;
 }
 
@@ -176,22 +242,30 @@
   display:none!important;
 }
 
-@media (max-width:1260px){
+@media (max-width:1320px){
   .core-editor-workbench-page .core-editor-focus-section .editor-grid{
-    grid-template-columns:minmax(0,1fr) 320px!important;
+    grid-template-columns:minmax(0,1fr) 360px!important;
   }
 }
 
-@media (max-width:980px){
+/* Available editor width is smaller than viewport because of the navigation sidebar.
+ * Drop inspector below the player earlier rather than squeezing its content. */
+@media (max-width:1120px){
   .core-editor-workbench-page .core-editor-focus-section .editor-grid{
-    grid-template-columns:1fr!important;
+    grid-template-columns:minmax(0,1fr)!important;
   }
   .core-editor-workbench-page .core-editor-focus-section .stack{
     max-height:none;
     overflow:visible;
     position:static;
   }
-  .core-editor-inspector{margin-top:2px}
+  .core-editor-inspector{margin-top:4px}
+}
+
+@media (max-width:620px){
+  .core-inspector-tabs{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
 }
 
 @media (prefers-reduced-motion:reduce){
