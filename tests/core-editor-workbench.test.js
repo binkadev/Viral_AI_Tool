@@ -24,12 +24,19 @@ for (const token of [
   ".core-inspector-tabs",
   ".core-inspector-pane[hidden]",
   ".core-editor-legacy-workflow",
-  "grid-template-columns:minmax(0,1fr) clamp(320px,25vw,390px)"
+  "grid-template-columns:minmax(0,1fr) clamp(360px,27vw,430px)",
+  "grid-template-columns:minmax(0,1fr)!important",
+  "white-space:nowrap",
+  "overflow-wrap:anywhere"
 ]) {
   assert(css.includes(token), `Missing workbench layout rule: ${token}`);
 }
 
-assert(css.includes("@media (max-width:980px)"), "Workbench must collapse to one column on constrained windows");
+assert(css.includes(".core-inspector-card .speech-controls"), "Speech controls must have inspector-specific compact layout");
+assert(css.includes(".core-inspector-card .translation-controls"), "Translation controls must have inspector-specific compact layout");
+assert(css.includes(".core-inspector-card .voice-top-controls"), "Voice controls must have inspector-specific compact layout");
+assert(css.includes('[class*="connection-panel"]'), "Legacy connection panels must stack instead of squeezing their copy");
+assert(css.includes("@media (max-width:1120px)"), "Workbench must drop below preview before inspector becomes too narrow");
 assert(css.includes("prefers-reduced-motion"), "Workbench must respect reduced motion preferences");
 assert(index.includes('href="core-editor-workbench.css"'), "Production renderer must load workbench CSS");
 assert(index.includes('src="core-editor-workbench.js"'), "Production renderer must load workbench JS");
