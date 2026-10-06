@@ -193,6 +193,21 @@
     return document.querySelector(selector);
   }
 
+  function renderCanStop(active) {
+    return active?.id === "render" && typeof cancelExportJob === "function" && active?.job;
+  }
+
+  async function stopActivity(active, stopTarget) {
+    if (stopTarget instanceof HTMLButtonElement && !stopTarget.disabled) {
+      stopTarget.click();
+      return;
+    }
+    if (renderCanStop(active)) {
+      try { await cancelExportJob(active.job); }
+      catch (error) { console.warn("[EditorActivity] Could not cancel render", error); }
+    }
+  }
+
   function syncActivity(page) {
     const current = appState();
     const active = activityFor(current);
@@ -248,13 +263,12 @@
     if (fill instanceof HTMLElement) fill.style.width = progress.indeterminate ? "34%" : progress.value + "%";
 
     const stopTarget = buttonFor(active.stop);
+    const canStop = (stopTarget instanceof HTMLButtonElement && !stopTarget.disabled) || renderCanStop(active);
     if (stop instanceof HTMLButtonElement) {
-      stop.hidden = !meta.busy || !(stopTarget instanceof HTMLButtonElement);
+      stop.hidden = !meta.busy || !canStop;
       stop.textContent = rawPhase === "cancelling" ? labels.stopping : labels.stop;
-      stop.disabled = rawPhase === "cancelling" || !(stopTarget instanceof HTMLButtonElement) || stopTarget.disabled;
-      stop.onclick = () => {
-        if (stopTarget instanceof HTMLButtonElement && !stopTarget.disabled) stopTarget.click();
-      };
+      stop.disabled = rawPhase === "cancelling" || !canStop;
+      stop.onclick = () => stopActivity(active, stopTarget);
     }
 
     const retryTarget = buttonFor(active.start);
