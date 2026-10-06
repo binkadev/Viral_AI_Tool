@@ -59,10 +59,16 @@ assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS m
 assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
 assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
 
+const startupStart = index.indexOf('id="appStartup"');
+const startupEnd = index.indexOf('<div class="ambient-layer"');
+const startupMarkup = index.slice(startupStart, startupEnd);
+assert(!startupMarkup.includes("CREATOR STUDIO"), "Startup splash must not introduce an English-only subtitle.");
+
 for (const required of [
   'root.dataset.startup = "booting"',
   'root.dataset.startup = "revealing"',
   'root.dataset.startup = "ready"',
+  'startup-reveal-once',
   'window.setTimeout(reveal, 2800)',
   'prefers-reduced-motion: reduce',
   'viral-ai:startup-complete',
@@ -77,6 +83,7 @@ for (const required of [
   "startupAuroraA",
   "startupSidebarIn",
   "startupNavItemIn",
+  'html[data-startup="ready"].startup-reveal-once .nav-item',
   "prefers-reduced-motion",
   'html[data-motion="reduced"]'
 ]) {
