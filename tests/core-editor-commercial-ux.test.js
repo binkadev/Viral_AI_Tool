@@ -19,7 +19,7 @@ for (const required of [
   "core-commercial-connection-badge",
   "data-commercial-media-action",
   "typeof addFiles === \"function\"",
-  "data.fileState",
+  "dataset.fileState",
   "classifyToast"
 ]) {
   assert(js.includes(required), "Commercial UX JS missing: " + required);
