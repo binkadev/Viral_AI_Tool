@@ -17,30 +17,22 @@
     }
   }
 
-  function ensureCommandTranslations() {
-    const messages = window.I18N?.messages;
-    if (!messages?.vi?.app || !messages?.en?.app) return;
-    messages.vi.app.commandNoResults ||= "Không tìm thấy chức năng phù hợp";
-    messages.en.app.commandNoResults ||= "No matching commands found";
-  }
-
-  function tr(key) {
-    try {
-      return window.I18N?.t(locale(), key) || key;
-    } catch {
-      return key;
-    }
-  }
-
   function copy() {
-    ensureCommandTranslations();
-    return {
-      placeholder: tr("app.searchAnything"),
-      empty: tr("app.commandNoResults"),
-      hint: tr("app.searchAnything"),
-      trigger: tr("app.searchAnything"),
-      dialog: tr("app.search")
-    };
+    return locale() === "en"
+      ? {
+          placeholder: "Find a page or feature…",
+          empty: "No matching feature found",
+          hint: "Available pages and production features",
+          trigger: "Go to a feature",
+          dialog: "Go to a feature"
+        }
+      : {
+          placeholder: "Tìm trang hoặc chức năng…",
+          empty: "Không tìm thấy chức năng phù hợp",
+          hint: "Các trang và chức năng production đang khả dụng",
+          trigger: "Đi tới chức năng",
+          dialog: "Đi tới chức năng"
+        };
   }
 
   function syncTriggerText() {
@@ -215,7 +207,6 @@
   }
 
   function start() {
-    ensureCommandTranslations();
     const trigger = document.querySelector(".command-palette");
     if (trigger instanceof HTMLButtonElement) {
       trigger.disabled = false;
