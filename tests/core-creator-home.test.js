@@ -43,8 +43,9 @@ assert(!js.includes("statusBadge"), "Creator Home must not present stale source-
 assert(!js.includes('class="creator-home-visual"'), "The removed orbit/workflow demo visual must not be rendered.");
 assert(!js.includes("creatorWorkspacePreparing"), "Opening the editor must not use a full-screen preparing animation.");
 assert(!js.includes("workflowRail()"), "The removed five-step orbit demo must not remain in the Creator Home render path.");
-assert(js.includes("current?.cloud?.accountOffline"), "Cloud status must be derived from real runtime state.");
-assert(js.includes("current?.cloud?.account || current?.cloud?.auth"), "Connected cloud status must be state-backed, not hard-coded.");
+assert(js.includes("current?.cloud?.accountOffline"), "Cloud status must reflect offline runtime state.");
+assert(js.includes("current?.cloud?.auth?.authenticated === true"), "Cloud connected state must require authenticated runtime state.");
+assert(!js.includes("current?.cloud?.account || current?.cloud?.auth"), "A truthy auth object alone must never imply a connected cloud session.");
 
 for (const token of [
   ".creator-home-hero",
