@@ -5,7 +5,9 @@
   let revealed = false;
   let pageObserver = null;
   let pageTimer = 0;
+  let pageTransitionFrame = 0;
   let revealClassTimer = 0;
+  let lastPageKey = "";
 
   function reducedMotion() {
     if (root.dataset.motion === "reduced") return true;
@@ -19,14 +21,36 @@
     return Boolean(page?.children?.length && nav?.children?.length);
   }
 
+  function currentPageKey() {
+    try {
+      if (typeof state !== "undefined" && state?.page) return String(state.page);
+    } catch {}
+    try {
+      const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
+      return String(saved.page || "");
+    } catch {
+      return "";
+    }
+  }
+
   function animatePage(page) {
     if (!(page instanceof HTMLElement) || reducedMotion()) return;
     if (root.classList.contains("startup-reveal-once")) return;
-    page.classList.remove("core-page-enter");
-    void page.offsetWidth;
-    page.classList.add("core-page-enter");
-    clearTimeout(pageTimer);
-    pageTimer = window.setTimeout(() => page.classList.remove("core-page-enter"), 520);
+
+    const nextPageKey = currentPageKey();
+    if (nextPageKey && nextPageKey === lastPageKey) return;
+    lastPageKey = nextPageKey || lastPageKey;
+
+    if (pageTransitionFrame) cancelAnimationFrame(pageTransitionFrame);
+    pageTransitionFrame = requestAnimationFrame(() => {
+      page.classList.remove("core-page-enter");
+      pageTransitionFrame = requestAnimationFrame(() => {
+        page.classList.add("core-page-enter");
+        clearTimeout(pageTimer);
+        pageTimer = window.setTimeout(() => page.classList.remove("core-page-enter"), 420);
+        pageTransitionFrame = 0;
+      });
+    });
   }
 
   function wirePageTransitions() {
@@ -34,6 +58,7 @@
     const page = document.getElementById("page");
     if (!(page instanceof HTMLElement)) return;
 
+    lastPageKey = currentPageKey();
     pageObserver = new MutationObserver(records => {
       if (root.dataset.startup !== "ready") return;
       if (!records.some(record => record.type === "childList")) return;
