@@ -17,6 +17,13 @@
     }
   }
 
+  function ensureCommandTranslations() {
+    const messages = window.I18N?.messages;
+    if (!messages?.vi?.app || !messages?.en?.app) return;
+    messages.vi.app.commandNoResults ||= "Không tìm thấy chức năng phù hợp";
+    messages.en.app.commandNoResults ||= "No matching commands found";
+  }
+
   function tr(key) {
     try {
       return window.I18N?.t(locale(), key) || key;
@@ -26,9 +33,10 @@
   }
 
   function copy() {
+    ensureCommandTranslations();
     return {
       placeholder: tr("app.searchAnything"),
-      empty: tr("app.search"),
+      empty: tr("app.commandNoResults"),
       hint: tr("app.searchAnything"),
       trigger: tr("app.searchAnything"),
       dialog: tr("app.search")
@@ -207,12 +215,14 @@
   }
 
   function start() {
+    ensureCommandTranslations();
     const trigger = document.querySelector(".command-palette");
     if (trigger instanceof HTMLButtonElement) {
       trigger.disabled = false;
       trigger.removeAttribute("aria-disabled");
       trigger.removeAttribute("data-core-disabled-reason");
       trigger.classList.remove("core-coming-soon-control");
+      trigger.querySelector(".core-coming-soon")?.remove();
       trigger.dataset.coreCapability = "functional";
       trigger.addEventListener("click", open);
     }
