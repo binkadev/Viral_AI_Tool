@@ -1,0 +1,48 @@
+name: Core Commercial Regression
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "renderer/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "preload.js"
+      - ".github/workflows/core-commercial.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "renderer/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "preload.js"
+      - ".github/workflows/core-commercial.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-commercial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commercial-regression:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run commercial regression suite
+        run: npm run test:core-commercial
