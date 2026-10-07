@@ -8,6 +8,7 @@
   const DEFERRED_PAGES = new Set(["automation", "workflow", "workflow-builder", "monitor", "editor", "voice"]);
   const FUNCTIONAL_IDS = new Set([
     "quickProject",
+    "commandPalette",
     "langMenuButton",
     "speechStart",
     "speechStop",
@@ -117,9 +118,6 @@
 
     const legacyTts = document.getElementById("tts");
     if (legacyTts instanceof HTMLButtonElement) mark(legacyTts, "coming-soon");
-
-    const search = document.querySelector(".command-palette");
-    if (search instanceof HTMLButtonElement) mark(search, "coming-soon");
   }
 
   function classifyCoreButtons() {
