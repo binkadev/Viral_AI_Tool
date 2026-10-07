@@ -100,6 +100,35 @@ html.core-editor-premium .core-commercial-connection-badge{
   line-height:1.3!important;
 }
 
+/* Legacy provider badges share the same narrow inspector title row. Keep the
+ * title readable and allow the status to occupy its own line when needed. */
+html.core-editor-premium .core-inspector-card .ai-connection-title-row{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:7px!important;
+}
+
+html.core-editor-premium .core-inspector-card .ai-connection-title-row > b{
+  min-width:0!important;
+  overflow-wrap:break-word!important;
+}
+
+html.core-editor-premium .core-inspector-card .speech-provider-badge,
+html.core-editor-premium .core-inspector-card .translation-connection .speech-provider-badge,
+html.core-editor-premium .core-inspector-card .voice-connection .speech-provider-badge{
+  width:max-content!important;
+  max-width:100%!important;
+  min-width:0!important;
+  justify-self:start!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  word-break:normal!important;
+  overflow-wrap:break-word!important;
+  line-height:1.3!important;
+}
+
 /* Creator Home now opens as a clean commercial workspace, not an animated demo. */
 .creator-home-hero{
   grid-template-columns:minmax(0,1fr)!important;
