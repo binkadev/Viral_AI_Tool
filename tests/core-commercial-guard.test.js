@@ -37,6 +37,9 @@ for (const fake of ["@hoangstudio", "@hoang.creates", "Hoang Studio"]) {
 assert(accounts.includes("state?.cloud?.accountSessions"), "Accounts must use real session data.");
 assert(creator.includes("current?.cloud?.auth?.authenticated === true"), "Cloud connected state must require authenticated auth state.");
 assert(!creator.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply connectivity.");
+assert(creator.includes("current?.speech?.providerStatus?.local"), "Local readiness must come from the real speech provider state.");
+assert(creator.includes("local.ready === true"), "Local must only say ready when the provider reports ready.");
+assert(creator.includes("Cần thiết lập"), "Unavailable local AI must show a setup-required state.");
 
 for (const token of ["setting-row", "1080p", "4K", "__coreProductionSettings"]) {
   assert(settings.includes(token), "Production settings guard missing control sanitizer: " + token);
