@@ -3,6 +3,7 @@
 
   const jobModel = window.ViralCoreJobModel;
   let queued = false;
+  const progressUnsubscribers = [];
 
   function appState() {
     try {
@@ -298,12 +299,35 @@
     requestAnimationFrame(enhance);
   }
 
+  function wireProgressSignals() {
+    const api = window.desktopAPI;
+    if (!api) return;
+    for (const name of ["onSpeechProgress", "onTranslationProgress", "onVoiceProgress", "onRenderProgress"]) {
+      const subscribe = api[name];
+      if (typeof subscribe !== "function") continue;
+      try {
+        const unsubscribe = subscribe(() => queue());
+        if (typeof unsubscribe === "function") progressUnsubscribers.push(unsubscribe);
+      } catch (error) {
+        console.warn("[EditorActivity] Could not subscribe to progress signal", name, error);
+      }
+    }
+  }
+
+  function cleanupProgressSignals() {
+    while (progressUnsubscribers.length) {
+      try { progressUnsubscribers.pop()?.(); }
+      catch {}
+    }
+  }
+
   function start() {
     const page = document.getElementById("page");
     if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
-    window.setInterval(queue, 700);
+    window.addEventListener("beforeunload", cleanupProgressSignals, { once: true });
+    wireProgressSignals();
     queue();
   }
 
