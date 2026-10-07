@@ -69,6 +69,37 @@ html[data-theme="midnight"] #page{
   animation:none!important;
 }
 
+/* Inspector connection actions must never collapse into clipped status copy. */
+html.core-editor-premium .core-inspector-card .cloud-connection .button,
+html.core-editor-premium .core-inspector-card .speech-cloud-panel .button,
+html.core-editor-premium .core-inspector-card .translation-connection .button,
+html.core-editor-premium .core-inspector-card .voice-connection .button,
+html.core-editor-premium .core-inspector-card [class*="connection-panel"] .button,
+html.core-editor-premium .core-inspector-card [class*="connection-row"] .button{
+  width:100%!important;
+  max-width:none!important;
+  min-width:0!important;
+  height:auto!important;
+  min-height:36px!important;
+  padding:8px 12px!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  word-break:normal!important;
+  overflow-wrap:normal!important;
+  line-height:1.3!important;
+  text-align:center;
+}
+
+html.core-editor-premium .core-commercial-connection-badge{
+  max-width:100%!important;
+  min-width:0!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  line-height:1.3!important;
+}
+
 /* Creator Home now opens as a clean commercial workspace, not an animated demo. */
 .creator-home-hero{
   grid-template-columns:minmax(0,1fr)!important;
