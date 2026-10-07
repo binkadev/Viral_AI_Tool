@@ -20,7 +20,11 @@
   function navOptions(){
     return Array.from(document.querySelectorAll("#nav .nav-item[data-page]"))
       .filter(node=>node instanceof HTMLButtonElement&&!node.hidden)
-      .map(node=>({page:String(node.dataset.page||""),label:String(node.innerText||node.textContent||"").replace(/\s+/g," ").trim(),node}))
+      .map(node=>{
+        const labelNode=node.querySelector("span:not(.nav-icon)");
+        const label=String(labelNode?.textContent||node.textContent||"").replace(/\s+/g," ").trim();
+        return{page:String(node.dataset.page||""),label,node};
+      })
       .filter(item=>item.page&&item.label);
   }
   function ensureDialog(){
