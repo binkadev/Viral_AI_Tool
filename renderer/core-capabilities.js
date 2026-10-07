@@ -36,12 +36,12 @@
   function copy() {
     return locale() === "en"
       ? {
-          comingSoon: "Coming soon — this action is not connected to a production capability yet.",
-          disabled: "This action is not available yet because a required previous step is incomplete."
+          comingSoon: "Coming soon — this feature is still being prepared and is not available yet.",
+          disabled: "Finish the required previous step before using this action."
         }
       : {
-          comingSoon: "Sắp có — thao tác này chưa được nối với capability production.",
-          disabled: "Chưa thể dùng thao tác này vì bước bắt buộc trước đó chưa hoàn tất."
+          comingSoon: "Sắp có — tính năng này đang được hoàn thiện và chưa thể sử dụng.",
+          disabled: "Hãy hoàn tất bước bắt buộc trước đó để sử dụng thao tác này."
         };
   }
 
