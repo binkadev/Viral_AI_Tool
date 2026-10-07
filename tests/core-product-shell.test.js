@@ -47,15 +47,15 @@ assert(!capabilities.includes('[data-page="ai-video"]'), "Core Editor must not b
 const themeBootstrap = 'localStorage.getItem(stateKey)';
 const firstStylesheet = 'href="styles.css"';
 assert(index.includes('data-theme="midnight"'), "Premium Dark must be the static first-paint theme.");
-assert(index.includes('data-motion="expressive"'), "Expressive motion must be the new first-paint motion default.");
+assert(index.includes('data-motion="balanced"'), "Balanced motion must be the new first-paint motion default.");
 assert(index.includes(themeBootstrap), "Saved appearance must be restored during head bootstrap.");
 assert(index.includes('if (!saved.appearance)'), "Premium Dark must only initialize when no appearance preference exists.");
-assert(index.includes('if (!saved.motion)'), "Expressive motion must only initialize when no motion preference exists.");
+assert(index.includes('if (!saved.motion)'), "Balanced motion must only initialize when no motion preference exists.");
 assert(!index.includes('saved.appearance === "aurora-light"'), "Explicit Aurora Light preferences must never be silently migrated.");
-assert(!index.includes('saved.motion === "balanced"'), "Explicit Balanced motion preferences must never be silently migrated.");
+assert(!index.includes('saved.motion === "expressive"'), "Explicit Expressive motion preferences must never be silently migrated.");
 assert(index.includes('new Set(["aurora-light", "pearl-light", "midnight"])'), "Theme bootstrap must accept only supported appearances.");
 assert(index.includes('root.dataset.theme = themes.has(saved.appearance) ? saved.appearance : "midnight"'), "Theme bootstrap must safely resolve to Premium Dark.");
-assert(index.includes('root.dataset.motion = motions.has(saved.motion) ? saved.motion : "expressive"'), "Motion bootstrap must safely resolve to Expressive.");
+assert(index.includes('root.dataset.motion = motions.has(saved.motion) ? saved.motion : "balanced"'), "Motion bootstrap must safely resolve to Balanced.");
 assert(
   index.indexOf(themeBootstrap) < index.indexOf(firstStylesheet),
   "Theme bootstrap must execute before the first stylesheet to prevent light/dark first-paint switching."
