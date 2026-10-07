@@ -8,15 +8,10 @@
     catch { return null; }
   }
 
-  function availableSource() {
+  function projectSource() {
     const current = appState();
     if (!Array.isArray(current?.jobs)) return null;
-    return current.jobs.find(job =>
-      job?.sourcePath &&
-      !job?.isRenderOutput &&
-      job?.fileState !== "missing" &&
-      job?.fileState !== "trashed"
-    ) || null;
+    return current.jobs.find(job => job?.sourcePath && !job?.isRenderOutput) || null;
   }
 
   function cloudCopy() {
@@ -60,7 +55,7 @@
 
   function restoreStartupRoute() {
     const current = appState();
-    if (!current || current.page !== "download" || !availableSource()) return;
+    if (!current || current.page !== "download" || !projectSource()) return;
     current.page = "ai-video";
     try { if (typeof save === "function") save(); } catch {}
     try { if (typeof render === "function") render(); } catch {}
