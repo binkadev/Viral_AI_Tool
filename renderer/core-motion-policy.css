@@ -1,0 +1,34 @@
+/* Motion policy: balanced is the production default; ambient HUD motion is opt-in via expressive. */
+html[data-motion="balanced"] .premium-hud-scan,
+html[data-motion="balanced"] .premium-hud-orbit,
+html[data-motion="balanced"] .premium-hud-trace{display:none!important}
+html[data-motion="balanced"] .premium-hud-grid,
+html[data-motion="balanced"] .creator-home-hero::after,
+html[data-motion="balanced"] .creator-visual-mark,
+html[data-motion="balanced"] .creator-visual-mark::before,
+html[data-motion="balanced"] .creator-visual-mark::after,
+html[data-motion="balanced"] .creator-workflow-step,
+html[data-motion="balanced"] .creator-workflow-dot::after,
+html[data-motion="balanced"] .nav-item.active::after,
+html[data-motion="balanced"] .button.primary::after,
+html[data-motion="balanced"] .core-workflow-stage .core-stage-index,
+html[data-motion="balanced"] .core-workflow-stage .core-stage-index::after,
+html[data-motion="balanced"] .core-editor-assets-panel::after,
+html[data-motion="balanced"] .core-editor-inspector::after,
+html[data-motion="balanced"] .preview.core-player-host::after,
+html[data-motion="balanced"] .preview.preview-real::after,
+html[data-motion="balanced"] .core-timeline-workspace::after,
+html[data-motion="balanced"] .core-inspector-tab.has-active-job::after,
+html[data-motion="balanced"] .badge.processing,
+html[data-motion="balanced"] .status-pill.processing{animation:none!important}
+html[data-motion="balanced"] .hud-reactive-light{display:none!important}
+html[data-motion="balanced"] .is-hud-magnet{transform:none!important;translate:none!important}
+html[data-motion="balanced"] .premium-hud-grid{translate:none!important;transform:none!important}
+html[data-motion="balanced"] .premium-hud-layer{opacity:.48!important}
+
+html[data-motion="expressive"] .premium-hud-layer{--core-hud-interactive:1}
+
+@media(prefers-reduced-motion:reduce){
+  .hud-reactive-light{display:none!important}
+  .is-hud-magnet{transform:none!important;translate:none!important}
+}
