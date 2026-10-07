@@ -24,6 +24,7 @@
   let pointerY = 0;
   let activeSurface = null;
   let activeMagnet = null;
+  let pointerTracking = false;
 
   function interactiveMotion() {
     if (root.dataset.motion !== "expressive") return false;
@@ -33,18 +34,11 @@
 
   function mount() {
     if (!document.body || document.getElementById("premiumHudLayer")) return;
-
     const layer = document.createElement("div");
     layer.id = "premiumHudLayer";
     layer.className = "premium-hud-layer";
     layer.setAttribute("aria-hidden", "true");
-    layer.innerHTML =
-      '<span class="premium-hud-grid"></span>' +
-      '<span class="premium-hud-scan"></span>' +
-      '<span class="premium-hud-orbit"></span>' +
-      '<span class="premium-hud-trace"></span>' +
-      '<span class="premium-hud-vignette"></span>';
-
+    layer.innerHTML = '<span class="premium-hud-grid"></span><span class="premium-hud-scan"></span><span class="premium-hud-orbit"></span><span class="premium-hud-trace"></span><span class="premium-hud-vignette"></span>';
     document.body.prepend(layer);
     root.dataset.premiumHud = "enabled";
     syncPage();
@@ -101,7 +95,6 @@
       }
     }
     if (!activeSurface) return;
-
     const rect = activeSurface.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const localX = Math.max(0, Math.min(100, ((pointerX - rect.left) / rect.width) * 100));
@@ -118,7 +111,6 @@
       activeMagnet?.classList.add("is-hud-magnet");
     }
     if (!activeMagnet) return;
-
     const rect = activeMagnet.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const nx = Math.max(-1, Math.min(1, ((pointerX - rect.left) / rect.width - .5) * 2));
@@ -136,23 +128,14 @@
     root.style.setProperty("--hud-pointer-y", y.toFixed(3));
     root.style.setProperty("--hud-shift-x", shiftX.toFixed(2) + "px");
     root.style.setProperty("--hud-shift-y", shiftY.toFixed(2) + "px");
-    root.style.setProperty("--hud-grid-x", (shiftX * .22).toFixed(2) + "px");
-    root.style.setProperty("--hud-grid-y", (shiftY * .22).toFixed(2) + "px");
-    root.style.setProperty("--hud-orbit-x", (shiftX * .42).toFixed(2) + "px");
-    root.style.setProperty("--hud-orbit-y", (shiftY * .42).toFixed(2) + "px");
-    root.style.setProperty("--hud-trace-x", (shiftX * -.28).toFixed(2) + "px");
-    root.style.setProperty("--hud-trace-y", (shiftY * -.18).toFixed(2) + "px");
     syncSurface(target);
     syncMagnet(target);
   }
 
   function onPointerMove(event) {
+    if (!interactiveMotion()) return;
     pointerX = event.clientX;
     pointerY = event.clientY;
-    if (!interactiveMotion()) {
-      clearInteractiveState();
-      return;
-    }
     const target = event.target instanceof Element ? event.target : null;
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
@@ -161,28 +144,36 @@
     });
   }
 
+  function syncPointerTracking() {
+    const shouldTrack = interactiveMotion();
+    if (shouldTrack === pointerTracking) {
+      if (!shouldTrack) clearInteractiveState();
+      return;
+    }
+    pointerTracking = shouldTrack;
+    if (pointerTracking) {
+      document.addEventListener("pointermove", onPointerMove, { passive:true });
+      return;
+    }
+    document.removeEventListener("pointermove", onPointerMove);
+    clearInteractiveState();
+  }
+
   function start() {
     mount();
-    document.addEventListener("pointermove", onPointerMove, { passive: true });
-    document.addEventListener("pointerleave", clearInteractiveState, { passive: true });
+    syncPointerTracking();
+    document.addEventListener("pointerleave", clearInteractiveState, { passive:true });
     window.addEventListener("blur", clearInteractiveState);
 
     const page = document.getElementById("page");
-    if (page) {
-      const observer = new MutationObserver(syncPage);
-      observer.observe(page, { childList: true, subtree: false });
-    }
-    new MutationObserver(() => {
-      if (!interactiveMotion()) clearInteractiveState();
-    }).observe(root, { attributes: true, attributeFilter: ["data-motion"] });
+    if (page) new MutationObserver(syncPage).observe(page, { childList:true, subtree:false });
+    new MutationObserver(syncPointerTracking).observe(root, { attributes:true, attributeFilter: ["data-motion"] });
+    try { window.matchMedia?.("(prefers-reduced-motion: reduce)")?.addEventListener?.("change", syncPointerTracking); } catch {}
 
     root.classList.add("premium-hud-ready");
     syncPage();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once:true });
+  else start();
 })();
