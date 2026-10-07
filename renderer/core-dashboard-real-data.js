@@ -47,7 +47,7 @@
           minute: "min",
           sourceFoot: count => count === 1 ? "1 source in this workspace" : count + " sources in this workspace",
           processingFoot: count => count ? count + " active job" + (count === 1 ? "" : "s") : "No background job is running",
-          renderFoot: count => count ? count + " output file" + (count === 1 ? "" : "s") : "No completed render yet"
+          renderFoot: count => count ? count + " available output file" + (count === 1 ? "" : "s") : "No available completed render"
         }
       : {
           eyebrow: "Tổng quan dự án",
@@ -59,7 +59,7 @@
           importVideo: "Nhập video",
           sourceVideos: "Video nguồn",
           processing: "Đang xử lý",
-          renders: "Render hoàn tất",
+          renders: "Render khả dụng",
           cloudRemaining: "Cloud còn lại",
           notSynced: "Chưa đồng bộ",
           noProject: "Chưa có dự án",
@@ -77,7 +77,7 @@
           minute: "phút",
           sourceFoot: count => count + " video nguồn trong workspace",
           processingFoot: count => count ? count + " tác vụ đang chạy" : "Không có tác vụ nền đang chạy",
-          renderFoot: count => count ? count + " file đầu ra" : "Chưa có render hoàn tất"
+          renderFoot: count => count ? count + " file đầu ra còn khả dụng" : "Chưa có render hoàn tất còn khả dụng"
         };
   }
 
@@ -106,6 +106,10 @@
   function fileName(value) {
     const raw = String(value || "");
     return raw.split(/[\\/]/).filter(Boolean).pop() || raw;
+  }
+
+  function fileAvailable(job) {
+    return job?.fileState !== "missing" && job?.fileState !== "trashed";
   }
 
   function activeJobCount() {
@@ -185,7 +189,7 @@
     const c = copy();
     const sources = sourceJobs();
     const renders = renderJobs();
-    const completedRenders = renders.filter(job => normalizeStatus(job.status) === "completed");
+    const completedRenders = renders.filter(job => normalizeStatus(job.status) === "completed" && fileAvailable(job));
     const active = activeJobCount();
     const cloud = cloudInfo();
     const hasProject = sources.length > 0;
