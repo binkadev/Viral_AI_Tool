@@ -27,6 +27,10 @@ for (const token of [
   'document.addEventListener("drop"',
   'requestAnimationFrame(() => {',
   "function sourceAvailability(job)",
+  "function cloudStatus()",
+  "creator-status-strip",
+  "creator-home-professional",
+  "creator-recent-open",
   'fileState === "trashed"',
   'fileState === "missing"',
   'sourceAvailability(source)',
@@ -37,13 +41,21 @@ for (const token of [
 
 assert(!js.includes("statusBadge"), "Creator Home must not present stale source-job status as project workflow status.");
 assert(!js.includes('class="creator-home-visual"'), "The removed orbit/workflow demo visual must not be rendered.");
-assert(!js.includes("creatorWorkspacePreparing"), "Opening the editor must not use the removed full-screen preparing animation.");
+assert(!js.includes("creatorWorkspacePreparing"), "Opening the editor must not use a full-screen preparing animation.");
 assert(!js.includes("workflowRail()"), "The removed five-step orbit demo must not remain in the Creator Home render path.");
+assert(js.includes("current?.cloud?.accountOffline"), "Cloud status must be derived from real runtime state.");
+assert(js.includes("current?.cloud?.account || current?.cloud?.auth"), "Connected cloud status must be state-backed, not hard-coded.");
 
 for (const token of [
   ".creator-home-hero",
+  ".creator-home-professional",
+  ".creator-home-actions",
+  ".creator-status-strip",
+  ".creator-status-chip",
   ".creator-import-zone",
+  ".creator-import-symbol",
   ".creator-current-project",
+  ".creator-recent-open",
   ".creator-source-availability",
   ":focus-visible",
   "prefers-reduced-motion",
@@ -51,6 +63,10 @@ for (const token of [
 ]) {
   assert(allCreatorCss.includes(token), "Creator Home style missing: " + token);
 }
+
+assert(!css.includes("@keyframes"), "Creator Home must not reintroduce decorative looping animations.");
+assert(!css.includes("creator-drop-orbit"), "Import surface must use a static commercial icon instead of an orbit visual.");
+assert(!css.includes("creator-home-visual"), "Removed hero demo visual styles must not remain in the active Creator Home stylesheet.");
 
 for (const token of [
   ".creator-home-hero",
@@ -84,16 +100,8 @@ const context = { window: {} };
 vm.createContext(context);
 vm.runInContext(i18n, context);
 const requiredKeys = [
-  "dashboard.eyebrow",
-  "dashboard.title",
-  "dashboard.desc",
   "download.localTitle",
   "download.localDesc",
-  "download.dropTitle",
-  "download.dropDesc",
-  "dashboard.recentJobs",
-  "dashboard.recentJobsDesc",
-  "aiVideo.editor",
   "media.readingInfo",
   "file.relink",
   "file.missing",
