@@ -85,16 +85,17 @@
 
   function removeLegacyDemoJobs() {
     const current = appState();
-    if (!Array.isArray(current?.jobs) || current.jobs.length !== LEGACY_DEMO_NAMES.size) return;
+    if (!Array.isArray(current?.jobs) || current.jobs.length === 0) return;
 
-    const demoOnly = current.jobs.every(job =>
-      LEGACY_DEMO_NAMES.has(String(job?.name || "")) &&
-      !job?.sourcePath &&
-      !job?.outputPath
-    );
+    const productionJobs = current.jobs.filter(job => {
+      const isLegacyDemo = LEGACY_DEMO_NAMES.has(String(job?.name || "")) &&
+        !job?.sourcePath &&
+        !job?.outputPath;
+      return !isLegacyDemo;
+    });
 
-    if (!demoOnly) return;
-    current.jobs = [];
+    if (productionJobs.length === current.jobs.length) return;
+    current.jobs = productionJobs;
     persist();
   }
 
