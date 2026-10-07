@@ -1,0 +1,72 @@
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+
+const root = path.resolve(__dirname, "..");
+const read = file => fs.readFileSync(path.join(root, file), "utf8");
+
+const index = read("renderer/index.html");
+const bootstrap = read("renderer/core-bootstrap.js");
+const accounts = read("renderer/core-accounts-real-data.js");
+const settings = read("renderer/core-settings-production.js");
+const creator = read("renderer/core-creator-home-production.js");
+const output = read("renderer/core-editor-output-state-v2.js");
+const libraryRecovery = read("renderer/core-library-output-recovery.js");
+const folderRecovery = read("renderer/core-export-folder-recovery.js");
+const jobHealth = read("renderer/core-job-file-health.js");
+const motion = read("renderer/core-motion-policy.css");
+
+assert(index.includes('data-motion="balanced"'), "New installs must default to balanced motion.");
+assert(!index.includes("core-startup-experience"), "Removed startup animation must stay out of production shell.");
+
+for (const productionModule of [
+  "core-accounts-real-data.js",
+  "core-library-output-recovery.js",
+  "core-settings-production.js",
+  "core-creator-home-production.js",
+  "core-export-folder-recovery.js"
+]) {
+  assert(bootstrap.includes(productionModule), "Production bootstrap missing override: " + productionModule);
+}
+
+for (const fake of ["@hoangstudio", "@hoang.creates", "Hoang Studio"]) {
+  assert(!accounts.includes(fake), "Production account surface contains fake identity: " + fake);
+}
+assert(accounts.includes("state?.cloud?.accountSessions"), "Accounts must use real session data.");
+assert(creator.includes("current?.cloud?.auth?.authenticated === true"), "Cloud connected state must require authenticated auth state.");
+assert(!creator.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply connectivity.");
+
+for (const token of ["setting-row", "1080p", "4K", "__coreProductionSettings"]) {
+  assert(settings.includes(token), "Production settings guard missing control sanitizer: " + token);
+}
+
+for (const stateName of ["idle", "checking", "ready", "missing", "unverified"]) {
+  assert(output.includes('"' + stateName + '"'), "Output verifier missing state: " + stateName);
+}
+assert(output.includes("Kiểm tra lại"), "Output verification failure must offer an explicit retry.");
+assert(output.includes("Render lại"), "Missing output must offer rerender recovery.");
+assert(!output.includes("setInterval("), "Output verifier must not poll.");
+assert(output.includes("subtree:false"), "Output observer must stay scoped to page replacement.");
+
+assert(libraryRecovery.includes("missingRerender"), "Library must offer rerender for missing output files.");
+assert(folderRecovery.includes("selectOutputFolder"), "Export errors must allow choosing another output folder.");
+assert(jobHealth.includes('window.addEventListener("focus"'), "File health must refresh on app focus.");
+assert(!jobHealth.includes("setInterval("), "File health must remain event-driven.");
+
+assert(motion.includes('html[data-motion="balanced"]'), "Balanced motion policy must be explicit.");
+assert(motion.includes("animation:none!important"), "Balanced/reduced policy must suppress ambient loops.");
+
+for (const [name, source] of [
+  ["accounts", accounts],
+  ["settings", settings],
+  ["creator", creator],
+  ["output", output],
+  ["library recovery", libraryRecovery],
+  ["folder recovery", folderRecovery]
+]) {
+  assert(!source.includes("setInterval("), name + " production guard must not introduce UI polling.");
+}
+
+console.log("core commercial product guard passed");
