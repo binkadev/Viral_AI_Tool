@@ -2,7 +2,8 @@
 html[data-theme="midnight"]{color-scheme:dark;background:#080a0f}
 html[data-theme="midnight"] body{background:#080a0f}
 
-.premium-hud-layer{position:fixed;inset:var(--titlebar,34px) 0 0;z-index:0;overflow:hidden;pointer-events:none;opacity:.9}
+.premium-hud-layer{display:none;position:fixed;inset:var(--titlebar,34px) 0 0;z-index:0;overflow:hidden;pointer-events:none;opacity:.9}
+html[data-theme="midnight"] .premium-hud-layer{display:block}
 .premium-hud-grid,.premium-hud-scan,.premium-hud-vignette,.premium-hud-orbit,.premium-hud-trace{position:absolute;pointer-events:none}
 .premium-hud-grid{inset:-8%;opacity:.19;background-image:linear-gradient(rgba(122,112,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(103,185,255,.07) 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(circle at 61% 45%,#000 0 26%,rgba(0,0,0,.55) 48%,transparent 77%);animation:hudGridDrift 22s linear infinite}
 .premium-hud-scan{inset:-16% 0 auto;height:32%;opacity:.2;background:linear-gradient(180deg,transparent,rgba(117,107,255,.16) 46%,rgba(103,185,255,.11) 50%,transparent 54%);filter:blur(.2px);animation:hudGlobalScan 8.5s cubic-bezier(.4,0,.2,1) infinite}
