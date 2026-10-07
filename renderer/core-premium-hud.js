@@ -25,10 +25,10 @@
   let activeSurface = null;
   let activeMagnet = null;
 
-  function reducedMotion() {
-    if (root.dataset.motion === "reduced") return true;
-    try { return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true; }
-    catch { return false; }
+  function interactiveMotion() {
+    if (root.dataset.motion !== "expressive") return false;
+    try { return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches !== true; }
+    catch { return true; }
   }
 
   function mount() {
@@ -84,6 +84,8 @@
   }
 
   function clearInteractiveState() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
     clearSurface();
     clearMagnet();
   }
@@ -147,7 +149,7 @@
   function onPointerMove(event) {
     pointerX = event.clientX;
     pointerY = event.clientY;
-    if (reducedMotion()) {
+    if (!interactiveMotion()) {
       clearInteractiveState();
       return;
     }
@@ -170,6 +172,9 @@
       const observer = new MutationObserver(syncPage);
       observer.observe(page, { childList: true, subtree: false });
     }
+    new MutationObserver(() => {
+      if (!interactiveMotion()) clearInteractiveState();
+    }).observe(root, { attributes: true, attributeFilter: ["data-motion"] });
 
     root.classList.add("premium-hud-ready");
     syncPage();
