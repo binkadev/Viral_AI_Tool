@@ -72,7 +72,7 @@ for (const required of [
   "coreCommandDialogIn",
   'html[data-theme="midnight"] .topbar',
   "@media(max-width:1180px)",
-  '.command-palette{display:flex;width:44px',
+  '.command-palette{display:flex!important;width:44px!important',
   '.command-copy{color:#9aa5b8;font-size:13px',
   '.core-command-item-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px'
 ]) {
