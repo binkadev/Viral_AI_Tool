@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi" data-theme="midnight" data-motion="expressive" data-scale="comfortable">
+<html lang="vi" data-theme="midnight" data-motion="balanced" data-scale="comfortable">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -13,14 +13,14 @@
         const saved = JSON.parse(localStorage.getItem(stateKey) || "{}");
         let changed = false;
 
-        // Premium Dark + expressive motion are defaults for users who have no
+        // Premium Dark + balanced motion are defaults for users who have no
         // saved choice. Existing light/dark and motion preferences are preserved.
         if (!saved.appearance) {
           saved.appearance = "midnight";
           changed = true;
         }
         if (!saved.motion) {
-          saved.motion = "expressive";
+          saved.motion = "balanced";
           changed = true;
         }
         if (changed) localStorage.setItem(stateKey, JSON.stringify(saved));
@@ -29,11 +29,11 @@
         const motions = new Set(["balanced", "expressive", "reduced"]);
         const scales = new Set(["compact", "comfortable", "large"]);
         root.dataset.theme = themes.has(saved.appearance) ? saved.appearance : "midnight";
-        root.dataset.motion = motions.has(saved.motion) ? saved.motion : "expressive";
+        root.dataset.motion = motions.has(saved.motion) ? saved.motion : "balanced";
         if (scales.has(saved.scale)) root.dataset.scale = saved.scale;
         if (["vi", "en"].includes(saved.locale)) root.lang = saved.locale;
       } catch {
-        // Premium Dark / expressive are the safe first-paint defaults.
+        // Premium Dark / balanced are the safe first-paint defaults.
       }
     })();
   </script>
@@ -133,9 +133,9 @@
         </div>
 
         <div class="top-actions">
-          <button class="command-palette" type="button" aria-label="Quick search">
+          <button class="command-palette" type="button" aria-label="Đi tới chức năng">
             <span class="command-icon">⌕</span>
-            <span class="command-copy">Search anything</span>
+            <span class="command-copy">Đi tới chức năng</span>
             <kbd>Ctrl K</kbd>
           </button>
 
