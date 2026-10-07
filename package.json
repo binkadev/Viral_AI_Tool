@@ -3,9 +3,7 @@
   "version": "0.14.0",
   "description": "Viral AI Tool desktop video automation studio",
   "main": "main.js",
-  "author": {
-    "name": "Viral AI Tool"
-  },
+  "author": { "name": "Viral AI Tool" },
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
@@ -58,13 +56,14 @@
     "test:core-editor-shortcuts": "node tests/core-editor-shortcuts.test.js",
     "test:core-motion-policy": "node tests/core-motion-policy.test.js",
     "test:core-job-file-health": "node tests/core-job-file-health.test.js",
+    "test:core-render-output-integrity": "node tests/core-render-output-integrity.test.js",
     "test:core-accounts-real-data": "node tests/core-accounts-real-data.test.js",
     "test:core-library-output-recovery": "node tests/core-library-output-recovery.test.js",
     "test:core-settings-production": "node tests/core-settings-production.test.js",
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
+    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
   },
   "devDependencies": {
     "electron": "38.2.0",
@@ -74,27 +73,11 @@
     "appId": "com.viralai.tool",
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "renderer/**/*",
-      "assets/**/*",
-      "services/**/*",
-      "release-info.json"
-    ],
+    "directories": { "output": "release" },
+    "files": ["main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "release-info.json"],
     "win": {
       "icon": "assets/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
       "executableName": "Viral AI Tool",
       "requestedExecutionLevel": "asInvoker"
     },
