@@ -54,7 +54,8 @@
     "test:core-timeline-workstation": "node tests/core-timeline-workstation.test.js",
     "test:core-editor-panels-workstation": "node tests/core-editor-panels-workstation.test.js",
     "test:core-source-recovery": "node tests/core-source-recovery.test.js",
-    "test:core-real-dashboard": "node tests/core-real-dashboard.test.js"
+    "test:core-real-dashboard": "node tests/core-real-dashboard.test.js",
+    "test:core-editor-shortcuts": "node tests/core-editor-shortcuts.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
