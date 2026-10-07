@@ -26,7 +26,7 @@
     "test:update-signature-live": "node tests/windows-signature.integration.test.js",
     "test:diagnostics": "node tests/diagnostics.test.js",
     "test:cloud-release-config": "node tests/cloud-release-config.test.js",
-    "test:backend-backup": "node dev-backend/maintenance/state-backup.js backup",
+    "test:backend-backup": "node dev-backend/tests/sqlite-backup.test.js",
     "backup:state": "node dev-backend/maintenance/state-backup.js backup",
     "verify:state-backup": "node dev-backend/maintenance/state-backup.js verify",
     "test:render-e2e": "node tests/render-pipeline.integration.test.js",
