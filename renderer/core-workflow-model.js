@@ -62,14 +62,23 @@
     return null;
   }
 
+  function renderFileUnavailable(job) {
+    return job?.fileState === "missing" || job?.fileState === "trashed";
+  }
+
   function latestRenderOutput(saved, source) {
     const job = latestRenderJob(saved, source);
-    return job && jobState(job) === "completed" && job?.outputPath ? job : null;
+    return job &&
+      jobState(job) === "completed" &&
+      job?.outputPath &&
+      !renderFileUnavailable(job)
+      ? job
+      : null;
   }
 
   function derive(saved = {}) {
     const source = latestSourceJob(saved);
-    const missingSource = Boolean(source && source.fileState === "missing");
+    const missingSource = Boolean(source && (source.fileState === "missing" || source.fileState === "trashed"));
     const hasSource = Boolean(source && !missingSource);
     const analyzed = Boolean(hasSource && source.meta && (Number(source.meta.duration) > 0 || Number(source.meta.width) > 0 || Number(source.meta.height) > 0));
 
@@ -81,107 +90,45 @@
     const voiceJob = jobMatches(saved?.voice?.job, source) ? saved.voice.job : null;
     const renderJob = latestRenderJob(saved, source);
     const renderOutput = latestRenderOutput(saved, source);
+    const renderOutputMissing = Boolean(
+      renderJob &&
+      jobState(renderJob) === "completed" &&
+      renderJob?.outputPath &&
+      renderFileUnavailable(renderJob)
+    );
 
     const speechState = speechResult ? "completed" : jobState(speechJob);
     const translationState = translationResult ? "completed" : jobState(translationJob);
     const voiceState = voiceResult ? "completed" : jobState(voiceJob);
-    const renderState = renderOutput ? "completed" : jobState(renderJob);
+    const rawRenderState = jobState(renderJob);
+    const renderState = renderOutput
+      ? "completed"
+      : renderOutputMissing
+        ? "active"
+        : rawRenderState;
 
     const stages = [
-      {
-        id: "import",
-        label: "IMPORT",
-        status: missingSource ? "failed" : hasSource ? "completed" : "active",
-        reason: missingSource ? "File nguồn không còn tồn tại." : hasSource ? "Video đã được nhập." : "Chọn video để bắt đầu."
-      },
-      {
-        id: "analyze",
-        label: "ANALYZE",
-        status: missingSource ? "blocked" : analyzed ? "completed" : hasSource ? "processing" : "blocked",
-        reason: analyzed ? "Metadata video đã sẵn sàng." : hasSource ? "Đang kiểm tra video." : "Cần Import trước."
-      },
-      {
-        id: "transcript",
-        label: "TRANSCRIPT",
-        status: !analyzed ? "blocked" : speechState === "idle" ? "active" : speechState,
-        reason: speechResult ? "Transcript và timestamp đã sẵn sàng." : !analyzed ? "Cần video hợp lệ." : "Chạy nhận diện lời nói."
-      },
-      {
-        id: "edit",
-        label: "EDIT",
-        status: !speechResult ? "blocked" : (translationJob || translationResult) ? "completed" : "active",
-        reason: speechResult ? "Kiểm tra và chỉnh transcript trước khi localize." : "Cần Transcript trước."
-      },
-      {
-        id: "localize",
-        label: "LOCALIZE",
-        status: !speechResult
-          ? "blocked"
-          : !translationResult
-            ? (translationState === "idle" ? "active" : translationState)
-            : voiceState === "idle"
-              ? "active"
-              : voiceState,
-        reason: voiceResult
-          ? "Bản dịch và AI Voice đã sẵn sàng."
-          : translationResult
-            ? "Bản dịch đã sẵn sàng. Bản dubbing hiện tại cần tạo AI Voice trước khi Render."
-            : "Dịch transcript trước khi tạo Voice/Subtitle."
-      },
-      {
-        id: "render",
-        label: "RENDER",
-        status: renderState === "idle" ? (!voiceResult ? "blocked" : "active") : renderState,
-        reason: renderOutput
-          ? "Đã có file render thành công."
-          : renderState === "processing"
-            ? "Đang render video."
-            : renderState === "failed"
-              ? "Render chưa hoàn tất. Hãy kiểm tra lỗi và thử lại."
-              : voiceResult
-                ? "Đã đủ input cho pipeline dubbing hiện tại."
-                : translationResult
-                  ? "Cần AI Voice trước khi render bản dubbing hiện tại."
-                  : "Cần bản dịch trước."
-      }
+      { id:"import", label:"IMPORT", status:missingSource?"failed":hasSource?"completed":"active", reason:missingSource?"File nguồn không còn tồn tại.":hasSource?"Video đã được nhập.":"Chọn video để bắt đầu." },
+      { id:"analyze", label:"ANALYZE", status:missingSource?"blocked":analyzed?"completed":hasSource?"processing":"blocked", reason:analyzed?"Metadata video đã sẵn sàng.":hasSource?"Đang kiểm tra video.":"Cần Import trước." },
+      { id:"transcript", label:"TRANSCRIPT", status:!analyzed?"blocked":speechState==="idle"?"active":speechState, reason:speechResult?"Transcript và timestamp đã sẵn sàng.":!analyzed?"Cần video hợp lệ.":"Chạy nhận diện lời nói." },
+      { id:"edit", label:"EDIT", status:!speechResult?"blocked":(translationJob||translationResult)?"completed":"active", reason:speechResult?"Kiểm tra và chỉnh transcript trước khi localize.":"Cần Transcript trước." },
+      { id:"localize", label:"LOCALIZE", status:!speechResult?"blocked":!translationResult?(translationState==="idle"?"active":translationState):voiceState==="idle"?"active":voiceState, reason:voiceResult?"Bản dịch và AI Voice đã sẵn sàng.":translationResult?"Bản dịch đã sẵn sàng. Bản dubbing hiện tại cần tạo AI Voice trước khi Render.":"Dịch transcript trước khi tạo Voice/Subtitle." },
+      { id:"render", label:"RENDER", status:renderState==="idle"?(!voiceResult?"blocked":"active"):renderState, reason:renderOutput?"Đã có file render thành công.":renderOutputMissing?"File render không còn khả dụng. Có thể render lại từ project hiện tại.":renderState==="processing"?"Đang render video.":renderState==="failed"?"Render chưa hoàn tất. Hãy kiểm tra lỗi và thử lại.":voiceResult?"Đã đủ input cho pipeline dubbing hiện tại.":translationResult?"Cần AI Voice trước khi render bản dubbing hiện tại.":"Cần bản dịch trước." }
     ];
 
     const anyBusy = Boolean(
       (!speechResult && isBusy(speechJob)) ||
       (!translationResult && isBusy(translationJob)) ||
       (!voiceResult && isBusy(voiceJob)) ||
-      (!renderOutput && isBusy(renderJob))
+      (!renderOutput && !renderOutputMissing && isBusy(renderJob))
     );
 
     const controls = {
-      speech: {
-        enabled: analyzed && !anyBusy,
-        reason: !hasSource ? "Cần Import video trước." : missingSource ? "File nguồn đã bị xóa hoặc di chuyển." : !analyzed ? "Video chưa phân tích xong." : anyBusy ? "Đang có tác vụ xử lý." : ""
-      },
-      translate: {
-        enabled: Boolean(speechResult) && !anyBusy,
-        reason: !speechResult ? "Cần Transcript trước." : anyBusy ? "Đang có tác vụ xử lý." : ""
-      },
-      voice: {
-        enabled: Boolean(translationResult) && !anyBusy,
-        reason: !translationResult ? "Cần bản dịch trước." : anyBusy ? "Đang có tác vụ xử lý." : ""
-      },
-      render: {
-        enabled: Boolean(source && translationResult && voiceResult) && !missingSource && !anyBusy,
-        reason: missingSource
-          ? "File nguồn không còn tồn tại."
-          : !translationResult
-            ? "Cần bản dịch trước khi render."
-            : !voiceResult
-              ? "Cần AI Voice trước khi render bản dubbing hiện tại."
-              : anyBusy
-                ? "Hãy chờ tác vụ hiện tại hoàn tất."
-                : ""
-      },
-      export: {
-        enabled: Boolean(renderOutput) && renderState === "completed",
-        reason: renderOutput ? "" : renderState === "processing" ? "Đang render; Export sẽ mở khi hoàn tất." : "Chỉ Export sau khi render thành công."
-      }
+      speech: { enabled: analyzed && !anyBusy, reason: !hasSource ? "Cần Import video trước." : missingSource ? "File nguồn đã bị xóa hoặc di chuyển." : !analyzed ? "Video chưa phân tích xong." : anyBusy ? "Đang có tác vụ xử lý." : "" },
+      translate: { enabled: Boolean(speechResult) && !anyBusy, reason: !speechResult ? "Cần Transcript trước." : anyBusy ? "Đang có tác vụ xử lý." : "" },
+      voice: { enabled: Boolean(translationResult) && !anyBusy, reason: !translationResult ? "Cần bản dịch trước." : anyBusy ? "Đang có tác vụ xử lý." : "" },
+      render: { enabled: Boolean(source && translationResult && voiceResult) && !missingSource && !anyBusy, reason: missingSource ? "File nguồn không còn tồn tại." : !translationResult ? "Cần bản dịch trước khi render." : !voiceResult ? "Cần AI Voice trước khi render bản dubbing hiện tại." : anyBusy ? "Hãy chờ tác vụ hiện tại hoàn tất." : "" },
+      export: { enabled: Boolean(renderOutput) && renderState === "completed", reason: renderOutputMissing ? "File render không còn khả dụng. Hãy render lại trước khi Export." : renderOutput ? "" : renderState === "processing" ? "Đang render; Export sẽ mở khi hoàn tất." : "Chỉ Export sau khi render thành công." }
     };
 
     return {
@@ -193,16 +140,17 @@
       voiceResult,
       renderJob,
       renderOutput,
+      renderOutputMissing,
       stages,
       controls,
       jobs: {
         speech: speechResult ? "completed" : canonicalJobState(speechJob),
         translation: translationResult ? "completed" : canonicalJobState(translationJob),
         voice: voiceResult ? "completed" : canonicalJobState(voiceJob),
-        render: renderOutput ? "completed" : canonicalJobState(renderJob)
+        render: renderOutput ? "completed" : renderOutputMissing ? "active" : canonicalJobState(renderJob)
       }
     };
   }
 
-  return { derive, jobState, latestSourceJob, latestRenderJob, latestRenderOutput };
+  return { derive, jobState, latestSourceJob, latestRenderJob, latestRenderOutput, renderFileUnavailable };
 });
