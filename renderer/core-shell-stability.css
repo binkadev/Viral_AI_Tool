@@ -1,0 +1,93 @@
+/* Direct-paint workstation shell: no splash screen and no page-entry animation. */
+
+html,
+body{
+  background:#080d17;
+}
+
+.viral-brand-icon,
+.viral-brand-mark{
+  position:relative;
+  overflow:visible;
+  isolation:isolate;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+.viral-brand-icon img,
+.viral-brand-mark img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 7px 16px rgba(91,103,255,.22));
+}
+
+.viral-brand-mark::after{
+  content:"";
+  position:absolute;
+  inset:8%;
+  z-index:-1;
+  border-radius:32%;
+  background:radial-gradient(circle,rgba(106,117,255,.22),transparent 68%);
+  filter:blur(12px);
+  opacity:.72;
+}
+
+.titlebar,
+.shell,
+.sidebar,
+.topbar,
+#page{
+  opacity:1!important;
+  visibility:visible!important;
+}
+
+#page{
+  transform:none!important;
+  contain:layout style;
+}
+
+#page.core-page-enter{
+  animation:none!important;
+  transform:none!important;
+  opacity:1!important;
+}
+
+#page.core-page-enter::before{
+  content:none!important;
+  display:none!important;
+  animation:none!important;
+}
+
+.nav-item,
+.command-palette,
+.select-trigger,
+.button{
+  transition-property:background-color,border-color,color,box-shadow!important;
+  transition-duration:.16s!important;
+  transition-timing-function:ease!important;
+}
+
+.nav-item:not(:disabled):active,
+.command-palette:not(:disabled):active,
+.select-trigger:not(:disabled):active,
+.button:not(:disabled):active{
+  transform:none!important;
+}
+
+@media(prefers-reduced-motion:reduce){
+  .nav-item,
+  .command-palette,
+  .select-trigger,
+  .button{
+    transition-duration:.01ms!important;
+  }
+}
+
+html[data-motion="reduced"] .nav-item,
+html[data-motion="reduced"] .command-palette,
+html[data-motion="reduced"] .select-trigger,
+html[data-motion="reduced"] .button{
+  transition-duration:.01ms!important;
+}
