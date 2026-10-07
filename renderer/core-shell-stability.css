@@ -1,7 +1,7 @@
 /* Direct-paint workstation shell: no splash screen and no page-entry animation. */
 
-html,
-body{
+html[data-theme="midnight"],
+html[data-theme="midnight"] body{
   background:#080d17;
 }
 
@@ -45,7 +45,7 @@ body{
 
 #page{
   transform:none!important;
-  contain:layout style;
+  isolation:isolate;
 }
 
 #page.core-page-enter{
