@@ -18,14 +18,16 @@
 
   function copy() {
     return locale() === "en"
-      ? { placeholder: "Search commands…", empty: "No matching command", hint: "Navigate quickly", trigger: "Search commands" }
-      : { placeholder: "Tìm chức năng…", empty: "Không tìm thấy chức năng phù hợp", hint: "Đi nhanh đến chức năng", trigger: "Tìm chức năng" };
+      ? { placeholder: "Search commands…", empty: "No matching command", hint: "Navigate quickly", trigger: "Search commands", dialog: "Command palette" }
+      : { placeholder: "Tìm chức năng…", empty: "Không tìm thấy chức năng phù hợp", hint: "Đi nhanh đến chức năng", trigger: "Tìm chức năng", dialog: "Bảng lệnh nhanh" };
   }
 
   function syncTriggerText() {
     const trigger = document.querySelector(".command-palette");
     const label = trigger?.querySelector(".command-copy");
-    if (label) label.textContent = copy().trigger;
+    const c = copy();
+    if (label) label.textContent = c.trigger;
+    if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-label", c.trigger);
   }
 
   function commands() {
@@ -46,7 +48,7 @@
     overlay.className = "core-command-overlay";
     overlay.hidden = true;
     overlay.innerHTML =
-      '<div class="core-command-dialog" role="dialog" aria-modal="true" aria-label="Quick command palette">' +
+      '<div class="core-command-dialog" role="dialog" aria-modal="true">' +
         '<div class="core-command-input-wrap">' +
           '<span class="core-command-search" aria-hidden="true">⌕</span>' +
           '<input class="core-command-input" autocomplete="off" spellcheck="false" />' +
@@ -115,6 +117,8 @@
     syncTriggerText();
     const c = copy();
     input.placeholder = c.placeholder;
+    const dialog = overlay.querySelector(".core-command-dialog");
+    if (dialog) dialog.setAttribute("aria-label", c.dialog);
     const hint = overlay.querySelector(".core-command-hint");
     if (hint) hint.textContent = c.hint;
     input.value = "";
