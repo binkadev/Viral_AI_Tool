@@ -7,6 +7,7 @@
   let list = null;
   let activeIndex = 0;
   let opener = null;
+  let chromeWrapped = false;
 
   function locale() {
     try {
@@ -19,28 +20,32 @@
 
   function copy() {
     return locale() === "en"
-      ? {
-          placeholder: "Find a page or feature…",
-          empty: "No matching feature found",
-          hint: "Available pages and production features",
-          trigger: "Go to a feature",
-          dialog: "Go to a feature"
-        }
-      : {
-          placeholder: "Tìm trang hoặc chức năng…",
-          empty: "Không tìm thấy chức năng phù hợp",
-          hint: "Các trang và chức năng production đang khả dụng",
-          trigger: "Đi tới chức năng",
-          dialog: "Đi tới chức năng"
-        };
+      ? { placeholder:"Find a page or feature…", empty:"No matching feature found", hint:"Available pages and production features", trigger:"Go to a feature", dialog:"Go to a feature" }
+      : { placeholder:"Tìm trang hoặc chức năng…", empty:"Không tìm thấy chức năng phù hợp", hint:"Các trang và chức năng production đang khả dụng", trigger:"Đi tới chức năng", dialog:"Đi tới chức năng" };
   }
 
   function syncTriggerText() {
     const trigger = document.querySelector(".command-palette");
     const label = trigger?.querySelector(".command-copy");
     const c = copy();
-    if (label) label.textContent = c.trigger;
-    if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-label", c.trigger);
+    if (label && label.textContent !== c.trigger) label.textContent = c.trigger;
+    if (trigger instanceof HTMLButtonElement && trigger.getAttribute("aria-label") !== c.trigger) trigger.setAttribute("aria-label", c.trigger);
+  }
+
+  function wrapChromeLocale() {
+    if (chromeWrapped) return;
+    try {
+      if (typeof applyChromeLocale !== "function") return;
+      const legacy = applyChromeLocale;
+      const wrapped = function coreApplyChromeLocale(...args) {
+        const result = legacy(...args);
+        syncTriggerText();
+        return result;
+      };
+      wrapped.__coreCommandSynced = true;
+      applyChromeLocale = wrapped;
+      chromeWrapped = true;
+    } catch {}
   }
 
   function commands() {
@@ -49,8 +54,7 @@
       .map(node => ({
         page: String(node.dataset.page || ""),
         label: String(node.querySelector(".nav-icon + span")?.textContent || "").trim(),
-        icon: String(node.querySelector(".nav-icon")?.textContent || "").trim(),
-        node
+        icon: String(node.querySelector(".nav-icon")?.textContent || "").trim()
       }))
       .filter(item => item.page && item.label);
   }
@@ -60,38 +64,17 @@
     overlay = document.createElement("div");
     overlay.className = "core-command-overlay";
     overlay.hidden = true;
-    overlay.innerHTML =
-      '<div class="core-command-dialog" role="dialog" aria-modal="true">' +
-        '<div class="core-command-input-wrap">' +
-          '<span class="core-command-search" aria-hidden="true">⌕</span>' +
-          '<input class="core-command-input" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="coreCommandList" autocomplete="off" spellcheck="false" />' +
-          '<kbd>Esc</kbd>' +
-        '</div>' +
-        '<div class="core-command-meta"><span class="core-command-hint"></span><span>↑ ↓ · Enter</span></div>' +
-        '<div id="coreCommandList" class="core-command-list" role="listbox"></div>' +
-      '</div>';
+    overlay.innerHTML = '<div class="core-command-dialog" role="dialog" aria-modal="true"><div class="core-command-input-wrap"><span class="core-command-search" aria-hidden="true">⌕</span><input class="core-command-input" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="coreCommandList" autocomplete="off" spellcheck="false" /><kbd>Esc</kbd></div><div class="core-command-meta"><span class="core-command-hint"></span><span>↑ ↓ · Enter</span></div><div id="coreCommandList" class="core-command-list" role="listbox"></div></div>';
     document.body.appendChild(overlay);
     input = overlay.querySelector(".core-command-input");
     list = overlay.querySelector(".core-command-list");
-
-    overlay.addEventListener("pointerdown", event => {
-      if (event.target === overlay) close();
-    });
-    overlay.addEventListener("keydown", event => {
-      if (event.key === "Tab") {
-        event.preventDefault();
-        input?.focus();
-      }
-    });
-    input?.addEventListener("input", () => {
-      activeIndex = 0;
-      renderList();
-    });
+    overlay.addEventListener("pointerdown", event => { if (event.target === overlay) close(); });
+    overlay.addEventListener("keydown", event => { if (event.key === "Tab") { event.preventDefault(); input?.focus(); } });
+    input?.addEventListener("input", () => { activeIndex = 0; renderList(); });
     input?.addEventListener("keydown", onInputKeyDown);
     list?.addEventListener("click", event => {
       const button = event.target.closest("[data-command-page]");
-      if (!(button instanceof HTMLButtonElement)) return;
-      run(String(button.dataset.commandPage || ""));
+      if (button instanceof HTMLButtonElement) run(String(button.dataset.commandPage || ""));
     });
   }
 
@@ -114,23 +97,14 @@
     }
     list.innerHTML = items.map((item, index) => {
       const optionId = "coreCommandOption" + index;
-      return '<button id="' + optionId + '" type="button" tabindex="-1" class="core-command-item ' + (index === activeIndex ? "is-active" : "") + '" data-command-page="' + item.page + '" role="option" aria-selected="' + (index === activeIndex ? "true" : "false") + '">' +
-        '<span class="core-command-item-icon" aria-hidden="true">' + item.icon + '</span>' +
-        '<span class="core-command-item-label">' + escapeHtml(item.label) + '</span>' +
-        '<span class="core-command-item-enter">↵</span>' +
-      '</button>';
+      return '<button id="' + optionId + '" type="button" tabindex="-1" class="core-command-item ' + (index === activeIndex ? "is-active" : "") + '" data-command-page="' + item.page + '" role="option" aria-selected="' + (index === activeIndex ? "true" : "false") + '"><span class="core-command-item-icon" aria-hidden="true">' + item.icon + '</span><span class="core-command-item-label">' + escapeHtml(item.label) + '</span><span class="core-command-item-enter">↵</span></button>';
     }).join("");
     input.setAttribute("aria-activedescendant", "coreCommandOption" + activeIndex);
     list.querySelector(".is-active")?.scrollIntoView({ block: "nearest" });
   }
 
   function escapeHtml(value) {
-    return String(value || "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+    return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
 
   function open() {
@@ -140,8 +114,7 @@
     syncTriggerText();
     const c = copy();
     input.placeholder = c.placeholder;
-    const dialog = overlay.querySelector(".core-command-dialog");
-    if (dialog) dialog.setAttribute("aria-label", c.dialog);
+    overlay.querySelector(".core-command-dialog")?.setAttribute("aria-label", c.dialog);
     const hint = overlay.querySelector(".core-command-hint");
     if (hint) hint.textContent = c.hint;
     input.value = "";
@@ -171,42 +144,21 @@
 
   function onInputKeyDown(event) {
     const items = filteredCommands();
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      return;
-    }
+    if (event.key === "Escape") { event.preventDefault(); close(); return; }
     if (!items.length) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      activeIndex = (activeIndex + 1) % items.length;
-      renderList();
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      activeIndex = (activeIndex - 1 + items.length) % items.length;
-      renderList();
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      run(items[activeIndex]?.page || "");
-    }
+    if (event.key === "ArrowDown") { event.preventDefault(); activeIndex = (activeIndex + 1) % items.length; renderList(); return; }
+    if (event.key === "ArrowUp") { event.preventDefault(); activeIndex = (activeIndex - 1 + items.length) % items.length; renderList(); return; }
+    if (event.key === "Enter") { event.preventDefault(); run(items[activeIndex]?.page || ""); }
   }
 
   function onGlobalKeyDown(event) {
     const meta = event.ctrlKey || event.metaKey;
-    if (meta && String(event.key).toLowerCase() === "k") {
-      event.preventDefault();
-      open();
-    } else if (event.key === "Escape" && overlay && !overlay.hidden) {
-      event.preventDefault();
-      close();
-    }
+    if (meta && String(event.key).toLowerCase() === "k") { event.preventDefault(); open(); }
+    else if (event.key === "Escape" && overlay && !overlay.hidden) { event.preventDefault(); close(); }
   }
 
   function start() {
+    wrapChromeLocale();
     const trigger = document.querySelector(".command-palette");
     if (trigger instanceof HTMLButtonElement) {
       trigger.disabled = false;
