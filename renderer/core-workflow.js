@@ -122,21 +122,24 @@
 
   function workflowPosition(stages) {
     const total = Math.max(1, stages.length);
-    const completed = stages.filter(stage => stage.status === "completed").length;
-    if (completed === total) return { completed, currentIndex: total - 1, progress: 1 };
+    let contiguousCompleted = 0;
+    while (contiguousCompleted < stages.length && stages[contiguousCompleted].status === "completed") {
+      contiguousCompleted += 1;
+    }
+    if (contiguousCompleted === total) return { completed: total, currentIndex: total - 1, progress: 1 };
 
     let currentIndex = stages.findIndex(stage => ["processing", "active", "failed", "cancelled"].includes(stage.status));
     if (currentIndex < 0) currentIndex = stages.findIndex(stage => stage.status !== "completed");
     currentIndex = Math.max(0, currentIndex);
 
     const currentStage = stages[currentIndex];
-    const lastCompletedIndex = Math.max(-1, completed - 1);
+    const lastCompletedIndex = contiguousCompleted - 1;
     const visualIndex = currentStage?.status === "processing"
       ? Math.max(lastCompletedIndex, currentIndex - 0.5)
       : lastCompletedIndex;
     const progress = total > 1 ? Math.max(0, Math.min(1, visualIndex / (total - 1))) : 0;
 
-    return { completed, currentIndex, progress };
+    return { completed: contiguousCompleted, currentIndex, progress };
   }
 
   function ensureWorkflowRail(derived, saved) {
