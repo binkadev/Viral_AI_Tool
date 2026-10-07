@@ -31,18 +31,21 @@ for (const required of [
   "onRenderProgress",
   "beforeunload",
   "data-output-show",
-  "core-output-state-card"
+  "core-output-state-card",
+  "subtree:false"
 ]) {
   assert(js.includes(required), "Output state v2 missing: " + required);
 }
 
 assert(preload.includes("onRenderProgress"), "Desktop bridge must expose render progress events.");
 assert(!js.includes("setInterval("), "Output verification must remain event-driven.");
+assert(!js.includes("subtree:true"), "Output card mutations must not retrigger a subtree observer loop.");
 assert(!js.includes("outputExists = null"), "V2 must not overload null as both unchecked and verification failure.");
 
 for (const required of [
   ".core-output-state-card",
   '.core-output-state-card[data-output-state="checking"]',
+  '.core-output-state-card[data-output-state="unverified"]',
   '.core-output-state-card[data-output-state="missing"]',
   ".core-output-state-action",
   ".core-output-state-hint"
