@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const js = read("renderer/core-editor-activity.js");
 const css = read("renderer/core-editor-activity.css");
 const index = read("renderer/index.html");
+const preload = read("preload.js");
 
 assert.doesNotThrow(() => new Function(js), "Activity JS must parse.");
 
@@ -23,9 +24,21 @@ for (const required of [
   "latestRenderJob(current)",
   "renderCanStop(active)",
   'typeof cancelExportJob === "function"',
-  "await cancelExportJob(active.job)"
+  "await cancelExportJob(active.job)",
+  "wireProgressSignals()",
+  "progressUnsubscribers",
+  '"onSpeechProgress"',
+  '"onTranslationProgress"',
+  '"onVoiceProgress"',
+  '"onRenderProgress"',
+  "beforeunload"
 ]) {
   assert(js.includes(required), "Activity JS missing: " + required);
+}
+
+assert(!js.includes("setInterval("), "Editor activity must update from real progress signals instead of polling every few hundred milliseconds.");
+for (const progressApi of ["onSpeechProgress", "onTranslationProgress", "onVoiceProgress", "onRenderProgress"]) {
+  assert(preload.includes(progressApi), "Desktop bridge must expose activity signal: " + progressApi);
 }
 
 for (const required of [
