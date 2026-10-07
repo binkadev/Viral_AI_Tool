@@ -10,8 +10,8 @@ const shell = fs.readFileSync(path.join(root, "renderer", "core-product-shell.js
 const css = fs.readFileSync(path.join(root, "renderer", "core-product-shell.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const capabilities = fs.readFileSync(path.join(root, "renderer", "core-capabilities.css"), "utf8");
-const startupJs = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.js"), "utf8");
-const startupCss = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.css"), "utf8");
+const shellStabilityCss = fs.readFileSync(path.join(root, "renderer", "core-shell-stability.css"), "utf8");
+const navigationStability = fs.readFileSync(path.join(root, "renderer", "core-navigation-stability.js"), "utf8");
 const hudJs = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.css"), "utf8");
 const workstationCss = fs.readFileSync(path.join(root, "renderer", "core-premium-workstation.css"), "utf8");
@@ -61,48 +61,46 @@ assert(
   "Theme bootstrap must execute before the first stylesheet to prevent light/dark first-paint switching."
 );
 
-assert.doesNotThrow(() => new Function(startupJs), "Premium startup JS must parse.");
+assert.doesNotThrow(() => new Function(navigationStability), "Navigation stability JS must parse.");
 assert.doesNotThrow(() => new Function(hudJs), "Premium HUD JS must parse.");
-assert(index.includes('data-startup="booting"'), "The document must begin in a protected startup state.");
-assert(index.includes('id="appStartup"'), "Premium startup overlay must be present in the shell.");
-assert(index.includes('href="core-startup-experience.css"'), "Premium startup CSS must be loaded.");
-assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS must be loaded.");
+assert(!index.includes('data-startup="booting"'), "The app must not enter the removed animated startup state.");
+assert(!index.includes('id="appStartup"'), "The removed startup splash must not be rendered.");
+assert(!index.includes('core-startup-experience.css'), "Removed startup CSS must not be loaded.");
+assert(!index.includes('core-startup-experience.js'), "Removed startup JS must not be loaded.");
+assert(index.includes('href="core-shell-stability.css"'), "Direct-paint shell stability CSS must be loaded.");
+assert(index.includes('src="core-navigation-stability.js"'), "Stable navigation behavior must be loaded.");
+assert(index.indexOf('src="core-navigation-stability.js"') > index.indexOf('src="core-product-shell.js"'), "Navigation stability must wrap the final core navigation renderer.");
 assert(index.includes('href="core-premium-hud.css"'), "Premium HUD CSS must be loaded.");
 assert(index.includes('src="core-premium-hud.js"'), "Premium HUD JS must be loaded.");
 assert(index.includes('href="core-premium-workstation.css"'), "Premium workstation shell CSS must be loaded.");
 assert(index.indexOf('href="core-premium-workstation.css"') > index.indexOf('href="core-premium-interactions.css"'), "Premium workstation refinement must load after motion/interactions so its material hierarchy wins.");
+assert(index.indexOf('href="core-shell-stability.css"') > index.indexOf('href="core-command-surface.css"'), "Shell stability must load last so removed page-entry motion cannot leak back in.");
 assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
 assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
 
-const startupStart = index.indexOf('id="appStartup"');
-const startupEnd = index.indexOf('<div class="ambient-layer"');
-const startupMarkup = index.slice(startupStart, startupEnd);
-assert(!startupMarkup.includes("CREATOR STUDIO"), "Startup splash must not introduce an English-only subtitle.");
-
 for (const required of [
-  'root.dataset.startup = "booting"',
-  'root.dataset.startup = "revealing"',
-  'root.dataset.startup = "ready"',
-  'startup-reveal-once',
-  'window.setTimeout(reveal, 2800)',
-  'prefers-reduced-motion: reduce',
-  'viral-ai:startup-complete',
-  'core-page-enter'
+  "Direct-paint workstation shell",
+  ".viral-brand-icon",
+  ".viral-brand-mark",
+  "contain:layout style",
+  "#page.core-page-enter::before",
+  "content:none!important",
+  "transition-property:background-color,border-color,color,box-shadow!important"
 ]) {
-  assert(startupJs.includes(required) || startupCss.includes(required), "Premium startup behavior missing: " + required);
+  assert(shellStabilityCss.includes(required), "Shell stability CSS missing: " + required);
 }
+assert(!shellStabilityCss.includes("@keyframes"), "Direct shell paint must not introduce another startup/page animation.");
 
 for (const required of [
-  ".app-startup",
-  "startupLogoReveal",
-  "startupAuroraA",
-  "startupSidebarIn",
-  "startupNavItemIn",
-  'html[data-startup="ready"].startup-reveal-once .nav-item',
-  "prefers-reduced-motion",
-  'html[data-motion="reduced"]'
+  "legacyNavRender",
+  "structureMatches",
+  "buttons.forEach",
+  'button.setAttribute("aria-current", "page")',
+  "stableNavigationWired",
+  "event.stopImmediatePropagation()",
+  'root.dataset.stableNavigation = "enabled"'
 ]) {
-  assert(startupCss.includes(required), "Premium startup CSS missing: " + required);
+  assert(navigationStability.includes(required), "Stable navigation behavior missing: " + required);
 }
 
 for (const required of [
@@ -125,8 +123,8 @@ for (const required of [
 for (const required of [
   'id = "premiumHudLayer"',
   'root.dataset.premiumHud = "enabled"',
+  'root.classList.add("premium-hud-ready")',
   'document.addEventListener("pointermove"',
-  'window.addEventListener("viral-ai:startup-complete"',
   "SURFACE_SELECTOR",
   "MAGNET_SELECTOR",
   "ensureReactiveLight",
@@ -136,6 +134,7 @@ for (const required of [
 ]) {
   assert(hudJs.includes(required), "Premium HUD behavior missing: " + required);
 }
+assert(!hudJs.includes('viral-ai:startup-complete'), "HUD must not depend on the removed startup animation event.");
 assert(hudCss.includes('.button.primary::after{animation:none'), "Primary button shimmer must be interaction-triggered, not permanently looping.");
 assert(hudCss.includes('.core-editor-assets-panel::after,\nhtml.core-editor-premium .core-editor-inspector::after{animation:none'), "Editor panel sweeps must stay dormant outside processing.");
 
