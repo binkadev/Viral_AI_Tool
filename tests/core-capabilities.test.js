@@ -32,9 +32,15 @@ for (const required of [
   'data-core-fullscreen',
   'new MutationObserver(queueScan)',
   'observer.observe(page, { childList: true, subtree: true })',
-  'requestAnimationFrame(() => {'
+  'requestAnimationFrame(() => {',
+  'Coming soon — this feature is still being prepared and is not available yet.',
+  'Sắp có — tính năng này đang được hoàn thiện và chưa thể sử dụng.',
+  'Finish the required previous step before using this action.',
+  'Hãy hoàn tất bước bắt buộc trước đó để sử dụng thao tác này.'
 ]) assert(guard.includes(required), "Capability guard is missing behavior: " + required);
 
+assert(!guard.includes('capability production'), "User-facing copy must not expose internal capability jargon.");
+assert(!guard.includes('production capability'), "User-facing copy must not expose internal production terminology.");
 assert(!guard.includes('attributeFilter: ["disabled", "aria-disabled"]'));
 assert(!guard.includes("new MutationObserver(scan)"));
 
