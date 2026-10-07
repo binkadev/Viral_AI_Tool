@@ -87,6 +87,37 @@ html.core-editor-premium .core-output-state-action:hover:not(:disabled){
 
 html.core-editor-premium .core-output-state-action:disabled{opacity:.45;cursor:not-allowed}
 
+html.core-editor-premium .core-output-state-card[data-output-state="checking"]{
+  border-color:rgba(124,140,255,.16);
+  background:rgba(124,140,255,.05);
+}
+html.core-editor-premium .core-output-state-card[data-output-state="checking"] .core-output-state-icon{
+  color:#cbd2ff;
+  border-color:rgba(124,140,255,.18);
+  background:rgba(124,140,255,.08);
+}
+html.core-editor-premium .core-output-state-card[data-output-state="checking"] .core-output-state-copy small{color:#aab3da}
+
+html.core-editor-premium .core-output-state-card[data-output-state="missing"]{
+  border-color:rgba(240,180,76,.22);
+  background:rgba(240,180,76,.055);
+}
+html.core-editor-premium .core-output-state-card[data-output-state="missing"] .core-output-state-icon{
+  color:#f0d09a;
+  border-color:rgba(240,180,76,.22);
+  background:rgba(240,180,76,.08);
+}
+html.core-editor-premium .core-output-state-card[data-output-state="missing"] .core-output-state-copy small{color:#d9b56c}
+html.core-editor-premium .core-output-state-card[data-output-state="missing"] .core-output-state-action{
+  color:#f6ddad;
+  border-color:rgba(240,180,76,.24);
+  background:rgba(240,180,76,.08);
+}
+html.core-editor-premium .core-output-state-card[data-output-state="missing"] .core-output-state-action:hover:not(:disabled){
+  border-color:rgba(240,180,76,.38);
+  background:rgba(240,180,76,.13);
+}
+
 html.core-editor-premium .core-output-state-hint{
   margin:0 0 10px;
   padding:9px 11px;
