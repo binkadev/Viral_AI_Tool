@@ -10,7 +10,7 @@ const workflow = fs.readFileSync(path.join(root, "renderer", "core-workflow.js")
 const workflowMotion = fs.readFileSync(path.join(root, "renderer", "core-workflow-motion.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "renderer", "core-workflow.css"), "utf8");
 const premiumInteractions = fs.readFileSync(path.join(root, "renderer", "core-premium-interactions.css"), "utf8");
-const startup = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.js"), "utf8");
+const shellStability = fs.readFileSync(path.join(root, "renderer", "core-shell-stability.css"), "utf8");
 const coreEditorCss = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
@@ -136,12 +136,10 @@ assert.strictEqual(derived.controls.render.enabled, false);
 
 assert.doesNotThrow(() => new Function(workflow), "Core workflow UI script must parse.");
 assert.doesNotThrow(() => new Function(workflowMotion), "Core workflow motion script must parse.");
-assert.doesNotThrow(() => new Function(startup), "Startup transition script must parse.");
 
 for (const selector of ["#speechStart", "#translationStart", "#voiceStart", "#render", "#export"]) {
   assert(workflow.includes(selector), "Core workflow must gate " + selector);
 }
-assert(workflow.includes('dataset.coreCapability = "coming-soon"'), "Unimplemented controls must be labeled coming soon.");
 assert(workflow.includes('event.stopImmediatePropagation()'), "Quick project must not fall through to the legacy AI-video route.");
 assert(workflow.includes('import: "IMPORT"'), "English workflow stage labels must be explicit.");
 assert(workflow.includes('import: "NHẬP"'), "Vietnamese workflow stage labels must be explicit.");
@@ -158,10 +156,10 @@ assert(workflowMotion.includes("lastProgress"), "Workflow motion must preserve t
 assert(workflowMotion.includes("requestAnimationFrame"), "Workflow progress changes must animate after layout settles.");
 assert(workflowMotion.includes('style.setProperty("--workflow-progress"'), "Workflow motion must drive the continuous progress track.");
 
-assert(startup.includes("lastPageKey"), "Page transitions must deduplicate same-page rerenders.");
-assert(startup.includes("nextPageKey === lastPageKey"), "Same-page state updates must not replay navigation motion.");
+assert(!index.includes('core-startup-experience'), "Removed startup/page-entry module must stay out of the production shell.");
 assert(!premiumInteractions.includes("from { opacity:0"), "Navigation refinement must not fade the entire page from zero opacity.");
-assert(premiumInteractions.includes("#page.core-page-enter::before"), "Navigation changes need a non-blocking premium signal.");
+assert(shellStability.includes("#page.core-page-enter::before"), "Shell stability must explicitly neutralize legacy page-entry signals.");
+assert(shellStability.includes("content:none!important"), "Legacy navigation signal must not render after the startup module is removed.");
 assert(premiumInteractions.includes(".core-workflow-rail::after"), "Workflow rail must render a continuous progress layer.");
 assert(premiumInteractions.includes("workflowNodeBreath"), "Active stages need restrained state motion.");
 assert(premiumInteractions.includes("workflowSpinner"), "Processing stages need a dedicated spinner.");
@@ -175,6 +173,7 @@ assert(css.includes("button.core-gated:disabled"));
 assert(index.includes('href="core-workflow.css"'));
 assert(index.includes('href="core-premium-interactions.css"'));
 assert(index.indexOf('href="core-premium-interactions.css"') > index.indexOf('href="core-premium-hud.css"'), "Interaction refinements must load after the HUD layer.");
+assert(index.includes('href="core-shell-stability.css"'));
 assert(index.includes('src="core-workflow-model.js"'));
 assert(index.includes('src="core-workflow.js"'));
 assert(index.includes('src="core-workflow-motion.js"'));
