@@ -18,8 +18,14 @@
 
   function copy() {
     return locale() === "en"
-      ? { placeholder: "Search commands…", empty: "No matching command", hint: "Navigate quickly" }
-      : { placeholder: "Tìm chức năng…", empty: "Không tìm thấy chức năng phù hợp", hint: "Đi nhanh đến chức năng" };
+      ? { placeholder: "Search commands…", empty: "No matching command", hint: "Navigate quickly", trigger: "Search commands" }
+      : { placeholder: "Tìm chức năng…", empty: "Không tìm thấy chức năng phù hợp", hint: "Đi nhanh đến chức năng", trigger: "Tìm chức năng" };
+  }
+
+  function syncTriggerText() {
+    const trigger = document.querySelector(".command-palette");
+    const label = trigger?.querySelector(".command-copy");
+    if (label) label.textContent = copy().trigger;
   }
 
   function commands() {
@@ -106,6 +112,7 @@
   function open() {
     ensureOverlay();
     if (!overlay || !input) return;
+    syncTriggerText();
     const c = copy();
     input.placeholder = c.placeholder;
     const hint = overlay.querySelector(".core-command-hint");
@@ -178,7 +185,9 @@
       trigger.dataset.coreCapability = "functional";
       trigger.addEventListener("click", open);
     }
+    syncTriggerText();
     document.addEventListener("keydown", onGlobalKeyDown);
+    window.addEventListener("viral-ai:core-state-changed", syncTriggerText);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
