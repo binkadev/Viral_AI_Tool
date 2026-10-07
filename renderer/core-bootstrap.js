@@ -51,5 +51,6 @@
     loadProductionOverride("core-library-output-recovery.js", "script");
     loadProductionOverride("core-settings-production.js", "script");
     loadProductionOverride("core-creator-home-production.js", "script");
+    loadProductionOverride("core-export-folder-recovery.js", "script");
   }, { once: true });
 })();
