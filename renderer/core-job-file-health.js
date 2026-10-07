@@ -3,6 +3,7 @@
 
   let checking = false;
   let queued = false;
+  let recoveryQueued = false;
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -51,11 +52,52 @@
     }));
   }
 
+  function recoverableOutput(job) {
+    return Boolean(job?.isRenderOutput) &&
+      normalizedStatus(job?.status) === "completed" &&
+      (job?.fileState === "missing" || job?.fileState === "trashed");
+  }
+
+  function syncRecoveryActions() {
+    recoveryQueued = false;
+    const jobs = Array.isArray(appState()?.jobs) ? appState().jobs : [];
+    const byId = new Map(jobs.map(job => [String(job?.id || ""), job]));
+    const english = appState()?.locale === "en";
+
+    document.querySelectorAll(".job-menu-button[data-job-menu]").forEach(menuButton => {
+      const id = String(menuButton.dataset.jobMenu || "");
+      if (!id) return;
+      const popover = document.querySelector('[data-job-menu-popover="' + CSS.escape(id) + '"]');
+      if (!(popover instanceof HTMLElement)) return;
+      const existing = popover.querySelector('[data-job-action="retry-export"][data-job-id="' + CSS.escape(id) + '"]');
+      if (!recoverableOutput(byId.get(id))) {
+        existing?.remove();
+        return;
+      }
+      if (existing) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.jobAction = "retry-export";
+      button.dataset.jobId = id;
+      button.innerHTML = '↻ <span>' + (english ? "Render again" : "Render lại") + '</span>';
+      popover.appendChild(button);
+    });
+  }
+
+  function queueRecoveryActions() {
+    if (recoveryQueued) return;
+    recoveryQueued = true;
+    requestAnimationFrame(syncRecoveryActions);
+  }
+
   async function checkAll() {
     queued = false;
     if (checking || typeof window.desktopAPI?.fileStatus !== "function") return;
     const candidates = jobsToCheck();
-    if (!candidates.length) return;
+    if (!candidates.length) {
+      queueRecoveryActions();
+      return;
+    }
 
     checking = true;
     const changedIds = [];
@@ -82,6 +124,7 @@
         persist();
         refreshUi(changedIds);
       }
+      queueRecoveryActions();
     } finally {
       checking = false;
     }
@@ -96,7 +139,11 @@
   function start() {
     window.addEventListener("focus", queueCheck);
     window.addEventListener("viral-ai:job-file-health-request", queueCheck);
+    window.addEventListener("viral-ai:core-state-changed", queueRecoveryActions);
+    const page = document.getElementById("page");
+    if (page) new MutationObserver(queueRecoveryActions).observe(page, { childList: true, subtree: true });
     queueCheck();
+    queueRecoveryActions();
     document.documentElement.dataset.coreJobFileHealth = "enabled";
   }
 
