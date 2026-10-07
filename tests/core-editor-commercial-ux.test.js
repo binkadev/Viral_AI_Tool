@@ -34,7 +34,13 @@ for (const required of [
   'catalog("translation.notReady"',
   "ViralCoreWorkflowModel?.derive",
   "workflowSnapshot()?.jobs?.render",
-  'if (!(button instanceof HTMLButtonElement)) return "blocked"'
+  'if (!(button instanceof HTMLButtonElement)) return "blocked"',
+  "normalizeLegacyConnectionCopy",
+  'connectionError: "Lỗi kết nối"',
+  'value === "Lỗi nối"',
+  "NodeFilter.SHOW_TEXT",
+  'replace("Lỗi nối", replacement)',
+  'setAttribute("aria-label", replacement)'
 ]) {
   assert(js.includes(required), "Commercial UX JS missing: " + required);
 }
