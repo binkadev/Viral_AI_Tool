@@ -15,6 +15,10 @@ for (const token of [
   'root.dataset.motion !== "expressive"',
   "interactiveMotion()",
   "clearInteractiveState()",
+  "syncPointerTracking()",
+  "let pointerTracking = false",
+  'document.addEventListener("pointermove", onPointerMove',
+  'document.removeEventListener("pointermove", onPointerMove)',
   'attributeFilter: ["data-motion"]'
 ]) {
   assert(hud.includes(token), "HUD motion guard missing: " + token);
