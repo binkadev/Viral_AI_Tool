@@ -20,9 +20,14 @@ const motion = read("renderer/core-motion-policy.css");
 
 assert(index.includes('data-motion="balanced"'), "New installs must default to balanced motion.");
 assert(!index.includes("core-startup-experience"), "Removed startup animation must stay out of production shell.");
-assert(bootstrap.includes("hasAvailableSource"), "Startup bootstrap must know whether a real source can resume.");
-assert(bootstrap.includes('savedPage === "ai-video" && !hasAvailableSource'), "Core Editor must only fall back to Import when its source is unavailable.");
-assert(!bootstrap.includes('["ai-video", "automation", "workflow", "workflow-builder"].includes'), "Startup must not blindly redirect a valid Core Editor route through Import.");
+assert(bootstrap.includes("hasProjectSource"), "Startup bootstrap must identify persisted source projects.");
+assert(bootstrap.includes('saved.page = hasProjectSource ? "ai-video" : "download"'), "First render must go directly to the workflow route.");
+assert(bootstrap.includes('root.dataset.coreFirstPaint = "pending"'), "First paint must be gated until production routing settles.");
+assert(bootstrap.includes('visibility:hidden!important'), "First-paint guard must hide only intermediate page content.");
+assert(bootstrap.includes("requestAnimationFrame(() =>"), "Production page must be revealed on the pre-paint frame.");
+assert(bootstrap.includes('root.dataset.coreFirstPaint = "ready"'), "Production page must explicitly complete first paint.");
+assert(!bootstrap.includes("opacity:0"), "First-paint guard must not introduce another fade animation.");
+assert(!bootstrap.includes("setInterval("), "Startup stabilization must not poll.");
 
 for (const productionModule of [
   "core-accounts-real-data.js",
@@ -43,6 +48,7 @@ assert(!creator.includes("Boolean(current?.cloud?.account)"), "Cached account da
 assert(creator.includes("current?.speech?.providerStatus?.local"), "Local readiness must come from the real speech provider state.");
 assert(creator.includes("local.ready === true"), "Local must only say ready when the provider reports ready.");
 assert(creator.includes("Cần thiết lập"), "Unavailable local AI must show a setup-required state.");
+assert(creator.includes("projectSource()"), "Creator route recovery must keep persisted projects recoverable.");
 
 for (const token of ["setting-row", "1080p", "4K", "__coreProductionSettings"]) {
   assert(settings.includes(token), "Production settings guard missing control sanitizer: " + token);
