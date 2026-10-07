@@ -141,7 +141,8 @@ assert.doesNotThrow(() => new Function(startup), "Startup transition script must
 for (const selector of ["#speechStart", "#translationStart", "#voiceStart", "#render", "#export"]) {
   assert(workflow.includes(selector), "Core workflow must gate " + selector);
 }
-assert(workflow.includes('dataset.coreCapability = "coming-soon"'), "Unimplemented controls must be labeled coming soon.");
+assert(!workflow.includes('document.querySelector(".command-palette")'), "Core workflow must not treat the functional Quick Switcher as a placeholder.");
+assert(!workflow.includes("markComingSoon"), "Legacy workflow refreshes must not disable functional shell controls.");
 assert(workflow.includes('event.stopImmediatePropagation()'), "Quick project must not fall through to the legacy AI-video route.");
 assert(workflow.includes('import: "IMPORT"'), "English workflow stage labels must be explicit.");
 assert(workflow.includes('import: "NHẬP"'), "Vietnamese workflow stage labels must be explicit.");
