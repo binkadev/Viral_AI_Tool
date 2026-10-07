@@ -1,0 +1,12 @@
+/* Final production workflow layer: state is visible without perpetual motion or glow. */
+#page.core-page-enter::before{content:none!important;display:none!important;animation:none!important}
+.core-workflow-rail::after{transition:none!important;box-shadow:none!important}
+.core-workflow-stage.is-active .core-stage-index::after,.core-workflow-stage.is-current.is-active .core-stage-index::after{content:none!important;display:none!important;animation:none!important}
+.core-workflow-stage.is-active .core-stage-index,.core-workflow-stage.is-current.is-active .core-stage-index,.core-workflow-stage.is-processing .core-stage-index{box-shadow:none!important}
+.core-stage-index{transition:border-color .12s ease,background-color .12s ease,color .12s ease!important}
+.core-stage-spinner{width:7px!important;height:7px!important;border:0!important;border-radius:50%!important;background:currentColor!important;box-shadow:none!important;animation:none!important;transform:none!important}
+html[data-theme="midnight"] .core-workflow-shell{background:#0f141d!important;border-color:rgba(255,255,255,.065)!important;box-shadow:none!important;backdrop-filter:none!important}
+html[data-theme="midnight"] .core-workflow-shell::before{content:none!important;display:none!important}
+html[data-theme="midnight"] .core-workflow-rail::before{background:rgba(255,255,255,.07)!important;box-shadow:none!important}
+@media(prefers-reduced-motion:reduce){.core-stage-index{transition:none!important}}
+html[data-motion="reduced"] .core-stage-index{transition:none!important}
