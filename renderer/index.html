@@ -1,24 +1,37 @@
 <!doctype html>
-<html lang="vi" data-theme="aurora-light" data-motion="balanced" data-scale="comfortable" data-startup="booting">
+<html lang="vi" data-theme="midnight" data-motion="expressive" data-scale="comfortable" data-startup="booting">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="color-scheme" content="dark light" />
   <title>Viral AI Tool</title>
   <script>
     (() => {
       const root = document.documentElement;
       try {
-        const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
+        const stateKey = "viral-ai-tool-state";
+        const migrationKey = "viral-ai-premium-default-v1";
+        const saved = JSON.parse(localStorage.getItem(stateKey) || "{}");
+
+        // One-time visual migration: older installs inherited Aurora Light even when
+        // the user had never deliberately chosen a theme. Move that legacy default
+        // to Premium Dark, then respect all future appearance choices.
+        if (!localStorage.getItem(migrationKey)) {
+          if (!saved.appearance || saved.appearance === "aurora-light") saved.appearance = "midnight";
+          if (!saved.motion || saved.motion === "balanced") saved.motion = "expressive";
+          localStorage.setItem(stateKey, JSON.stringify(saved));
+          localStorage.setItem(migrationKey, "1");
+        }
+
         const themes = new Set(["aurora-light", "pearl-light", "midnight"]);
         const motions = new Set(["balanced", "expressive", "reduced"]);
         const scales = new Set(["compact", "comfortable", "large"]);
-        if (themes.has(saved.appearance)) root.dataset.theme = saved.appearance;
-        if (motions.has(saved.motion)) root.dataset.motion = saved.motion;
+        root.dataset.theme = themes.has(saved.appearance) ? saved.appearance : "midnight";
+        root.dataset.motion = motions.has(saved.motion) ? saved.motion : "expressive";
         if (scales.has(saved.scale)) root.dataset.scale = saved.scale;
         if (["vi", "en"].includes(saved.locale)) root.lang = saved.locale;
       } catch {
-        // Keep the safe HTML defaults when stored UI preferences are unavailable.
+        // Premium Dark / expressive are the safe first-paint defaults.
       }
     })();
   </script>
@@ -46,6 +59,7 @@
   <link rel="stylesheet" href="core-editor-activity.css" />
   <link rel="stylesheet" href="core-editor-output-state.css" />
   <link rel="stylesheet" href="core-editor-timeline-interactions.css" />
+  <link rel="stylesheet" href="core-premium-hud.css" />
 </head>
 <body>
   <div id="appStartup" class="app-startup" role="presentation" aria-hidden="true">
@@ -191,6 +205,7 @@
   <script src="core-editor-timeline-interactions.js"></script>
   <script src="core-editor-shortcuts.js"></script>
   <script src="core-creator-home.js"></script>
+  <script src="core-premium-hud.js"></script>
   <script src="core-startup-experience.js"></script>
 </body>
 </html>
