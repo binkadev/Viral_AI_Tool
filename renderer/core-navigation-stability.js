@@ -1,12 +1,13 @@
 (function installNavigationStability() {
   "use strict";
 
+  const root = document.documentElement;
   let installed = false;
   let lastLocale = "";
 
   function currentLocale() {
     try { return typeof state !== "undefined" && state?.locale === "en" ? "en" : "vi"; }
-    catch { return document.documentElement.lang === "en" ? "en" : "vi"; }
+    catch { return root.lang === "en" ? "en" : "vi"; }
   }
 
   function currentPage() {
@@ -72,7 +73,7 @@
     }
 
     lastLocale = currentLocale();
-    document.documentElement.dataset.stableNavigation = "enabled";
+    root.dataset.stableNavigation = "enabled";
   }
 
   if (document.readyState === "loading") {
