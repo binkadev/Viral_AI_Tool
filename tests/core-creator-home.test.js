@@ -8,6 +8,8 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 const js = fs.readFileSync(path.join(root, "renderer", "core-creator-home.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "renderer", "core-creator-home.css"), "utf8");
+const availabilityCss = fs.readFileSync(path.join(root, "renderer", "core-creator-home-availability.css"), "utf8");
+const allCreatorCss = css + "\n" + availabilityCss;
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const i18n = fs.readFileSync(path.join(root, "renderer", "i18n.js"), "utf8");
 
@@ -44,7 +46,7 @@ for (const token of [
   "prefers-reduced-motion",
   'html[data-motion="reduced"]'
 ]) {
-  assert(css.includes(token), "Creator Home style missing: " + token);
+  assert(allCreatorCss.includes(token), "Creator Home style missing: " + token);
 }
 
 const relinkRule = css.match(/\.creator-recent-relink\{([^}]*)\}/)?.[1] || "";
@@ -57,6 +59,7 @@ assert(recentTitleRule.includes("font-size:13px"), "Recent-source title must mee
 assert(recentMetaRule.includes("font-size:12px"), "Recent-source metadata must meet the secondary readability floor.");
 
 assert(index.includes('href="core-creator-home.css"'), "Creator Home stylesheet must be loaded.");
+assert(index.includes('href="core-creator-home-availability.css"'), "Creator Home availability stylesheet must be loaded.");
 assert(index.includes('src="core-creator-home.js"'), "Creator Home script must be loaded.");
 assert(
   index.indexOf('src="core-creator-home.js"') < index.indexOf('src="core-startup-experience.js"'),
