@@ -50,5 +50,6 @@
     loadProductionOverride("core-accounts-real-data.js", "script");
     loadProductionOverride("core-library-output-recovery.js", "script");
     loadProductionOverride("core-settings-production.js", "script");
+    loadProductionOverride("core-creator-home-production.js", "script");
   }, { once: true });
 })();
