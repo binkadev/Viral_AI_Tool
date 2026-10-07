@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const js = fs.readFileSync(path.join(root, "renderer", "core-creator-home.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "renderer", "core-creator-home.css"), "utf8");
 const availabilityCss = fs.readFileSync(path.join(root, "renderer", "core-creator-home-availability.css"), "utf8");
+const shellStability = fs.readFileSync(path.join(root, "renderer", "core-shell-stability.css"), "utf8");
 const allCreatorCss = css + "\n" + availabilityCss;
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const i18n = fs.readFileSync(path.join(root, "renderer", "i18n.js"), "utf8");
@@ -24,7 +25,7 @@ for (const token of [
   "data-creator-open",
   "data-job-action=\"relink\"",
   'document.addEventListener("drop"',
-  'document.documentElement.dataset.motion === "reduced"',
+  'requestAnimationFrame(() => {',
   "function sourceAvailability(job)",
   'fileState === "trashed"',
   'fileState === "missing"',
@@ -35,18 +36,30 @@ for (const token of [
 }
 
 assert(!js.includes("statusBadge"), "Creator Home must not present stale source-job status as project workflow status.");
+assert(!js.includes('class="creator-home-visual"'), "The removed orbit/workflow demo visual must not be rendered.");
+assert(!js.includes("creatorWorkspacePreparing"), "Opening the editor must not use the removed full-screen preparing animation.");
+assert(!js.includes("workflowRail()"), "The removed five-step orbit demo must not remain in the Creator Home render path.");
 
 for (const token of [
   ".creator-home-hero",
   ".creator-import-zone",
   ".creator-current-project",
   ".creator-source-availability",
-  ".creator-workspace-preparing",
   ":focus-visible",
   "prefers-reduced-motion",
   'html[data-motion="reduced"]'
 ]) {
   assert(allCreatorCss.includes(token), "Creator Home style missing: " + token);
+}
+
+for (const token of [
+  ".creator-home-hero",
+  "grid-template-columns:minmax(0,1fr)!important",
+  ".creator-home-visual",
+  ".creator-workspace-preparing",
+  "display:none!important"
+]) {
+  assert(shellStability.includes(token), "Creator Home stability override missing: " + token);
 }
 
 const relinkRule = css.match(/\.creator-recent-relink\{([^}]*)\}/)?.[1] || "";
