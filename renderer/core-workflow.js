@@ -23,112 +23,32 @@
           current: "Core workflow",
           comingSoon: "Coming soon",
           importVideo: "Import video",
-          stages: {
-            import: "IMPORT",
-            analyze: "ANALYZE",
-            transcript: "TRANSCRIPT",
-            edit: "EDIT",
-            localize: "LOCALIZE",
-            render: "RENDER"
-          },
-          states: {
-            completed: "Done",
-            processing: "Working",
-            failed: "Needs attention",
-            cancelled: "Cancelled",
-            blocked: "Locked",
-            active: "Ready",
-            idle: "Waiting"
-          },
+          stages: { import: "IMPORT", analyze: "ANALYZE", transcript: "TRANSCRIPT", edit: "EDIT", localize: "LOCALIZE", render: "RENDER" },
+          states: { completed: "Done", processing: "Working", failed: "Needs attention", cancelled: "Cancelled", blocked: "Locked", active: "Ready", idle: "Waiting" },
           reasons: {
-            importActive: "Choose a source video to start.",
-            importDone: "The source video is ready.",
-            importMissing: "The source video is no longer available.",
-            analyzeWorking: "Checking video metadata and media information.",
-            analyzeDone: "Video metadata is ready.",
-            analyzeBlocked: "Import an available source video first.",
-            transcriptReady: "Run speech recognition to create the transcript.",
-            transcriptWorking: "Speech recognition is running.",
-            transcriptDone: "Transcript and timestamps are ready.",
-            transcriptBlocked: "A valid analyzed video is required first.",
-            editReady: "Review and edit the transcript before localization.",
-            editDone: "Transcript editing is available while localization continues.",
-            editBlocked: "Create the transcript first.",
-            localizeTranslate: "Translate the transcript before generating AI Voice.",
-            localizeVoice: "Translation is ready. Generate AI Voice next.",
-            localizeWorking: "Localization is being processed.",
-            localizeDone: "Translation and AI Voice are ready.",
-            localizeBlocked: "Create the transcript first.",
-            renderReady: "All required localized inputs are ready to render.",
-            renderWorking: "Rendering the final localized video.",
-            renderDone: "The rendered output is ready.",
-            renderFailed: "Rendering did not finish. Review the issue and retry.",
-            renderBlocked: "Complete translation and AI Voice first.",
-            busyControl: "Another processing step is currently running.",
-            missingSourceControl: "The source video is unavailable.",
-            analyzeControl: "Wait until the video analysis is ready.",
-            transcriptControl: "Create the transcript first.",
-            translationControl: "Complete translation first.",
-            voiceControl: "Generate AI Voice first.",
-            renderWaitControl: "Wait for the current processing step to finish.",
-            exportWorking: "Rendering is still in progress. Export will unlock when it finishes.",
-            exportControl: "Export becomes available after a successful render."
+            importActive: "Choose a source video to start.", importDone: "The source video is ready.", importMissing: "The source video is no longer available.",
+            analyzeWorking: "Checking video metadata and media information.", analyzeDone: "Video metadata is ready.", analyzeBlocked: "Import an available source video first.",
+            transcriptReady: "Run speech recognition to create the transcript.", transcriptWorking: "Speech recognition is running.", transcriptDone: "Transcript and timestamps are ready.", transcriptBlocked: "A valid analyzed video is required first.",
+            editReady: "Review and edit the transcript before localization.", editDone: "Transcript editing is available while localization continues.", editBlocked: "Create the transcript first.",
+            localizeTranslate: "Translate the transcript before generating AI Voice.", localizeVoice: "Translation is ready. Generate AI Voice next.", localizeWorking: "Localization is being processed.", localizeDone: "Translation and AI Voice are ready.", localizeBlocked: "Create the transcript first.",
+            renderReady: "All required localized inputs are ready to render.", renderWorking: "Rendering the final localized video.", renderDone: "The rendered output is ready.", renderFailed: "Rendering did not finish. Review the issue and retry.", renderBlocked: "Complete translation and AI Voice first.",
+            busyControl: "Another processing step is currently running.", missingSourceControl: "The source video is unavailable.", analyzeControl: "Wait until the video analysis is ready.", transcriptControl: "Create the transcript first.", translationControl: "Complete translation first.", voiceControl: "Generate AI Voice first.", renderWaitControl: "Wait for the current processing step to finish.", exportWorking: "Rendering is still in progress. Export will unlock when it finishes.", exportControl: "Export becomes available after a successful render."
           }
         }
       : {
           current: "Quy trình chính",
           comingSoon: "Sắp có",
           importVideo: "Nhập video",
-          stages: {
-            import: "NHẬP",
-            analyze: "PHÂN TÍCH",
-            transcript: "LỜI NÓI",
-            edit: "CHỈNH SỬA",
-            localize: "LOCALIZE",
-            render: "RENDER"
-          },
-          states: {
-            completed: "Đã xong",
-            processing: "Đang xử lý",
-            failed: "Cần xử lý",
-            cancelled: "Đã hủy",
-            blocked: "Chưa mở",
-            active: "Sẵn sàng",
-            idle: "Đang chờ"
-          },
+          stages: { import: "NHẬP", analyze: "PHÂN TÍCH", transcript: "LỜI NÓI", edit: "CHỈNH SỬA", localize: "LOCALIZE", render: "RENDER" },
+          states: { completed: "Đã xong", processing: "Đang xử lý", failed: "Cần xử lý", cancelled: "Đã hủy", blocked: "Chưa mở", active: "Sẵn sàng", idle: "Đang chờ" },
           reasons: {
-            importActive: "Chọn video nguồn để bắt đầu.",
-            importDone: "Video nguồn đã sẵn sàng.",
-            importMissing: "Video nguồn hiện không còn khả dụng.",
-            analyzeWorking: "Đang kiểm tra metadata và thông tin media của video.",
-            analyzeDone: "Metadata video đã sẵn sàng.",
-            analyzeBlocked: "Cần nhập một video nguồn khả dụng trước.",
-            transcriptReady: "Chạy nhận diện lời nói để tạo transcript.",
-            transcriptWorking: "Đang nhận diện lời nói.",
-            transcriptDone: "Transcript và timestamp đã sẵn sàng.",
-            transcriptBlocked: "Cần video hợp lệ và đã phân tích trước.",
-            editReady: "Kiểm tra và chỉnh transcript trước khi localize.",
-            editDone: "Bạn vẫn có thể chỉnh transcript trong khi tiếp tục localize.",
-            editBlocked: "Cần tạo transcript trước.",
-            localizeTranslate: "Dịch transcript trước khi tạo Giọng AI.",
-            localizeVoice: "Bản dịch đã sẵn sàng. Tiếp theo hãy tạo Giọng AI.",
-            localizeWorking: "Đang xử lý nội dung localize.",
-            localizeDone: "Bản dịch và Giọng AI đã sẵn sàng.",
-            localizeBlocked: "Cần tạo transcript trước.",
-            renderReady: "Đã đủ dữ liệu localize để render.",
-            renderWorking: "Đang render video localize cuối.",
-            renderDone: "File render đã sẵn sàng.",
-            renderFailed: "Render chưa hoàn tất. Hãy kiểm tra trạng thái và thử lại.",
-            renderBlocked: "Cần hoàn tất bản dịch và Giọng AI trước.",
-            busyControl: "Đang có một bước xử lý khác chạy.",
-            missingSourceControl: "Video nguồn hiện không khả dụng.",
-            analyzeControl: "Hãy chờ video phân tích xong.",
-            transcriptControl: "Cần tạo transcript trước.",
-            translationControl: "Cần hoàn tất bản dịch trước.",
-            voiceControl: "Cần tạo Giọng AI trước.",
-            renderWaitControl: "Hãy chờ bước xử lý hiện tại hoàn tất.",
-            exportWorking: "Video vẫn đang render. Export sẽ mở khi render hoàn tất.",
-            exportControl: "Export chỉ mở sau khi render thành công."
+            importActive: "Chọn video nguồn để bắt đầu.", importDone: "Video nguồn đã sẵn sàng.", importMissing: "Video nguồn hiện không còn khả dụng.",
+            analyzeWorking: "Đang kiểm tra metadata và thông tin media của video.", analyzeDone: "Metadata video đã sẵn sàng.", analyzeBlocked: "Cần nhập một video nguồn khả dụng trước.",
+            transcriptReady: "Chạy nhận diện lời nói để tạo transcript.", transcriptWorking: "Đang nhận diện lời nói.", transcriptDone: "Transcript và timestamp đã sẵn sàng.", transcriptBlocked: "Cần video hợp lệ và đã phân tích trước.",
+            editReady: "Kiểm tra và chỉnh transcript trước khi localize.", editDone: "Bạn vẫn có thể chỉnh transcript trong khi tiếp tục localize.", editBlocked: "Cần tạo transcript trước.",
+            localizeTranslate: "Dịch transcript trước khi tạo Giọng AI.", localizeVoice: "Bản dịch đã sẵn sàng. Tiếp theo hãy tạo Giọng AI.", localizeWorking: "Đang xử lý nội dung localize.", localizeDone: "Bản dịch và Giọng AI đã sẵn sàng.", localizeBlocked: "Cần tạo transcript trước.",
+            renderReady: "Đã đủ dữ liệu localize để render.", renderWorking: "Đang render video localize cuối.", renderDone: "File render đã sẵn sàng.", renderFailed: "Render chưa hoàn tất. Hãy kiểm tra trạng thái và thử lại.", renderBlocked: "Cần hoàn tất bản dịch và Giọng AI trước.",
+            busyControl: "Đang có một bước xử lý khác chạy.", missingSourceControl: "Video nguồn hiện không khả dụng.", analyzeControl: "Hãy chờ video phân tích xong.", transcriptControl: "Cần tạo transcript trước.", translationControl: "Cần hoàn tất bản dịch trước.", voiceControl: "Cần tạo Giọng AI trước.", renderWaitControl: "Hãy chờ bước xử lý hiện tại hoàn tất.", exportWorking: "Video vẫn đang render. Export sẽ mở khi render hoàn tất.", exportControl: "Export chỉ mở sau khi render thành công."
           }
         };
   }
@@ -209,11 +129,7 @@
     if (currentIndex < 0) currentIndex = stages.findIndex(stage => stage.status !== "completed");
     currentIndex = Math.max(0, currentIndex);
 
-    return {
-      completed,
-      currentIndex,
-      progress: total > 1 ? Math.max(0, Math.min(1, currentIndex / (total - 1))) : 0
-    };
+    return { completed, currentIndex, progress: total > 1 ? Math.max(0, Math.min(1, currentIndex / (total - 1))) : 0 };
   }
 
   function ensureWorkflowRail(derived, saved) {
@@ -240,7 +156,6 @@
     const total = derived.stages.length;
     const progressPercent = Math.round(position.progress * 100);
     const edge = total ? (100 / (total * 2)).toFixed(4) + "%" : "0%";
-
     const markup =
       '<div class="core-workflow-head">' +
         '<div class="core-workflow-title">' + c.current + '</div>' +
@@ -261,30 +176,24 @@
       '</div>';
 
     rail.setAttribute("aria-label", c.current);
-    if (markup !== lastRailMarkup || rail.innerHTML !== markup) {
+    if (markup !== lastRailMarkup) {
       rail.innerHTML = markup;
       lastRailMarkup = markup;
     }
   }
 
   function escapeAttr(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/"/g, "&quot;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    return String(value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function applyGate(selector, policy, reason) {
     const button = document.querySelector(selector);
     if (!(button instanceof HTMLButtonElement) || !policy) return;
-
     const shouldDisable = policy.enabled !== true;
     button.disabled = shouldDisable;
     button.setAttribute("aria-disabled", shouldDisable ? "true" : "false");
     button.classList.toggle("core-gated", shouldDisable);
     button.dataset.coreCapability = policy.enabled ? "functional" : "disabled";
-
     if (shouldDisable && reason) {
       button.title = reason;
       button.dataset.coreDisabledReason = reason;
@@ -339,11 +248,7 @@
   }
 
   function annotateJobs(derived) {
-    const map = [
-      ["#speechStart", derived.jobs.speech],
-      ["#translationStart", derived.jobs.translation],
-      ["#voiceStart", derived.jobs.voice]
-    ];
+    const map = [["#speechStart", derived.jobs.speech], ["#translationStart", derived.jobs.translation], ["#voiceStart", derived.jobs.voice]];
     for (const [selector, status] of map) {
       const button = document.querySelector(selector);
       if (button) button.dataset.coreJobState = status;
