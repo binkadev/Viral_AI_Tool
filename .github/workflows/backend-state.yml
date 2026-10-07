@@ -93,7 +93,10 @@ jobs:
       - name: Test timeline scrub and viewer synchronization
         run: npm run test:core-editor-timeline-interactions
 
-      - name: Syntax check hardened backend
+      - name: Test commercial product regression gate
+        run: npm run test:core-commercial
+
+      - name: Syntax check hardened backend and production renderer guards
         run: |
           node --check dev-backend/server.js
           node --check dev-backend/billing.js
@@ -110,6 +113,7 @@ jobs:
           node --check tests/release-policy.test.js
           node --check tests/core-job-model.test.js
           node --check tests/core-player.test.js
+          node --check tests/core-player-workstation.test.js
           node --check tests/core-transcript.test.js
           node --check tests/core-workflow.test.js
           node --check tests/core-layout.test.js
@@ -124,15 +128,27 @@ jobs:
           node --check tests/core-editor-activity.test.js
           node --check tests/core-editor-output-state.test.js
           node --check tests/core-editor-timeline-interactions.test.js
+          node --check tests/core-editor-shortcuts.test.js
+          node --check tests/core-source-recovery.test.js
+          node --check tests/core-real-dashboard.test.js
+          node --check tests/core-job-file-health.test.js
+          node --check tests/core-accounts-real-data.test.js
+          node --check tests/core-library-output-recovery.test.js
+          node --check tests/core-settings-production.test.js
+          node --check tests/core-creator-home-production.test.js
+          node --check tests/core-export-folder-recovery.test.js
+          node --check tests/core-commercial-guard.test.js
           node --check main.js
           node --check preload.js
           node --check renderer/app.js
           node --check renderer/i18n.js
+          node --check renderer/core-bootstrap.js
           node --check renderer/core-job-model.js
           node --check renderer/core-player-model.js
           node --check renderer/core-player.js
           node --check renderer/core-player-interactions.js
           node --check renderer/core-player-rebind.js
+          node --check renderer/core-player-workstation.js
           node --check renderer/core-editor-stability.js
           node --check renderer/core-editor-focus.js
           node --check renderer/core-editor-workbench.js
@@ -140,7 +156,9 @@ jobs:
           node --check renderer/core-editor-processing-mode.js
           node --check renderer/core-editor-activity.js
           node --check renderer/core-editor-output-state.js
+          node --check renderer/core-editor-output-state-v2.js
           node --check renderer/core-editor-timeline-interactions.js
+          node --check renderer/core-editor-shortcuts.js
           node --check renderer/core-media-health.js
           node --check renderer/core-transcript-model.js
           node --check renderer/core-transcript-state.js
@@ -149,5 +167,13 @@ jobs:
           node --check renderer/core-layout.js
           node --check renderer/core-capabilities.js
           node --check renderer/core-media-restore.js
+          node --check renderer/core-job-file-health.js
           node --check renderer/core-product-shell.js
+          node --check renderer/core-source-recovery.js
+          node --check renderer/core-dashboard-real-data.js
+          node --check renderer/core-accounts-real-data.js
+          node --check renderer/core-library-output-recovery.js
+          node --check renderer/core-settings-production.js
+          node --check renderer/core-creator-home-production.js
+          node --check renderer/core-export-folder-recovery.js
           node --check scripts/release-preflight.js
