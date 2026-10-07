@@ -40,11 +40,6 @@
     }
   }
 
-  function sourceStatus(job) {
-    try { return typeof statusBadge === "function" ? statusBadge(job?.status) : ""; }
-    catch { return ""; }
-  }
-
   function sourceThumbnail(job, className) {
     const unavailable = job?.fileState === "missing" || job?.fileState === "trashed";
     const classes = [className, unavailable ? "is-unavailable" : ""].filter(Boolean).join(" ");
@@ -87,7 +82,6 @@
       '<div class="creator-project-body">' +
         sourceThumbnail(source, "creator-project-thumb") +
         '<div class="creator-project-copy">' +
-          '<div class="creator-project-status">' + sourceStatus(source) + '</div>' +
           '<h3 title="' + esc(source.name || "") + '">' + esc(source.name || tr("common.video")) + '</h3>' +
           '<p>' + esc(sourceMeta(source)) + '</p>' +
         '</div>' +
@@ -110,7 +104,6 @@
           return '<article class="creator-recent-item ' + (unavailable ? "is-unavailable" : "") + '">' +
             sourceThumbnail(job, "creator-recent-thumb") +
             '<div class="creator-recent-copy">' +
-              '<div class="creator-recent-top">' + sourceStatus(job) + '</div>' +
               '<strong title="' + esc(job.name || "") + '">' + esc(job.name || tr("common.video")) + '</strong>' +
               '<span>' + esc(sourceMeta(job)) + '</span>' +
             '</div>' +
