@@ -11,10 +11,18 @@
   function locale(){
     try{return typeof state!=="undefined"&&state?.locale==="en"?"en":"vi"}catch{return root.lang==="en"?"en":"vi"}
   }
+  function tr(key,vars){
+    try{return window.I18N?.t?.(locale(),key,vars)??key}catch{return key}
+  }
   function copy(){
-    return locale()==="en"
-      ?{trigger:"Quick switch",placeholder:"Search pages and tools…",title:"Quick switch",empty:"No matching destination",hint:"Navigate"}
-      :{trigger:"Chuyển nhanh",placeholder:"Tìm màn hình hoặc công cụ…",title:"Chuyển nhanh",empty:"Không tìm thấy mục phù hợp",hint:"Đi tới"};
+    const quick=tr("app.searchAnything");
+    return{
+      trigger:quick,
+      placeholder:quick+"…",
+      title:quick,
+      inputLabel:tr("app.search"),
+      hint:tr("common.choose")
+    };
   }
   function trigger(){return document.querySelector(".command-palette")}
   function navOptions(){
@@ -35,8 +43,8 @@
     dialog.setAttribute("aria-hidden","true");
     dialog.innerHTML='<section class="core-command-dialog" role="dialog" aria-modal="true" aria-labelledby="coreCommandTitle">'+
       '<header class="core-command-head"><div><span class="core-command-kicker">⌘</span><strong id="coreCommandTitle"></strong></div><kbd>Esc</kbd></header>'+
-      '<label class="core-command-search"><span aria-hidden="true">⌕</span><input type="text" autocomplete="off" spellcheck="false" /></label>'+
-      '<div class="core-command-list" role="listbox"></div>'+
+      '<label class="core-command-search"><span aria-hidden="true">⌕</span><input type="text" role="combobox" aria-autocomplete="list" aria-controls="coreCommandList" aria-expanded="false" autocomplete="off" spellcheck="false" /></label>'+
+      '<div id="coreCommandList" class="core-command-list" role="listbox"></div>'+
       '<footer class="core-command-footer"><span>↑ ↓</span><span class="core-command-nav-hint"></span><span>↵</span></footer>'+
     '</section>';
     document.body.appendChild(dialog);
@@ -59,21 +67,31 @@
   }
   function renderOptions(query=""){
     ensureDialog();
-    const c=copy();
-    options=navOptions().filter(item=>item.label.toLocaleLowerCase().includes(String(query||"").trim().toLocaleLowerCase()));
+    const normalizedQuery=String(query||"").trim();
+    options=navOptions().filter(item=>item.label.toLocaleLowerCase().includes(normalizedQuery.toLocaleLowerCase()));
     activeIndex=Math.min(activeIndex,Math.max(0,options.length-1));
-    if(!options.length){list.innerHTML='<div class="core-command-empty">'+c.empty+'</div>';return}
-    list.innerHTML=options.map((item,index)=>'<button class="core-command-option" type="button" role="option" aria-selected="'+(index===activeIndex?'true':'false')+'" data-command-index="'+index+'"><span class="core-command-option-icon" aria-hidden="true">'+(item.node.querySelector(".nav-icon")?.textContent||"•")+'</span><span>'+escapeHtml(item.label)+'</span><kbd>↵</kbd></button>').join("");
+    if(!options.length){
+      input.removeAttribute("aria-activedescendant");
+      list.innerHTML='<div class="core-command-empty">'+escapeHtml(tr("file.missingToast",{name:normalizedQuery||tr("app.search")}))+'</div>';
+      return;
+    }
+    list.innerHTML=options.map((item,index)=>'<button id="coreCommandOption-'+index+'" class="core-command-option" type="button" role="option" aria-selected="'+(index===activeIndex?'true':'false')+'" data-command-index="'+index+'"><span class="core-command-option-icon" aria-hidden="true">'+(item.node.querySelector(".nav-icon")?.textContent||"•")+'</span><span>'+escapeHtml(item.label)+'</span><kbd>↵</kbd></button>').join("");
     paintActive();
   }
   function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))}
   function paintActive(){
     if(!list)return;
+    let activeId="";
     list.querySelectorAll("[data-command-index]").forEach((row,index)=>{
-      row.classList.toggle("is-active",index===activeIndex);
-      row.setAttribute("aria-selected",index===activeIndex?"true":"false");
-      if(index===activeIndex)row.scrollIntoView({block:"nearest"});
+      const active=index===activeIndex;
+      row.classList.toggle("is-active",active);
+      row.setAttribute("aria-selected",active?"true":"false");
+      if(active){activeId=row.id;row.scrollIntoView({block:"nearest"})}
     });
+    if(input){
+      if(activeId)input.setAttribute("aria-activedescendant",activeId);
+      else input.removeAttribute("aria-activedescendant");
+    }
   }
   function activate(index){
     const item=options[index];
@@ -103,17 +121,20 @@
       const hint=dialog.querySelector(".core-command-nav-hint");
       if(title)title.textContent=c.title;
       if(hint)hint.textContent=c.hint;
-      if(input)input.placeholder=c.placeholder;
+      if(input){
+        input.placeholder=c.placeholder;
+        input.setAttribute("aria-label",c.inputLabel);
+      }
     }
   }
   function open(){
     ensureDialog();syncCopy();activeIndex=0;input.value="";renderOptions("");
-    dialog.hidden=false;dialog.setAttribute("aria-hidden","false");root.dataset.commandPalette="open";syncCopy();
+    dialog.hidden=false;dialog.setAttribute("aria-hidden","false");input.setAttribute("aria-expanded","true");root.dataset.commandPalette="open";syncCopy();
     requestAnimationFrame(()=>input.focus({preventScroll:true}));
   }
   function close(){
     if(!dialog||dialog.hidden)return;
-    dialog.hidden=true;dialog.setAttribute("aria-hidden","true");delete root.dataset.commandPalette;syncCopy();trigger()?.focus({preventScroll:true});
+    dialog.hidden=true;dialog.setAttribute("aria-hidden","true");input?.setAttribute("aria-expanded","false");input?.removeAttribute("aria-activedescendant");delete root.dataset.commandPalette;syncCopy();trigger()?.focus({preventScroll:true});
   }
   function start(){
     ensureDialog();syncCopy();
