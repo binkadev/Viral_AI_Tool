@@ -1,0 +1,78 @@
+/* Final Assets + Inspector presentation for the production editor. */
+html.core-editor-premium .core-editor-assets-panel,
+html.core-editor-premium .core-editor-inspector{
+  border-color:rgba(255,255,255,.065)!important;
+  border-radius:12px!important;
+  background:#0d1420!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.14),inset 0 1px rgba(255,255,255,.018)!important;
+  backdrop-filter:none!important;
+}
+html.core-editor-premium .core-editor-assets-panel::after,
+html.core-editor-premium .core-editor-inspector::after{content:none!important;display:none!important;animation:none!important}
+
+html.core-editor-premium .core-assets-head,
+html.core-editor-premium .core-inspector-tabs{
+  border-color:rgba(255,255,255,.055)!important;
+  background:#0f1724!important;
+  box-shadow:none!important;
+}
+html.core-editor-premium .core-assets-head{min-height:40px!important;padding:6px 7px 6px 10px!important}
+html.core-editor-premium .core-assets-head strong{color:#d7dde8!important;font-size:10px!important;font-weight:700!important;letter-spacing:.03em!important}
+html.core-editor-premium .core-assets-head button{
+  width:26px!important;height:26px!important;border-color:rgba(255,255,255,.06)!important;border-radius:7px!important;
+  background:rgba(255,255,255,.035)!important;color:#8894a7!important;
+}
+html.core-editor-premium .core-assets-head button:hover{border-color:rgba(126,138,255,.24)!important;color:#eef2f8!important}
+html.core-editor-premium .core-assets-body{padding:8px!important}
+html.core-editor-premium .core-assets-section-label{margin:2px 3px 7px!important;color:#647186!important;font-size:8px!important}
+html.core-editor-premium .core-asset-item{
+  margin-bottom:6px!important;padding:8px!important;border-color:rgba(255,255,255,.055)!important;border-radius:9px!important;
+  background:#101925!important;color:#d7deea!important;box-shadow:none!important;
+  transition:background-color .14s ease,border-color .14s ease!important;transform:none!important;
+}
+html.core-editor-premium .core-asset-item:hover:not(:disabled){transform:none!important;border-color:rgba(126,138,255,.18)!important;background:#131d2b!important;box-shadow:none!important}
+html.core-editor-premium .core-asset-icon{background:rgba(126,138,255,.08)!important;color:#9ca5ff!important;box-shadow:inset 0 0 0 1px rgba(126,138,255,.08)!important}
+html.core-editor-premium .core-asset-copy b{color:#d8dee9!important;font-size:10px!important}
+html.core-editor-premium .core-asset-copy small,
+html.core-editor-premium .core-asset-copy em{color:#737f92!important;font-size:9px!important}
+
+html.core-editor-premium .core-editor-inspector{max-height:none!important}
+html.core-editor-premium .core-inspector-tabs{gap:2px!important;padding:5px!important}
+html.core-editor-premium .core-inspector-tab{
+  min-height:32px!important;border-radius:7px!important;padding:7px 4px!important;color:#7c8799!important;font-size:10px!important;
+  transition:background-color .14s ease,color .14s ease,border-color .14s ease!important;transform:none!important;box-shadow:none!important;
+}
+html.core-editor-premium .core-inspector-tab:hover:not(.is-active){background:rgba(255,255,255,.03)!important;color:#c8d0dd!important;transform:none!important}
+html.core-editor-premium .core-inspector-tab.is-active{color:#f1f4fa!important;background:rgba(126,138,255,.08)!important;box-shadow:inset 0 -2px #8290ff!important}
+html.core-editor-premium .core-inspector-tab.has-active-job::after{animation:none!important;box-shadow:none!important;background:#8f98ff!important}
+html.core-editor-premium .core-inspector-panes{scrollbar-width:thin}
+html.core-editor-premium .core-inspector-pane{padding:10px!important}
+html.core-editor-premium .core-inspector-card,
+html.core-editor-premium .core-inspector-static{
+  border-color:rgba(255,255,255,.05)!important;background:#101925!important;box-shadow:none!important;
+}
+html.core-editor-premium .core-inspector-card{padding:8px!important;border:1px solid rgba(255,255,255,.05)!important;border-radius:9px!important}
+html.core-editor-premium .core-inspector-static{border-radius:9px!important}
+html.core-editor-premium .core-inspector-card .speech-card-head{margin-bottom:8px!important}
+html.core-editor-premium .core-inspector-card .speech-card-head h3{font-size:13px!important;color:#e3e8f0!important}
+html.core-editor-premium .core-inspector-card .speech-card-head p{font-size:10px!important;color:#758196!important}
+html.core-editor-premium .core-inspector-card .eyebrow{color:#77849a!important}
+html.core-editor-premium .core-inspector-card .button{min-height:32px!important;border-radius:8px!important;padding:6px 9px!important}
+html.core-editor-premium .core-inspector-card .select,
+html.core-editor-premium .core-inspector-card input{min-height:34px!important}
+html.core-editor-premium .core-output-actions{gap:7px!important}
+html.core-editor-premium .core-inspector-render{min-height:36px!important}
+
+@media(max-width:1320px){
+  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{grid-template-columns:48px minmax(0,1fr) 340px!important}
+  html.core-editor-premium .core-editor-assets-panel{width:48px!important}
+  html.core-editor-premium .core-editor-assets-panel .core-assets-head strong,
+  html.core-editor-premium .core-editor-assets-panel .core-assets-section-label,
+  html.core-editor-premium .core-editor-assets-panel .core-asset-copy{display:none!important}
+  html.core-editor-premium .core-editor-assets-panel .core-assets-head{justify-content:center!important;padding-inline:5px!important}
+  html.core-editor-premium .core-editor-assets-panel .core-assets-body{padding:7px!important}
+  html.core-editor-premium .core-editor-assets-panel .core-asset-item{grid-template-columns:1fr!important;padding:6px!important;place-items:center!important}
+}
+@media(max-width:1120px){html.core-editor-premium .core-editor-assets-panel{display:none!important}}
+@media(prefers-reduced-motion:reduce){html.core-editor-premium .core-asset-item,html.core-editor-premium .core-inspector-tab{transition:none!important}}
+html[data-motion="reduced"].core-editor-premium .core-asset-item,html[data-motion="reduced"].core-editor-premium .core-inspector-tab{transition:none!important}
