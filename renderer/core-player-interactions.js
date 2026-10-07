@@ -72,10 +72,11 @@
     if (!(video instanceof HTMLVideoElement)) return;
     host.dataset.coreKeyboardWired = "true";
     if (!host.hasAttribute("tabindex")) host.tabIndex = 0;
+    host.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight");
 
     host.addEventListener("keydown", async event => {
       const target = event.target;
-      if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='plaintext-only']")) return;
+      if (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true'], [contenteditable='plaintext-only']")) return;
 
       const duration = Number(video.duration || 0);
       if (event.key === " " || event.key === "k" || event.key === "K") {
