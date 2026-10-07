@@ -52,7 +52,12 @@ assert(!capabilities.includes('[data-page="ai-video"]'), "Production Core Editor
 for (const required of [
   "Direct-paint workstation shell",
   "#page.core-page-enter::before",
-  "content:none!important"
+  "content:none!important",
+  "min-height:calc(100dvh - 124px)",
+  "overflow-anchor:none",
+  "scrollbar-gutter:stable",
+  'html[data-theme="midnight"] #page',
+  'html[data-theme="midnight"] .main'
 ]) assert(shellStability.includes(required), "Shell stability missing: " + required);
 assert(!shellStability.includes("@keyframes"), "Shell stability must not animate page entry.");
 
