@@ -61,9 +61,10 @@ assert(recentMetaRule.includes("font-size:12px"), "Recent-source metadata must m
 assert(index.includes('href="core-creator-home.css"'), "Creator Home stylesheet must be loaded.");
 assert(index.includes('href="core-creator-home-availability.css"'), "Creator Home availability stylesheet must be loaded.");
 assert(index.includes('src="core-creator-home.js"'), "Creator Home script must be loaded.");
+assert(!index.includes('core-startup-experience'), "Creator Home must not depend on the removed animated startup module.");
 assert(
-  index.indexOf('src="core-creator-home.js"') < index.indexOf('src="core-startup-experience.js"'),
-  "Creator Home must choose the startup page before the splash reveals the shell."
+  index.indexOf('src="core-creator-home.js"') < index.indexOf('src="core-premium-hud.js"'),
+  "Creator Home must finish wiring before optional HUD interaction polish."
 );
 
 const context = { window: {} };
