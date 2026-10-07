@@ -57,7 +57,12 @@ for (const required of [
   "overflow-anchor:none",
   "scrollbar-gutter:stable",
   'html[data-theme="midnight"] #page',
-  'html[data-theme="midnight"] .main'
+  'html[data-theme="midnight"] .main',
+  "Inspector connection actions must never collapse into clipped status copy",
+  '[class*="connection-panel"] .button',
+  "white-space:normal!important",
+  "text-overflow:clip!important",
+  ".core-commercial-connection-badge"
 ]) assert(shellStability.includes(required), "Shell stability missing: " + required);
 assert(!shellStability.includes("@keyframes"), "Shell stability must not animate page entry.");
 
