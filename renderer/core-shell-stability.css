@@ -1,4 +1,5 @@
 /* Direct-paint workstation shell: no splash screen and no page-entry animation. */
+/* Avoid contain:layout style on #page: layout containment can rebase fixed/absolute editor UI. */
 
 html[data-theme="midnight"],
 html[data-theme="midnight"] body{
