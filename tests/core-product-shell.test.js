@@ -53,6 +53,10 @@ assert(index.includes('data-motion="balanced"'), "Balanced motion must be first-
 assert(index.includes('root.dataset.motion = motions.has(saved.motion) ? saved.motion : "balanced"'));
 assert(index.indexOf('localStorage.getItem(stateKey)') < index.indexOf('href="styles.css"'), "Saved theme must resolve before CSS first paint.");
 assert(!index.includes("core-startup-experience"), "Removed startup animation must stay removed.");
+assert(!index.includes("<strong>Core Project</strong>"), "First paint must not expose the internal Core Project label.");
+assert(index.includes("<strong>Studio video</strong>"), "First paint must use the commercial workspace label.");
+assert(index.includes("<b>Tài khoản Cloud</b>"), "Vietnamese first paint must not flash the English account placeholder.");
+assert(index.includes('id="newProjectLabel">Nhập video</span>'), "First-paint primary action must match the import workflow.");
 assert(index.includes('href="core-shell-stability.css"'));
 assert(index.includes('src="core-navigation-stability.js"'));
 assert(index.includes('href="core-motion-policy.css"'));

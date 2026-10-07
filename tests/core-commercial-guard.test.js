@@ -33,6 +33,16 @@ assert(bootstrap.includes('root.dataset.coreFirstPaint = "ready"'), "Production 
 assert(!bootstrap.includes("opacity:0"), "First-paint guard must not introduce another fade animation.");
 assert(!bootstrap.includes("setInterval("), "Startup stabilization must not poll.");
 
+for (const chromeToken of [
+  "function primeCommercialChrome()",
+  'workspaceName.textContent = en ? "Video Studio" : "Studio video"',
+  'accountName.textContent = en ? "Cloud account" : "Tài khoản Cloud"',
+  'projectAction.textContent = en ? "Import video" : "Nhập video"',
+  "primeCommercialChrome();"
+]) {
+  assert(bootstrap.includes(chromeToken), "Bootstrap commercial first-paint copy missing: " + chromeToken);
+}
+
 for (const productionModule of [
   "core-accounts-real-data.js",
   "core-library-output-recovery.js",
