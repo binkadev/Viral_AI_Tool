@@ -1,0 +1,237 @@
+(function installCoreCommandPalette() {
+  "use strict";
+
+  const root = document.documentElement;
+  let overlay = null;
+  let input = null;
+  let list = null;
+  let activeIndex = 0;
+  let opener = null;
+
+  function locale() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
+      return saved.locale === "en" ? "en" : "vi";
+    } catch {
+      return root.lang === "en" ? "en" : "vi";
+    }
+  }
+
+  function ensureCommandTranslations() {
+    const messages = window.I18N?.messages;
+    if (!messages?.vi?.app || !messages?.en?.app) return;
+    messages.vi.app.commandNoResults ||= "Không tìm thấy chức năng phù hợp";
+    messages.en.app.commandNoResults ||= "No matching commands found";
+  }
+
+  function tr(key) {
+    try {
+      return window.I18N?.t(locale(), key) || key;
+    } catch {
+      return key;
+    }
+  }
+
+  function copy() {
+    ensureCommandTranslations();
+    return {
+      placeholder: tr("app.searchAnything"),
+      empty: tr("app.commandNoResults"),
+      hint: tr("app.searchAnything"),
+      trigger: tr("app.searchAnything"),
+      dialog: tr("app.search")
+    };
+  }
+
+  function syncTriggerText() {
+    const trigger = document.querySelector(".command-palette");
+    const label = trigger?.querySelector(".command-copy");
+    const c = copy();
+    if (label) label.textContent = c.trigger;
+    if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-label", c.trigger);
+  }
+
+  function commands() {
+    return Array.from(document.querySelectorAll("#nav .nav-item[data-page]"))
+      .filter(node => !node.hidden && node.getAttribute("aria-hidden") !== "true")
+      .map(node => ({
+        page: String(node.dataset.page || ""),
+        label: String(node.querySelector(".nav-icon + span")?.textContent || "").trim(),
+        icon: String(node.querySelector(".nav-icon")?.textContent || "").trim(),
+        node
+      }))
+      .filter(item => item.page && item.label);
+  }
+
+  function ensureOverlay() {
+    if (overlay) return;
+    overlay = document.createElement("div");
+    overlay.className = "core-command-overlay";
+    overlay.hidden = true;
+    overlay.innerHTML =
+      '<div class="core-command-dialog" role="dialog" aria-modal="true">' +
+        '<div class="core-command-input-wrap">' +
+          '<span class="core-command-search" aria-hidden="true">⌕</span>' +
+          '<input class="core-command-input" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="coreCommandList" autocomplete="off" spellcheck="false" />' +
+          '<kbd>Esc</kbd>' +
+        '</div>' +
+        '<div class="core-command-meta"><span class="core-command-hint"></span><span>↑ ↓ · Enter</span></div>' +
+        '<div id="coreCommandList" class="core-command-list" role="listbox"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    input = overlay.querySelector(".core-command-input");
+    list = overlay.querySelector(".core-command-list");
+
+    overlay.addEventListener("pointerdown", event => {
+      if (event.target === overlay) close();
+    });
+    overlay.addEventListener("keydown", event => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        input?.focus();
+      }
+    });
+    input?.addEventListener("input", () => {
+      activeIndex = 0;
+      renderList();
+    });
+    input?.addEventListener("keydown", onInputKeyDown);
+    list?.addEventListener("click", event => {
+      const button = event.target.closest("[data-command-page]");
+      if (!(button instanceof HTMLButtonElement)) return;
+      run(String(button.dataset.commandPage || ""));
+    });
+  }
+
+  function filteredCommands() {
+    const query = String(input?.value || "").trim().toLocaleLowerCase();
+    const all = commands();
+    if (!query) return all;
+    return all.filter(item => item.label.toLocaleLowerCase().includes(query));
+  }
+
+  function renderList() {
+    if (!list || !input) return;
+    const c = copy();
+    const items = filteredCommands();
+    activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, items.length - 1)));
+    if (!items.length) {
+      list.innerHTML = '<div class="core-command-empty">' + escapeHtml(c.empty) + '</div>';
+      input.removeAttribute("aria-activedescendant");
+      return;
+    }
+    list.innerHTML = items.map((item, index) => {
+      const optionId = "coreCommandOption" + index;
+      return '<button id="' + optionId + '" type="button" tabindex="-1" class="core-command-item ' + (index === activeIndex ? "is-active" : "") + '" data-command-page="' + item.page + '" role="option" aria-selected="' + (index === activeIndex ? "true" : "false") + '">' +
+        '<span class="core-command-item-icon" aria-hidden="true">' + item.icon + '</span>' +
+        '<span class="core-command-item-label">' + escapeHtml(item.label) + '</span>' +
+        '<span class="core-command-item-enter">↵</span>' +
+      '</button>';
+    }).join("");
+    input.setAttribute("aria-activedescendant", "coreCommandOption" + activeIndex);
+    list.querySelector(".is-active")?.scrollIntoView({ block: "nearest" });
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function open() {
+    ensureOverlay();
+    if (!overlay || !input) return;
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : document.querySelector(".command-palette");
+    syncTriggerText();
+    const c = copy();
+    input.placeholder = c.placeholder;
+    const dialog = overlay.querySelector(".core-command-dialog");
+    if (dialog) dialog.setAttribute("aria-label", c.dialog);
+    const hint = overlay.querySelector(".core-command-hint");
+    if (hint) hint.textContent = c.hint;
+    input.value = "";
+    activeIndex = 0;
+    renderList();
+    overlay.hidden = false;
+    root.classList.add("core-command-open");
+    requestAnimationFrame(() => input.focus());
+  }
+
+  function close() {
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    root.classList.remove("core-command-open");
+    input?.removeAttribute("aria-activedescendant");
+    const target = opener;
+    opener = null;
+    if (target instanceof HTMLElement && target.isConnected) target.focus();
+    else document.querySelector(".command-palette")?.focus();
+  }
+
+  function run(page) {
+    const target = document.querySelector('#nav .nav-item[data-page="' + CSS.escape(page) + '"]');
+    close();
+    if (target instanceof HTMLButtonElement) target.click();
+  }
+
+  function onInputKeyDown(event) {
+    const items = filteredCommands();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (!items.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+      renderList();
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+      renderList();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      run(items[activeIndex]?.page || "");
+    }
+  }
+
+  function onGlobalKeyDown(event) {
+    const meta = event.ctrlKey || event.metaKey;
+    if (meta && String(event.key).toLowerCase() === "k") {
+      event.preventDefault();
+      open();
+    } else if (event.key === "Escape" && overlay && !overlay.hidden) {
+      event.preventDefault();
+      close();
+    }
+  }
+
+  function start() {
+    ensureCommandTranslations();
+    const trigger = document.querySelector(".command-palette");
+    if (trigger instanceof HTMLButtonElement) {
+      trigger.disabled = false;
+      trigger.removeAttribute("aria-disabled");
+      trigger.removeAttribute("data-core-disabled-reason");
+      trigger.classList.remove("core-coming-soon-control");
+      trigger.querySelector(".core-coming-soon")?.remove();
+      trigger.dataset.coreCapability = "functional";
+      trigger.addEventListener("click", open);
+    }
+    syncTriggerText();
+    document.addEventListener("keydown", onGlobalKeyDown);
+    window.addEventListener("viral-ai:core-state-changed", syncTriggerText);
+    new MutationObserver(syncTriggerText).observe(root, { attributes: true, attributeFilter: ["lang"] });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
+})();
