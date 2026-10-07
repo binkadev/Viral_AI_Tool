@@ -63,25 +63,6 @@
     '</div>';
   }
 
-  function workflowRail() {
-    const steps = [
-      ["aiVideo.steps.import", "download"],
-      ["aiVideo.steps.speech", "speech"],
-      ["aiVideo.steps.translate", "translate"],
-      ["aiVideo.steps.voices", "voice"],
-      ["aiVideo.steps.render", "render"]
-    ];
-
-    return '<div class="creator-workflow-rail" aria-hidden="true">' +
-      steps.map((step, index) =>
-        '<div class="creator-workflow-step creator-workflow-' + step[1] + '">' +
-          '<span class="creator-workflow-dot">' + (index + 1) + '</span>' +
-          '<span>' + esc(tr(step[0])) + '</span>' +
-        '</div>'
-      ).join("") +
-    '</div>';
-  }
-
   function currentProject(source) {
     if (!source) return "";
     const unavailable = source.fileState === "missing" || source.fileState === "trashed";
@@ -144,11 +125,6 @@
             '<span class="creator-button-icon" aria-hidden="true">+</span><span>' + esc(tr("download.localTitle")) + '</span>' +
           '</button>' +
         '</div>' +
-        '<div class="creator-home-visual">' +
-          '<div class="creator-visual-glow" aria-hidden="true"></div>' +
-          '<div class="creator-visual-mark" aria-hidden="true"><img src="brand-mark.svg" alt="" /></div>' +
-          workflowRail() +
-        '</div>' +
       '</section>' +
 
       '<section class="creator-start-grid">' +
@@ -191,26 +167,6 @@
     });
   }
 
-  function ensurePreparingOverlay() {
-    let overlay = document.getElementById("creatorWorkspacePreparing");
-    if (overlay) return overlay;
-
-    overlay = document.createElement("div");
-    overlay.id = "creatorWorkspacePreparing";
-    overlay.className = "creator-workspace-preparing";
-    overlay.setAttribute("role", "status");
-    overlay.setAttribute("aria-live", "polite");
-    overlay.innerHTML =
-      '<div class="creator-preparing-card">' +
-        '<div class="creator-preparing-mark"><img src="brand-mark.svg" alt="" /></div>' +
-        '<div class="creator-preparing-spinner" aria-hidden="true"><i></i><i></i><i></i></div>' +
-        '<strong>' + esc(tr("common.processing")) + '</strong>' +
-        '<span>' + esc(tr("media.readingInfo")) + '</span>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    return overlay;
-  }
-
   function openEditor(jobId) {
     if (preparing) return;
     const current = currentState();
@@ -230,20 +186,14 @@
 
     preparing = true;
     setImportBusy(true);
-    const overlay = ensurePreparingOverlay();
-    requestAnimationFrame(() => overlay.classList.add("is-visible"));
+    current.page = "ai-video";
+    try { if (typeof save === "function") save(); } catch {}
+    try { if (typeof render === "function") render(); } catch {}
 
-    window.setTimeout(() => {
-      current.page = "ai-video";
-      try { if (typeof save === "function") save(); } catch {}
-      try { if (typeof render === "function") render(); } catch {}
-      overlay.classList.add("is-leaving");
-      window.setTimeout(() => {
-        overlay.remove();
-        preparing = false;
-        setImportBusy(false);
-      }, 360);
-    }, document.documentElement.dataset.motion === "reduced" ? 60 : 520);
+    requestAnimationFrame(() => {
+      preparing = false;
+      setImportBusy(false);
+    });
   }
 
   async function importAndOpen() {
