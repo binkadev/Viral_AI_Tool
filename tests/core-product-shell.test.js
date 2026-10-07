@@ -14,6 +14,8 @@ const startupJs = fs.readFileSync(path.join(root, "renderer", "core-startup-expe
 const startupCss = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.css"), "utf8");
 const hudJs = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.css"), "utf8");
+const workstationCss = fs.readFileSync(path.join(root, "renderer", "core-workstation-shell.css"), "utf8");
+const commandJs = fs.readFileSync(path.join(root, "renderer", "core-command-palette.js"), "utf8");
 const brandMark = fs.readFileSync(path.join(root, "renderer", "brand-mark.svg"), "utf8");
 
 for (const required of [
@@ -62,12 +64,16 @@ assert(
 
 assert.doesNotThrow(() => new Function(startupJs), "Premium startup JS must parse.");
 assert.doesNotThrow(() => new Function(hudJs), "Premium HUD JS must parse.");
+assert.doesNotThrow(() => new Function(commandJs), "Core command palette JS must parse.");
 assert(index.includes('data-startup="booting"'), "The document must begin in a protected startup state.");
 assert(index.includes('id="appStartup"'), "Premium startup overlay must be present in the shell.");
 assert(index.includes('href="core-startup-experience.css"'), "Premium startup CSS must be loaded.");
 assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS must be loaded.");
 assert(index.includes('href="core-premium-hud.css"'), "Premium HUD CSS must be loaded.");
 assert(index.includes('src="core-premium-hud.js"'), "Premium HUD JS must be loaded.");
+assert(index.includes('href="core-workstation-shell.css"'), "Premium workstation shell CSS must be loaded after the interaction layers.");
+assert(index.includes('src="core-command-palette.js"'), "Functional command palette JS must be loaded.");
+assert(index.indexOf('href="core-workstation-shell.css"') > index.indexOf('href="core-premium-interactions.css"'), "Workstation refinement must be the final shell style layer.");
 assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
 assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
 
@@ -135,6 +141,33 @@ for (const required of [
 }
 assert(hudCss.includes('.button.primary::after{animation:none'), "Primary button shimmer must be interaction-triggered, not permanently looping.");
 assert(hudCss.includes('.core-editor-assets-panel::after,\nhtml.core-editor-premium .core-editor-inspector::after{animation:none'), "Editor panel sweeps must stay dormant outside processing.");
+
+for (const required of [
+  '.main>.topbar',
+  '.core-editor-focus-section .editor-grid.core-editor-assets-grid',
+  '.core-command-backdrop',
+  '.core-command-dialog',
+  '.core-command-option.is-active',
+  '@keyframes studioCommandIn',
+  'html[data-motion="reduced"]'
+]) {
+  assert(workstationCss.includes(required), "Workstation shell refinement missing: " + required);
+}
+for (const required of [
+  'document.querySelector(".command-palette")',
+  'document.querySelectorAll("#nav .nav-item[data-page]")',
+  'event.ctrlKey||event.metaKey',
+  'String(event.key).toLowerCase()==="k"',
+  'event.key==="ArrowDown"',
+  'event.key==="ArrowUp"',
+  'event.key==="Enter"',
+  'event.key==="Escape"',
+  'requestAnimationFrame(()=>item.node.click())',
+  'aria-haspopup','dialog'
+]) {
+  assert(commandJs.includes(required), "Functional command palette missing: " + required);
+}
+assert(!commandJs.includes('state.page='), "Command palette must navigate through the existing nav controls instead of bypassing product routing.");
 
 class FakeElement {
   constructor() {

@@ -21,6 +21,7 @@ for (const required of [
   'setDatasetIfChanged(button, "coreCapability", capability)',
   'mark(urlAnalyze, "coming-soon")',
   'mark(legacyTts, "coming-soon")',
+  '"commandPalette"',
   'document.querySelectorAll(".nav-badge").forEach(node => node.remove())',
   'button.disabled || button.getAttribute("aria-disabled") === "true"',
   'data-job-action',
@@ -32,6 +33,12 @@ for (const required of [
 ]) {
   assert(guard.includes(required), "Capability guard is missing behavior: " + required);
 }
+
+assert(index.includes('id="commandPalette"'), "Quick switcher needs a stable functional capability id.");
+assert(!guard.includes('document.querySelector(".command-palette")'),
+  "The functional quick switcher must not be reclassified as a coming-soon placeholder.");
+assert(!guard.includes('mark(search, "coming-soon")'),
+  "The functional quick switcher must never be disabled by the placeholder guard.");
 
 assert(!guard.includes('attributeFilter: ["disabled", "aria-disabled"]'),
   "Capability guard must not observe the attributes it mutates; that can freeze the renderer.");
