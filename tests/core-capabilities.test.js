@@ -53,6 +53,12 @@ for (const required of [
   'event.key === "Enter"',
   'document.querySelectorAll("#nav .nav-item[data-page]")',
   'node.querySelector(".nav-icon + span")',
+  'role="combobox"',
+  'aria-controls="coreCommandList"',
+  'input.setAttribute("aria-activedescendant"',
+  'tabindex="-1"',
+  'if (event.key === "Tab")',
+  'new MutationObserver(syncTriggerText).observe(root, { attributes: true, attributeFilter: ["lang"] })',
   'dataset.coreCapability = "functional"'
 ]) {
   assert(commandJs.includes(required), "Command palette behavior missing: " + required);
@@ -66,7 +72,9 @@ for (const required of [
   "coreCommandDialogIn",
   'html[data-theme="midnight"] .topbar',
   "@media(max-width:1180px)",
-  '.command-palette{display:flex;width:44px'
+  '.command-palette{display:flex;width:44px',
+  '.command-copy{color:#9aa5b8;font-size:13px',
+  '.core-command-item-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px'
 ]) {
   assert(commandCss.includes(required), "Command surface styles missing: " + required);
 }
