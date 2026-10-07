@@ -21,7 +21,6 @@
     return locale() === "en"
       ? {
           current: "Core workflow",
-          comingSoon: "Coming soon",
           importVideo: "Import video",
           stages: { import: "IMPORT", analyze: "ANALYZE", transcript: "TRANSCRIPT", edit: "EDIT", localize: "LOCALIZE", render: "RENDER" },
           states: { completed: "Done", processing: "Working", failed: "Needs attention", cancelled: "Cancelled", blocked: "Locked", active: "Ready", idle: "Waiting" },
@@ -37,7 +36,6 @@
         }
       : {
           current: "Quy trình chính",
-          comingSoon: "Sắp có",
           importVideo: "Nhập video",
           stages: { import: "NHẬP", analyze: "PHÂN TÍCH", transcript: "LỜI NÓI", edit: "CHỈNH SỬA", localize: "LOCALIZE", render: "RENDER" },
           states: { completed: "Đã xong", processing: "Đang xử lý", failed: "Cần xử lý", cancelled: "Đã hủy", blocked: "Chưa mở", active: "Sẵn sàng", idle: "Đang chờ" },
@@ -221,22 +219,6 @@
     applyGate("#export", derived.controls.export, controlReason("export", derived, derived.controls.export, c));
   }
 
-  function markComingSoon() {
-    const search = document.querySelector(".command-palette");
-    if (search instanceof HTMLButtonElement) {
-      search.disabled = true;
-      search.setAttribute("aria-disabled", "true");
-      search.dataset.coreCapability = "coming-soon";
-      search.title = copy().comingSoon;
-      if (!search.querySelector(".core-coming-soon")) {
-        const badge = document.createElement("span");
-        badge.className = "core-coming-soon";
-        badge.textContent = copy().comingSoon;
-        search.appendChild(badge);
-      }
-    }
-  }
-
   function wireQuickProject() {
     const button = document.getElementById("quickProject");
     if (!(button instanceof HTMLButtonElement)) return;
@@ -271,7 +253,6 @@
     ensureWorkflowRail(derived, saved);
     applyControlPolicy(derived);
     annotateJobs(derived);
-    markComingSoon();
     wireQuickProject();
     document.documentElement.dataset.coreWorkflow = "enabled";
     document.documentElement.dataset.coreSourceMissing = derived.missingSource ? "true" : "false";
