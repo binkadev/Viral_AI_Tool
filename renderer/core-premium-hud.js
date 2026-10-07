@@ -171,10 +171,8 @@
       observer.observe(page, { childList: true, subtree: false });
     }
 
-    window.addEventListener("viral-ai:startup-complete", () => {
-      root.classList.add("premium-hud-ready");
-      syncPage();
-    }, { once: true });
+    root.classList.add("premium-hud-ready");
+    syncPage();
   }
 
   if (document.readyState === "loading") {
