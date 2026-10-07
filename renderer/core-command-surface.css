@@ -99,6 +99,6 @@ html.core-command-open body{overflow:hidden}
 
 @keyframes coreCommandBackdropIn{from{opacity:0}to{opacity:1}}
 @keyframes coreCommandDialogIn{from{opacity:0;transform:translateY(-10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(max-width:980px){html[data-theme="midnight"] .command-palette{width:44px}.command-palette .command-copy,.command-palette kbd{display:none}}
+@media(max-width:1180px){html[data-theme="midnight"] .command-palette{display:flex;width:44px;justify-content:center;padding-inline:0}.command-palette .command-copy,.command-palette kbd{display:none}}
 @media(prefers-reduced-motion:reduce){.core-command-overlay,.core-command-dialog,.core-command-item{animation:none!important;transition-duration:.01ms!important}}
 html[data-motion="reduced"] .core-command-overlay,html[data-motion="reduced"] .core-command-dialog,html[data-motion="reduced"] .core-command-item{animation:none!important;transition-duration:.01ms!important}
