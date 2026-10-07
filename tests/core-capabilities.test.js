@@ -9,6 +9,8 @@ const guard = fs.readFileSync(path.join(root, "renderer", "core-capabilities.js"
 const css = fs.readFileSync(path.join(root, "renderer", "core-capabilities.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const bootstrap = fs.readFileSync(path.join(root, "renderer", "core-bootstrap.js"), "utf8");
+const commandJs = fs.readFileSync(path.join(root, "renderer", "core-command-palette.js"), "utf8");
+const commandCss = fs.readFileSync(path.join(root, "renderer", "core-command-surface.css"), "utf8");
 
 for (const page of ["automation", "workflow", "workflow-builder", "monitor", "editor", "voice"]) {
   assert(guard.includes('"' + page + '"'), "Deferred page must be capability-guarded: " + page);
@@ -21,6 +23,8 @@ for (const required of [
   'setDatasetIfChanged(button, "coreCapability", capability)',
   'mark(urlAnalyze, "coming-soon")',
   'mark(legacyTts, "coming-soon")',
+  'button.matches(".command-palette")',
+  'mark(button, "functional")',
   'document.querySelectorAll(".nav-badge").forEach(node => node.remove())',
   'button.disabled || button.getAttribute("aria-disabled") === "true"',
   'data-job-action',
@@ -33,13 +37,38 @@ for (const required of [
   assert(guard.includes(required), "Capability guard is missing behavior: " + required);
 }
 
+assert(!guard.includes('mark(search, "coming-soon")'), "Command palette must no longer be classified as coming soon.");
 assert(!guard.includes('attributeFilter: ["disabled", "aria-disabled"]'),
   "Capability guard must not observe the attributes it mutates; that can freeze the renderer.");
 assert(!guard.includes("new MutationObserver(scan)"),
   "Capability observer must be scheduled/coalesced instead of recursively scanning synchronously.");
 
+assert.doesNotThrow(() => new Function(commandJs), "Command palette JS must parse.");
+for (const required of [
+  'event.ctrlKey || event.metaKey',
+  'String(event.key).toLowerCase() === "k"',
+  'event.key === "ArrowDown"',
+  'event.key === "ArrowUp"',
+  'event.key === "Enter"',
+  'document.querySelectorAll("#nav .nav-item[data-page]")',
+  'dataset.coreCapability = "functional"'
+]) {
+  assert(commandJs.includes(required), "Command palette behavior missing: " + required);
+}
+for (const required of [
+  ".core-command-overlay",
+  ".core-command-dialog",
+  ".core-command-item.is-active",
+  "coreCommandDialogIn",
+  'html[data-theme="midnight"] .topbar'
+]) {
+  assert(commandCss.includes(required), "Command surface styles missing: " + required);
+}
+
 assert(bootstrap.includes("prototypeNames"), "Startup bootstrap must continue removing prototype jobs from persisted state.");
 assert(index.includes('href="core-capabilities.css"'));
 assert(index.includes('src="core-capabilities.js"'));
+assert(index.includes('href="core-command-surface.css"'), "Command surface CSS must be loaded.");
+assert(index.includes('src="core-command-palette.js"'), "Command palette JS must be loaded.");
 
 console.log("Core capability guard tests passed.");
