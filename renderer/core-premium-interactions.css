@@ -170,35 +170,42 @@
 
 .core-stage-copy{
   display:flex!important;
+  width:100%;
+  max-width:160px;
+  min-width:0;
   flex-direction:column;
   align-items:center;
-  min-width:0;
-  max-width:150px;
   line-height:1.2;
+  text-align:center;
 }
 
 .core-stage-copy b{
   max-width:100%;
-  overflow:hidden;
+  overflow:visible;
   color:var(--text-soft);
   font-size:12px!important;
-  line-height:1.25!important;
+  line-height:1.3!important;
   font-weight:750!important;
-  letter-spacing:.025em!important;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  letter-spacing:.02em!important;
+  white-space:normal;
+  text-overflow:clip;
+  text-wrap:balance;
+  overflow-wrap:normal;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
 }
 
 .core-stage-copy small{
+  max-width:100%;
   margin-top:3px!important;
   color:var(--text-faint);
   font-size:11px!important;
-  line-height:1.25!important;
+  line-height:1.3!important;
   font-weight:560;
   letter-spacing:0;
-  white-space:nowrap;
+  white-space:normal;
+  text-wrap:balance;
+  overflow-wrap:normal;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
 }
@@ -304,10 +311,6 @@ html[data-theme="midnight"] .core-workflow-shell::before{
 html[data-theme="midnight"] .core-workflow-rail::before{
   background:linear-gradient(90deg,rgba(255,255,255,.045),rgba(255,255,255,.09),rgba(255,255,255,.045));
   box-shadow:inset 0 1px rgba(255,255,255,.015);
-}
-
-html[data-theme="midnight"] .core-workflow-progress strong{
-  color:#cbc8ff;
 }
 
 @keyframes workflowNodeBreath{
