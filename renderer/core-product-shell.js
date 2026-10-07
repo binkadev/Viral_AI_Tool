@@ -23,6 +23,7 @@
       ? {
           workflow: "Create video",
           manage: "Manage",
+          workspaceName: "Video Studio",
           import: "Import video",
           editor: "Video studio",
           importTitle: "Import video",
@@ -48,6 +49,7 @@
       : {
           workflow: "Tạo video",
           manage: "Quản lý",
+          workspaceName: "Studio video",
           import: "Nhập video",
           editor: "Studio video",
           importTitle: "Nhập video",
@@ -189,8 +191,10 @@
     const title = document.getElementById("pageTitle");
     const breadcrumb = document.getElementById("breadcrumb");
     const projectLabel = document.getElementById("newProjectLabel");
+    const workspaceName = document.querySelector(".workspace strong");
 
     if (projectLabel) projectLabel.textContent = c.importAction;
+    if (workspaceName) workspaceName.textContent = c.workspaceName;
 
     if (current.page === "download") {
       if (title) title.textContent = c.importTitle;
