@@ -97,7 +97,7 @@ When a control has more than two meaningful options:
 
 This applies to language, appearance, motion, interface size, model, voice, target language, export format, and other configuration controls.
 
-The default visual direction is **Aurora Light**: bright glass surfaces with colorful creator-tool accents. Large visual-direction changes require explicit user approval before implementation.
+The approved default visual direction is **Premium Dark**: a dark creator-workstation surface with restrained neon/HUD accents. Light appearances remain user-selectable. Large visual-direction changes still require explicit user approval before implementation.
 
 
 ## Vietnamese UX copy
