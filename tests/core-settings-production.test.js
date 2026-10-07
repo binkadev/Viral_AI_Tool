@@ -13,7 +13,7 @@ assert.doesNotThrow(() => new Function(js), "Production settings sanitizer must 
 for (const required of [
   "pages.settings",
   "legacy()",
-  'class=\\"setting-row\\"',
+  'class="setting-row"',
   "1080p",
   "4K",
   "__coreProductionSettings"
@@ -21,11 +21,11 @@ for (const required of [
   assert(js.includes(required), "Production settings sanitizer missing: " + required);
 }
 assert(bootstrap.includes('core-settings-production.js'), "Bootstrap must load production settings sanitizer.");
-assert(app.includes('id=\"settingsLocale\"'), "Functional locale control must remain in legacy settings source.");
-assert(app.includes('id=\"appearanceSelect\"'), "Functional appearance control must remain.");
-assert(app.includes('id=\"motionSelect\"'), "Functional motion control must remain.");
-assert(app.includes('id=\"scaleSelect\"'), "Functional scale control must remain.");
-assert(app.includes('id=\"chooseOutput\"'), "Functional output-folder control must remain.");
+assert(app.includes('id="settingsLocale"'), "Functional locale control must remain in legacy settings source.");
+assert(app.includes('id="appearanceSelect"'), "Functional appearance control must remain.");
+assert(app.includes('id="motionSelect"'), "Functional motion control must remain.");
+assert(app.includes('id="scaleSelect"'), "Functional scale control must remain.");
+assert(app.includes('id="chooseOutput"'), "Functional output-folder control must remain.");
 assert(!js.includes("setInterval("), "Settings sanitizer must not poll the UI.");
 
 console.log("core production settings tests passed");
