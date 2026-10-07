@@ -6,6 +6,7 @@
 
   const CORE_PAGES = new Set(["download", "speech", "translation", "voice", "editor", "ai-video"]);
   let refreshQueued = false;
+  let lastRailMarkup = "";
 
   function savedState() {
     try { return JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}"); }
@@ -137,13 +138,12 @@
     return Boolean(document.querySelector(".preview-video, .transcript-list, #speechStart, #translationStart, #voiceStart, #render, #export"));
   }
 
-  function statusIcon(status) {
+  function statusIcon(status, index) {
     if (status === "completed") return "✓";
-    if (status === "processing") return "…";
+    if (status === "processing") return '<span class="core-stage-spinner" aria-hidden="true"></span>';
     if (status === "failed") return "!";
     if (status === "cancelled") return "×";
-    if (status === "active") return "•";
-    return "○";
+    return String(index + 1);
   }
 
   function stageReason(stage, derived, c) {
@@ -200,6 +200,22 @@
     return policy?.reason || "";
   }
 
+  function workflowPosition(stages) {
+    const total = Math.max(1, stages.length);
+    const completed = stages.filter(stage => stage.status === "completed").length;
+    if (completed === total) return { completed, currentIndex: total - 1, progress: 1 };
+
+    let currentIndex = stages.findIndex(stage => ["processing", "active", "failed", "cancelled"].includes(stage.status));
+    if (currentIndex < 0) currentIndex = stages.findIndex(stage => stage.status !== "completed");
+    currentIndex = Math.max(0, currentIndex);
+
+    return {
+      completed,
+      currentIndex,
+      progress: total > 1 ? Math.max(0, Math.min(1, currentIndex / (total - 1))) : 0
+    };
+  }
+
   function ensureWorkflowRail(derived, saved) {
     const page = document.getElementById("page");
     if (!page) return;
@@ -207,6 +223,7 @@
     let rail = page.querySelector(":scope > .core-workflow-shell");
     if (!coreSurface(saved)) {
       rail?.remove();
+      lastRailMarkup = "";
       return;
     }
 
@@ -215,23 +232,39 @@
       rail.className = "core-workflow-shell";
       rail.setAttribute("aria-label", copy().current);
       page.prepend(rail);
+      lastRailMarkup = "";
     }
 
     const c = copy();
-    rail.setAttribute("aria-label", c.current);
-    rail.innerHTML =
-      '<div class="core-workflow-title">' + c.current + '</div>' +
-      '<div class="core-workflow-rail">' +
-        derived.stages.map((stage, index) => {
-          const reason = stageReason(stage, derived, c);
-          const label = c.stages[stage.id] || stage.label;
-          return '<div class="core-workflow-stage is-' + stage.status + '" data-core-stage="' + stage.id + '" title="' + escapeAttr(reason) + '">' +
-            '<span class="core-stage-index">' + statusIcon(stage.status) + '</span>' +
-            '<span class="core-stage-copy"><b>' + label + '</b><small>' + (c.states[stage.status] || stage.status) + '</small></span>' +
-          '</div>' +
-          (index < derived.stages.length - 1 ? '<span class="core-stage-link" aria-hidden="true"></span>' : '');
-        }).join("") +
+    const position = workflowPosition(derived.stages);
+    const total = derived.stages.length;
+    const progressPercent = Math.round(position.progress * 100);
+    const edge = total ? (100 / (total * 2)).toFixed(4) + "%" : "0%";
+
+    const markup =
+      '<div class="core-workflow-head">' +
+        '<div class="core-workflow-title">' + c.current + '</div>' +
+        '<div class="core-workflow-progress" aria-hidden="true"><span>' + position.completed + '/' + total + '</span><strong>' + progressPercent + '%</strong></div>' +
+      '</div>' +
+      '<div class="core-workflow-scroll">' +
+        '<div class="core-workflow-rail" style="--workflow-progress:' + position.progress.toFixed(4) + ';--workflow-edge:' + edge + '">' +
+          derived.stages.map((stage, index) => {
+            const reason = stageReason(stage, derived, c);
+            const label = c.stages[stage.id] || stage.label;
+            const current = index === position.currentIndex && stage.status !== "completed";
+            return '<div class="core-workflow-stage is-' + stage.status + (current ? ' is-current' : '') + '" data-core-stage="' + stage.id + '" data-stage-state="' + stage.status + '" title="' + escapeAttr(reason) + '"' + (current ? ' aria-current="step"' : '') + '>' +
+              '<span class="core-stage-index"><span class="core-stage-symbol">' + statusIcon(stage.status, index) + '</span></span>' +
+              '<span class="core-stage-copy"><b>' + label + '</b><small>' + (c.states[stage.status] || stage.status) + '</small></span>' +
+            '</div>';
+          }).join("") +
+        '</div>' +
       '</div>';
+
+    rail.setAttribute("aria-label", c.current);
+    if (markup !== lastRailMarkup || rail.innerHTML !== markup) {
+      rail.innerHTML = markup;
+      lastRailMarkup = markup;
+    }
   }
 
   function escapeAttr(value) {
