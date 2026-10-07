@@ -28,4 +28,25 @@
   }
 
   localStorage.setItem(KEY, JSON.stringify(saved));
+
+  function loadProductionOverride(href, kind) {
+    const selector = kind === "style" ? 'link[href="' + href + '"]' : 'script[src="' + href + '"]';
+    if (document.querySelector(selector)) return;
+    if (kind === "style") {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = href;
+    script.async = false;
+    document.body.appendChild(script);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadProductionOverride("core-accounts-real-data.css", "style");
+    loadProductionOverride("core-accounts-real-data.js", "script");
+  }, { once: true });
 })();
