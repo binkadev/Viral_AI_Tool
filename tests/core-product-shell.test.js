@@ -110,6 +110,11 @@ for (const required of [
   "hudOrbitSpin",
   "hudPreviewScan",
   "hudTimelineSweep",
+  ".hud-reactive-light",
+  ".is-hud-hover>.hud-reactive-light",
+  '--hud-magnet-x',
+  ':has([data-core-job-state="processing"])',
+  '.button.primary:is(:hover,:focus-visible)::after',
   'html[data-motion="reduced"]'
 ]) {
   assert(hudCss.includes(required), "Premium HUD CSS missing: " + required);
@@ -118,10 +123,18 @@ for (const required of [
   'id = "premiumHudLayer"',
   'root.dataset.premiumHud = "enabled"',
   'document.addEventListener("pointermove"',
-  'window.addEventListener("viral-ai:startup-complete"'
+  'window.addEventListener("viral-ai:startup-complete"',
+  "SURFACE_SELECTOR",
+  "MAGNET_SELECTOR",
+  "ensureReactiveLight",
+  "syncSurface",
+  "syncMagnet",
+  "clearInteractiveState"
 ]) {
   assert(hudJs.includes(required), "Premium HUD behavior missing: " + required);
 }
+assert(hudCss.includes('.button.primary::after{animation:none'), "Primary button shimmer must be interaction-triggered, not permanently looping.");
+assert(hudCss.includes('.core-editor-assets-panel::after,\nhtml.core-editor-premium .core-editor-inspector::after{animation:none'), "Editor panel sweeps must stay dormant outside processing.");
 
 class FakeElement {
   constructor() {

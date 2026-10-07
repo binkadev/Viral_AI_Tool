@@ -71,3 +71,69 @@ html[data-motion="balanced"] .creator-workflow-dot::after{animation-duration:4s}
 @media(prefers-reduced-motion:reduce){.premium-hud-layer *,.creator-home-hero::after,.creator-visual-mark,.creator-visual-mark::before,.creator-visual-mark::after,.creator-workflow-step,.creator-workflow-dot::after,.nav-item.active::after,.button.primary::after,.core-stage-index,.core-stage-index::after,.core-editor-assets-panel::after,.core-editor-inspector::after,.preview.core-player-host::after,.preview.preview-real::after,.core-timeline-workspace::after,.core-inspector-tab.has-active-job::after,.badge.processing,.status-pill.processing{animation:none!important;transition-duration:.01ms!important}}
 html[data-motion="reduced"] .premium-hud-grid,html[data-motion="reduced"] .premium-hud-scan,html[data-motion="reduced"] .premium-hud-orbit,html[data-motion="reduced"] .premium-hud-trace{display:none}
 html[data-motion="reduced"] .creator-home-hero::after,html[data-motion="reduced"] .creator-visual-mark::before,html[data-motion="reduced"] .creator-visual-mark::after{animation:none!important}
+
+/* Cinematic workstation refinement: motion reacts to intent instead of looping everywhere. */
+html[data-theme="midnight"] .premium-hud-layer{opacity:.72;transition:opacity .45s ease}
+html[data-theme="midnight"] .premium-hud-grid{opacity:.12;translate:calc(var(--hud-shift-x,0px) * .22) calc(var(--hud-shift-y,0px) * .22);animation-duration:34s;transition:translate .55s cubic-bezier(.2,.8,.2,1)}
+html[data-theme="midnight"] .premium-hud-orbit{opacity:.72;translate:calc(var(--hud-shift-x,0px) * .42) calc(var(--hud-shift-y,0px) * .42);animation-duration:42s;transition:translate .6s cubic-bezier(.2,.8,.2,1)}
+html[data-theme="midnight"] .premium-hud-trace{opacity:.16;translate:calc(var(--hud-shift-x,0px) * -.28) calc(var(--hud-shift-y,0px) * -.18);animation-duration:8.8s;transition:translate .6s cubic-bezier(.2,.8,.2,1)}
+html[data-theme="midnight"] .premium-hud-scan{opacity:.11;animation-duration:13s}
+
+html[data-theme="midnight"] :is(.creator-home-hero,.creator-import-surface,.creator-current-project,.creator-recent-item,.core-editor-assets-panel,.core-editor-inspector,.core-editor-bottom-dock,.core-timeline-workspace){
+  isolation:isolate;
+  --hud-local-x:50%;
+  --hud-local-y:50%;
+  transition:border-color .28s ease,box-shadow .34s cubic-bezier(.2,.8,.2,1),background-color .28s ease;
+}
+.hud-reactive-light{
+  position:absolute;
+  z-index:20;
+  inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+  opacity:0;
+  background:radial-gradient(340px circle at var(--hud-local-x,50%) var(--hud-local-y,50%),rgba(118,109,255,.075),rgba(103,185,255,.035) 26%,transparent 66%);
+  transition:opacity .28s ease;
+}
+html[data-theme="midnight"] .is-hud-hover>.hud-reactive-light{opacity:1}
+html[data-theme="midnight"] :is(.creator-import-surface,.creator-current-project,.creator-recent-item).is-hud-hover{border-color:color-mix(in srgb,var(--accent) 24%,var(--line));box-shadow:0 18px 44px rgba(0,0,0,.18),0 0 0 1px rgba(138,124,255,.025)}
+html.core-editor-premium :is(.core-editor-assets-panel,.core-editor-inspector,.core-editor-bottom-dock).is-hud-hover{border-color:rgba(138,124,255,.16);box-shadow:0 18px 44px rgba(0,0,0,.17),inset 0 1px rgba(255,255,255,.028)}
+
+html[data-theme="midnight"] :is(.button.primary,.creator-primary-import,.core-import-primary,.creator-project-action){
+  --hud-magnet-x:0px;
+  --hud-magnet-y:0px;
+  translate:var(--hud-magnet-x) var(--hud-magnet-y);
+  transition:translate .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,border-color .25s ease,background-color .25s ease;
+  will-change:translate;
+}
+html[data-theme="midnight"] :is(.button.primary,.creator-primary-import,.core-import-primary,.creator-project-action).is-hud-magnet{box-shadow:0 14px 36px color-mix(in srgb,var(--accent) 22%,transparent),inset 0 1px rgba(255,255,255,.1)}
+html[data-theme="midnight"] :is(.button.primary,.creator-primary-import,.core-import-primary,.creator-project-action):active{scale:.985}
+
+html[data-theme="midnight"] .button.primary::after{animation:none;opacity:0;transform:translateX(-180%) rotate(14deg)}
+html[data-theme="midnight"] .button.primary:is(:hover,:focus-visible)::after{animation:hudButtonShimmer .82s cubic-bezier(.22,1,.36,1) 1}
+html[data-theme="midnight"] .nav-item.active::after{animation:none;opacity:.9;transform:scaleY(.86)}
+html[data-theme="midnight"] .nav-item .nav-icon{transition:transform .22s cubic-bezier(.2,.8,.2,1),filter .22s ease}
+html[data-theme="midnight"] .nav-item:hover .nav-icon{transform:translateX(1px) scale(1.035);filter:brightness(1.08)}
+
+/* The workflow already owns its active-state breathing ring; do not layer another pulse on top. */
+html.core-editor-premium .core-workflow-stage.is-active .core-stage-index{animation:none}
+html.core-editor-premium .core-workflow-stage.is-active .core-stage-index::after{animation:workflowNodeBreath 2.8s cubic-bezier(.4,0,.2,1) infinite}
+
+/* Editor scanning becomes a meaningful processing signal instead of permanent decoration. */
+html.core-editor-premium .core-editor-assets-panel::after,
+html.core-editor-premium .core-editor-inspector::after{animation:none;opacity:0;transform:translateX(-125%)}
+html.core-editor-premium .preview.core-player-host::after,
+html.core-editor-premium .preview.preview-real::after{animation:none;opacity:.5}
+html.core-editor-premium .core-timeline-workspace::after{animation:none;opacity:0}
+html.core-editor-premium:has([data-core-job-state="processing"]) .core-editor-assets-panel::after,
+html.core-editor-premium:has([data-core-job-state="processing"]) .core-editor-inspector::after{animation:hudPanelSweep 4.8s cubic-bezier(.4,0,.2,1) infinite}
+html.core-editor-premium:has([data-core-job-state="processing"]) .preview.core-player-host::after,
+html.core-editor-premium:has([data-core-job-state="processing"]) .preview.preview-real::after{opacity:.68;animation:hudPreviewScan 5.8s linear infinite}
+html.core-editor-premium:has([data-core-job-state="processing"]) .core-timeline-workspace::after{opacity:.34;animation:hudTimelineSweep 7.6s linear infinite}
+
+@media(prefers-reduced-motion:reduce){
+  .hud-reactive-light{display:none!important}
+  html[data-theme="midnight"] :is(.button.primary,.creator-primary-import,.core-import-primary,.creator-project-action){translate:0 0!important;scale:1!important}
+}
+html[data-motion="reduced"] .hud-reactive-light{display:none!important}
+html[data-motion="reduced"] :is(.button.primary,.creator-primary-import,.core-import-primary,.creator-project-action){translate:0 0!important;scale:1!important}
