@@ -7,8 +7,12 @@
   const CORE_PAGES = new Set(["download", "speech", "translation", "voice", "editor", "ai-video"]);
   let refreshQueued = false;
   let lastRailMarkup = "";
+  const progressUnsubscribers = [];
 
   function savedState() {
+    try {
+      if (typeof state !== "undefined" && state) return state;
+    } catch {}
     try { return JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}"); }
     catch { return {}; }
   }
@@ -264,13 +268,36 @@
     requestAnimationFrame(refresh);
   }
 
+  function wireProgressSignals() {
+    const api = window.desktopAPI;
+    if (!api) return;
+    for (const name of ["onSpeechProgress", "onTranslationProgress", "onVoiceProgress", "onRenderProgress"]) {
+      const subscribe = api[name];
+      if (typeof subscribe !== "function") continue;
+      try {
+        const unsubscribe = subscribe(() => queueRefresh());
+        if (typeof unsubscribe === "function") progressUnsubscribers.push(unsubscribe);
+      } catch (error) {
+        console.warn("[CoreWorkflow] Could not subscribe to progress signal", name, error);
+      }
+    }
+  }
+
+  function cleanupProgressSignals() {
+    while (progressUnsubscribers.length) {
+      try { progressUnsubscribers.pop()?.(); }
+      catch {}
+    }
+  }
+
   const observer = new MutationObserver(queueRefresh);
   const start = () => {
     const page = document.getElementById("page");
     if (page) observer.observe(page, { childList: true, subtree: true, attributes: false });
     window.addEventListener("viral-ai:core-state-changed", queueRefresh);
+    window.addEventListener("beforeunload", cleanupProgressSignals, { once: true });
+    wireProgressSignals();
     queueRefresh();
-    window.setInterval(queueRefresh, 900);
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
