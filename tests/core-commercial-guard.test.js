@@ -20,6 +20,9 @@ const motion = read("renderer/core-motion-policy.css");
 
 assert(index.includes('data-motion="balanced"'), "New installs must default to balanced motion.");
 assert(!index.includes("core-startup-experience"), "Removed startup animation must stay out of production shell.");
+assert(bootstrap.includes("hasAvailableSource"), "Startup bootstrap must know whether a real source can resume.");
+assert(bootstrap.includes('savedPage === "ai-video" && !hasAvailableSource'), "Core Editor must only fall back to Import when its source is unavailable.");
+assert(!bootstrap.includes('["ai-video", "automation", "workflow", "workflow-builder"].includes'), "Startup must not blindly redirect a valid Core Editor route through Import.");
 
 for (const productionModule of [
   "core-accounts-real-data.js",
