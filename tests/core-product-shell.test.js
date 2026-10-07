@@ -14,6 +14,7 @@ const startupJs = fs.readFileSync(path.join(root, "renderer", "core-startup-expe
 const startupCss = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.css"), "utf8");
 const hudJs = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.css"), "utf8");
+const workstationCss = fs.readFileSync(path.join(root, "renderer", "core-premium-workstation.css"), "utf8");
 const brandMark = fs.readFileSync(path.join(root, "renderer", "brand-mark.svg"), "utf8");
 
 for (const required of [
@@ -68,6 +69,8 @@ assert(index.includes('href="core-startup-experience.css"'), "Premium startup CS
 assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS must be loaded.");
 assert(index.includes('href="core-premium-hud.css"'), "Premium HUD CSS must be loaded.");
 assert(index.includes('src="core-premium-hud.js"'), "Premium HUD JS must be loaded.");
+assert(index.includes('href="core-premium-workstation.css"'), "Premium workstation shell CSS must be loaded.");
+assert(index.indexOf('href="core-premium-workstation.css"') > index.indexOf('href="core-premium-interactions.css"'), "Premium workstation refinement must load after motion/interactions so its material hierarchy wins.");
 assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
 assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
 
@@ -135,6 +138,21 @@ for (const required of [
 }
 assert(hudCss.includes('.button.primary::after{animation:none'), "Primary button shimmer must be interaction-triggered, not permanently looping.");
 assert(hudCss.includes('.core-editor-assets-panel::after,\nhtml.core-editor-premium .core-editor-inspector::after{animation:none'), "Editor panel sweeps must stay dormant outside processing.");
+
+for (const required of [
+  'html[data-theme="midnight"] .topbar',
+  'html[data-theme="midnight"] .command-palette',
+  'html[data-theme="midnight"] #quickProject',
+  'html[data-theme="midnight"] .sidebar',
+  'html.core-editor-premium .core-workflow-shell',
+  'html.core-editor-premium .preview.core-player-host',
+  'text-rendering:optimizeLegibility',
+  'text-shadow:none!important',
+  'html[data-motion="reduced"] .command-palette'
+]) {
+  assert(workstationCss.includes(required), "Premium workstation refinement missing: " + required);
+}
+assert(!workstationCss.includes('@keyframes'), "Workstation hierarchy layer must not introduce another ambient animation loop.");
 
 class FakeElement {
   constructor() {
