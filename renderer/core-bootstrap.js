@@ -23,7 +23,16 @@
     return Boolean(job.sourcePath || job.outputPath || job.isRenderOutput);
   });
 
-  if (["ai-video", "automation", "workflow", "workflow-builder"].includes(String(saved.page || ""))) {
+  const hasAvailableSource = saved.jobs.some(job =>
+    job?.sourcePath &&
+    !job?.isRenderOutput &&
+    job?.fileState !== "missing" &&
+    job?.fileState !== "trashed"
+  );
+  const savedPage = String(saved.page || "");
+  if (["automation", "workflow", "workflow-builder"].includes(savedPage)) {
+    saved.page = "download";
+  } else if (savedPage === "ai-video" && !hasAvailableSource) {
     saved.page = "download";
   }
 
