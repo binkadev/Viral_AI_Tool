@@ -5,15 +5,12 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
-const loader = read("renderer/core-editor-output-state.js");
 const js = read("renderer/core-editor-output-state-v2.js");
 const css = read("renderer/core-editor-output-state.css");
 const index = read("renderer/index.html");
 const preload = read("preload.js");
 
-assert.doesNotThrow(() => new Function(loader), "Output-state loader must parse.");
 assert.doesNotThrow(() => new Function(js), "Output-state v2 must parse.");
-assert(loader.includes('core-editor-output-state-v2.js'), "Legacy output-state entry must load v2 only.");
 
 for (const required of [
   'state: "idle"',
@@ -54,6 +51,7 @@ for (const required of [
 }
 
 assert(index.includes('href="core-editor-output-state.css"'), "Output state CSS must be loaded.");
-assert(index.includes('src="core-editor-output-state.js"'), "Compatibility output-state entry must stay loaded.");
+assert(index.includes('src="core-editor-output-state-v2.js"'), "Production shell must load output state v2.");
+assert(!index.includes('src="core-editor-output-state.js"'), "Legacy output state must not run beside v2.");
 
 console.log("core-editor-output-state v2 tests passed");
