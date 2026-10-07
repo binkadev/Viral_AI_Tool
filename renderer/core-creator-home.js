@@ -21,6 +21,54 @@
     catch { return String(value ?? ""); }
   }
 
+  function locale() {
+    return currentState()?.locale === "en" ? "en" : "vi";
+  }
+
+  function copy() {
+    return locale() === "en"
+      ? {
+          kicker: "Creator workspace",
+          title: "Start a new video project",
+          body: "Import one source video and continue directly in the production editor.",
+          importAction: "Import video",
+          dropTitle: "Drop a video here or choose a file",
+          dropMeta: "MP4 · MOV · MKV · WEBM · AVI · M4V",
+          local: "Local",
+          localReady: "Ready",
+          cloud: "Cloud",
+          cloudConnected: "Connected",
+          cloudOffline: "Offline",
+          cloudNotConnected: "Not connected",
+          currentProject: "Current project",
+          recent: "Recent projects",
+          continue: "Continue editing",
+          noProject: "No project yet",
+          noProjectBody: "Import a source video to create your first project.",
+          relink: "Relink source"
+        }
+      : {
+          kicker: "Không gian sáng tạo",
+          title: "Bắt đầu dự án video mới",
+          body: "Nhập một video nguồn và tiếp tục trực tiếp trong trình chỉnh sửa production.",
+          importAction: "Nhập video",
+          dropTitle: "Kéo video vào đây hoặc chọn tệp",
+          dropMeta: "MP4 · MOV · MKV · WEBM · AVI · M4V",
+          local: "Local",
+          localReady: "Sẵn sàng",
+          cloud: "Cloud",
+          cloudConnected: "Đã kết nối",
+          cloudOffline: "Ngoại tuyến",
+          cloudNotConnected: "Chưa kết nối",
+          currentProject: "Dự án đang làm",
+          recent: "Dự án gần đây",
+          continue: "Tiếp tục chỉnh sửa",
+          noProject: "Chưa có dự án",
+          noProjectBody: "Nhập video nguồn để bắt đầu dự án đầu tiên.",
+          relink: "Chọn lại video nguồn"
+        };
+  }
+
   function sourceJobs() {
     const current = currentState();
     if (!Array.isArray(current?.jobs)) return [];
@@ -63,15 +111,38 @@
     '</div>';
   }
 
+  function cloudStatus() {
+    const current = currentState();
+    const c = copy();
+    if (current?.cloud?.accountOffline) return { label: c.cloudOffline, tone: "offline" };
+    if (current?.cloud?.account || current?.cloud?.auth) return { label: c.cloudConnected, tone: "connected" };
+    return { label: c.cloudNotConnected, tone: "idle" };
+  }
+
+  function statusStrip() {
+    const c = copy();
+    const cloud = cloudStatus();
+    return '<div class="creator-status-strip" aria-label="Workspace status">' +
+      '<span class="creator-status-chip is-ready"><i></i><b>' + esc(c.local) + '</b><span>' + esc(c.localReady) + '</span></span>' +
+      '<span class="creator-status-chip is-' + cloud.tone + '"><i></i><b>' + esc(c.cloud) + '</b><span>' + esc(cloud.label) + '</span></span>' +
+    '</div>';
+  }
+
   function currentProject(source) {
-    if (!source) return "";
+    const c = copy();
+    if (!source) {
+      return '<section class="creator-current-project is-empty">' +
+        '<div class="creator-section-heading compact"><div><span class="creator-section-kicker">' + esc(c.currentProject) + '</span><h3>' + esc(c.noProject) + '</h3><p>' + esc(c.noProjectBody) + '</p></div></div>' +
+      '</section>';
+    }
+
     const unavailable = source.fileState === "missing" || source.fileState === "trashed";
     const action = unavailable
-      ? '<button class="button secondary creator-project-action" type="button" data-job-action="relink" data-job-id="' + esc(source.id) + '">' + esc(tr("file.relink")) + '</button>'
-      : '<button class="button primary creator-project-action" type="button" data-creator-open="' + esc(source.id) + '">' + esc(tr("aiVideo.editor")) + '</button>';
+      ? '<button class="button secondary creator-project-action" type="button" data-job-action="relink" data-job-id="' + esc(source.id) + '">' + esc(c.relink) + '</button>'
+      : '<button class="button primary creator-project-action" type="button" data-creator-open="' + esc(source.id) + '">' + esc(c.continue) + '<span aria-hidden="true">→</span></button>';
 
-    return '<section class="creator-current-project" aria-label="' + esc(tr("app.workspace")) + '">' +
-      '<div class="creator-section-kicker">' + esc(tr("app.workspace")) + '</div>' +
+    return '<section class="creator-current-project">' +
+      '<div class="creator-section-heading compact"><div><span class="creator-section-kicker">' + esc(c.currentProject) + '</span></div></div>' +
       '<div class="creator-project-body">' +
         sourceThumbnail(source, "creator-project-thumb") +
         '<div class="creator-project-copy">' +
@@ -85,16 +156,18 @@
   }
 
   function recentSources(sources) {
+    const c = copy();
     const recent = sources.slice(1, 5);
     if (!recent.length) return "";
 
     return '<section class="creator-recent-section">' +
-      '<div class="creator-section-heading">' +
-        '<div><h3>' + esc(tr("dashboard.recentJobs")) + '</h3><p>' + esc(tr("dashboard.recentJobsDesc")) + '</p></div>' +
-      '</div>' +
+      '<div class="creator-section-heading"><div><span class="creator-section-kicker">' + esc(c.recent) + '</span></div></div>' +
       '<div class="creator-recent-strip">' +
         recent.map(job => {
           const unavailable = job.fileState === "missing" || job.fileState === "trashed";
+          const action = unavailable
+            ? '<button class="creator-recent-relink" type="button" data-job-action="relink" data-job-id="' + esc(job.id) + '">' + esc(c.relink) + '</button>'
+            : '<button class="creator-recent-open" type="button" data-creator-open="' + esc(job.id) + '" aria-label="' + esc(c.continue) + '">→</button>';
           return '<article class="creator-recent-item ' + (unavailable ? "is-unavailable" : "") + '">' +
             sourceThumbnail(job, "creator-recent-thumb") +
             '<div class="creator-recent-copy">' +
@@ -102,9 +175,7 @@
               sourceAvailability(job) +
               '<span class="creator-recent-meta">' + esc(sourceMeta(job)) + '</span>' +
             '</div>' +
-            (unavailable
-              ? '<button class="creator-recent-relink" type="button" data-job-action="relink" data-job-id="' + esc(job.id) + '">' + esc(tr("file.relink")) + '</button>'
-              : '') +
+            action +
           '</article>';
         }).join("") +
       '</div>' +
@@ -112,18 +183,22 @@
   }
 
   function creatorHomePage() {
+    const c = copy();
     const sources = sourceJobs();
     const current = sources[0] || null;
 
-    return '<div class="creator-home" data-creator-home>' +
+    return '<div class="creator-home creator-home-professional" data-creator-home>' +
       '<section class="creator-home-hero">' +
         '<div class="creator-home-copy">' +
-          '<div class="creator-home-eyebrow"><span></span>' + esc(tr("dashboard.eyebrow")) + '</div>' +
-          '<h2>' + esc(tr("dashboard.title")) + '</h2>' +
-          '<p>' + esc(tr("dashboard.desc")) + '</p>' +
-          '<button id="creatorPrimaryImport" class="button primary creator-primary-import" type="button">' +
-            '<span class="creator-button-icon" aria-hidden="true">+</span><span>' + esc(tr("download.localTitle")) + '</span>' +
-          '</button>' +
+          '<div class="creator-home-eyebrow"><span></span>' + esc(c.kicker) + '</div>' +
+          '<h2>' + esc(c.title) + '</h2>' +
+          '<p>' + esc(c.body) + '</p>' +
+          '<div class="creator-home-actions">' +
+            '<button id="creatorPrimaryImport" class="button primary creator-primary-import" type="button">' +
+              '<span class="creator-button-icon" aria-hidden="true">+</span><span>' + esc(c.importAction) + '</span>' +
+            '</button>' +
+            statusStrip() +
+          '</div>' +
         '</div>' +
       '</section>' +
 
@@ -133,12 +208,12 @@
             '<div class="creator-import-icon" aria-hidden="true">' +
               '<svg viewBox="0 0 24 24" focusable="false"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
             '</div>' +
-            '<div><h3>' + esc(tr("download.localTitle")) + '</h3><p>' + esc(tr("download.localDesc")) + '</p></div>' +
+            '<div><h3>' + esc(c.importAction) + '</h3><p>' + esc(c.body) + '</p></div>' +
           '</div>' +
           '<button id="creatorImportZone" class="creator-import-zone" type="button">' +
-            '<span class="creator-drop-orbit" aria-hidden="true"><i></i></span>' +
-            '<strong>' + esc(tr("download.dropTitle")) + '</strong>' +
-            '<span>' + esc(tr("download.dropDesc")) + '</span>' +
+            '<span class="creator-import-symbol" aria-hidden="true">+</span>' +
+            '<strong>' + esc(c.dropTitle) + '</strong>' +
+            '<span>' + esc(c.dropMeta) + '</span>' +
           '</button>' +
         '</div>' +
         currentProject(current) +
