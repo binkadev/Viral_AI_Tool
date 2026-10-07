@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const js = read("renderer/core-editor-output-state.js");
 const css = read("renderer/core-editor-output-state.css");
 const index = read("renderer/index.html");
+const preload = read("preload.js");
 
 assert.doesNotThrow(() => new Function(js), "Output state JS must parse.");
 
@@ -18,10 +19,16 @@ for (const required of [
   "output?.outputPath",
   "window.desktopAPI?.showFile",
   "data-output-show",
-  "core-output-state-card"
+  "core-output-state-card",
+  "wireRenderProgress()",
+  "onRenderProgress",
+  "unsubscribeRenderProgress",
+  "beforeunload"
 ]) {
   assert(js.includes(required), "Output state JS missing: " + required);
 }
+assert(preload.includes("onRenderProgress"), "Desktop bridge must expose render progress events.");
+assert(!js.includes("setInterval("), "Output state must update from render/state events instead of polling every second.");
 
 for (const required of [
   ".core-output-state-card",
