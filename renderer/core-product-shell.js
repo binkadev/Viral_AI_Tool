@@ -21,53 +21,53 @@
   function copy() {
     return locale() === "en"
       ? {
-          workflow: "Core workflow",
+          workflow: "Create video",
           manage: "Manage",
-          import: "Import",
-          editor: "Core Editor",
+          import: "Import video",
+          editor: "Video studio",
           importTitle: "Import video",
-          importBreadcrumb: "Core workflow / Import",
-          editorTitle: "Core Editor",
-          editorBreadcrumb: "Core workflow / Editor",
-          localEyebrow: "Local video",
-          localTitle: "Import from this computer",
-          localBody: "Choose a video from your computer. This is the supported production import path for the current core workflow.",
+          importBreadcrumb: "Create video / Import",
+          editorTitle: "Video studio",
+          editorBreadcrumb: "Create video / Studio",
+          localEyebrow: "From this computer",
+          localTitle: "Choose your source video",
+          localBody: "Choose a video from your computer to start editing, translating, generating voice and exporting in one place.",
           dropTitle: "Click to choose or drop a video here",
           dropBody: "MP4 · MOV · MKV · WEBM · AVI · M4V",
-          urlEyebrow: "Link import",
+          urlEyebrow: "From a link",
           urlTitle: "Import from a video URL",
-          urlBody: "Link analysis is not connected to the production pipeline yet.",
+          urlBody: "Importing from a link is not available yet. You can use a video saved on this computer now.",
           urlPlaceholder: "Paste a video URL...",
           comingSoon: "Coming soon",
           sourceTitle: "Project source",
-          sourceBody: "Only original source videos appear here. Rendered outputs belong in Library/Export history.",
+          sourceBody: "Your original source video stays here. Finished videos are available from Library.",
           emptyTitle: "No source video yet",
-          emptyBody: "Import a local video to start the core workflow.",
+          emptyBody: "Import a video from this computer to begin.",
           importAction: "Import video"
         }
       : {
-          workflow: "Quy trình chính",
+          workflow: "Tạo video",
           manage: "Quản lý",
           import: "Nhập video",
-          editor: "Core Editor",
+          editor: "Studio video",
           importTitle: "Nhập video",
-          importBreadcrumb: "Quy trình chính / Nhập video",
-          editorTitle: "Core Editor",
-          editorBreadcrumb: "Quy trình chính / Editor",
-          localEyebrow: "Video trong máy",
-          localTitle: "Nhập video từ máy tính",
-          localBody: "Chọn video trong máy. Đây là đường nhập production đang được hỗ trợ cho workflow lõi hiện tại.",
+          importBreadcrumb: "Tạo video / Nhập video",
+          editorTitle: "Studio video",
+          editorBreadcrumb: "Tạo video / Studio",
+          localEyebrow: "Từ máy tính",
+          localTitle: "Chọn video nguồn",
+          localBody: "Chọn video trong máy để bắt đầu chỉnh sửa, dịch nội dung, tạo giọng và xuất video ngay trong một nơi.",
           dropTitle: "Bấm để chọn hoặc kéo video vào đây",
           dropBody: "MP4 · MOV · MKV · WEBM · AVI · M4V",
-          urlEyebrow: "Tải bằng liên kết",
+          urlEyebrow: "Từ liên kết",
           urlTitle: "Nhập video từ URL",
-          urlBody: "Phân tích liên kết chưa được nối với pipeline production.",
+          urlBody: "Nhập video từ liên kết chưa khả dụng. Hiện tại bạn có thể dùng video đã lưu trên máy.",
           urlPlaceholder: "Dán liên kết video...",
           comingSoon: "Sắp có",
           sourceTitle: "Video nguồn của dự án",
-          sourceBody: "Chỉ hiển thị video nguồn tại đây. File render được quản lý ở Thư viện/lịch sử xuất.",
+          sourceBody: "Video gốc của dự án được giữ tại đây. Video đã xuất được quản lý trong Thư viện.",
           emptyTitle: "Chưa có video nguồn",
-          emptyBody: "Nhập một video local để bắt đầu workflow lõi.",
+          emptyBody: "Nhập một video từ máy tính để bắt đầu.",
           importAction: "Nhập video"
         };
   }
@@ -176,8 +176,6 @@
     const current = appState();
     if (!current) return;
 
-    // Startup is workflow-first: resume the editor when a project source exists,
-    // otherwise land on Import. Passive pages should never be the first screen.
     const startupPage = hasSourceVideo() ? "ai-video" : "download";
     if (current.page === startupPage) return;
     current.page = startupPage;
