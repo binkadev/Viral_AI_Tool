@@ -18,6 +18,12 @@
     ));
   }
 
+  function playerOwnsEvent(target) {
+    return target instanceof HTMLElement && Boolean(target.closest(
+      ".preview.core-player-host, .preview.preview-real"
+    ));
+  }
+
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, Number(value) || 0));
   }
@@ -39,6 +45,7 @@
 
   function reveal(media) {
     media.dispatchEvent(new Event("seeking"));
+    media.dispatchEvent(new Event("seeked"));
     window.dispatchEvent(new CustomEvent("viral-ai:editor-shortcut-seek", {
       detail: { currentTime: Number(media.currentTime || 0) }
     }));
@@ -49,13 +56,13 @@
     root.dataset.coreShortcutWired = "true";
 
     root.addEventListener("keydown", event => {
-      if (editing(event.target)) return;
+      if (editing(event.target) || playerOwnsEvent(event.target)) return;
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
 
       const media = video(root);
       if (!(media instanceof HTMLVideoElement)) return;
-      const amount = event.shiftKey ? 1 : 5;
+      const amount = event.shiftKey ? 10 : 5;
       const delta = event.key === "ArrowLeft" ? -amount : amount;
       if (!seekBy(media, delta)) return;
 
@@ -64,9 +71,8 @@
     });
 
     const media = video(root);
-    if (media instanceof HTMLVideoElement) {
-      media.setAttribute("aria-keyshortcuts", "Space ArrowLeft ArrowRight Home End");
-    }
+    const host = media?.closest?.(".preview.core-player-host, .preview.preview-real");
+    if (host instanceof HTMLElement) host.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight");
   }
 
   function scan() {
