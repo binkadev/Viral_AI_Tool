@@ -25,6 +25,8 @@ assert.doesNotThrow(() => new Function(hudJs), "Premium HUD module must parse.")
 for (const required of [
   "LEGACY_DEMO_NAMES",
   "removeLegacyDemoJobs",
+  "const productionJobs = current.jobs.filter",
+  "const isLegacyDemo = LEGACY_DEMO_NAMES.has",
   "current.jobs.filter(job => !job?.isRenderOutput)",
   'const startupPage = hasSourceVideo() ? "ai-video" : "download"',
   '{ id: "download", icon: "⇩", label: "core-import" }',
@@ -34,6 +36,7 @@ for (const required of [
 
 for (const legacyName of ["Douyin_Product_042.mp4", "UGC_Beauty_118.mp4", "Review_Camera_090.mp4", "Short_Fashion_031.mp4"])
   assert(shell.includes(legacyName), "Legacy demo cleanup missing: " + legacyName);
+assert(!shell.includes("current.jobs.length !== LEGACY_DEMO_NAMES.size"), "Legacy cleanup must work when demo jobs are mixed with real projects.");
 
 assert(index.includes('data-theme="midnight"'), "Premium Dark must be first-paint theme.");
 assert(index.includes('data-motion="balanced"'), "Balanced motion must be first-paint default.");
