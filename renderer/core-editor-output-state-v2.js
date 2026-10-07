@@ -157,7 +157,7 @@
   }
   function start() {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList:true, subtree:true });
+    if (page) new MutationObserver(queue).observe(page, { childList:true, subtree:false });
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("focus", recheck);
     if (typeof window.desktopAPI?.onRenderProgress === "function") {
