@@ -61,6 +61,23 @@ html[data-theme="midnight"] body{
   animation:none!important;
 }
 
+/* Creator Home now opens as a clean commercial workspace, not an animated demo. */
+.creator-home-hero{
+  grid-template-columns:minmax(0,1fr)!important;
+  min-height:0!important;
+}
+
+.creator-home-copy{
+  width:min(920px,100%);
+  max-width:920px!important;
+  padding:34px 40px!important;
+}
+
+.creator-home-visual,
+.creator-workspace-preparing{
+  display:none!important;
+}
+
 .nav-item,
 .command-palette,
 .select-trigger,
@@ -75,6 +92,10 @@ html[data-theme="midnight"] body{
 .select-trigger:not(:disabled):active,
 .button:not(:disabled):active{
   transform:none!important;
+}
+
+@media(max-width:1120px){
+  .creator-home-copy{padding:30px!important}
 }
 
 @media(prefers-reduced-motion:reduce){
