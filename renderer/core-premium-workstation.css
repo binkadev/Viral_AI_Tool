@@ -1,0 +1,181 @@
+/* Premium workstation refinement layer.
+ * Purpose: make the shell read like a native creative workstation rather than a web dashboard.
+ * Decorative only: no workflow or media behavior lives here.
+ */
+
+html[data-theme="midnight"]{
+  --workstation-surface:#0d1321;
+  --workstation-surface-2:#111a2a;
+  --workstation-surface-3:#151f31;
+  --workstation-line:rgba(255,255,255,.072);
+  --workstation-line-strong:rgba(255,255,255,.13);
+  --workstation-highlight:rgba(255,255,255,.028);
+  --workstation-shadow:0 18px 44px rgba(0,0,0,.20);
+}
+
+html[data-theme="midnight"] .topbar{
+  min-height:78px;
+  padding:0 24px;
+  gap:22px;
+  background:linear-gradient(180deg,rgba(9,14,25,.96),rgba(9,14,25,.91));
+  border-bottom:1px solid var(--workstation-line);
+  box-shadow:0 10px 26px rgba(0,0,0,.12);
+  backdrop-filter:blur(24px) saturate(125%);
+}
+html[data-theme="midnight"] .topbar-heading{display:grid;gap:3px;align-content:center}
+html[data-theme="midnight"] .breadcrumb{
+  margin:0;color:#758197;font-size:10px;font-weight:560;letter-spacing:.005em;
+}
+html[data-theme="midnight"] .topbar h1{
+  margin:0;color:#f5f7fb;font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Arial,sans-serif;
+  font-size:23px;line-height:1.15;font-weight:690;letter-spacing:-.032em;
+  text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;
+}
+html[data-theme="midnight"] .top-actions{gap:8px}
+html[data-theme="midnight"] .command-palette,
+html[data-theme="midnight"] .select-trigger{
+  height:38px;border:1px solid var(--workstation-line);background:rgba(17,26,42,.72);
+  box-shadow:inset 0 1px 0 var(--workstation-highlight);backdrop-filter:blur(14px);
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+html[data-theme="midnight"] .command-palette{width:196px;padding-inline:11px;border-radius:11px}
+html[data-theme="midnight"] .command-palette:hover,
+html[data-theme="midnight"] .select-trigger:hover{
+  background:rgba(21,31,49,.92);border-color:var(--workstation-line-strong);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 8px 18px rgba(0,0,0,.12);
+}
+html[data-theme="midnight"] .command-icon{color:#9aa8bf;font-size:14px}
+html[data-theme="midnight"] .command-copy{color:#8793a8;font-size:10px;font-weight:560}
+html[data-theme="midnight"] .command-palette kbd{
+  padding:4px 6px;border-color:rgba(255,255,255,.07);background:#0b111e;color:#68758b;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+html[data-theme="midnight"] .select-trigger{min-width:146px;border-radius:11px}
+html[data-theme="midnight"] .select-leading{
+  width:26px;height:26px;border-radius:8px;color:#9fa9ff;
+  background:linear-gradient(145deg,rgba(124,140,255,.15),rgba(97,168,255,.07));
+  box-shadow:inset 0 0 0 1px rgba(124,140,255,.09);
+}
+html[data-theme="midnight"] .select-value small{color:#6f7b90;font-size:8px}
+html[data-theme="midnight"] .select-value strong{color:#e8ecf5;font-size:10px;font-weight:650}
+html[data-theme="midnight"] #quickProject{
+  min-height:38px;padding-inline:15px;border:1px solid rgba(153,163,255,.30);border-radius:11px;
+  background:linear-gradient(135deg,#7887ff,#7185f6 52%,#6898f2);
+  box-shadow:0 9px 20px rgba(82,96,225,.20),inset 0 1px 0 rgba(255,255,255,.18);
+  font-size:11px;font-weight:680;letter-spacing:-.006em;
+}
+html[data-theme="midnight"] #quickProject:hover{
+  background:linear-gradient(135deg,#8794ff,#7c8efc 52%,#73a1f6);
+  box-shadow:0 12px 24px rgba(82,96,225,.25),inset 0 1px 0 rgba(255,255,255,.22);
+}
+html[data-theme="midnight"] .button-spark{opacity:.72;font-size:10px}
+
+html[data-theme="midnight"] .sidebar{
+  background:linear-gradient(180deg,rgba(13,20,34,.985),rgba(10,16,28,.99));
+  border-inline-end-color:var(--workstation-line);
+}
+html[data-theme="midnight"] .brand{padding-bottom:15px}
+html[data-theme="midnight"] .brand-name{color:#f2f5fb;font-weight:820;letter-spacing:.075em}
+html[data-theme="midnight"] .brand-sub{color:#657187;letter-spacing:.055em}
+html[data-theme="midnight"] .workspace,
+html[data-theme="midnight"] .credit-card{
+  border-color:var(--workstation-line);background:linear-gradient(145deg,rgba(18,27,44,.82),rgba(14,21,35,.86));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+html[data-theme="midnight"] .workspace{border-radius:12px}
+html[data-theme="midnight"] .nav-item{min-height:38px;border-radius:10px;font-size:11px;font-weight:570}
+html[data-theme="midnight"] .nav-item:hover{background:rgba(255,255,255,.035);color:#e8ecf4;transform:none}
+html[data-theme="midnight"] .nav-item.active{
+  background:linear-gradient(90deg,rgba(124,140,255,.13),rgba(124,140,255,.055));
+  box-shadow:inset 0 0 0 1px rgba(124,140,255,.08);
+}
+html[data-theme="midnight"] .nav-icon{
+  width:22px;height:22px;border-radius:7px;background:rgba(124,140,255,.07);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+}
+
+html[data-theme="midnight"] .creator-home-hero,
+html[data-theme="midnight"] .creator-import-surface,
+html[data-theme="midnight"] .creator-current-project,
+html[data-theme="midnight"] .creator-recent-item,
+html[data-theme="midnight"] .core-workflow-shell,
+html[data-theme="midnight"] .core-editor-assets-panel,
+html[data-theme="midnight"] .core-editor-inspector,
+html[data-theme="midnight"] .core-editor-bottom-dock{
+  border-color:var(--workstation-line);
+  box-shadow:var(--workstation-shadow),inset 0 1px 0 rgba(255,255,255,.022);
+}
+html[data-theme="midnight"] .creator-import-surface,
+html[data-theme="midnight"] .creator-current-project,
+html[data-theme="midnight"] .creator-recent-item{
+  background:linear-gradient(180deg,rgba(17,26,42,.94),rgba(14,22,36,.96));
+}
+html[data-theme="midnight"] .creator-recent-item:hover{
+  border-color:rgba(124,140,255,.18);
+  background:linear-gradient(180deg,rgba(20,30,48,.98),rgba(16,24,40,.98));
+  box-shadow:0 16px 34px rgba(0,0,0,.17),inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+html.core-editor-premium .core-editor-docked-page{gap:12px}
+html.core-editor-premium .core-workflow-shell{
+  border-radius:15px;background:linear-gradient(180deg,#101828,#0e1625);
+  box-shadow:0 10px 26px rgba(0,0,0,.13),inset 0 1px 0 rgba(255,255,255,.025);
+}
+html.core-editor-premium .core-editor-assets-panel,
+html.core-editor-premium .core-editor-inspector,
+html.core-editor-premium .core-editor-bottom-dock{
+  border-radius:16px;background:linear-gradient(180deg,#101827,#0e1624);
+  box-shadow:0 14px 34px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.022);
+}
+html.core-editor-premium .core-assets-head,
+html.core-editor-premium .core-inspector-tabs,
+html.core-editor-premium .core-bottom-dock-head{
+  background:rgba(18,27,44,.88);border-color:var(--workstation-line);
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.018);
+}
+html.core-editor-premium .core-asset-item,
+html.core-editor-premium .core-inspector-card,
+html.core-editor-premium .core-inspector-static{
+  background:rgba(20,29,46,.82);border-color:rgba(255,255,255,.065);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.018);
+}
+html.core-editor-premium .core-asset-item:hover:not(:disabled),
+html.core-editor-premium .core-inspector-card:hover{
+  background:rgba(24,34,53,.90);border-color:rgba(255,255,255,.105);
+}
+html.core-editor-premium .core-inspector-tab,
+html.core-editor-premium .core-bottom-tab{color:#8d99ad;font-weight:590;letter-spacing:-.005em}
+html.core-editor-premium .core-inspector-tab.is-active,
+html.core-editor-premium .core-bottom-tab.is-active{
+  color:#f4f6fb;background:linear-gradient(180deg,rgba(124,140,255,.12),rgba(124,140,255,.055));
+  box-shadow:inset 0 -2px 0 #8290ff;
+}
+html.core-editor-premium .preview.core-player-host,
+html.core-editor-premium .preview.preview-real{
+  border-color:rgba(255,255,255,.085)!important;background:linear-gradient(180deg,#060a12,#050811)!important;
+  box-shadow:0 22px 54px rgba(0,0,0,.30),inset 0 0 0 1px rgba(255,255,255,.012)!important;
+}
+html.core-editor-premium .core-player-controls,
+html.core-editor-premium .core-player-timeline{
+  background:rgba(9,14,24,.90)!important;border-color:rgba(255,255,255,.075)!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+
+html[data-theme="midnight"] .topbar h1,
+html[data-theme="midnight"] .breadcrumb,
+html[data-theme="midnight"] .nav-item > span:not(.nav-icon),
+html[data-theme="midnight"] .creator-home-copy,
+html.core-editor-premium .core-stage-title,
+html.core-editor-premium .core-stage-state,
+html.core-editor-premium .core-inspector-tab,
+html.core-editor-premium .core-bottom-tab{
+  transform:none!important;filter:none!important;text-shadow:none!important;
+}
+
+html[data-motion="reduced"] .command-palette,
+html[data-motion="reduced"] .select-trigger,
+html[data-motion="reduced"] #quickProject,
+html[data-motion="reduced"] .nav-item,
+html[data-motion="reduced"] .creator-recent-item{
+  transition-duration:.01ms!important;transform:none!important;
+}
