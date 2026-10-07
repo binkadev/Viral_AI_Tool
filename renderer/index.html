@@ -10,18 +10,20 @@
       const root = document.documentElement;
       try {
         const stateKey = "viral-ai-tool-state";
-        const migrationKey = "viral-ai-premium-default-v1";
         const saved = JSON.parse(localStorage.getItem(stateKey) || "{}");
+        let changed = false;
 
-        // One-time visual migration: older installs inherited Aurora Light even when
-        // the user had never deliberately chosen a theme. Move that legacy default
-        // to Premium Dark, then respect all future appearance choices.
-        if (!localStorage.getItem(migrationKey)) {
-          if (!saved.appearance || saved.appearance === "aurora-light") saved.appearance = "midnight";
-          if (!saved.motion || saved.motion === "balanced") saved.motion = "expressive";
-          localStorage.setItem(stateKey, JSON.stringify(saved));
-          localStorage.setItem(migrationKey, "1");
+        // Premium Dark + expressive motion are defaults for users who have no
+        // saved choice. Existing light/dark and motion preferences are preserved.
+        if (!saved.appearance) {
+          saved.appearance = "midnight";
+          changed = true;
         }
+        if (!saved.motion) {
+          saved.motion = "expressive";
+          changed = true;
+        }
+        if (changed) localStorage.setItem(stateKey, JSON.stringify(saved));
 
         const themes = new Set(["aurora-light", "pearl-light", "midnight"]);
         const motions = new Set(["balanced", "expressive", "reduced"]);
