@@ -13,11 +13,15 @@ assert.doesNotThrow(() => new Function(js), "Creator Home production guard must 
 for (const required of [
   "availableSource()",
   "current?.cloud?.auth?.authenticated === true",
+  "current?.speech?.providerStatus?.local",
+  'local.ready === true',
+  '"Đang kiểm tra"',
+  '"Cần thiết lập"',
   'current.page = "ai-video"',
   'current.page !== "download"',
   'fileState !== "missing"',
   'fileState !== "trashed"',
-  "syncCloudChip",
+  "syncStatusChips",
   "subtree:false"
 ]) {
   assert(js.includes(required), "Creator Home production guard missing: " + required);
