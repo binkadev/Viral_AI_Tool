@@ -45,11 +45,12 @@ for (const required of [
   ".core-editor-activity",
   '.core-editor-activity[data-state="failed"]',
   ".core-editor-activity-progress.is-indeterminate",
-  ".core-editor-activity-button.is-retry",
-  "@media (prefers-reduced-motion:reduce)"
+  ".core-editor-activity-button.is-retry"
 ]) {
   assert(css.includes(required), "Activity CSS missing: " + required);
 }
+assert(/@media\s*\(prefers-reduced-motion\s*:\s*reduce\)/.test(css),
+  "Activity CSS must respect prefers-reduced-motion regardless of formatting.");
 
 assert(index.includes('href="core-editor-activity.css"'), "Activity CSS must be loaded.");
 assert(index.includes('src="core-editor-activity.js"'), "Activity JS must be loaded.");
