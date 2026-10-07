@@ -3,6 +3,7 @@
 
   const workflowModel = window.ViralCoreWorkflowModel;
   let queued = false;
+  let unsubscribeRenderProgress = null;
 
   function appState() {
     try {
@@ -133,12 +134,23 @@
     requestAnimationFrame(sync);
   }
 
+  function wireRenderProgress() {
+    if (typeof window.desktopAPI?.onRenderProgress !== "function") return;
+    try { unsubscribeRenderProgress = window.desktopAPI.onRenderProgress(() => queue()); }
+    catch (error) { console.warn("[OutputState] Could not subscribe to render progress", error); }
+  }
+
   function start() {
     const page = document.getElementById("page");
     if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
-    window.setInterval(queue, 1000);
+    window.addEventListener("beforeunload", () => {
+      try { unsubscribeRenderProgress?.(); }
+      catch {}
+      unsubscribeRenderProgress = null;
+    }, { once: true });
+    wireRenderProgress();
     queue();
   }
 
