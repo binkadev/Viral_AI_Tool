@@ -45,22 +45,28 @@ assert(!guard.includes("new MutationObserver(scan)"),
 
 assert.doesNotThrow(() => new Function(commandJs), "Command palette JS must parse.");
 for (const required of [
+  'window.I18N?.t(locale(), key)',
   'event.ctrlKey || event.metaKey',
   'String(event.key).toLowerCase() === "k"',
   'event.key === "ArrowDown"',
   'event.key === "ArrowUp"',
   'event.key === "Enter"',
   'document.querySelectorAll("#nav .nav-item[data-page]")',
+  'node.querySelector(".nav-icon + span")',
   'dataset.coreCapability = "functional"'
 ]) {
   assert(commandJs.includes(required), "Command palette behavior missing: " + required);
 }
+assert(!commandJs.includes("Search commands…"), "Command palette copy must come from central I18N, not a feature-local English catalog.");
+assert(!commandJs.includes("Tìm chức năng…"), "Command palette copy must come from central I18N, not a feature-local Vietnamese catalog.");
 for (const required of [
   ".core-command-overlay",
   ".core-command-dialog",
   ".core-command-item.is-active",
   "coreCommandDialogIn",
-  'html[data-theme="midnight"] .topbar'
+  'html[data-theme="midnight"] .topbar',
+  "@media(max-width:1180px)",
+  '.command-palette{display:flex;width:44px'
 ]) {
   assert(commandCss.includes(required), "Command surface styles missing: " + required);
 }
