@@ -12,6 +12,8 @@ const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8")
 const capabilities = fs.readFileSync(path.join(root, "renderer", "core-capabilities.css"), "utf8");
 const startupJs = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.js"), "utf8");
 const startupCss = fs.readFileSync(path.join(root, "renderer", "core-startup-experience.css"), "utf8");
+const hudJs = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.js"), "utf8");
+const hudCss = fs.readFileSync(path.join(root, "renderer", "core-premium-hud.css"), "utf8");
 const brandMark = fs.readFileSync(path.join(root, "renderer", "brand-mark.svg"), "utf8");
 
 for (const required of [
@@ -41,21 +43,27 @@ assert(index.includes('src="core-product-shell.js"'), "Core product shell JS mus
 assert(css.includes(".core-import-primary"), "Core import UI styles must be present.");
 assert(!capabilities.includes('[data-page="ai-video"]'), "Core Editor must not be hidden by capability CSS.");
 
-const themeBootstrap = 'localStorage.getItem("viral-ai-tool-state")';
+const themeBootstrap = 'localStorage.getItem(stateKey)';
 const firstStylesheet = 'href="styles.css"';
+assert(index.includes('data-theme="midnight"'), "Premium Dark must be the static first-paint theme.");
+assert(index.includes('data-motion="expressive"'), "Expressive motion must be the new first-paint motion default.");
+assert(index.includes('viral-ai-premium-default-v1'), "Legacy Aurora installs need a one-time Premium Dark migration.");
 assert(index.includes(themeBootstrap), "Saved appearance must be restored during head bootstrap.");
 assert(index.includes('new Set(["aurora-light", "pearl-light", "midnight"])'), "Theme bootstrap must accept only supported appearances.");
-assert(index.includes("root.dataset.theme = saved.appearance"), "Theme bootstrap must restore the saved appearance.");
+assert(index.includes('root.dataset.theme = themes.has(saved.appearance) ? saved.appearance : "midnight"'), "Theme bootstrap must safely resolve to Premium Dark.");
 assert(
   index.indexOf(themeBootstrap) < index.indexOf(firstStylesheet),
   "Theme bootstrap must execute before the first stylesheet to prevent light/dark first-paint switching."
 );
 
 assert.doesNotThrow(() => new Function(startupJs), "Premium startup JS must parse.");
+assert.doesNotThrow(() => new Function(hudJs), "Premium HUD JS must parse.");
 assert(index.includes('data-startup="booting"'), "The document must begin in a protected startup state.");
 assert(index.includes('id="appStartup"'), "Premium startup overlay must be present in the shell.");
 assert(index.includes('href="core-startup-experience.css"'), "Premium startup CSS must be loaded.");
 assert(index.includes('src="core-startup-experience.js"'), "Premium startup JS must be loaded.");
+assert(index.includes('href="core-premium-hud.css"'), "Premium HUD CSS must be loaded.");
+assert(index.includes('src="core-premium-hud.js"'), "Premium HUD JS must be loaded.");
 assert(index.includes('src="brand-mark.svg"'), "The product shell must use the shared brand mark.");
 assert(brandMark.includes('linearGradient id="bg"'), "Brand mark must use the production gradient artwork.");
 
@@ -88,6 +96,26 @@ for (const required of [
   'html[data-motion="reduced"]'
 ]) {
   assert(startupCss.includes(required), "Premium startup CSS missing: " + required);
+}
+
+for (const required of [
+  ".premium-hud-layer",
+  ".premium-hud-grid",
+  "hudGlobalScan",
+  "hudOrbitSpin",
+  "hudPreviewScan",
+  "hudTimelineSweep",
+  'html[data-motion="reduced"]'
+]) {
+  assert(hudCss.includes(required), "Premium HUD CSS missing: " + required);
+}
+for (const required of [
+  'id = "premiumHudLayer"',
+  'root.dataset.premiumHud = "enabled"',
+  'document.addEventListener("pointermove"',
+  'window.addEventListener("viral-ai:startup-complete"'
+]) {
+  assert(hudJs.includes(required), "Premium HUD behavior missing: " + required);
 }
 
 class FakeElement {
