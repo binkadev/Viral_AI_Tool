@@ -1,0 +1,339 @@
+/* Premium interaction refinement: stable navigation + stage-aware workflow motion. */
+
+#page{
+  position:relative;
+}
+
+/* Navigation changes must never fade the entire workspace. A thin signal gives
+ * continuity while all text and controls stay fully opaque and readable. */
+#page.core-page-enter{
+  animation:none!important;
+}
+
+#page.core-page-enter::before{
+  content:"";
+  position:absolute;
+  z-index:80;
+  inset:-1px 0 auto;
+  height:1px;
+  pointer-events:none;
+  transform-origin:left center;
+  background:linear-gradient(90deg,transparent 0%,rgba(103,185,255,.72) 34%,rgba(138,124,255,.9) 62%,transparent 100%);
+  box-shadow:0 0 18px rgba(112,103,255,.24);
+  animation:coreNavigationSignal .34s cubic-bezier(.22,1,.36,1) both;
+}
+
+@keyframes coreNavigationSignal{
+  0%{transform:scaleX(.04);opacity:0}
+  22%{opacity:.72}
+  100%{transform:scaleX(1);opacity:0}
+}
+
+/* Workflow rail */
+.core-workflow-shell{
+  position:relative;
+  margin:0 0 16px!important;
+  padding:11px 16px 12px!important;
+  overflow:hidden;
+  border-radius:15px!important;
+}
+
+.core-workflow-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:18px;
+  margin-bottom:8px;
+}
+
+.core-workflow-title{
+  margin:0!important;
+  font-size:10px!important;
+  line-height:1!important;
+  font-weight:780!important;
+  letter-spacing:.095em!important;
+}
+
+.core-workflow-progress{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:0 0 auto;
+  font-variant-numeric:tabular-nums;
+}
+
+.core-workflow-progress span{
+  color:var(--text-faint);
+  font-size:9px;
+  font-weight:700;
+}
+
+.core-workflow-progress strong{
+  min-width:34px;
+  color:var(--text-soft);
+  font-size:10px;
+  line-height:1;
+  font-weight:780;
+  text-align:right;
+}
+
+.core-workflow-scroll{
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  overscroll-behavior-inline:contain;
+}
+.core-workflow-scroll::-webkit-scrollbar{display:none}
+
+.core-workflow-rail{
+  --workflow-progress:0;
+  --workflow-edge:8.3333%;
+  position:relative;
+  display:grid!important;
+  grid-template-columns:repeat(6,minmax(94px,1fr))!important;
+  align-items:start!important;
+  gap:0!important;
+  min-width:680px;
+  padding:2px 0 0!important;
+  isolation:isolate;
+}
+
+.core-workflow-rail::before,
+.core-workflow-rail::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  top:16px;
+  left:var(--workflow-edge);
+  right:var(--workflow-edge);
+  height:2px;
+  border-radius:999px;
+  pointer-events:none;
+}
+
+.core-workflow-rail::before{
+  background:var(--line-strong);
+}
+
+.core-workflow-rail::after{
+  transform:scaleX(var(--workflow-progress));
+  transform-origin:left center;
+  background:linear-gradient(90deg,var(--success),var(--accent-2) 58%,var(--accent));
+  box-shadow:0 0 14px color-mix(in srgb,var(--accent) 24%,transparent);
+  transition:transform .58s cubic-bezier(.22,1,.36,1);
+}
+
+.core-workflow-stage{
+  position:relative;
+  z-index:2;
+  display:grid!important;
+  grid-template-rows:32px auto;
+  justify-items:center;
+  align-items:start!important;
+  gap:6px!important;
+  min-width:0;
+  padding:0 8px!important;
+  color:var(--text-soft);
+  text-align:center;
+  opacity:1!important;
+}
+
+.core-stage-index{
+  position:relative;
+  width:30px!important;
+  height:30px!important;
+  flex:0 0 30px!important;
+  display:grid;
+  place-items:center;
+  border-radius:50%!important;
+  font-size:10px!important;
+  line-height:1;
+  font-weight:820!important;
+  transform:none!important;
+  transition:
+    border-color .28s cubic-bezier(.22,1,.36,1),
+    background .28s cubic-bezier(.22,1,.36,1),
+    box-shadow .28s cubic-bezier(.22,1,.36,1),
+    color .28s cubic-bezier(.22,1,.36,1)!important;
+}
+
+.core-stage-symbol{
+  position:relative;
+  z-index:2;
+  display:grid;
+  place-items:center;
+  min-width:12px;
+  min-height:12px;
+}
+
+.core-stage-copy{
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;
+  min-width:0;
+  max-width:132px;
+  line-height:1.15;
+}
+
+.core-stage-copy b{
+  max-width:100%;
+  overflow:hidden;
+  color:var(--text-soft);
+  font-size:10.5px!important;
+  line-height:1.2!important;
+  font-weight:760!important;
+  letter-spacing:.035em!important;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:geometricPrecision;
+}
+
+.core-stage-copy small{
+  margin-top:3px!important;
+  color:var(--text-faint);
+  font-size:9.5px!important;
+  line-height:1.15!important;
+  font-weight:560;
+  letter-spacing:0;
+  white-space:nowrap;
+  -webkit-font-smoothing:antialiased;
+}
+
+.core-stage-link{display:none!important}
+
+.core-workflow-stage.is-blocked .core-stage-index{
+  color:color-mix(in srgb,var(--text-faint) 72%,transparent)!important;
+  border-color:color-mix(in srgb,var(--line-strong) 76%,transparent)!important;
+  background:color-mix(in srgb,var(--surface-soft) 82%,transparent)!important;
+  box-shadow:none!important;
+}
+.core-workflow-stage.is-blocked .core-stage-copy b{color:color-mix(in srgb,var(--text-soft) 62%,transparent)}
+.core-workflow-stage.is-blocked .core-stage-copy small{color:color-mix(in srgb,var(--text-faint) 72%,transparent)}
+
+.core-workflow-stage.is-completed .core-stage-index{
+  color:var(--success)!important;
+  border-color:color-mix(in srgb,var(--success) 38%,var(--line))!important;
+  background:color-mix(in srgb,var(--success) 10%,var(--surface-solid))!important;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--success) 5%,transparent)!important;
+}
+.core-workflow-stage.is-completed .core-stage-copy b{color:var(--text-soft)}
+.core-workflow-stage.is-completed .core-stage-copy small{color:color-mix(in srgb,var(--success) 62%,var(--text-faint))}
+
+.core-workflow-stage.is-active .core-stage-index,
+.core-workflow-stage.is-current.is-active .core-stage-index{
+  color:var(--accent)!important;
+  border-color:color-mix(in srgb,var(--accent) 52%,var(--line))!important;
+  background:color-mix(in srgb,var(--accent) 12%,var(--surface-solid))!important;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 6%,transparent),0 0 20px color-mix(in srgb,var(--accent) 12%,transparent)!important;
+  animation:none!important;
+}
+
+.core-workflow-stage.is-active .core-stage-index::after,
+.core-workflow-stage.is-current.is-active .core-stage-index::after{
+  content:"";
+  position:absolute;
+  inset:-5px;
+  border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);
+  border-radius:50%;
+  pointer-events:none;
+  animation:workflowNodeBreath 2.8s cubic-bezier(.4,0,.2,1) infinite;
+}
+
+.core-workflow-stage.is-active .core-stage-copy b,
+.core-workflow-stage.is-processing .core-stage-copy b,
+.core-workflow-stage.is-failed .core-stage-copy b{
+  color:var(--text)!important;
+}
+.core-workflow-stage.is-active .core-stage-copy small{color:color-mix(in srgb,var(--accent) 74%,var(--text-soft))!important}
+
+.core-workflow-stage.is-processing .core-stage-index{
+  color:var(--accent-2)!important;
+  border-color:color-mix(in srgb,var(--accent-2) 54%,var(--line))!important;
+  background:color-mix(in srgb,var(--accent-2) 10%,var(--surface-solid))!important;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-2) 5%,transparent),0 0 22px color-mix(in srgb,var(--accent-2) 13%,transparent)!important;
+  animation:none!important;
+}
+.core-workflow-stage.is-processing .core-stage-copy small{color:color-mix(in srgb,var(--accent-2) 70%,var(--text-soft))!important}
+
+.core-stage-spinner{
+  width:11px;
+  height:11px;
+  box-sizing:border-box;
+  border:1.5px solid color-mix(in srgb,currentColor 28%,transparent);
+  border-top-color:currentColor;
+  border-radius:50%;
+  animation:workflowSpinner .9s linear infinite;
+}
+
+.core-workflow-stage.is-failed .core-stage-index{
+  color:var(--danger)!important;
+  border-color:color-mix(in srgb,var(--danger) 48%,var(--line))!important;
+  background:color-mix(in srgb,var(--danger) 10%,var(--surface-solid))!important;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 5%,transparent)!important;
+}
+.core-workflow-stage.is-failed .core-stage-copy small{color:color-mix(in srgb,var(--danger) 70%,var(--text-soft))!important}
+
+.core-workflow-stage.is-cancelled .core-stage-index{
+  color:var(--text-faint)!important;
+  background:var(--surface-soft)!important;
+  box-shadow:none!important;
+}
+
+html[data-theme="midnight"] .core-workflow-shell{
+  border:1px solid rgba(255,255,255,.065)!important;
+  background:
+    radial-gradient(circle at 44% -120%,rgba(112,97,255,.10),transparent 42%),
+    linear-gradient(180deg,rgba(18,22,30,.94),rgba(13,17,24,.91))!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 16px 42px rgba(0,0,0,.13)!important;
+  backdrop-filter:blur(18px) saturate(118%);
+}
+
+html[data-theme="midnight"] .core-workflow-shell::before{
+  content:"";
+  position:absolute;
+  inset:0 12% auto;
+  height:1px;
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(138,124,255,.18),rgba(103,185,255,.15),transparent);
+}
+
+html[data-theme="midnight"] .core-workflow-rail::before{
+  background:linear-gradient(90deg,rgba(255,255,255,.045),rgba(255,255,255,.09),rgba(255,255,255,.045));
+  box-shadow:inset 0 1px rgba(255,255,255,.015);
+}
+
+html[data-theme="midnight"] .core-workflow-progress strong{
+  color:#cbc8ff;
+}
+
+@keyframes workflowNodeBreath{
+  0%,100%{opacity:.24;transform:scale(.94)}
+  50%{opacity:.72;transform:scale(1.06)}
+}
+
+@keyframes workflowSpinner{to{transform:rotate(360deg)}}
+
+@media(max-width:980px){
+  .core-workflow-shell{padding-inline:12px!important}
+  .core-workflow-rail{min-width:650px}
+  .core-stage-copy b{font-size:10px!important}
+  .core-stage-copy small{font-size:9px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  #page.core-page-enter::before,
+  .core-workflow-stage.is-active .core-stage-index::after,
+  .core-stage-spinner{
+    animation:none!important;
+  }
+  .core-workflow-rail::after{transition:none!important}
+}
+
+html[data-motion="reduced"] #page.core-page-enter::before,
+html[data-motion="reduced"] .core-workflow-stage.is-active .core-stage-index::after,
+html[data-motion="reduced"] .core-stage-spinner{
+  animation:none!important;
+}
+html[data-motion="reduced"] .core-workflow-rail::after{transition:none!important}
