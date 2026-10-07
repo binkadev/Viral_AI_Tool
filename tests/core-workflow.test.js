@@ -13,6 +13,7 @@ const premiumInteractions = fs.readFileSync(path.join(root, "renderer", "core-pr
 const shellStability = fs.readFileSync(path.join(root, "renderer", "core-shell-stability.css"), "utf8");
 const coreEditorCss = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
+const preload = fs.readFileSync(path.join(root, "preload.js"), "utf8");
 
 let derived = model.derive({});
 assert.strictEqual(derived.stages[0].id, "import");
@@ -151,6 +152,13 @@ assert(workflow.includes('class="core-workflow-progress"'), "Workflow rail must 
 assert(!workflow.includes("progressPercent"), "Workflow header must not expose a misleading completion percentage.");
 assert(workflow.includes('aria-current="step"'), "The active workflow stage must be exposed accessibly.");
 assert(workflow.includes("lastRailMarkup"), "Workflow refreshes must avoid unnecessary DOM replacement.");
+assert(workflow.includes('typeof state !== "undefined" && state'), "Workflow must prefer live application state over a delayed localStorage snapshot.");
+assert(workflow.includes("wireProgressSignals()"), "Workflow must subscribe to real job progress signals.");
+for (const progressApi of ["onSpeechProgress", "onTranslationProgress", "onVoiceProgress", "onRenderProgress"]) {
+  assert(workflow.includes('"' + progressApi + '"'), "Workflow must listen to " + progressApi);
+  assert(preload.includes(progressApi), "Desktop bridge must expose " + progressApi);
+}
+assert(!workflow.includes("setInterval("), "Core workflow must be event-driven instead of polling the renderer every 900ms.");
 
 assert(workflowMotion.includes("lastProgress"), "Workflow motion must preserve the previous visual position.");
 assert(workflowMotion.includes("requestAnimationFrame"), "Workflow progress changes must animate after layout settles.");
