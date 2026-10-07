@@ -2,7 +2,8 @@
 /* Avoid contain:layout style on #page: layout containment can rebase fixed/absolute editor UI. */
 
 html[data-theme="midnight"],
-html[data-theme="midnight"] body{
+html[data-theme="midnight"] body,
+html[data-theme="midnight"] .main{
   background:#080d17;
 }
 
@@ -45,8 +46,15 @@ html[data-theme="midnight"] body{
 }
 
 #page{
+  min-height:calc(100dvh - 124px);
   transform:none!important;
   isolation:isolate;
+  overflow-anchor:none;
+  scrollbar-gutter:stable;
+}
+
+html[data-theme="midnight"] #page{
+  background:#080d17;
 }
 
 #page.core-page-enter{
