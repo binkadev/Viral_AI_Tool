@@ -16,10 +16,22 @@
     }
   }
 
+  function tr(key) {
+    try {
+      return window.I18N?.t(locale(), key) || key;
+    } catch {
+      return key;
+    }
+  }
+
   function copy() {
-    return locale() === "en"
-      ? { placeholder: "Search commands…", empty: "No matching command", hint: "Navigate quickly", trigger: "Search commands", dialog: "Command palette" }
-      : { placeholder: "Tìm chức năng…", empty: "Không tìm thấy chức năng phù hợp", hint: "Đi nhanh đến chức năng", trigger: "Tìm chức năng", dialog: "Bảng lệnh nhanh" };
+    return {
+      placeholder: tr("app.searchAnything"),
+      empty: tr("app.search"),
+      hint: tr("app.searchAnything"),
+      trigger: tr("app.searchAnything"),
+      dialog: tr("app.search")
+    };
   }
 
   function syncTriggerText() {
@@ -35,7 +47,7 @@
       .filter(node => !node.hidden && node.getAttribute("aria-hidden") !== "true")
       .map(node => ({
         page: String(node.dataset.page || ""),
-        label: String(node.textContent || "").trim(),
+        label: String(node.querySelector(".nav-icon + span")?.textContent || "").trim(),
         icon: String(node.querySelector(".nav-icon")?.textContent || "").trim(),
         node
       }))
@@ -89,7 +101,7 @@
     const items = filteredCommands();
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, items.length - 1)));
     if (!items.length) {
-      list.innerHTML = '<div class="core-command-empty">' + c.empty + '</div>';
+      list.innerHTML = '<div class="core-command-empty">' + escapeHtml(c.empty) + '</div>';
       return;
     }
     list.innerHTML = items.map((item, index) =>
