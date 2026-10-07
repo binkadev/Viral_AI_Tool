@@ -10,14 +10,21 @@ const bootstrap = fs.readFileSync(path.join(root, "renderer", "core-bootstrap.js
 
 assert.doesNotThrow(() => new Function(js), "Export folder recovery must parse.");
 for (const required of [
-  "legacy = handleExportBlock",
+  "legacyHandle = handleExportBlock",
+  "legacyLocalized = startLocalizedRender",
+  "legacyReal = startRealRender",
+  'kind: "localized"',
+  'kind: "real"',
+  "retryPipeline(source)",
   '"OUTPUT_UNAVAILABLE"',
   '"OUTPUT_REQUIRED"',
-  "return legacy(response, source)",
+  "return legacyHandle(response, source)",
   "selectOutputFolder",
   "state.output = folder",
   "outputFolderChoose",
   "outputFolderCancel",
+  "pendingPipeline = null",
+  "await retryPipeline(source)",
   "export.folderTitle",
   "export.folderBody"
 ]) {
