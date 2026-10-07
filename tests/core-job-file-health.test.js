@@ -19,16 +19,23 @@ for (const token of [
   'job.fileState = next',
   'reason: "job-file-health"',
   'window.addEventListener("focus", queueCheck)',
-  'viral-ai:job-file-health-request'
+  'viral-ai:job-file-health-request',
+  "function recoverableOutput(job)",
+  'job?.fileState === "missing" || job?.fileState === "trashed"',
+  'button.dataset.jobAction = "retry-export"',
+  'button.dataset.jobId = id',
+  '"Render again" : "Render lại"',
+  "syncRecoveryActions",
+  "queueRecoveryActions"
 ]) {
   assert(health.includes(token), "Job file health behavior missing: " + token);
 }
 
-assert(!health.includes("setInterval("), "File health must run from startup/focus events, not polling.");
+assert(!health.includes("setInterval("), "File health must run from startup/focus/events, not polling.");
 assert(preload.includes("fileStatus"), "Desktop bridge must expose file status checks.");
 assert(dashboard.includes("fileAvailable(job)"), "Dashboard must account for missing render files.");
 assert(dashboard.includes('normalizeStatus(job.status) === "completed" && fileAvailable(job)'), "Completed render KPI must exclude missing/trashed output files.");
 assert(index.includes('src="core-job-file-health.js"'), "Job file health module must be loaded.");
 assert(index.indexOf('src="core-job-file-health.js"') < index.indexOf('src="core-dashboard-real-data.js"'), "File health must initialize before the real dashboard layer.");
 
-console.log("Project and render file health tests passed.");
+console.log("Project/render file health and recovery-action tests passed.");
