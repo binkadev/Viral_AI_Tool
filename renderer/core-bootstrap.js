@@ -23,16 +23,13 @@
     return Boolean(job.sourcePath || job.outputPath || job.isRenderOutput);
   });
 
-  const hasAvailableSource = saved.jobs.some(job =>
-    job?.sourcePath &&
-    !job?.isRenderOutput &&
-    job?.fileState !== "missing" &&
-    job?.fileState !== "trashed"
-  );
+  // A missing source file is still a real project. Keep Core Editor as the
+  // startup route so the relink/recovery flow remains reachable.
+  const hasProjectSource = saved.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
   const savedPage = String(saved.page || "");
   if (["automation", "workflow", "workflow-builder"].includes(savedPage)) {
     saved.page = "download";
-  } else if (savedPage === "ai-video" && !hasAvailableSource) {
+  } else if (savedPage === "ai-video" && !hasProjectSource) {
     saved.page = "download";
   }
 
