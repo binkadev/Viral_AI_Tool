@@ -27,6 +27,8 @@ for (const token of [
   assert(js.includes(token), "Creator Home behavior missing: " + token);
 }
 
+assert(!js.includes("statusBadge"), "Creator Home must not present stale source-job status as project workflow status.");
+
 for (const token of [
   ".creator-home-hero",
   ".creator-import-zone",
@@ -42,6 +44,11 @@ for (const token of [
 const relinkRule = css.match(/\.creator-recent-relink\{([^}]*)\}/)?.[1] || "";
 assert(relinkRule.includes("min-height:32px"), "Recent-source recovery action must exceed the minimum pointer target floor.");
 assert(relinkRule.includes("font-size:13px"), "Recent-source recovery action must meet the control-copy readability floor.");
+
+const recentTitleRule = css.match(/\.creator-recent-copy strong\{([^}]*)\}/)?.[1] || "";
+const recentMetaRule = css.match(/\.creator-recent-copy span\{([^}]*)\}/)?.[1] || "";
+assert(recentTitleRule.includes("font-size:13px"), "Recent-source title must meet the primary readability floor.");
+assert(recentMetaRule.includes("font-size:12px"), "Recent-source metadata must meet the secondary readability floor.");
 
 assert(index.includes('href="core-creator-home.css"'), "Creator Home stylesheet must be loaded.");
 assert(index.includes('src="core-creator-home.js"'), "Creator Home script must be loaded.");
