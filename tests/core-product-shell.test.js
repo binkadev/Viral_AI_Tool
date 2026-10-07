@@ -34,8 +34,11 @@ for (const required of [
   "pages.download = function coreImportPage()",
   'workflow: "Tạo video"',
   'editor: "Studio video"',
+  'workspaceName: "Studio video"',
   'workflow: "Create video"',
-  'editor: "Video studio"'
+  'editor: "Video studio"',
+  'workspaceName: "Video Studio"',
+  'document.querySelector(".workspace strong")'
 ]) assert(shell.includes(required), "Core product shell missing: " + required);
 
 for (const legacyName of ["Douyin_Product_042.mp4", "UGC_Beauty_118.mp4", "Review_Camera_090.mp4", "Short_Fashion_031.mp4"])
