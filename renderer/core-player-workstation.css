@@ -99,4 +99,4 @@ html.core-editor-premium .core-player-time{min-width:82px!important;font-size:10
   html.core-editor-premium .core-player-volume{display:none!important}
 }
 @media(prefers-reduced-motion:reduce){html.core-editor-premium .core-player-button{transition:none!important}}
-html[data-motion="reduced"] html.core-editor-premium .core-player-button{transition:none!important}
+html[data-motion="reduced"].core-editor-premium .core-player-button{transition:none!important}
