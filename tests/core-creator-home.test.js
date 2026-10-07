@@ -22,7 +22,12 @@ for (const token of [
   "data-creator-open",
   "data-job-action=\"relink\"",
   'document.addEventListener("drop"',
-  'document.documentElement.dataset.motion === "reduced"'
+  'document.documentElement.dataset.motion === "reduced"',
+  "function sourceAvailability(job)",
+  'fileState === "trashed"',
+  'fileState === "missing"',
+  'sourceAvailability(source)',
+  'sourceAvailability(job)'
 ]) {
   assert(js.includes(token), "Creator Home behavior missing: " + token);
 }
@@ -33,6 +38,7 @@ for (const token of [
   ".creator-home-hero",
   ".creator-import-zone",
   ".creator-current-project",
+  ".creator-source-availability",
   ".creator-workspace-preparing",
   ":focus-visible",
   "prefers-reduced-motion",
@@ -46,7 +52,7 @@ assert(relinkRule.includes("min-height:32px"), "Recent-source recovery action mu
 assert(relinkRule.includes("font-size:13px"), "Recent-source recovery action must meet the control-copy readability floor.");
 
 const recentTitleRule = css.match(/\.creator-recent-copy strong\{([^}]*)\}/)?.[1] || "";
-const recentMetaRule = css.match(/\.creator-recent-copy span\{([^}]*)\}/)?.[1] || "";
+const recentMetaRule = css.match(/(?:^|})\.creator-recent-copy span\{([^}]*)\}/)?.[1] || "";
 assert(recentTitleRule.includes("font-size:13px"), "Recent-source title must meet the primary readability floor.");
 assert(recentMetaRule.includes("font-size:12px"), "Recent-source metadata must meet the secondary readability floor.");
 
@@ -73,6 +79,8 @@ const requiredKeys = [
   "aiVideo.editor",
   "media.readingInfo",
   "file.relink",
+  "file.missing",
+  "file.trashed",
   "common.processing"
 ];
 
