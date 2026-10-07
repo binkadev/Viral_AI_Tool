@@ -13,8 +13,8 @@
   }
   function copy(){
     return locale()==="en"
-      ?{trigger:"Quick switch",placeholder:"Search pages and tools…",title:"Quick switch",empty:"No matching destination",hint:"Navigate",close:"Close"}
-      :{trigger:"Chuyển nhanh",placeholder:"Tìm màn hình hoặc công cụ…",title:"Chuyển nhanh",empty:"Không tìm thấy mục phù hợp",hint:"Đi tới",close:"Đóng"};
+      ?{trigger:"Quick switch",placeholder:"Search pages and tools…",title:"Quick switch",empty:"No matching destination",hint:"Navigate"}
+      :{trigger:"Chuyển nhanh",placeholder:"Tìm màn hình hoặc công cụ…",title:"Chuyển nhanh",empty:"Không tìm thấy mục phù hợp",hint:"Đi tới"};
   }
   function trigger(){return document.querySelector(".command-palette")}
   function navOptions(){
@@ -86,6 +86,7 @@
     else if(event.key==="ArrowUp"){event.preventDefault();if(options.length){activeIndex=(activeIndex-1+options.length)%options.length;paintActive()}}
     else if(event.key==="Enter"){event.preventDefault();activate(activeIndex)}
     else if(event.key==="Escape"){event.preventDefault();close()}
+    else if(event.key==="Tab"){event.preventDefault();input.focus({preventScroll:true})}
   }
   function syncCopy(){
     const c=copy();
