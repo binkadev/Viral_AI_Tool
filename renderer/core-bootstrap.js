@@ -8,6 +8,15 @@
     "Review_Camera_090.mp4",
     "Short_Fashion_031.mp4"
   ]);
+  const root = document.documentElement;
+
+  // Never paint an intermediate legacy page. The shell stays visible; only the
+  // page content waits until production routing has settled. No fade/animation.
+  root.dataset.coreFirstPaint = "pending";
+  const firstPaintStyle = document.createElement("style");
+  firstPaintStyle.id = "coreFirstPaintGuard";
+  firstPaintStyle.textContent = 'html[data-core-first-paint="pending"] #page{visibility:hidden!important;pointer-events:none!important}';
+  document.head.appendChild(firstPaintStyle);
 
   let saved = {};
   try {
@@ -23,16 +32,10 @@
     return Boolean(job.sourcePath || job.outputPath || job.isRenderOutput);
   });
 
-  // A missing source file is still a real project. Keep Core Editor as the
-  // startup route so the relink/recovery flow remains reachable.
+  // A missing source file is still a real project. Start directly in Core Editor
+  // so the relink/recovery UI is available instead of bouncing through Import.
   const hasProjectSource = saved.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-  const savedPage = String(saved.page || "");
-  if (["automation", "workflow", "workflow-builder"].includes(savedPage)) {
-    saved.page = "download";
-  } else if (savedPage === "ai-video" && !hasProjectSource) {
-    saved.page = "download";
-  }
-
+  saved.page = hasProjectSource ? "ai-video" : "download";
   localStorage.setItem(KEY, JSON.stringify(saved));
 
   function loadProductionOverride(href, kind) {
@@ -51,6 +54,23 @@
     document.body.appendChild(script);
   }
 
+  function settleFirstPaint() {
+    requestAnimationFrame(() => {
+      try {
+        if (typeof state !== "undefined" && state) {
+          const project = Array.isArray(state.jobs) && state.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
+          const target = project ? "ai-video" : "download";
+          if (state.page !== target) {
+            state.page = target;
+            if (typeof render === "function") render();
+          }
+        }
+      } catch {}
+      root.dataset.coreFirstPaint = "ready";
+      firstPaintStyle.remove();
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     loadProductionOverride("core-accounts-real-data.css", "style");
     loadProductionOverride("core-accounts-real-data.js", "script");
@@ -58,5 +78,6 @@
     loadProductionOverride("core-settings-production.js", "script");
     loadProductionOverride("core-creator-home-production.js", "script");
     loadProductionOverride("core-export-folder-recovery.js", "script");
+    settleFirstPaint();
   }, { once: true });
 })();
