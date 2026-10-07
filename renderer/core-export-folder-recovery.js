@@ -1,22 +1,62 @@
 (function installCoreExportFolderRecovery() {
   "use strict";
 
-  let legacy = null;
+  let legacyHandle = null;
+  let legacyLocalized = null;
+  let legacyReal = null;
+  let pendingPipeline = null;
+
+  function wrapRenderEntrypoints() {
+    try {
+      if (typeof startLocalizedRender === "function" && startLocalizedRender.__coreFolderTracked !== true) {
+        legacyLocalized = startLocalizedRender;
+        const localized = async function coreTrackedLocalizedRender(sourceOverride = null) {
+          pendingPipeline = { kind: "localized", source: sourceOverride || null };
+          return legacyLocalized(sourceOverride);
+        };
+        localized.__coreFolderTracked = true;
+        startLocalizedRender = localized;
+      }
+      if (typeof startRealRender === "function" && startRealRender.__coreFolderTracked !== true) {
+        legacyReal = startRealRender;
+        const real = async function coreTrackedRealRender(sourceOverride = null) {
+          pendingPipeline = { kind: "real", source: sourceOverride || null };
+          return legacyReal(sourceOverride);
+        };
+        real.__coreFolderTracked = true;
+        startRealRender = real;
+      }
+    } catch {}
+  }
+
+  async function retryPipeline(source) {
+    const pending = pendingPipeline;
+    pendingPipeline = null;
+    if (pending?.kind === "localized" && typeof startLocalizedRender === "function") {
+      return startLocalizedRender(source || pending.source || null);
+    }
+    if (pending?.kind === "real" && typeof startRealRender === "function") {
+      return startRealRender(source || pending.source || null);
+    }
+    return null;
+  }
 
   function install() {
     try {
+      wrapRenderEntrypoints();
       if (typeof handleExportBlock !== "function") return false;
       if (handleExportBlock.__coreFolderRecovery === true) return true;
-      legacy = handleExportBlock;
+      legacyHandle = handleExportBlock;
 
       const replacement = async function coreHandleExportBlock(response, source) {
         const code = response?.error?.code || "PROCESSING_FAILED";
         if (!["OUTPUT_UNAVAILABLE", "OUTPUT_REQUIRED"].includes(code)) {
-          return legacy(response, source);
+          pendingPipeline = null;
+          return legacyHandle(response, source);
         }
 
         const root = document.getElementById("modal");
-        if (!root) return legacy(response, source);
+        if (!root) return legacyHandle(response, source);
         root.classList.remove("hidden");
         root.innerHTML =
           '<div class="modal commercial-modal">' +
@@ -30,13 +70,18 @@
           '</div>';
 
         const cancel = document.getElementById("outputFolderCancel");
-        if (cancel) cancel.onclick = () => root.classList.add("hidden");
+        if (cancel) cancel.onclick = () => {
+          pendingPipeline = null;
+          root.classList.add("hidden");
+        };
 
         const choose = document.getElementById("outputFolderChoose");
         if (choose instanceof HTMLButtonElement) {
           choose.onclick = async () => {
             choose.disabled = true;
-            const folder = await window.desktopAPI?.selectOutputFolder?.();
+            let folder = null;
+            try { folder = await window.desktopAPI?.selectOutputFolder?.(); }
+            catch { folder = null; }
             if (!folder) {
               choose.disabled = false;
               return;
@@ -45,6 +90,7 @@
             try { if (typeof save === "function") save(); } catch {}
             root.classList.add("hidden");
             try { if (typeof render === "function") render(); } catch {}
+            await retryPipeline(source);
           };
         }
       };
