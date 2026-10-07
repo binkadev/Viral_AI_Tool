@@ -48,5 +48,6 @@
   document.addEventListener("DOMContentLoaded", () => {
     loadProductionOverride("core-accounts-real-data.css", "style");
     loadProductionOverride("core-accounts-real-data.js", "script");
+    loadProductionOverride("core-library-output-recovery.js", "script");
   }, { once: true });
 })();
