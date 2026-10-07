@@ -128,10 +128,18 @@
   function renderPointer(target) {
     const x = Math.max(0, Math.min(1, pointerX / Math.max(1, window.innerWidth)));
     const y = Math.max(0, Math.min(1, pointerY / Math.max(1, window.innerHeight)));
+    const shiftX = (x - .5) * 12;
+    const shiftY = (y - .5) * 8;
     root.style.setProperty("--hud-pointer-x", x.toFixed(3));
     root.style.setProperty("--hud-pointer-y", y.toFixed(3));
-    root.style.setProperty("--hud-shift-x", ((x - .5) * 12).toFixed(2) + "px");
-    root.style.setProperty("--hud-shift-y", ((y - .5) * 8).toFixed(2) + "px");
+    root.style.setProperty("--hud-shift-x", shiftX.toFixed(2) + "px");
+    root.style.setProperty("--hud-shift-y", shiftY.toFixed(2) + "px");
+    root.style.setProperty("--hud-grid-x", (shiftX * .22).toFixed(2) + "px");
+    root.style.setProperty("--hud-grid-y", (shiftY * .22).toFixed(2) + "px");
+    root.style.setProperty("--hud-orbit-x", (shiftX * .42).toFixed(2) + "px");
+    root.style.setProperty("--hud-orbit-y", (shiftY * .42).toFixed(2) + "px");
+    root.style.setProperty("--hud-trace-x", (shiftX * -.28).toFixed(2) + "px");
+    root.style.setProperty("--hud-trace-y", (shiftY * -.18).toFixed(2) + "px");
     syncSurface(target);
     syncMagnet(target);
   }
