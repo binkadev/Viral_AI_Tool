@@ -39,6 +39,10 @@ for (const token of [
   assert(css.includes(token), "Creator Home style missing: " + token);
 }
 
+const relinkRule = css.match(/\.creator-recent-relink\{([^}]*)\}/)?.[1] || "";
+assert(relinkRule.includes("min-height:32px"), "Recent-source recovery action must exceed the minimum pointer target floor.");
+assert(relinkRule.includes("font-size:13px"), "Recent-source recovery action must meet the control-copy readability floor.");
+
 assert(index.includes('href="core-creator-home.css"'), "Creator Home stylesheet must be loaded.");
 assert(index.includes('src="core-creator-home.js"'), "Creator Home script must be loaded.");
 assert(
