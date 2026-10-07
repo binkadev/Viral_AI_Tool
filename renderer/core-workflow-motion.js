@@ -5,6 +5,8 @@
   let queued = false;
   let firstFrame = 0;
   let secondFrame = 0;
+  let animatingRail = null;
+  let animationPending = false;
 
   function clampProgress(value) {
     const number = Number.parseFloat(value);
@@ -18,13 +20,29 @@
     catch { return false; }
   }
 
+  function cancelPendingAnimation() {
+    if (firstFrame) cancelAnimationFrame(firstFrame);
+    if (secondFrame) cancelAnimationFrame(secondFrame);
+    firstFrame = 0;
+    secondFrame = 0;
+    animatingRail = null;
+    animationPending = false;
+  }
+
   function syncProgress() {
     queued = false;
     const rail = document.querySelector(".core-workflow-rail");
     if (!(rail instanceof HTMLElement)) return;
 
+    // A workflow refresh can enqueue another mutation after we intentionally set
+    // the previous visual position. Ignore that duplicate callback so the rail
+    // never oscillates backward while interpolating to the real next state.
+    if (animationPending && rail === animatingRail) return;
+    if (animationPending && rail !== animatingRail) cancelPendingAnimation();
+
     const next = clampProgress(rail.style.getPropertyValue("--workflow-progress"));
     if (lastProgress === null || reducedMotion()) {
+      cancelPendingAnimation();
       lastProgress = next;
       rail.style.setProperty("--workflow-progress", next.toFixed(4));
       return;
@@ -34,9 +52,10 @@
     lastProgress = next;
     if (Math.abs(next - previous) < 0.0001) return;
 
+    cancelPendingAnimation();
+    animatingRail = rail;
+    animationPending = true;
     rail.style.setProperty("--workflow-progress", previous.toFixed(4));
-    if (firstFrame) cancelAnimationFrame(firstFrame);
-    if (secondFrame) cancelAnimationFrame(secondFrame);
 
     firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => {
@@ -46,6 +65,8 @@
         }
         firstFrame = 0;
         secondFrame = 0;
+        animatingRail = null;
+        animationPending = false;
       });
     });
   }
