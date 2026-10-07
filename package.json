@@ -58,7 +58,8 @@
     "test:core-editor-shortcuts": "node tests/core-editor-shortcuts.test.js",
     "test:core-motion-policy": "node tests/core-motion-policy.test.js",
     "test:core-job-file-health": "node tests/core-job-file-health.test.js",
-    "test:core-accounts-real-data": "node tests/core-accounts-real-data.test.js"
+    "test:core-accounts-real-data": "node tests/core-accounts-real-data.test.js",
+    "test:core-library-output-recovery": "node tests/core-library-output-recovery.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
