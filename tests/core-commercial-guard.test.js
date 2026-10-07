@@ -20,6 +20,10 @@ const motion = read("renderer/core-motion-policy.css");
 
 assert(index.includes('data-motion="balanced"'), "New installs must default to balanced motion.");
 assert(!index.includes("core-startup-experience"), "Removed startup animation must stay out of production shell.");
+assert(index.indexOf('src="core-bootstrap.js"') < index.indexOf('src="app.js"'), "Startup sanitizer must execute before legacy app state is constructed.");
+assert(bootstrap.includes("const jobs = Array.isArray(saved.jobs) ? saved.jobs : []"), "Bootstrap must materialize an empty real jobs array on fresh installs.");
+assert(bootstrap.includes("saved.jobs = jobs.filter"), "Bootstrap must sanitize persisted jobs before app.js reads them.");
+assert(bootstrap.includes("prototypeNames.has"), "Bootstrap must remove legacy prototype jobs before first paint.");
 assert(bootstrap.includes("hasProjectSource"), "Startup bootstrap must identify persisted source projects.");
 assert(bootstrap.includes('saved.page = hasProjectSource ? "ai-video" : "download"'), "First render must go directly to the workflow route.");
 assert(bootstrap.includes('root.dataset.coreFirstPaint = "pending"'), "First paint must be gated until production routing settles.");
