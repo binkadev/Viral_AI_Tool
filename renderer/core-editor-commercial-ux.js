@@ -27,6 +27,7 @@
       ? {
           ready: "Ready",
           needsSetup: "Needs setup",
+          connectionError: "Connection error",
           sourceMissingTitle: "Source video is unavailable",
           sourceMissingBody: "The original file may have been moved, renamed, or deleted. Your project data and completed processing are still kept.",
           sourceTrashedTitle: "Source video was moved to Recycle Bin",
@@ -43,6 +44,7 @@
       : {
           ready: "Sẵn sàng",
           needsSetup: "Cần thiết lập",
+          connectionError: "Lỗi kết nối",
           sourceMissingTitle: "Video nguồn không còn khả dụng",
           sourceMissingBody: "File gốc có thể đã bị di chuyển, đổi tên hoặc xóa. Dữ liệu dự án và các bước đã xử lý vẫn được giữ nguyên.",
           sourceTrashedTitle: "Video nguồn đã được chuyển vào Thùng rác",
@@ -206,6 +208,26 @@
     });
   }
 
+  function normalizeLegacyConnectionCopy(panel) {
+    if (!(panel instanceof HTMLElement)) return;
+    const replacement = copy().connectionError;
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+    const touched = new Set();
+    let node = walker.nextNode();
+
+    while (node) {
+      const value = String(node.nodeValue || "").trim();
+      if (value === "Lỗi nối") {
+        node.nodeValue = String(node.nodeValue || "").replace("Lỗi nối", replacement);
+        const owner = node.parentElement?.closest?.("button, [role='button'], .speech-provider-badge, .core-commercial-connection-badge");
+        if (owner instanceof HTMLElement) touched.add(owner);
+      }
+      node = walker.nextNode();
+    }
+
+    touched.forEach(owner => owner.setAttribute("aria-label", replacement));
+  }
+
   function syncConnectionPanels(page) {
     const c = copy();
     const selector = [
@@ -220,6 +242,7 @@
     page?.querySelectorAll?.(selector).forEach(panel => {
       if (!(panel instanceof HTMLElement)) return;
       panel.classList.add("core-commercial-connection");
+      normalizeLegacyConnectionCopy(panel);
 
       const stateName = panel.classList.contains("is-ready")
         ? "ready"
