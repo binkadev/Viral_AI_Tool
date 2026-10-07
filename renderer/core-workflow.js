@@ -129,7 +129,14 @@
     if (currentIndex < 0) currentIndex = stages.findIndex(stage => stage.status !== "completed");
     currentIndex = Math.max(0, currentIndex);
 
-    return { completed, currentIndex, progress: total > 1 ? Math.max(0, Math.min(1, currentIndex / (total - 1))) : 0 };
+    const currentStage = stages[currentIndex];
+    const lastCompletedIndex = Math.max(-1, completed - 1);
+    const visualIndex = currentStage?.status === "processing"
+      ? Math.max(lastCompletedIndex, currentIndex - 0.5)
+      : lastCompletedIndex;
+    const progress = total > 1 ? Math.max(0, Math.min(1, visualIndex / (total - 1))) : 0;
+
+    return { completed, currentIndex, progress };
   }
 
   function ensureWorkflowRail(derived, saved) {
@@ -154,12 +161,11 @@
     const c = copy();
     const position = workflowPosition(derived.stages);
     const total = derived.stages.length;
-    const progressPercent = Math.round(position.progress * 100);
     const edge = total ? (100 / (total * 2)).toFixed(4) + "%" : "0%";
     const markup =
       '<div class="core-workflow-head">' +
         '<div class="core-workflow-title">' + c.current + '</div>' +
-        '<div class="core-workflow-progress" aria-hidden="true"><span>' + position.completed + '/' + total + '</span><strong>' + progressPercent + '%</strong></div>' +
+        '<div class="core-workflow-progress" aria-hidden="true"><span>' + position.completed + ' / ' + total + '</span></div>' +
       '</div>' +
       '<div class="core-workflow-scroll">' +
         '<div class="core-workflow-rail" style="--workflow-progress:' + position.progress.toFixed(4) + ';--workflow-edge:' + edge + '">' +
