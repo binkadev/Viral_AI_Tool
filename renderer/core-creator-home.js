@@ -40,6 +40,18 @@
     }
   }
 
+  function sourceAvailability(job) {
+    const fileState = String(job?.fileState || "");
+    const key = fileState === "trashed"
+      ? "file.trashed"
+      : fileState === "missing"
+        ? "file.missing"
+        : "";
+    if (!key) return "";
+
+    return '<span class="creator-source-availability is-' + fileState + '" role="status">' + esc(tr(key)) + '</span>';
+  }
+
   function sourceThumbnail(job, className) {
     const unavailable = job?.fileState === "missing" || job?.fileState === "trashed";
     const classes = [className, unavailable ? "is-unavailable" : ""].filter(Boolean).join(" ");
@@ -83,6 +95,7 @@
         sourceThumbnail(source, "creator-project-thumb") +
         '<div class="creator-project-copy">' +
           '<h3 title="' + esc(source.name || "") + '">' + esc(source.name || tr("common.video")) + '</h3>' +
+          sourceAvailability(source) +
           '<p>' + esc(sourceMeta(source)) + '</p>' +
         '</div>' +
         action +
@@ -105,7 +118,8 @@
             sourceThumbnail(job, "creator-recent-thumb") +
             '<div class="creator-recent-copy">' +
               '<strong title="' + esc(job.name || "") + '">' + esc(job.name || tr("common.video")) + '</strong>' +
-              '<span>' + esc(sourceMeta(job)) + '</span>' +
+              sourceAvailability(job) +
+              '<span class="creator-recent-meta">' + esc(sourceMeta(job)) + '</span>' +
             '</div>' +
             (unavailable
               ? '<button class="creator-recent-relink" type="button" data-job-action="relink" data-job-id="' + esc(job.id) + '">' + esc(tr("file.relink")) + '</button>'
