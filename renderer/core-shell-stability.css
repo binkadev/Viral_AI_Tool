@@ -78,6 +78,29 @@ html[data-theme="midnight"] body{
   display:none!important;
 }
 
+/* Decorative motion stays static. Real processing spinners/progress remain untouched. */
+html[data-theme="midnight"] .premium-hud-grid,
+html[data-theme="midnight"] .premium-hud-scan,
+html[data-theme="midnight"] .premium-hud-orbit,
+html[data-theme="midnight"] .premium-hud-orbit::before,
+html[data-theme="midnight"] .premium-hud-trace,
+html[data-theme="midnight"] .creator-home-hero::after,
+html[data-theme="midnight"] .nav-item.active::after,
+html.core-editor-premium .core-workflow-stage.is-active .core-stage-index,
+html.core-editor-premium .core-workflow-stage.is-active .core-stage-index::after,
+html.core-editor-premium .preview.core-player-host::after,
+html.core-editor-premium .preview.preview-real::after,
+html.core-editor-premium .core-timeline-workspace::after{
+  animation:none!important;
+}
+
+html[data-theme="midnight"] .premium-hud-scan,
+html[data-theme="midnight"] .premium-hud-orbit,
+html[data-theme="midnight"] .premium-hud-trace,
+html.core-editor-premium .core-timeline-workspace::after{
+  display:none!important;
+}
+
 .nav-item,
 .command-palette,
 .select-trigger,
