@@ -84,6 +84,9 @@
       return;
     }
 
+    setDisabledIfChanged(button, false);
+    button.removeAttribute("aria-disabled");
+    delete button.dataset.coreDisabledReason;
     button.classList.remove("core-coming-soon-control");
   }
 
@@ -117,14 +120,16 @@
 
     const legacyTts = document.getElementById("tts");
     if (legacyTts instanceof HTMLButtonElement) mark(legacyTts, "coming-soon");
-
-    const search = document.querySelector(".command-palette");
-    if (search instanceof HTMLButtonElement) mark(search, "coming-soon");
   }
 
   function classifyCoreButtons() {
     document.querySelectorAll("button").forEach(button => {
       if (!(button instanceof HTMLButtonElement)) return;
+
+      if (button.matches(".command-palette")) {
+        mark(button, "functional");
+        return;
+      }
       if (button.dataset.coreCapability) return;
 
       const page = String(button.dataset.page || "");
