@@ -15,11 +15,20 @@ assert.doesNotThrow(() => new Function(js), "Output state JS must parse.");
 for (const required of [
   "Rendered video is ready",
   "Video render đã sẵn sàng",
-  "flow?.renderOutput",
+  "File render không còn khả dụng",
+  "Render lại",
+  "currentOutput()",
   "output?.outputPath",
   "window.desktopAPI?.showFile",
+  "window.desktopAPI?.fileStatus",
+  "checkOutput(output.outputPath, { force: true })",
   "data-output-show",
   "core-output-state-card",
+  'card.dataset.outputState = availability',
+  'output?.fileState === "missing"',
+  'output?.fileState === "trashed"',
+  'document.getElementById("render")',
+  'window.addEventListener("focus", recheckCurrentOutput)',
   "wireRenderProgress()",
   "onRenderProgress",
   "unsubscribeRenderProgress",
@@ -28,13 +37,17 @@ for (const required of [
   assert(js.includes(required), "Output state JS missing: " + required);
 }
 assert(preload.includes("onRenderProgress"), "Desktop bridge must expose render progress events.");
-assert(!js.includes("setInterval("), "Output state must update from render/state events instead of polling every second.");
+assert(preload.includes("fileStatus"), "Desktop bridge must expose file status checks for rendered outputs.");
+assert(!js.includes("setInterval("), "Output state must update from file/render/state events instead of polling every second.");
 
 for (const required of [
   ".core-output-state-card",
   ".core-output-state-action",
   ".core-output-state-hint",
-  "rgba(51,194,127"
+  'data-output-state="checking"',
+  'data-output-state="missing"',
+  "rgba(51,194,127",
+  "rgba(240,180,76"
 ]) {
   assert(css.includes(required), "Output state CSS missing: " + required);
 }
