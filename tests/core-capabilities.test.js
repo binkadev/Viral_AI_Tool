@@ -51,12 +51,17 @@ for (const required of [
   'event.key === "ArrowUp"',
   'event.key === "Enter"',
   'event.key === "Tab"',
-  'app.commandNoResults',
+  'empty: "No matching feature found"',
+  'empty: "Không tìm thấy chức năng phù hợp"',
+  'trigger: "Go to a feature"',
+  'trigger: "Đi tới chức năng"',
   'trigger.dataset.coreCapability = "functional"'
 ]) {
   assert(commandPalette.includes(required), "Command palette is missing behavior: " + required);
 }
 
+assert(!commandPalette.includes("Search anything"),
+  "Command palette must not overpromise global search when it only navigates production features.");
 assert(!workflow.includes("markComingSoon"),
   "Workflow refresher must not disable the functional command palette.");
 assert(!workflow.includes('document.querySelector(".command-palette")'),
