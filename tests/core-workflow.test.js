@@ -148,6 +148,7 @@ assert(workflow.includes('import: "NHẬP"'), "Vietnamese workflow stage labels 
 assert(workflow.includes("stageReason(stage, derived, c)"), "Workflow stage reasons must be localized in the UI layer.");
 assert(workflow.includes('controlReason("render"'), "Disabled render guidance must be localized in the UI layer.");
 assert(workflow.includes("workflowPosition(derived.stages)"), "Workflow rail must derive a real stage position.");
+assert(workflow.includes("contiguousCompleted"), "Workflow progress must only count completed stages that are contiguous from the start.");
 assert(workflow.includes('class="core-workflow-progress"'), "Workflow rail must expose completed-stage progress.");
 assert(!workflow.includes("progressPercent"), "Workflow header must not expose a misleading completion percentage.");
 assert(workflow.includes('aria-current="step"'), "The active workflow stage must be exposed accessibly.");
