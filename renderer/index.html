@@ -12,19 +12,9 @@
         const stateKey = "viral-ai-tool-state";
         const saved = JSON.parse(localStorage.getItem(stateKey) || "{}");
         let changed = false;
-
-        // Premium Dark + balanced motion are defaults for users who have no
-        // saved choice. Existing light/dark and motion preferences are preserved.
-        if (!saved.appearance) {
-          saved.appearance = "midnight";
-          changed = true;
-        }
-        if (!saved.motion) {
-          saved.motion = "balanced";
-          changed = true;
-        }
+        if (!saved.appearance) { saved.appearance = "midnight"; changed = true; }
+        if (!saved.motion) { saved.motion = "balanced"; changed = true; }
         if (changed) localStorage.setItem(stateKey, JSON.stringify(saved));
-
         const themes = new Set(["aurora-light", "pearl-light", "midnight"]);
         const motions = new Set(["balanced", "expressive", "reduced"]);
         const scales = new Set(["compact", "comfortable", "large"]);
@@ -32,9 +22,7 @@
         root.dataset.motion = motions.has(saved.motion) ? saved.motion : "balanced";
         if (scales.has(saved.scale)) root.dataset.scale = saved.scale;
         if (["vi", "en"].includes(saved.locale)) root.lang = saved.locale;
-      } catch {
-        // Premium Dark / balanced are the safe first-paint defaults.
-      }
+      } catch {}
     })();
   </script>
   <link rel="stylesheet" href="styles.css" />
@@ -74,148 +62,21 @@
   <link rel="stylesheet" href="core-motion-policy.css" />
 </head>
 <body>
-  <div class="ambient-layer" aria-hidden="true">
-    <span class="ambient ambient-a"></span>
-    <span class="ambient ambient-b"></span>
-    <span class="ambient ambient-c"></span>
-  </div>
-
-  <header class="titlebar">
-    <div class="drag">
-      <div class="app-icon viral-brand-icon"><img src="brand-mark.svg" alt="" /></div>
-      <strong>Viral AI Tool</strong>
-      <span id="desktopPill" class="desktop-pill">Ứng dụng desktop</span>
-    </div>
-    <div class="window-controls">
-      <button id="winMin" aria-label="Minimize">—</button>
-      <button id="winMax" aria-label="Maximize">□</button>
-      <button id="winClose" class="close" aria-label="Close">×</button>
-    </div>
-  </header>
-
+  <div class="ambient-layer" aria-hidden="true"><span class="ambient ambient-a"></span><span class="ambient ambient-b"></span><span class="ambient ambient-c"></span></div>
+  <header class="titlebar"><div class="drag"><div class="app-icon viral-brand-icon"><img src="brand-mark.svg" alt="" /></div><strong>Viral AI Tool</strong><span id="desktopPill" class="desktop-pill">Ứng dụng desktop</span></div><div class="window-controls"><button id="winMin" aria-label="Minimize">—</button><button id="winMax" aria-label="Maximize">□</button><button id="winClose" class="close" aria-label="Close">×</button></div></header>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark viral-brand-mark"><img src="brand-mark.svg" alt="" /></div>
-        <div>
-          <div class="brand-name">VIRAL AI</div>
-          <div class="brand-sub">CREATOR STUDIO</div>
-        </div>
-      </div>
-
-      <div class="workspace">
-        <div>
-          <span id="workspaceLabel">Không gian làm việc</span>
-          <strong>Core Project</strong>
-        </div>
-        <i aria-hidden="true"></i>
-      </div>
-
+      <div class="brand"><div class="brand-mark viral-brand-mark"><img src="brand-mark.svg" alt="" /></div><div><div class="brand-name">VIRAL AI</div><div class="brand-sub">CREATOR STUDIO</div></div></div>
+      <div class="workspace"><div><span id="workspaceLabel">Không gian làm việc</span><strong>Core Project</strong></div><i aria-hidden="true"></i></div>
       <nav id="nav" aria-label="Primary"></nav>
-
-      <div class="sidebar-bottom">
-        <div class="credit-card" data-core-placeholder="account-usage">
-          <div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>—</b></div>
-          <div class="bar"><i style="width:0%"></i></div>
-          <small><span>—</span> <span id="remainingLabel">còn lại</span></small>
-        </div>
-        <div class="profile" data-core-placeholder="account-profile">
-          <div class="avatar">•</div>
-          <div><b>Cloud account</b><span>Chưa đồng bộ</span></div>
-        </div>
-      </div>
+      <div class="sidebar-bottom"><div class="credit-card" data-core-placeholder="account-usage"><div class="credit-head"><span id="creditsLabel">Tín dụng tháng</span><b>—</b></div><div class="bar"><i style="width:0%"></i></div><small><span>—</span> <span id="remainingLabel">còn lại</span></small></div><div class="profile" data-core-placeholder="account-profile"><div class="avatar">•</div><div><b>Cloud account</b><span>Chưa đồng bộ</span></div></div></div>
     </aside>
-
     <main class="main">
-      <header class="topbar">
-        <div class="topbar-heading">
-          <div id="breadcrumb" class="breadcrumb"></div>
-          <h1 id="pageTitle"></h1>
-        </div>
-
-        <div class="top-actions">
-          <button class="command-palette" type="button" aria-label="Đi tới chức năng">
-            <span class="command-icon">⌕</span>
-            <span class="command-copy">Đi tới chức năng</span>
-            <kbd>Ctrl K</kbd>
-          </button>
-
-          <div class="language-control">
-            <button id="langMenuButton" class="select-trigger language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-              <span class="select-leading">文</span>
-              <span class="select-value">
-                <small id="langHint">Language</small>
-                <strong id="langName">Tiếng Việt</strong>
-              </span>
-              <span class="select-chevron" aria-hidden="true">▾</span>
-            </button>
-            <div id="langMenu" class="popover-menu hidden" role="listbox" aria-label="Language">
-              <button class="popover-option" type="button" data-locale="vi" role="option">
-                <span class="option-code">VI</span>
-                <span><b>Tiếng Việt</b><small>Vietnamese</small></span>
-                <span class="option-check">✓</span>
-              </button>
-              <button class="popover-option" type="button" data-locale="en" role="option">
-                <span class="option-code">EN</span>
-                <span><b>English</b><small>English</small></span>
-                <span class="option-check">✓</span>
-              </button>
-            </div>
-          </div>
-
-          <button id="quickProject" class="button primary" type="button">
-            <span class="button-spark" aria-hidden="true">✦</span>
-            <span id="newProjectLabel">Dự án mới</span>
-          </button>
-        </div>
-      </header>
-
+      <header class="topbar"><div class="topbar-heading"><div id="breadcrumb" class="breadcrumb"></div><h1 id="pageTitle"></h1></div><div class="top-actions"><button class="command-palette" type="button" aria-label="Đi tới chức năng"><span class="command-icon">⌕</span><span class="command-copy">Đi tới chức năng</span><kbd>Ctrl K</kbd></button><div class="language-control"><button id="langMenuButton" class="select-trigger language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="select-leading">文</span><span class="select-value"><small id="langHint">Language</small><strong id="langName">Tiếng Việt</strong></span><span class="select-chevron" aria-hidden="true">▾</span></button><div id="langMenu" class="popover-menu hidden" role="listbox" aria-label="Language"><button class="popover-option" type="button" data-locale="vi" role="option"><span class="option-code">VI</span><span><b>Tiếng Việt</b><small>Vietnamese</small></span><span class="option-check">✓</span></button><button class="popover-option" type="button" data-locale="en" role="option"><span class="option-code">EN</span><span><b>English</b><small>English</small></span><span class="option-check">✓</span></button></div></div><button id="quickProject" class="button primary" type="button"><span class="button-spark" aria-hidden="true">✦</span><span id="newProjectLabel">Dự án mới</span></button></div></header>
       <section id="page" class="page" aria-live="polite"></section>
     </main>
   </div>
-
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <div id="modal" class="modal-backdrop hidden"></div>
-
-  <script src="i18n.js"></script>
-  <script src="core-bootstrap.js"></script>
-  <script src="app.js"></script>
-  <script src="core-job-model.js"></script>
-  <script src="core-player-model.js"></script>
-  <script src="core-transcript-model.js"></script>
-  <script src="core-editor-stability.js"></script>
-  <script src="core-player.js"></script>
-  <script src="core-player-interactions.js"></script>
-  <script src="core-player-rebind.js"></script>
-  <script src="core-player-workstation.js"></script>
-  <script src="core-media-health.js"></script>
-  <script src="core-transcript-state.js"></script>
-  <script src="core-workflow-model.js"></script>
-  <script src="core-workflow.js"></script>
-  <script src="core-workflow-motion.js"></script>
-  <script src="core-layout.js"></script>
-  <script src="core-capabilities.js"></script>
-  <script src="core-command-palette.js"></script>
-  <script src="core-media-restore.js"></script>
-  <script src="core-job-file-health.js"></script>
-  <script src="core-product-shell.js"></script>
-  <script src="core-navigation-stability.js"></script>
-  <script src="core-editor-focus.js"></script>
-  <script src="core-editor-workbench.js"></script>
-  <script src="core-inspector-workflow.js"></script>
-  <script src="core-editor-bottom-dock.js"></script>
-  <script src="core-editor-assets.js"></script>
-  <script src="core-editor-selection.js"></script>
-  <script src="core-editor-premium-theme.js"></script>
-  <script src="core-editor-commercial-ux.js"></script>
-  <script src="core-source-recovery.js"></script>
-  <script src="core-editor-processing-mode.js"></script>
-  <script src="core-editor-activity.js"></script>
-  <script src="core-editor-output-state.js"></script>
-  <script src="core-editor-timeline-interactions.js"></script>
-  <script src="core-editor-shortcuts.js"></script>
-  <script src="core-creator-home.js"></script>
-  <script src="core-dashboard-real-data.js"></script>
-  <script src="core-premium-hud.js"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="modal" class="modal-backdrop hidden"></div>
+  <script src="i18n.js"></script><script src="core-bootstrap.js"></script><script src="app.js"></script><script src="core-job-model.js"></script><script src="core-player-model.js"></script><script src="core-transcript-model.js"></script><script src="core-editor-stability.js"></script><script src="core-player.js"></script><script src="core-player-interactions.js"></script><script src="core-player-rebind.js"></script><script src="core-player-workstation.js"></script><script src="core-media-health.js"></script><script src="core-transcript-state.js"></script><script src="core-workflow-model.js"></script><script src="core-workflow.js"></script><script src="core-workflow-motion.js"></script><script src="core-layout.js"></script><script src="core-capabilities.js"></script><script src="core-command-palette.js"></script><script src="core-media-restore.js"></script><script src="core-job-file-health.js"></script><script src="core-product-shell.js"></script><script src="core-navigation-stability.js"></script><script src="core-editor-focus.js"></script><script src="core-editor-workbench.js"></script><script src="core-inspector-workflow.js"></script><script src="core-editor-bottom-dock.js"></script><script src="core-editor-assets.js"></script><script src="core-editor-selection.js"></script><script src="core-editor-premium-theme.js"></script><script src="core-editor-commercial-ux.js"></script><script src="core-source-recovery.js"></script><script src="core-editor-processing-mode.js"></script><script src="core-editor-activity.js"></script><script src="core-editor-output-state-v2.js"></script><script src="core-editor-timeline-interactions.js"></script><script src="core-editor-shortcuts.js"></script><script src="core-creator-home.js"></script><script src="core-dashboard-real-data.js"></script><script src="core-premium-hud.js"></script>
 </body>
 </html>
