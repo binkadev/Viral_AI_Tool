@@ -32,6 +32,7 @@
           renders: "Completed renders",
           cloudRemaining: "Cloud minutes left",
           notSynced: "Not synced",
+          noProject: "No project",
           recent: "Recent work",
           recentDesc: "Real project files and render history from this workspace.",
           noRecent: "No project activity yet.",
@@ -61,6 +62,7 @@
           renders: "Render hoàn tất",
           cloudRemaining: "Cloud còn lại",
           notSynced: "Chưa đồng bộ",
+          noProject: "Chưa có dự án",
           recent: "Công việc gần đây",
           recentDesc: "File dự án và lịch sử render thật trong workspace này.",
           noRecent: "Chưa có hoạt động dự án.",
@@ -99,6 +101,11 @@
 
   function renderJobs() {
     return jobs().filter(job => job?.isRenderOutput);
+  }
+
+  function fileName(value) {
+    const raw = String(value || "");
+    return raw.split(/[\\/]/).filter(Boolean).pop() || raw;
   }
 
   function activeJobCount() {
@@ -217,6 +224,14 @@
   function syncSidebar() {
     const c = copy();
     const cloud = cloudInfo();
+    const source = sourceJobs()[0] || null;
+    const workspace = document.querySelector(".workspace strong");
+    if (workspace) {
+      const projectName = source?.name || fileName(source?.sourcePath) || c.noProject;
+      workspace.textContent = projectName;
+      workspace.title = projectName;
+    }
+
     const usage = document.querySelector('[data-core-placeholder="account-usage"]');
     if (usage instanceof HTMLElement) {
       const label = usage.querySelector("#creditsLabel");
