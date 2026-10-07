@@ -34,6 +34,7 @@
     "test:deployment-config": "node tests/deployment-config.test.js",
     "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js",
     "test:core-player": "node tests/core-player.test.js",
+    "test:core-player-workstation": "node tests/core-player-workstation.test.js",
     "test:core-transcript": "node tests/core-transcript.test.js",
     "test:core-workflow": "node tests/core-workflow.test.js",
     "test:core-layout": "node tests/core-layout.test.js",
@@ -49,7 +50,10 @@
     "test:core-editor-commercial-ux": "node tests/core-editor-commercial-ux.test.js",
     "test:core-editor-activity": "node tests/core-editor-activity.test.js",
     "test:core-editor-output-state": "node tests/core-editor-output-state.test.js",
-    "test:core-editor-timeline-interactions": "node tests/core-editor-timeline-interactions.test.js"
+    "test:core-editor-timeline-interactions": "node tests/core-editor-timeline-interactions.test.js",
+    "test:core-timeline-workstation": "node tests/core-timeline-workstation.test.js",
+    "test:core-editor-panels-workstation": "node tests/core-editor-panels-workstation.test.js",
+    "test:core-source-recovery": "node tests/core-source-recovery.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
