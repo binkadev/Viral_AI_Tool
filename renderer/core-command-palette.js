@@ -6,13 +6,14 @@
   let input = null;
   let list = null;
   let activeIndex = 0;
+  let opener = null;
 
   function locale() {
     try {
       const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
       return saved.locale === "en" ? "en" : "vi";
     } catch {
-      return "vi";
+      return root.lang === "en" ? "en" : "vi";
     }
   }
 
@@ -63,11 +64,11 @@
       '<div class="core-command-dialog" role="dialog" aria-modal="true">' +
         '<div class="core-command-input-wrap">' +
           '<span class="core-command-search" aria-hidden="true">⌕</span>' +
-          '<input class="core-command-input" autocomplete="off" spellcheck="false" />' +
+          '<input class="core-command-input" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="coreCommandList" autocomplete="off" spellcheck="false" />' +
           '<kbd>Esc</kbd>' +
         '</div>' +
         '<div class="core-command-meta"><span class="core-command-hint"></span><span>↑ ↓ · Enter</span></div>' +
-        '<div class="core-command-list" role="listbox"></div>' +
+        '<div id="coreCommandList" class="core-command-list" role="listbox"></div>' +
       '</div>';
     document.body.appendChild(overlay);
     input = overlay.querySelector(".core-command-input");
@@ -75,6 +76,12 @@
 
     overlay.addEventListener("pointerdown", event => {
       if (event.target === overlay) close();
+    });
+    overlay.addEventListener("keydown", event => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        input?.focus();
+      }
     });
     input?.addEventListener("input", () => {
       activeIndex = 0;
@@ -96,21 +103,24 @@
   }
 
   function renderList() {
-    if (!list) return;
+    if (!list || !input) return;
     const c = copy();
     const items = filteredCommands();
     activeIndex = Math.max(0, Math.min(activeIndex, Math.max(0, items.length - 1)));
     if (!items.length) {
       list.innerHTML = '<div class="core-command-empty">' + escapeHtml(c.empty) + '</div>';
+      input.removeAttribute("aria-activedescendant");
       return;
     }
-    list.innerHTML = items.map((item, index) =>
-      '<button type="button" class="core-command-item ' + (index === activeIndex ? "is-active" : "") + '" data-command-page="' + item.page + '" role="option" aria-selected="' + (index === activeIndex ? "true" : "false") + '">' +
+    list.innerHTML = items.map((item, index) => {
+      const optionId = "coreCommandOption" + index;
+      return '<button id="' + optionId + '" type="button" tabindex="-1" class="core-command-item ' + (index === activeIndex ? "is-active" : "") + '" data-command-page="' + item.page + '" role="option" aria-selected="' + (index === activeIndex ? "true" : "false") + '">' +
         '<span class="core-command-item-icon" aria-hidden="true">' + item.icon + '</span>' +
         '<span class="core-command-item-label">' + escapeHtml(item.label) + '</span>' +
         '<span class="core-command-item-enter">↵</span>' +
-      '</button>'
-    ).join("");
+      '</button>';
+    }).join("");
+    input.setAttribute("aria-activedescendant", "coreCommandOption" + activeIndex);
     list.querySelector(".is-active")?.scrollIntoView({ block: "nearest" });
   }
 
@@ -126,6 +136,7 @@
   function open() {
     ensureOverlay();
     if (!overlay || !input) return;
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : document.querySelector(".command-palette");
     syncTriggerText();
     const c = copy();
     input.placeholder = c.placeholder;
@@ -142,10 +153,14 @@
   }
 
   function close() {
-    if (!overlay) return;
+    if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
     root.classList.remove("core-command-open");
-    document.querySelector(".command-palette")?.focus();
+    input?.removeAttribute("aria-activedescendant");
+    const target = opener;
+    opener = null;
+    if (target instanceof HTMLElement && target.isConnected) target.focus();
+    else document.querySelector(".command-palette")?.focus();
   }
 
   function run(page) {
@@ -204,6 +219,7 @@
     syncTriggerText();
     document.addEventListener("keydown", onGlobalKeyDown);
     window.addEventListener("viral-ai:core-state-changed", syncTriggerText);
+    new MutationObserver(syncTriggerText).observe(root, { attributes: true, attributeFilter: ["lang"] });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
