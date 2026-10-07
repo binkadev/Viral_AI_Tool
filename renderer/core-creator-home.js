@@ -115,7 +115,9 @@
     const current = currentState();
     const c = copy();
     if (current?.cloud?.accountOffline) return { label: c.cloudOffline, tone: "offline" };
-    if (current?.cloud?.account || current?.cloud?.auth) return { label: c.cloudConnected, tone: "connected" };
+    if (current?.cloud?.auth?.authenticated === true || Boolean(current?.cloud?.account)) {
+      return { label: c.cloudConnected, tone: "connected" };
+    }
     return { label: c.cloudNotConnected, tone: "idle" };
   }
 
