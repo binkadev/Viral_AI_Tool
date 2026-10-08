@@ -85,6 +85,14 @@ assert.strictEqual(migrated.editor.timeline.zoom, 2.25);
 assert.strictEqual(migrated.editor.timeline.selection, "subtitle:0");
 assert.strictEqual(migrated.editor.panels.inspectorTab, "translate");
 
+const frontmostSource = { id: "source-new", name: "New.mp4", sourcePath: "C:/media/New.mp4", fileState: "available" };
+const olderSource = { id: "source-old", name: "Old.mp4", sourcePath: "C:/media/Old.mp4", fileState: "available" };
+assert.strictEqual(
+  snapshotModel.sourceFromState({ jobs: [frontmostSource, olderSource] }).identity,
+  "source-new",
+  "snapshot ownership must follow the editor's frontmost imported source"
+);
+
 const legacyProjection = snapshotModel.toLegacyState(migrated, {
   locale: "en",
   appearance: "pearl-light",
@@ -158,10 +166,13 @@ assert.strictEqual(uiProjection["viral-ai-core-editor-timeline-zoom"], "3");
 assert.strictEqual(uiProjection["viral-ai-core-timeline-selection"], "subtitle:0");
 
 for (const required of [
+  'const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1"',
   'const DEBOUNCE_MS = 320',
   'const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)])',
+  'storagePrototype.getItem = function patchedGetItem',
   'storagePrototype.setItem = function patchedSetItem',
   'storagePrototype.removeItem = function patchedRemoveItem',
+  'normalizedKey === LEGACY_TRANSCRIPT_EDIT_KEY && currentSnapshot',
   'setTimeout(() => flush(reason), DEBOUNCE_MS)',
   'window.addEventListener("pagehide", () => flush("pagehide"))',
   'window.addEventListener("beforeunload", () => flush("beforeunload"))',
@@ -174,19 +185,32 @@ for (const required of [
   'staleResult',
   'staleJob',
   'viral-ai:project-snapshot-saved',
+  'viral-ai:project-snapshot-save-failed',
   'viral-ai:project-snapshot-restored'
 ]) {
   assert(persistence.includes(required), "Project persistence runtime is missing: " + required);
 }
+assert(
+  persistence.indexOf('writeNative(SNAPSHOT_KEY, JSON.stringify(next))') < persistence.indexOf('currentSnapshot = next'),
+  "in-memory snapshot must advance only after the durable write succeeds"
+);
+assert(persistence.includes('try { removeNative(SNAPSHOT_KEY); } catch {}'), "failed durable writes must remove the stale durable snapshot so startup cannot roll legacy state backward");
 assert(!persistence.includes("setInterval("), "project autosave must be semantic/debounced, never polling");
 assert(!persistence.includes("video.play("), "reopen must restore position without auto-playing media");
 
 for (const required of [
   'const SELECTION_KEY = "viral-ai-core-timeline-selection"',
+  'const SELECTION_VERSION = 1',
+  "stateSourceKey()",
+  "parseStoredSelection",
   "loadStoredSelection()",
   "persistSelection()",
+  'record.source !== currentSource',
+  "JSON.stringify(record)",
+  "transcriptSelectionAvailable",
   'source: "project-restore"',
-  "restoreTranscriptSelection()"
+  "restoreTranscriptSelection()",
+  'viral-ai:transcript-workstation-ready'
 ]) {
   assert(timelineSelection.includes(required), "Timeline selection persistence is missing: " + required);
 }
@@ -201,4 +225,4 @@ assert(index.indexOf('src="core-project-persistence.js"') < index.indexOf('src="
 assert(pkg.scripts["test:core-project-persistence"], "package.json must expose the project persistence regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-project-persistence"), "commercial regression must gate project persistence");
 
-console.log("Core project snapshot schema, migration, semantic autosave, reopen and recovery tests passed.");
+console.log("Core project snapshot schema, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
