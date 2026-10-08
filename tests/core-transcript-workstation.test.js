@@ -11,6 +11,8 @@ const workstation = read("renderer/core-transcript-workstation.js");
 const css = read("renderer/core-transcript-workstation.css");
 const index = read("renderer/index.html");
 
+assert.doesNotThrow(() => new Function(workstation), "Transcript workstation module must parse.");
+
 for (const required of [
   "context.source.segments.forEach",
   "list.replaceChildren(fragment)",
