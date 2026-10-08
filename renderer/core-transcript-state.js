@@ -43,6 +43,15 @@
     };
   }
 
+  function archiveStale(bucket, activeKey, archiveKey, sourcePath, reason) {
+    const active = bucket?.[activeKey];
+    if (!active) return;
+    const stale = staleValue(active, sourcePath, reason);
+    if (stale === active) return;
+    bucket[archiveKey] = stale;
+    bucket[activeKey] = null;
+  }
+
   function markRenderOutputsStale(current, sourcePath) {
     if (!Array.isArray(current?.jobs)) return;
     current.jobs = current.jobs.map(job => {
@@ -50,25 +59,19 @@
       if (sourcePath && job.sourcePath && String(job.sourcePath) !== String(sourcePath)) return job;
       return {
         ...job,
-        status: "stale",
-        staleReason: "transcript-edited"
+        status: "failed",
+        stale: true,
+        staleReason: "transcript-edited",
+        staleAt: new Date().toISOString()
       };
     });
   }
 
   function invalidateDownstream(current, sourcePath) {
-    if (current?.translation?.result) {
-      current.translation.result = staleValue(current.translation.result, sourcePath, "source-transcript-edited");
-    }
-    if (current?.translation?.job) {
-      current.translation.job = staleValue(current.translation.job, sourcePath, "source-transcript-edited");
-    }
-    if (current?.voice?.result) {
-      current.voice.result = staleValue(current.voice.result, sourcePath, "source-transcript-edited");
-    }
-    if (current?.voice?.job) {
-      current.voice.job = staleValue(current.voice.job, sourcePath, "source-transcript-edited");
-    }
+    archiveStale(current?.translation, "result", "staleResult", sourcePath, "source-transcript-edited");
+    archiveStale(current?.translation, "job", "staleJob", sourcePath, "source-transcript-edited");
+    archiveStale(current?.voice, "result", "staleResult", sourcePath, "source-transcript-edited");
+    archiveStale(current?.voice, "job", "staleJob", sourcePath, "source-transcript-edited");
     markRenderOutputsStale(current, sourcePath);
   }
 
