@@ -16,6 +16,15 @@
     return Number.isFinite(max) ? Math.min(time, Math.max(0, max)) : time;
   }
 
+  function resolveDuration(nativeDuration, seekableEnd = 0, hint = 0) {
+    const native = finite(nativeDuration, 0);
+    if (native > 0) return native;
+    const seekable = finite(seekableEnd, 0);
+    if (seekable > 0) return seekable;
+    const fallback = finite(hint, 0);
+    return fallback > 0 ? fallback : 0;
+  }
+
   function parseTimeLabel(value) {
     const raw = String(value || "").trim();
     if (!raw) return 0;
@@ -99,6 +108,7 @@
 
   return {
     clampTime,
+    resolveDuration,
     parseTimeLabel,
     formatClock,
     fitContain,
