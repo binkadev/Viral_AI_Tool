@@ -18,6 +18,12 @@ for (const required of [
   'data-core-volume',
   'dataset.coreCapability = "functional"',
   'video.addEventListener("volumechange"',
+  "const wiredVideos = new WeakSet()",
+  "function mediaFor(host)",
+  "function wireVideo(video)",
+  'video.closest(".preview")',
+  'host?.querySelector?.(".core-player-controls")',
+  "const currentVideo = mediaFor(host)",
   "MutationObserver",
   "requestAnimationFrame",
   'root'
