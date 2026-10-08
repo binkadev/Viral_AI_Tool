@@ -44,8 +44,12 @@
     return any instanceof HTMLVideoElement ? any : null;
   }
 
+  function isAuthoritativeVideo(video) {
+    return video instanceof HTMLVideoElement && video.isConnected && currentVideo() === video;
+  }
+
   function sync(video) {
-    if (!(video instanceof HTMLVideoElement)) return;
+    if (!isAuthoritativeVideo(video)) return;
     const duration = durationFor(video);
     const current = duration > 0 ? clamp(Number(video.currentTime || 0), 0, duration) : Math.max(0, Number(video.currentTime || 0));
     const ratio = duration > 0 ? clamp(current / duration, 0, 1) : 0;
@@ -88,7 +92,10 @@
     if (wiredVideos.has(video)) return;
     wiredVideos.add(video);
     ["loadedmetadata", "durationchange", "loadeddata", "canplay", "progress", "timeupdate", "seeking", "seeked", "play", "pause", "ended", "emptied"]
-      .forEach(name => video.addEventListener(name, () => sync(video), { passive: true }));
+      .forEach(name => video.addEventListener(name, () => {
+        if (!isAuthoritativeVideo(video)) return;
+        sync(video);
+      }, { passive: true }));
   }
 
   function scan() {
