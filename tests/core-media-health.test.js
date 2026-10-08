@@ -34,16 +34,38 @@ for (const required of [
   "surfaceStates.set(video, { state, details })",
   "const video = mediaFor(host)",
   "syncSurface(video);\n    if (wired.has(video)) return;",
-  'window.addEventListener("viral-ai:editor-preview-preserved", scan)'
+  'window.addEventListener("viral-ai:editor-preview-preserved", scan)',
+  'overlay.setAttribute("role", "status")',
+  'overlay.setAttribute("aria-live", "polite")',
+  "core-media-state-panel",
+  "core-media-progress",
+  "data-media-state-symbol",
+  'loading: "Đang mở video…"',
+  'failedTitle: "Chưa thể phát video"',
+  'retry: "Thử lại"'
 ]) {
   assert(health.includes(required), "Media health layer is missing: " + required);
 }
 
-assert(health.includes('Number(details.errorCode) === 4'), "Unsupported codec must have an explicit user-safe state.");
-assert(css.includes('.core-media-state'));
-assert(css.includes('[data-core-media-state="loading"]'));
-assert(css.includes('@media(prefers-reduced-motion:reduce)'));
+assert(health.includes('Number(details.errorCode) === 4'), "Unsupported format must have an explicit user-safe state.");
+assert(!health.includes("Codec của video này"), "Commercial copy must not expose codec jargon in the primary user message.");
+assert(!health.includes('retry: "Retry preview"'), "Commercial retry copy must be user-facing rather than implementation-facing.");
+
+for (const required of [
+  ".core-media-state",
+  ".core-media-state-panel",
+  ".core-media-progress",
+  '.core-media-state[data-state="failed"]',
+  "@keyframes coreMediaSpin",
+  "@keyframes coreMediaProgress",
+  "html.core-editor-premium .core-media-state",
+  '@media(prefers-reduced-motion:reduce)',
+  'html[data-motion="reduced"] .core-media-state-icon::before'
+]) {
+  assert(css.includes(required), "Commercial media state CSS missing: " + required);
+}
+
 assert(index.includes('href="core-media-health.css"'));
 assert(index.includes('src="core-media-health.js"'));
 
-console.log("Core media loading, error, retry and live-surface state tests passed.");
+console.log("Core media loading, error, retry, live-surface and commercial UX tests passed.");
