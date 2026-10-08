@@ -71,8 +71,33 @@ for (const token of ["setting-row", "1080p", "4K", "__coreProductionSettings"]) 
 for (const stateName of ["idle", "checking", "ready", "missing", "unverified"]) {
   assert(output.includes('"' + stateName + '"'), "Output verifier missing state: " + stateName);
 }
-assert(output.includes("Kiểm tra lại"), "Output verification failure must offer an explicit retry.");
-assert(output.includes("Render lại"), "Missing output must offer rerender recovery.");
+for (const key of [
+  "common.export",
+  "media.renderDone",
+  "media.exportDone",
+  "media.showFile",
+  "settings.updateChecking",
+  "file.missingTitle",
+  "file.missingBody",
+  "export.retry",
+  "file.unknownDetails",
+  "translation.retry"
+]) {
+  assert(output.includes('tr("' + key + '"'), "Customer-facing output must use locale key: " + key);
+}
+assert(output.includes("window.I18N?.t?.(locale(), key, vars)"), "Output copy must resolve through the shared locale catalog.");
+for (const forbidden of [
+  "Exported video is ready",
+  "Video đã xuất sẵn sàng",
+  "Could not check the exported video",
+  "Chưa kiểm tra được video đã xuất",
+  "Render lại",
+  "Video render đã sẵn sàng",
+  "File render không còn khả dụng",
+  "Hãy render video"
+]) {
+  assert(!output.includes(forbidden), "Output module must not hard-code customer-facing copy: " + forbidden);
+}
 assert(!output.includes("setInterval("), "Output verifier must not poll.");
 assert(output.includes("subtree:false"), "Output observer must stay scoped to page replacement.");
 
