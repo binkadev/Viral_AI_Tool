@@ -30,6 +30,10 @@
     return ["preparing", "uploading", "processing"].includes(canonicalJobState(job));
   }
 
+  function isStale(value) {
+    return String(value?.status || value?.state || "").toLowerCase() === "stale";
+  }
+
   function latestSourceJob(saved) {
     const jobs = Array.isArray(saved?.jobs) ? saved.jobs : [];
     for (let index = jobs.length - 1; index >= 0; index -= 1) {
@@ -84,10 +88,14 @@
 
     const speechResult = resultMatches(saved?.speech?.result, source) ? saved.speech.result : null;
     const speechJob = jobMatches(saved?.speech?.job, source) ? saved.speech.job : null;
-    const translationResult = resultMatches(saved?.translation?.result, source) ? saved.translation.result : null;
-    const translationJob = jobMatches(saved?.translation?.job, source) ? saved.translation.job : null;
-    const voiceResult = resultMatches(saved?.voice?.result, source) ? saved.voice.result : null;
-    const voiceJob = jobMatches(saved?.voice?.job, source) ? saved.voice.job : null;
+    const storedTranslationResult = resultMatches(saved?.translation?.result, source) ? saved.translation.result : null;
+    const storedTranslationJob = jobMatches(saved?.translation?.job, source) ? saved.translation.job : null;
+    const storedVoiceResult = resultMatches(saved?.voice?.result, source) ? saved.voice.result : null;
+    const storedVoiceJob = jobMatches(saved?.voice?.job, source) ? saved.voice.job : null;
+    const translationResult = storedTranslationResult && !isStale(storedTranslationResult) ? storedTranslationResult : null;
+    const translationJob = storedTranslationJob && !isStale(storedTranslationJob) ? storedTranslationJob : null;
+    const voiceResult = storedVoiceResult && !isStale(storedVoiceResult) ? storedVoiceResult : null;
+    const voiceJob = storedVoiceJob && !isStale(storedVoiceJob) ? storedVoiceJob : null;
     const renderJob = latestRenderJob(saved, source);
     const renderOutput = latestRenderOutput(saved, source);
     const renderOutputMissing = Boolean(
@@ -138,6 +146,8 @@
       speechResult,
       translationResult,
       voiceResult,
+      staleTranslationResult: isStale(storedTranslationResult) ? storedTranslationResult : null,
+      staleVoiceResult: isStale(storedVoiceResult) ? storedVoiceResult : null,
       renderJob,
       renderOutput,
       renderOutputMissing,
@@ -145,8 +155,8 @@
       controls,
       jobs: {
         speech: speechResult ? "completed" : canonicalJobState(speechJob),
-        translation: translationResult ? "completed" : canonicalJobState(translationJob),
-        voice: voiceResult ? "completed" : canonicalJobState(voiceJob),
+        translation: translationResult ? "completed" : canonicalJobState(storedTranslationJob || storedTranslationResult),
+        voice: voiceResult ? "completed" : canonicalJobState(storedVoiceJob || storedVoiceResult),
         render: renderOutput ? "completed" : renderOutputMissing ? "active" : canonicalJobState(renderJob)
       }
     };
