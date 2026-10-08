@@ -166,6 +166,11 @@
     }
   }
 
+  function currentSurfaceVideo(host, fallback) {
+    const current = host?.querySelector?.("video.preview-video, video.core-player-media");
+    return current instanceof HTMLVideoElement ? current : fallback;
+  }
+
   function wireSurface(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
@@ -177,10 +182,11 @@
     if (seek instanceof HTMLInputElement && !wiredSeeks.has(seek)) {
       wiredSeeks.add(seek);
       seek.addEventListener("input", event => {
-        const duration = effectiveDuration(video);
+        const currentVideo = currentSurfaceVideo(host, video);
+        const duration = effectiveDuration(currentVideo);
         if (!duration) return;
         event.stopPropagation();
-        seekToRatio(video, Number(seek.value || 0) / 1000);
+        seekToRatio(currentVideo, Number(seek.value || 0) / 1000);
       }, true);
     }
 
@@ -188,14 +194,15 @@
     if (track instanceof HTMLElement && !wiredTracks.has(track)) {
       wiredTracks.add(track);
       track.addEventListener("click", event => {
-        const duration = effectiveDuration(video);
+        const currentVideo = currentSurfaceVideo(host, video);
+        const duration = effectiveDuration(currentVideo);
         if (!duration) return;
         const rect = track.getBoundingClientRect();
         if (!rect.width) return;
         const ratio = (event.clientX - rect.left) / rect.width;
         event.preventDefault();
         event.stopImmediatePropagation();
-        seekToRatio(video, ratio);
+        seekToRatio(currentVideo, ratio);
       }, true);
     }
   }
