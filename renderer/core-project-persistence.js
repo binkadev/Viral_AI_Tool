@@ -52,6 +52,24 @@
     }
   }
 
+  function dispatchSaveFailure(reason, error) {
+    try {
+      window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-save-failed", {
+        detail: { reason, message: String(error?.message || error || "storage-write-failed") }
+      }));
+    } catch {}
+  }
+
+  function writeBootstrapSnapshot(snapshot, reason) {
+    try {
+      writeNative(SNAPSHOT_KEY, JSON.stringify(snapshot));
+      return true;
+    } catch (error) {
+      dispatchSaveFailure(reason, error);
+      return false;
+    }
+  }
+
   function legacyUiState() {
     const read = key => localStorage.getItem(key);
     return {
@@ -88,13 +106,19 @@
     currentSnapshot = migrated.snapshot;
     if (!currentSnapshot) {
       currentSnapshot = model.fromLegacy(readJson(LEGACY_STATE_KEY, {}) || {}, legacyUiState());
-      if (currentSnapshot) writeNative(SNAPSHOT_KEY, JSON.stringify(currentSnapshot));
+      if (currentSnapshot) writeBootstrapSnapshot(currentSnapshot, "bootstrap-legacy-migration");
     } else if (migrated.migrated) {
-      writeNative(SNAPSHOT_KEY, JSON.stringify(currentSnapshot));
+      // A bootstrap backfill is best-effort. Keep the normalized snapshot authoritative
+      // in memory even when storage is full/unavailable so persistence still starts.
+      writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill");
     }
 
     if (currentSnapshot) {
-      projectLegacyProjection(currentSnapshot);
+      try {
+        projectLegacyProjection(currentSnapshot);
+      } catch (error) {
+        dispatchSaveFailure("bootstrap-legacy-projection", error);
+      }
       try { nativeRemoveItem.call(localStorage, LEGACY_TRANSCRIPT_EDIT_KEY); } catch {}
     }
   }
@@ -203,9 +227,7 @@
       writeNative(SNAPSHOT_KEY, JSON.stringify(next));
     } catch (error) {
       try { removeNative(SNAPSHOT_KEY); } catch {}
-      window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-save-failed", {
-        detail: { reason, message: String(error?.message || error || "storage-write-failed") }
-      }));
+      dispatchSaveFailure(reason, error);
       return null;
     }
     currentSnapshot = next;
