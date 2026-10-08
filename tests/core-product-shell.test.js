@@ -13,6 +13,8 @@ const index = read("renderer/index.html");
 const capabilities = read("renderer/core-capabilities.css");
 const shellStability = read("renderer/core-shell-stability.css");
 const shellWorkstation = read("renderer/core-shell-workstation.css");
+const projectContext = read("renderer/core-project-context.js");
+const projectContextCss = read("renderer/core-project-context.css");
 const navigation = read("renderer/core-navigation-stability.js");
 const hudJs = read("renderer/core-premium-hud.js");
 const hudCss = read("renderer/core-premium-hud.css");
@@ -22,6 +24,7 @@ const brand = read("renderer/brand-mark.svg");
 
 assert.doesNotThrow(() => new Function(navigation), "Navigation stability must parse.");
 assert.doesNotThrow(() => new Function(hudJs), "Premium HUD module must parse.");
+assert.doesNotThrow(() => new Function(projectContext), "Project context topbar module must parse.");
 
 for (const required of [
   "LEGACY_DEMO_NAMES",
@@ -60,7 +63,9 @@ assert(index.includes("<b>Tài khoản Cloud</b>"), "Vietnamese first paint must
 assert(index.includes('id="newProjectLabel">Nhập video</span>'), "First-paint primary action must match the import workflow.");
 assert(index.includes('href="core-shell-stability.css"'));
 assert(index.includes('href="core-shell-workstation.css"'));
+assert(index.includes('href="core-project-context.css"'));
 assert(index.includes('src="core-navigation-stability.js"'));
+assert(index.includes('src="core-project-context.js"'));
 assert(index.includes('href="core-motion-policy.css"'));
 assert(index.includes('href="core-premium-workstation.css"'));
 assert(index.includes('src="brand-mark.svg"'));
@@ -139,5 +144,26 @@ for (const required of [
 assert(!shellWorkstation.includes("@keyframes"), "Commercial shell workstation must not add decorative loops.");
 assert(index.indexOf('href="core-shell-workstation.css"') > index.indexOf('href="core-shell-stability.css"'), "Final shell workstation layer must load after shell stability.");
 assert(index.indexOf('href="core-shell-workstation.css"') < index.indexOf('href="core-player-workstation.css"'), "Shell chrome must settle before player workstation styling.");
+
+for (const required of [
+  "function sourceProject()",
+  "job?.sourcePath && !job?.isRenderOutput",
+  'current.page !== "ai-video"',
+  "breadcrumb.textContent = name",
+  'breadcrumb.dataset.projectContext = "true"',
+  'breadcrumb.dataset.sourceState',
+  'project.fileState === "missing" || project.fileState === "trashed"',
+  'window.addEventListener("viral-ai:core-state-changed", queue)',
+  'new MutationObserver(queue).observe(page, { childList: true, subtree: false })'
+]) assert(projectContext.includes(required), "Project context behavior missing: " + required);
+for (const required of [
+  '.breadcrumb[data-project-context="true"]',
+  '[data-source-state="needs-action"]',
+  'background:#33c27f',
+  'background:#f0b44c'
+]) assert(projectContextCss.includes(required), "Project context style missing: " + required);
+assert(!projectContext.includes("setInterval("), "Project context must not poll.");
+assert(!projectContextCss.includes("@keyframes"), "Project context must not add decorative animation loops.");
+assert(index.indexOf('src="core-project-context.js"') > index.indexOf('src="core-navigation-stability.js"'), "Project context must run after stable navigation wiring.");
 
 console.log("Core product shell production contract passed");
