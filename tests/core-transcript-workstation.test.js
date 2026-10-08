@@ -21,6 +21,7 @@ for (const required of [
   "translationAvailable",
   "translationStale",
   "translationForContext",
+  "staleResult",
   "targetLanguage",
   "result?.sourcePath",
   "result?.targetLanguage",
@@ -29,6 +30,7 @@ for (const required of [
   'tr("speech.resultTitle")',
   'tr("translation.resultTitle")',
   'tr("translation.translateAgain")',
+  "queueMicrotask",
   "viral-ai:player-seek",
   "currentTime",
   "pointerdown",
@@ -46,6 +48,7 @@ for (const required of [
 assert(!workstation.includes("segments.slice("), "Transcript workstation must not truncate long transcripts.");
 assert(!workstation.includes("setInterval("), "Transcript workstation must be event-driven, not polling-based.");
 assert(!workstation.includes("render()"), "Transcript workstation must not trigger a full app render/video replacement.");
+assert(!workstation.includes("requestAnimationFrame"), "Transcript hydration must not leave a one-frame demo transcript before full long-form rows are installed.");
 assert(!workstation.includes('source: "Source"'), "Transcript workstation production copy must use the locale catalog.");
 assert(!workstation.includes('source: "Nguồn"'), "Transcript workstation production copy must use the locale catalog.");
 assert(!workstation.includes('translation: "Translation"'), "Transcript workstation production copy must use the locale catalog.");
@@ -61,6 +64,7 @@ for (const required of [
   "contain-intrinsic-size:64px",
   "font-variant-numeric:tabular-nums",
   "font:650 13px/1.25",
+  "font:600 12px/1.25",
   "max-height:min(54vh,620px)!important",
   "prefers-reduced-motion",
   'html[data-motion="reduced"]'
@@ -81,25 +85,36 @@ assert(
 );
 
 const staleSaved = {
-  jobs: [{ sourcePath: "C:/video.mp4", meta: { duration: 120 } }],
+  jobs: [
+    { sourcePath: "C:/video.mp4", meta: { duration: 120 } },
+    { isRenderOutput: true, sourcePath: "C:/video.mp4", outputPath: "C:/out.mp4", status: "failed", stale: true, staleReason: "transcript-edited" }
+  ],
   speech: { result: { sourcePath: "C:/video.mp4", segments: [{ id: "s1", start: 0, end: 2, text: "hello" }] } },
   translation: {
-    result: { sourcePath: "C:/video.mp4", status: "stale", staleReason: "source-transcript-edited", segments: [{ id: "s1", text: "xin chao" }] },
-    job: null
+    targetLanguage: "vi",
+    result: null,
+    job: null,
+    staleResult: { sourcePath: "C:/video.mp4", targetLanguage: "vi", status: "stale", staleReason: "source-transcript-edited", segments: [{ id: "s1", text: "xin chao" }] },
+    staleJob: null
   },
   voice: {
-    result: { sourcePath: "C:/video.mp4", status: "stale", staleReason: "source-transcript-edited" },
-    job: null
+    result: null,
+    job: null,
+    staleResult: { sourcePath: "C:/video.mp4", status: "stale", staleReason: "source-transcript-edited" },
+    staleJob: null
   }
 };
 const derived = workflowModel.derive(staleSaved);
-assert.strictEqual(derived.translationResult, null, "stale translation must not be treated as valid localization output");
-assert.strictEqual(derived.voiceResult, null, "stale voice must not be treated as valid downstream output");
+assert.strictEqual(derived.translationResult, null, "archived stale translation must never re-enter active localization output");
+assert.strictEqual(derived.voiceResult, null, "archived stale voice must never re-enter active downstream output");
 assert.strictEqual(derived.staleTranslationResult.status, "stale", "stale translation must remain available for recovery/audit");
 assert.strictEqual(derived.staleVoiceResult.status, "stale", "stale voice must remain available for recovery/audit");
 assert.strictEqual(derived.controls.voice.enabled, false, "stale translation must block voice generation ownership");
 assert.strictEqual(derived.controls.render.enabled, false, "stale downstream data must block render ownership");
-assert.strictEqual(derived.jobs.translation, "failed", "workflow must surface stale translation as non-complete");
-assert.strictEqual(derived.jobs.voice, "failed", "workflow must surface stale voice as non-complete");
+assert.strictEqual(derived.renderOutput, null, "stale render output must not remain exportable");
+assert.strictEqual(derived.controls.export.enabled, false, "stale render output must block export ownership");
+assert.strictEqual(derived.jobs.translation, "failed", "workflow must surface archived stale translation as non-complete");
+assert.strictEqual(derived.jobs.voice, "failed", "workflow must surface archived stale voice as non-complete");
+assert.strictEqual(derived.jobs.render, "failed", "stale render output must use an existing localized non-complete state");
 
-console.log("Long-form transcript workstation, locale and stale dependency tests passed.");
+console.log("Long-form transcript workstation, locale and stale consumer boundary tests passed.");
