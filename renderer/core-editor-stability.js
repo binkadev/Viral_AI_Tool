@@ -26,12 +26,16 @@
     };
   }
 
-  function sameMedia(snapshot, replacement) {
-    if (!snapshot || !(replacement instanceof HTMLElement)) return false;
+  function replacementVideoFor(snapshot, replacement) {
+    if (!snapshot || !(replacement instanceof HTMLElement)) return null;
     const nextVideo = replacement.querySelector("video.preview-video, video.core-player-media");
-    if (!(nextVideo instanceof HTMLVideoElement)) return false;
+    if (!(nextVideo instanceof HTMLVideoElement)) return null;
     const nextSrc = String(nextVideo.currentSrc || nextVideo.getAttribute("src") || nextVideo.src || "");
-    return Boolean(snapshot.src && nextSrc && snapshot.src === nextSrc);
+    return snapshot.src && nextSrc && snapshot.src === nextSrc ? nextVideo : null;
+  }
+
+  function sameMedia(snapshot, replacement) {
+    return Boolean(replacementVideoFor(snapshot, replacement));
   }
 
   function restorePlayback(snapshot) {
@@ -53,10 +57,14 @@
   function preserveEditorPreview(snapshot) {
     if (!snapshot || !isCoreEditorPage()) return false;
     const replacement = document.querySelector("#page .preview.preview-real");
-    if (!sameMedia(snapshot, replacement)) return false;
+    const replacementVideo = replacementVideoFor(snapshot, replacement);
+    if (!(replacement instanceof HTMLElement) || !(replacementVideo instanceof HTMLVideoElement)) return false;
 
-    replacement.replaceWith(snapshot.preview);
-    snapshot.preview.dataset.corePersistentPreview = "true";
+    // Preserve only the live media element. The freshly rendered preview shell must stay
+    // in place so new controls, status chrome and layout are never rolled back to stale DOM.
+    replacementVideo.replaceWith(snapshot.video);
+    replacement.dataset.corePersistentPreview = "true";
+    snapshot.video.dataset.corePersistentMedia = "true";
     restorePlayback(snapshot);
     window.dispatchEvent(new CustomEvent("viral-ai:editor-preview-preserved", {
       detail: {
