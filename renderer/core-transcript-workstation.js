@@ -6,6 +6,7 @@
 
   let pending = false;
   let lastSignature = "";
+  let renderGeneration = 0;
 
   function appState() {
     try {
@@ -16,10 +17,14 @@
   }
 
   function localeCopy() {
-    const vi = document.documentElement.lang === "vi";
-    return vi
-      ? { source: "Nguồn", translation: "Bản dịch", segments: "phân đoạn", empty: "Chưa có bản dịch" }
-      : { source: "Source", translation: "Translation", segments: "segments", empty: "No translation yet" };
+    const locale = document.documentElement.lang === "en" ? "en" : "vi";
+    const tr = key => window.I18N?.t?.(locale, key) || key;
+    return {
+      source: tr("speech.workstationSource"),
+      translation: tr("speech.workstationTranslation"),
+      segments: tr("speech.workstationSegments"),
+      empty: tr("speech.workstationEmptyTranslation")
+    };
   }
 
   function finiteTime(value) {
@@ -59,13 +64,14 @@
   function translatedTextFor(segment, index, translations) {
     const id = segment?.id != null ? String(segment.id) : "";
     const start = finiteTime(segment?.start).toFixed(3);
-    return String(
-      segment?.translatedText ??
-      (id ? translations.get("id:" + id) : undefined) ??
-      translations.get("start:" + start) ??
-      translations.get("index:" + index) ??
-      ""
-    );
+    const idKey = id ? "id:" + id : "";
+    const startKey = "start:" + start;
+    const indexKey = "index:" + index;
+
+    if (idKey && translations.has(idKey)) return String(translations.get(idKey) ?? "");
+    if (translations.has(startKey)) return String(translations.get(startKey) ?? "");
+    if (translations.has(indexKey)) return String(translations.get(indexKey) ?? "");
+    return String(segment?.translatedText ?? "");
   }
 
   function documentSignature(result, translations) {
@@ -177,11 +183,16 @@
     });
     list.replaceChildren(fragment);
     list.dataset.coreTranscriptCount = String(segments.length);
+    list.dataset.coreTranscriptGeneration = String(++renderGeneration);
     list.setAttribute("data-core-transcript-workstation", "ready");
     lastSignature = signature;
 
     window.dispatchEvent(new CustomEvent("viral-ai:transcript-workstation-ready", {
-      detail: { count: segments.length, sourcePath: result?.sourcePath || null }
+      detail: {
+        count: segments.length,
+        sourcePath: result?.sourcePath || null,
+        generation: renderGeneration
+      }
     }));
   }
 
