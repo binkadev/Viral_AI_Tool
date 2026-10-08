@@ -1,6 +1,6 @@
 /* Commercial entry choreography is state-driven and intentionally non-looping. */
 .creator-home-hero::after{content:"";position:absolute;right:-86px;top:-118px;width:360px;height:360px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 13%,transparent) 0%,color-mix(in srgb,var(--accent-2) 7%,transparent) 34%,transparent 68%);opacity:.72}
-.creator-home-hero,.creator-start-grid,.creator-recent-section{transition:opacity .24s ease,translate .32s cubic-bezier(.22,.82,.24,1)}
+html[data-creator-entry] .creator-home-hero,html[data-creator-entry] .creator-start-grid,html[data-creator-entry] .creator-recent-section{transition:opacity .24s ease,translate .32s cubic-bezier(.22,.82,.24,1)}
 html[data-creator-entry="pending"] .creator-home-hero{opacity:0;translate:0 7px;will-change:opacity,translate}
 html[data-creator-entry="pending"] .creator-start-grid{opacity:0;translate:0 9px;will-change:opacity,translate}
 html[data-creator-entry="pending"] .creator-recent-section{opacity:0;translate:0 10px;will-change:opacity,translate}
@@ -15,7 +15,7 @@ html[data-creator-entry="ready"] .creator-recent-section{transition-delay:96ms}
 }
 .creator-primary-import:active,.creator-project-action:active,.creator-recent-open:active{translate:0 1px}
 
-#page .core-editor-assets-panel,#page .core-editor-focus-section,#page .core-editor-inspector,#page .core-editor-bottom-dock{transition-property:opacity,translate,scale;transition-duration:.22s,.3s,.3s;transition-timing-function:ease,cubic-bezier(.22,.82,.24,1),cubic-bezier(.22,.82,.24,1)}
+html[data-editor-entry] #page .core-editor-assets-panel,html[data-editor-entry] #page .core-editor-focus-section,html[data-editor-entry] #page .core-editor-inspector,html[data-editor-entry] #page .core-editor-bottom-dock{transition-property:opacity,translate,scale;transition-duration:.22s,.3s,.3s;transition-timing-function:ease,cubic-bezier(.22,.82,.24,1),cubic-bezier(.22,.82,.24,1)}
 html[data-editor-entry="pending"] #page .core-editor-assets-panel{opacity:0;translate:-8px 0;will-change:opacity,translate}
 html[data-editor-entry="pending"] #page .core-editor-focus-section{opacity:.54;translate:0 7px;scale:.995;will-change:opacity,translate,scale}
 html[data-editor-entry="pending"] #page .core-editor-inspector{opacity:0;translate:8px 0;will-change:opacity,translate}
