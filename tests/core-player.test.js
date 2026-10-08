@@ -104,7 +104,25 @@ for (const required of [
   "coreMediaReady",
   "querySelectorAll(\"#page video.preview-video, #page video.core-player-media\")",
   "seekToRatio(video",
-  '"play", "pause", "ended"'
+  '"play", "pause", "ended"',
+  "const wiredSeeks = new WeakSet()",
+  "const wiredTracks = new WeakSet()",
+  "const surfaceObservers = new WeakMap()",
+  "function wireSurface(video)",
+  "function syncEditorDock(video, duration, current)",
+  "function bindSurfaceResize(video, host)",
+  "function currentSurfaceVideo(host, fallback)",
+  ".core-editor-bottom-dock",
+  "currentVideo !== video",
+  "wireSurface(video);",
+  "bindSurfaceResize(video, host);",
+  "currentSurfaceVideo(host, video)",
+  "current?.observer?.disconnect?.()",
+  'video.closest(".preview") !== host',
+  "observer.observe(host)",
+  "data-bottom-playhead",
+  "data-bottom-time",
+  ".core-bottom-segment"
 ]) {
   assert(rebind.includes(required), "Core player rebind is missing hardening behavior: " + required);
 }
