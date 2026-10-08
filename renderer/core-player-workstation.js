@@ -1,6 +1,7 @@
 (function installCorePlayerWorkstationControls() {
   "use strict";
 
+  const wiredVideos = new WeakSet();
   let scanQueued = false;
 
   function labels() {
@@ -16,7 +17,13 @@
       : '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 9h4l5-4v14l-5-4H5z" fill="currentColor"/><path d="M17 9.2c1 .8 1.5 1.7 1.5 2.8S18 14 17 14.8M19 7c1.7 1.4 2.6 3 2.6 5S20.7 15.6 19 17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   }
 
-  function sync(video, controls) {
+  function mediaFor(host) {
+    const video = host?.querySelector?.("video.preview-video, video.core-player-media");
+    return video instanceof HTMLVideoElement ? video : null;
+  }
+
+  function sync(host, controls) {
+    const video = mediaFor(host);
     if (!(video instanceof HTMLVideoElement) || !(controls instanceof HTMLElement)) return;
     const button = controls.querySelector("[data-core-mute]");
     const slider = controls.querySelector("[data-core-volume]");
@@ -36,14 +43,25 @@
     }
   }
 
+  function wireVideo(video, host, controls) {
+    if (!(video instanceof HTMLVideoElement) || wiredVideos.has(video)) return;
+    wiredVideos.add(video);
+    video.addEventListener("volumechange", () => {
+      if (mediaFor(host) !== video) return;
+      sync(host, controls);
+    });
+  }
+
   function wire(host) {
     if (!(host instanceof HTMLElement)) return;
-    const video = host.querySelector("video.preview-video, video.core-player-media");
+    const video = mediaFor(host);
     const controls = host.querySelector(".core-player-controls");
     if (!(video instanceof HTMLVideoElement) || !(controls instanceof HTMLElement)) return;
 
+    wireVideo(video, host, controls);
+
     if (controls.dataset.coreVolumeWired === "true") {
-      sync(video, controls);
+      sync(host, controls);
       return;
     }
     controls.dataset.coreVolumeWired = "true";
@@ -71,26 +89,29 @@
     }
 
     mute.addEventListener("click", () => {
-      if (video.muted || Number(video.volume) <= 0.001) {
-        if (Number(video.volume) <= 0.001) video.volume = 0.5;
-        video.muted = false;
+      const currentVideo = mediaFor(host);
+      if (!(currentVideo instanceof HTMLVideoElement)) return;
+      if (currentVideo.muted || Number(currentVideo.volume) <= 0.001) {
+        if (Number(currentVideo.volume) <= 0.001) currentVideo.volume = 0.5;
+        currentVideo.muted = false;
       } else {
-        video.muted = true;
+        currentVideo.muted = true;
       }
-      sync(video, controls);
+      sync(host, controls);
     });
 
     volume.addEventListener("input", () => {
+      const currentVideo = mediaFor(host);
+      if (!(currentVideo instanceof HTMLVideoElement)) return;
       const next = Math.max(0, Math.min(1, Number(volume.value || 0)));
-      video.volume = next;
-      video.muted = next <= 0.001;
-      sync(video, controls);
+      currentVideo.volume = next;
+      currentVideo.muted = next <= 0.001;
+      sync(host, controls);
     });
 
-    video.addEventListener("volumechange", () => sync(video, controls));
-    window.addEventListener("viral-ai:core-state-changed", () => sync(video, controls));
-    new MutationObserver(() => sync(video, controls)).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    sync(video, controls);
+    window.addEventListener("viral-ai:core-state-changed", () => sync(host, controls));
+    new MutationObserver(() => sync(host, controls)).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    sync(host, controls);
   }
 
   function scan() {
