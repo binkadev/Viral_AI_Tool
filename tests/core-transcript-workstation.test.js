@@ -20,6 +20,15 @@ for (const required of [
   "dataset.longTranscript",
   "translationAvailable",
   "translationStale",
+  "translationForContext",
+  "targetLanguage",
+  "result?.sourcePath",
+  "result?.targetLanguage",
+  'typeof t === "function"',
+  "window.I18N?.t?.",
+  'tr("speech.resultTitle")',
+  'tr("translation.resultTitle")',
+  'tr("translation.translateAgain")',
   "viral-ai:player-seek",
   "currentTime",
   "pointerdown",
@@ -37,6 +46,10 @@ for (const required of [
 assert(!workstation.includes("segments.slice("), "Transcript workstation must not truncate long transcripts.");
 assert(!workstation.includes("setInterval("), "Transcript workstation must be event-driven, not polling-based.");
 assert(!workstation.includes("render()"), "Transcript workstation must not trigger a full app render/video replacement.");
+assert(!workstation.includes('source: "Source"'), "Transcript workstation production copy must use the locale catalog.");
+assert(!workstation.includes('source: "Nguồn"'), "Transcript workstation production copy must use the locale catalog.");
+assert(!workstation.includes('translation: "Translation"'), "Transcript workstation production copy must use the locale catalog.");
+assert(!workstation.includes('translation: "Bản dịch"'), "Transcript workstation production copy must use the locale catalog.");
 
 for (const required of [
   ".core-transcript-toolbar",
@@ -47,6 +60,7 @@ for (const required of [
   "content-visibility:auto",
   "contain-intrinsic-size:64px",
   "font-variant-numeric:tabular-nums",
+  "font:650 13px/1.25",
   "max-height:min(54vh,620px)!important",
   "prefers-reduced-motion",
   'html[data-motion="reduced"]'
@@ -88,4 +102,4 @@ assert.strictEqual(derived.controls.render.enabled, false, "stale downstream dat
 assert.strictEqual(derived.jobs.translation, "failed", "workflow must surface stale translation as non-complete");
 assert.strictEqual(derived.jobs.voice, "failed", "workflow must surface stale voice as non-complete");
 
-console.log("Long-form transcript workstation and stale dependency tests passed.");
+console.log("Long-form transcript workstation, locale and stale dependency tests passed.");
