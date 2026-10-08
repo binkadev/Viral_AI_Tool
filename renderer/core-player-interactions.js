@@ -9,15 +9,51 @@
     return host?.querySelector?.("video.preview-video, video.core-player-media") || null;
   }
 
+  function seekableEnd(video) {
+    try {
+      if (video?.seekable?.length) {
+        const end = Number(video.seekable.end(video.seekable.length - 1));
+        return Number.isFinite(end) && end > 0 ? end : 0;
+      }
+    } catch {}
+    return 0;
+  }
+
+  function durationFor(video) {
+    if (!(video instanceof HTMLVideoElement)) return 0;
+    const nativeDuration = Number(video.duration || 0);
+    const hint = Number(video.dataset.coreDurationHint || 0);
+    const api = window.ViralCorePlayerModel;
+    if (api && typeof api.resolveDuration === "function") {
+      return api.resolveDuration(nativeDuration, seekableEnd(video), hint);
+    }
+    if (Number.isFinite(nativeDuration) && nativeDuration > 0) return nativeDuration;
+    const seekable = seekableEnd(video);
+    if (seekable > 0) return seekable;
+    return Number.isFinite(hint) && hint > 0 ? hint : 0;
+  }
+
+  function announceSeek(video, source) {
+    if (!(video instanceof HTMLVideoElement)) return;
+    window.dispatchEvent(new CustomEvent("viral-ai:player-seek", {
+      detail: {
+        currentTime: Number(video.currentTime || 0),
+        duration: durationFor(video),
+        source: String(source || "interaction")
+      }
+    }));
+  }
+
   function seekFromPointer(track, video, clientX) {
     if (!(track instanceof HTMLElement) || !(video instanceof HTMLVideoElement)) return;
-    const duration = Number(video.duration || 0);
-    if (!Number.isFinite(duration) || duration <= 0) return;
+    const duration = durationFor(video);
+    if (!duration) return;
     const rect = track.getBoundingClientRect();
     if (!rect.width) return;
     const ratio = Math.max(0, Math.min(1, (Number(clientX) - rect.left) / rect.width));
     video.currentTime = ratio * duration;
     video.dispatchEvent(new Event("seeking"));
+    announceSeek(video, "pointer");
   }
 
   function wireTrack(track) {
@@ -56,6 +92,7 @@
       activeScrub = null;
       suppressClickUntil = Date.now() + 350;
       video.dispatchEvent(new Event("seeked"));
+      announceSeek(video, "pointer-end");
     };
 
     track.addEventListener("pointerup", finish);
@@ -78,7 +115,7 @@
       const target = event.target;
       if (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true'], [contenteditable='plaintext-only']")) return;
 
-      const duration = Number(video.duration || 0);
+      const duration = durationFor(video);
       if (event.key === " " || event.key === "k" || event.key === "K") {
         event.preventDefault();
         if (video.paused) {
@@ -89,7 +126,7 @@
         return;
       }
 
-      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (!duration) return;
       let delta = 0;
       if (event.key === "ArrowLeft") delta = event.shiftKey ? -10 : -5;
       if (event.key === "ArrowRight") delta = event.shiftKey ? 10 : 5;
@@ -98,6 +135,7 @@
       video.currentTime = Math.max(0, Math.min(duration, Number(video.currentTime || 0) + delta));
       video.dispatchEvent(new Event("seeking"));
       video.dispatchEvent(new Event("seeked"));
+      announceSeek(video, "keyboard");
     });
   }
 
