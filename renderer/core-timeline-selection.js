@@ -95,7 +95,8 @@
   function start() {
     const root = page();
     if (!(root instanceof HTMLElement)) return;
-    root.addEventListener("click", onClick);
+    // Capture before the existing timeline/clip seek handlers stop propagation.
+    root.addEventListener("click", onClick, true);
     observer = new MutationObserver(queue);
     observer.observe(root, { childList: true, subtree: true });
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
