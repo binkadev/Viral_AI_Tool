@@ -2,6 +2,8 @@
   "use strict";
 
   const wired = new WeakSet();
+  const wiredSeeks = new WeakSet();
+  const wiredTracks = new WeakSet();
   let queued = false;
 
   function parseDurationHint(video) {
@@ -51,6 +53,39 @@
     host.dataset.coreMediaFit = "contain";
   }
 
+  function syncEditorDock(video, duration, current) {
+    const page = document.getElementById("page");
+    if (!(page instanceof HTMLElement) || !page.classList.contains("core-editor-docked-page")) return;
+
+    const currentVideo = page.querySelector(".core-editor-focus-section video.preview-video, .core-editor-focus-section video.core-player-media");
+    if (currentVideo !== video) return;
+
+    const dock = page.querySelector(".core-editor-bottom-dock");
+    if (!(dock instanceof HTMLElement)) return;
+
+    const ratio = duration > 0 ? Math.max(0, Math.min(1, current / duration)) : 0;
+    const playhead = dock.querySelector("[data-bottom-playhead]");
+    const time = dock.querySelector("[data-bottom-time]");
+
+    if (playhead instanceof HTMLElement) playhead.style.left = String(ratio * 100) + "%";
+    if (time instanceof HTMLOutputElement) {
+      time.textContent = duration > 0
+        ? formatClock(current) + " / " + formatClock(duration)
+        : formatClock(current) + " / --:--";
+    }
+
+    dock.querySelectorAll(".core-bottom-segment").forEach(segment => {
+      const start = Number(segment.dataset.start || 0);
+      const end = Number(segment.dataset.end || start);
+      const active = duration > 0 && current >= start && (current < end || (current === duration && end === duration));
+      segment.classList.toggle("is-active", active);
+      segment.setAttribute("aria-current", active ? "true" : "false");
+    });
+
+    dock.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    dock.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+  }
+
   function refresh(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
@@ -92,6 +127,7 @@
     host.dataset.coreDurationResolved = duration > 0 ? "true" : "false";
     host.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
     host.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    syncEditorDock(video, duration, current);
   }
 
   function nudgeCorePlayer(video) {
@@ -115,23 +151,14 @@
     }
   }
 
-  function wire(video) {
+  function wireSurface(video) {
     if (!(video instanceof HTMLVideoElement)) return;
-    refresh(video);
-    if (wired.has(video)) return;
-    wired.add(video);
-
-    [
-      "loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough",
-      "progress", "timeupdate", "seeking", "seeked", "play", "pause", "ended",
-      "emptied", "stalled", "suspend", "waiting", "resize"
-    ].forEach(name => {
-      video.addEventListener(name, () => refresh(video));
-    });
-
     const host = video.closest(".preview");
-    const seek = host?.querySelector("[data-core-seek]");
-    if (seek instanceof HTMLInputElement) {
+    if (!(host instanceof HTMLElement)) return;
+
+    const seek = host.querySelector("[data-core-seek]");
+    if (seek instanceof HTMLInputElement && !wiredSeeks.has(seek)) {
+      wiredSeeks.add(seek);
       seek.addEventListener("input", event => {
         const duration = effectiveDuration(video);
         if (!duration) return;
@@ -140,8 +167,9 @@
       }, true);
     }
 
-    const track = host?.querySelector("[data-core-timeline-track]");
-    if (track instanceof HTMLElement) {
+    const track = host.querySelector("[data-core-timeline-track]");
+    if (track instanceof HTMLElement && !wiredTracks.has(track)) {
+      wiredTracks.add(track);
       track.addEventListener("click", event => {
         const duration = effectiveDuration(video);
         if (!duration) return;
@@ -153,6 +181,22 @@
         seekToRatio(video, ratio);
       }, true);
     }
+  }
+
+  function wire(video) {
+    if (!(video instanceof HTMLVideoElement)) return;
+    refresh(video);
+    wireSurface(video);
+    if (wired.has(video)) return;
+    wired.add(video);
+
+    [
+      "loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough",
+      "progress", "timeupdate", "seeking", "seeked", "play", "pause", "ended",
+      "emptied", "stalled", "suspend", "waiting", "resize"
+    ].forEach(name => {
+      video.addEventListener(name, () => refresh(video));
+    });
   }
 
   function scan() {
@@ -184,6 +228,7 @@
       document.querySelectorAll("#page video.preview-video, #page video.core-player-media").forEach(video => {
         if (video instanceof HTMLVideoElement) {
           nudgeCorePlayer(video);
+          wireSurface(video);
           refresh(video);
         }
       });
