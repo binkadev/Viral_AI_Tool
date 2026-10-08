@@ -62,11 +62,11 @@
     if (!result) return null;
 
     const sourcePath = latestSourcePath(current, source);
-    if (sourcePath && result.sourcePath && String(result.sourcePath) !== sourcePath) return null;
+    if (sourcePath && String(result?.sourcePath || "") !== sourcePath) return null;
 
     const activeTarget = String(current?.translation?.targetLanguage || "");
     const resultTarget = String(result?.targetLanguage || "");
-    if (activeTarget && resultTarget && resultTarget !== activeTarget) return null;
+    if (activeTarget && resultTarget !== activeTarget) return null;
 
     return result;
   }
