@@ -55,6 +55,8 @@ html.core-editor-premium .core-transcript-row{
   border:1px solid transparent;
   border-radius:10px;
   background:transparent;
+  content-visibility:auto;
+  contain-intrinsic-size:auto 72px;
   transition:background .14s ease,border-color .14s ease,box-shadow .14s ease;
 }
 
