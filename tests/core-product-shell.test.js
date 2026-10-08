@@ -12,6 +12,7 @@ const shellCss = read("renderer/core-product-shell.css");
 const index = read("renderer/index.html");
 const capabilities = read("renderer/core-capabilities.css");
 const shellStability = read("renderer/core-shell-stability.css");
+const shellWorkstation = read("renderer/core-shell-workstation.css");
 const navigation = read("renderer/core-navigation-stability.js");
 const hudJs = read("renderer/core-premium-hud.js");
 const hudCss = read("renderer/core-premium-hud.css");
@@ -58,6 +59,7 @@ assert(index.includes("<strong>Studio video</strong>"), "First paint must use th
 assert(index.includes("<b>Tài khoản Cloud</b>"), "Vietnamese first paint must not flash the English account placeholder.");
 assert(index.includes('id="newProjectLabel">Nhập video</span>'), "First-paint primary action must match the import workflow.");
 assert(index.includes('href="core-shell-stability.css"'));
+assert(index.includes('href="core-shell-workstation.css"'));
 assert(index.includes('src="core-navigation-stability.js"'));
 assert(index.includes('href="core-motion-policy.css"'));
 assert(index.includes('href="core-premium-workstation.css"'));
@@ -121,5 +123,21 @@ for (const required of [
   "text-shadow:none!important"
 ]) assert(workstation.includes(required), "Workstation hierarchy missing: " + required);
 assert(!workstation.includes("@keyframes"), "Workstation hierarchy must not add ambient loops.");
+
+for (const required of [
+  '.nav-item.active::before',
+  '.nav-item.active .nav-icon',
+  '.breadcrumb',
+  '#quickProject',
+  '.credit-card',
+  '.profile',
+  ':focus-visible',
+  'prefers-reduced-motion',
+  'html[data-motion="reduced"]',
+  'font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif!important'
+]) assert(shellWorkstation.includes(required), "Commercial shell workstation missing: " + required);
+assert(!shellWorkstation.includes("@keyframes"), "Commercial shell workstation must not add decorative loops.");
+assert(index.indexOf('href="core-shell-workstation.css"') > index.indexOf('href="core-shell-stability.css"'), "Final shell workstation layer must load after shell stability.");
+assert(index.indexOf('href="core-shell-workstation.css"') < index.indexOf('href="core-player-workstation.css"'), "Shell chrome must settle before player workstation styling.");
 
 console.log("Core product shell production contract passed");
