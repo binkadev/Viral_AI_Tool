@@ -36,9 +36,11 @@ for (const required of [
   ".core-inspector-card .speech-card-head",
   ".core-inspector-card .button.primary",
   ".core-inspector-card .select:focus-visible",
-  "font-size:13px!important",
-  "font-size:12px!important",
-  "font-size:11px!important",
+  "font-size:var(--type-control)!important",
+  "font-size:var(--type-body)!important",
+  "font-size:var(--type-meta)!important",
+  "font-size:var(--type-caption)!important",
+  "font-size:var(--type-section)!important",
   "min-height:36px!important",
   "transform:none!important",
   "backdrop-filter:none!important",
@@ -50,9 +52,7 @@ for (const required of [
 }
 assert(!css.includes("@keyframes"), "Final editor panels must not add decorative animation loops.");
 assert(!css.includes("filter:blur"), "Final editor panels must not use blur motion effects.");
-assert(!css.includes("font-size:10px!important"), "Commercial panel copy must not fall below the 11px helper-text floor.");
-assert(!css.includes("font-size:9px!important"), "Commercial panel copy must not use legacy 9px text.");
-assert(css.includes("font-size:14px!important"), "Inspector headings must keep a readable hierarchy.");
+assert(!/font-size:(?:9|10)px!important/.test(css), "Commercial panel copy must not use fixed text below the helper-text floor.");
 assert(css.includes("outline-offset:2px!important"), "Assets and inspector controls need visible keyboard focus.");
 
 assert(index.includes('href="core-editor-panels-workstation.css"'), "Final editor panels CSS must be loaded.");
@@ -66,4 +66,4 @@ assert(
   "Inspector workflow helper must augment the workbench after it exists."
 );
 
-console.log("Editor panels, commercial readability floors and workflow-aware inspector tests passed.");
+console.log("Editor panels, scale-aware readability and workflow-aware inspector tests passed.");
