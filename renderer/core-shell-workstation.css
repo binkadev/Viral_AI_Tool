@@ -1,0 +1,155 @@
+/* Final commercial shell layer. Keeps the desktop chrome restrained and consistent with the editor workstation. */
+html[data-theme="midnight"] .topbar{
+  min-height:72px!important;
+  padding:0 20px!important;
+  gap:18px!important;
+  border-bottom:1px solid rgba(255,255,255,.06)!important;
+  background:linear-gradient(180deg,rgba(9,14,24,.985),rgba(8,13,22,.955))!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.14)!important;
+  backdrop-filter:blur(20px) saturate(118%)!important;
+}
+html[data-theme="midnight"][data-scale="large"] .topbar{min-height:84px!important}
+html[data-theme="midnight"] .topbar-heading{display:grid!important;gap:5px!important;min-width:0;align-content:center}
+html[data-theme="midnight"] .breadcrumb{
+  width:max-content;max-width:min(54vw,620px);margin:0!important;padding:3px 7px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border:1px solid rgba(255,255,255,.055);border-radius:6px;
+  background:rgba(255,255,255,.025);color:#7e8a9f!important;
+  font-size:10px!important;font-weight:620!important;line-height:1.25;letter-spacing:.018em!important;
+}
+html[data-theme="midnight"] .topbar h1{
+  margin:0!important;color:#f3f6fb!important;
+  font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif!important;
+  font-size:21px!important;line-height:1.12!important;font-weight:700!important;letter-spacing:-.03em!important;
+}
+html[data-theme="midnight"] .top-actions{gap:7px!important;align-items:center}
+html[data-theme="midnight"] .command-palette,
+html[data-theme="midnight"] .select-trigger,
+html[data-theme="midnight"] #quickProject{
+  min-height:38px!important;height:38px!important;border-radius:10px!important;
+}
+html[data-theme="midnight"] .command-palette{
+  width:184px!important;padding-inline:10px!important;
+  border-color:rgba(255,255,255,.065)!important;background:#101827!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="midnight"] .command-palette:hover,
+html[data-theme="midnight"] .command-palette:focus-visible{
+  border-color:rgba(126,138,255,.25)!important;background:#141e30!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 8px 20px rgba(0,0,0,.12)!important;
+}
+html[data-theme="midnight"] .command-copy{font-size:11px!important;font-weight:600!important;color:#8d99ad!important}
+html[data-theme="midnight"] .command-palette kbd{font-size:10px!important}
+html[data-theme="midnight"] .select-trigger{
+  min-width:136px!important;border-color:rgba(255,255,255,.065)!important;background:#101827!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="midnight"] .select-value small{font-size:9px!important;color:#6e7b91!important}
+html[data-theme="midnight"] .select-value strong{font-size:12px!important;font-weight:650!important}
+html[data-theme="midnight"] #quickProject{
+  padding-inline:14px!important;border-color:rgba(145,155,255,.28)!important;
+  background:linear-gradient(135deg,#737ff2,#7187f5 58%,#6b97ed)!important;
+  box-shadow:0 7px 16px rgba(71,86,207,.18),inset 0 1px rgba(255,255,255,.16)!important;
+  font-size:11px!important;font-weight:700!important;
+}
+html[data-theme="midnight"] #quickProject:hover{
+  background:linear-gradient(135deg,#7e89fa,#7b90fb 58%,#73a0f4)!important;
+  box-shadow:0 9px 20px rgba(71,86,207,.22),inset 0 1px rgba(255,255,255,.19)!important;
+}
+
+html[data-theme="midnight"] .sidebar{
+  border-inline-end:1px solid rgba(255,255,255,.06)!important;
+  background:linear-gradient(180deg,#0d1422 0%,#0b111d 72%,#0a101b 100%)!important;
+  box-shadow:8px 0 24px rgba(0,0,0,.08);
+}
+html[data-theme="midnight"] .brand{
+  position:relative;padding-bottom:16px!important;margin-bottom:10px;
+}
+html[data-theme="midnight"] .brand::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:rgba(255,255,255,.055);
+}
+html[data-theme="midnight"] .brand-mark{box-shadow:inset 0 1px rgba(255,255,255,.06),0 8px 18px rgba(0,0,0,.16)!important}
+html[data-theme="midnight"] .brand-name{font-size:12px!important;letter-spacing:.065em!important}
+html[data-theme="midnight"] .brand-sub{font-size:9px!important;letter-spacing:.07em!important}
+html[data-theme="midnight"] .workspace{
+  min-height:54px;padding:9px 10px!important;border-radius:10px!important;
+  border-color:rgba(255,255,255,.06)!important;background:#101827!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="midnight"] .workspace span{font-size:9px!important;color:#6f7c91!important;letter-spacing:.025em}
+html[data-theme="midnight"] .workspace strong{margin-top:3px!important;font-size:11px!important;font-weight:680!important;color:#dce2ec!important}
+html[data-theme="midnight"] .workspace i{width:7px!important;height:7px!important;box-shadow:0 0 0 3px rgba(51,194,127,.09)!important}
+
+html[data-theme="midnight"] #nav{display:grid;gap:3px}
+html[data-theme="midnight"] .nav-item{
+  position:relative;min-height:39px!important;padding-inline:9px!important;border:1px solid transparent!important;
+  border-radius:9px!important;color:#8793a7!important;font-size:11px!important;font-weight:600!important;
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease!important;
+}
+html[data-theme="midnight"] .nav-item::before{
+  content:"";position:absolute;left:-1px;top:9px;bottom:9px;width:2px;border-radius:0 999px 999px 0;
+  background:transparent;box-shadow:none;
+}
+html[data-theme="midnight"] .nav-item:hover{
+  border-color:rgba(255,255,255,.045)!important;background:rgba(255,255,255,.03)!important;color:#dfe5ef!important;
+}
+html[data-theme="midnight"] .nav-item.active{
+  border-color:rgba(126,138,255,.105)!important;
+  background:linear-gradient(90deg,rgba(124,140,255,.12),rgba(124,140,255,.04))!important;
+  color:#f0f3f8!important;box-shadow:none!important;
+}
+html[data-theme="midnight"] .nav-item.active::before{background:#8390ff;box-shadow:0 0 10px rgba(131,144,255,.28)}
+html[data-theme="midnight"] .nav-icon{
+  width:24px!important;height:24px!important;border-radius:7px!important;
+  background:rgba(255,255,255,.025)!important;color:#8290a5!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="midnight"] .nav-item.active .nav-icon{
+  background:rgba(124,140,255,.11)!important;color:#a9b2ff!important;
+  box-shadow:inset 0 0 0 1px rgba(124,140,255,.10)!important;
+}
+html[data-theme="midnight"] .nav-item:focus-visible,
+html[data-theme="midnight"] #quickProject:focus-visible,
+html[data-theme="midnight"] .command-palette:focus-visible,
+html[data-theme="midnight"] .select-trigger:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--accent) 68%,white)!important;outline-offset:2px!important;
+}
+
+html[data-theme="midnight"] .sidebar-bottom{gap:8px!important}
+html[data-theme="midnight"] .credit-card{
+  padding:10px!important;border-radius:10px!important;border-color:rgba(255,255,255,.055)!important;
+  background:#0f1725!important;box-shadow:inset 0 1px rgba(255,255,255,.02)!important;
+}
+html[data-theme="midnight"] .credit-head span,
+html[data-theme="midnight"] .credit-card small{font-size:9px!important;color:#758197!important}
+html[data-theme="midnight"] .credit-head b{font-size:10px!important;color:#d7deea!important}
+html[data-theme="midnight"] .credit-card .bar{height:4px!important;background:rgba(255,255,255,.055)!important}
+html[data-theme="midnight"] .profile{
+  min-height:46px;padding:7px 8px!important;border:1px solid rgba(255,255,255,.045);border-radius:10px;
+  background:rgba(255,255,255,.018);
+}
+html[data-theme="midnight"] .profile .avatar{width:30px!important;height:30px!important;border-radius:9px!important}
+html[data-theme="midnight"] .profile b{font-size:10px!important;color:#dce2ec!important}
+html[data-theme="midnight"] .profile span{font-size:9px!important;color:#6f7c91!important}
+
+@media(max-width:1180px){
+  html[data-theme="midnight"] .command-palette{width:40px!important;padding-inline:0!important}
+  html[data-theme="midnight"] .language-trigger{min-width:42px!important;width:42px!important;padding-inline:7px!important}
+  html[data-theme="midnight"] .language-trigger .select-value,
+  html[data-theme="midnight"] .language-trigger .select-chevron{display:none!important}
+}
+@media(max-width:860px){
+  html[data-theme="midnight"] .topbar{padding-inline:14px!important}
+  html[data-theme="midnight"] .breadcrumb{max-width:42vw}
+  html[data-theme="midnight"] #quickProject{padding-inline:10px!important}
+}
+@media(prefers-reduced-motion:reduce){
+  html[data-theme="midnight"] .nav-item,
+  html[data-theme="midnight"] .command-palette,
+  html[data-theme="midnight"] .select-trigger,
+  html[data-theme="midnight"] #quickProject{transition:none!important}
+}
+html[data-motion="reduced"][data-theme="midnight"] .nav-item,
+html[data-motion="reduced"][data-theme="midnight"] .command-palette,
+html[data-motion="reduced"][data-theme="midnight"] .select-trigger,
+html[data-motion="reduced"][data-theme="midnight"] #quickProject{transition:none!important}
