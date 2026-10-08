@@ -56,7 +56,7 @@
 
   function latestSourceJob(state) {
     const jobs = Array.isArray(state?.jobs) ? state.jobs : [];
-    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+    for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
       if (job && !job.isRenderOutput && job.sourcePath) return job;
     }
