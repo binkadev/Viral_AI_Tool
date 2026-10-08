@@ -115,7 +115,7 @@ html.core-editor-premium .core-player-time{
   border-radius:7px!important;
   background:rgba(255,255,255,.035)!important;
   color:rgba(229,235,244,.76)!important;
-  font-family:"Cascadia Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace!important;
+  font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif!important;
   font-size:10px!important;
   font-variant-numeric:tabular-nums!important;
   letter-spacing:-.015em!important;
