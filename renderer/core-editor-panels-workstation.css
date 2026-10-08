@@ -13,66 +13,193 @@ html.core-editor-premium .core-editor-inspector::after{content:none!important;di
 html.core-editor-premium .core-assets-head,
 html.core-editor-premium .core-inspector-tabs{
   border-color:rgba(255,255,255,.055)!important;
-  background:#0f1724!important;
+  background:linear-gradient(180deg,#101926,#0e1622)!important;
   box-shadow:none!important;
 }
-html.core-editor-premium .core-assets-head{min-height:40px!important;padding:6px 7px 6px 10px!important}
-html.core-editor-premium .core-assets-head strong{color:#d7dde8!important;font-size:10px!important;font-weight:700!important;letter-spacing:.03em!important}
+html.core-editor-premium .core-assets-head{min-height:42px!important;padding:7px 8px 7px 11px!important}
+html.core-editor-premium .core-assets-head strong{
+  color:#dce2ec!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  letter-spacing:.025em!important;
+}
 html.core-editor-premium .core-assets-head button{
-  width:26px!important;height:26px!important;border-color:rgba(255,255,255,.06)!important;border-radius:7px!important;
-  background:rgba(255,255,255,.035)!important;color:#8894a7!important;
+  width:28px!important;
+  height:28px!important;
+  border-color:rgba(255,255,255,.06)!important;
+  border-radius:8px!important;
+  background:rgba(255,255,255,.035)!important;
+  color:#8d99ab!important;
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease!important;
 }
-html.core-editor-premium .core-assets-head button:hover{border-color:rgba(126,138,255,.24)!important;color:#eef2f8!important}
-html.core-editor-premium .core-assets-body{padding:8px!important}
-html.core-editor-premium .core-assets-section-label{margin:2px 3px 7px!important;color:#647186!important;font-size:8px!important}
+html.core-editor-premium .core-assets-head button:hover{border-color:rgba(126,138,255,.26)!important;background:rgba(126,138,255,.07)!important;color:#f1f4f9!important}
+html.core-editor-premium .core-assets-body{padding:9px!important}
+html.core-editor-premium .core-assets-section-label{
+  margin:3px 4px 8px!important;
+  color:#6f7c90!important;
+  font-size:10px!important;
+  font-weight:750!important;
+  letter-spacing:.065em!important;
+}
 html.core-editor-premium .core-asset-item{
-  margin-bottom:6px!important;padding:8px!important;border-color:rgba(255,255,255,.055)!important;border-radius:9px!important;
-  background:#101925!important;color:#d7deea!important;box-shadow:none!important;
-  transition:background-color .14s ease,border-color .14s ease!important;transform:none!important;
+  min-height:58px!important;
+  margin-bottom:7px!important;
+  padding:9px!important;
+  border-color:rgba(255,255,255,.055)!important;
+  border-radius:9px!important;
+  background:#101925!important;
+  color:#d7deea!important;
+  box-shadow:none!important;
+  transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease!important;
+  transform:none!important;
 }
-html.core-editor-premium .core-asset-item:hover:not(:disabled){transform:none!important;border-color:rgba(126,138,255,.18)!important;background:#131d2b!important;box-shadow:none!important}
-html.core-editor-premium .core-asset-icon{background:rgba(126,138,255,.08)!important;color:#9ca5ff!important;box-shadow:inset 0 0 0 1px rgba(126,138,255,.08)!important}
-html.core-editor-premium .core-asset-copy b{color:#d8dee9!important;font-size:10px!important}
-html.core-editor-premium .core-asset-copy small,
-html.core-editor-premium .core-asset-copy em{color:#737f92!important;font-size:9px!important}
+html.core-editor-premium .core-asset-item:hover:not(:disabled){
+  transform:none!important;
+  border-color:rgba(126,138,255,.24)!important;
+  background:#141f2e!important;
+  box-shadow:inset 3px 0 color-mix(in srgb,var(--accent) 50%,transparent)!important;
+}
+html.core-editor-premium .core-asset-item:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--accent) 72%,white)!important;
+  outline-offset:2px!important;
+}
+html.core-editor-premium .core-asset-item:disabled,
+html.core-editor-premium .core-asset-item.is-disabled{opacity:.46!important;filter:saturate(.55)!important}
+html.core-editor-premium .core-asset-icon{
+  width:36px!important;
+  height:36px!important;
+  border-radius:9px!important;
+  background:rgba(126,138,255,.08)!important;
+  color:#a5adff!important;
+  box-shadow:inset 0 0 0 1px rgba(126,138,255,.10)!important;
+  font-size:9px!important;
+}
+html.core-editor-premium .core-source-asset .core-asset-icon{font-size:11px!important}
+html.core-editor-premium .core-asset-copy{gap:3px!important}
+html.core-editor-premium .core-asset-copy b{color:#e0e5ee!important;font-size:12px!important;line-height:1.3!important;font-weight:650!important}
+html.core-editor-premium .core-asset-copy small{color:#929eb1!important;font-size:11px!important;line-height:1.35!important}
+html.core-editor-premium .core-asset-copy em{color:#6f7b8e!important;font-size:10px!important;line-height:1.35!important}
 
 html.core-editor-premium .core-editor-inspector{max-height:none!important}
-html.core-editor-premium .core-inspector-tabs{gap:2px!important;padding:5px!important}
+html.core-editor-premium .core-inspector-tabs{gap:3px!important;padding:6px!important}
 html.core-editor-premium .core-inspector-tab{
-  min-height:32px!important;border-radius:7px!important;padding:7px 4px!important;color:#7c8799!important;font-size:10px!important;
-  transition:background-color .14s ease,color .14s ease,border-color .14s ease!important;transform:none!important;box-shadow:none!important;
+  min-height:34px!important;
+  border-radius:8px!important;
+  padding:8px 5px!important;
+  color:#828ea1!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  transition:background-color .14s ease,color .14s ease,border-color .14s ease!important;
+  transform:none!important;
+  box-shadow:none!important;
 }
-html.core-editor-premium .core-inspector-tab:hover:not(.is-active){background:rgba(255,255,255,.03)!important;color:#c8d0dd!important;transform:none!important}
-html.core-editor-premium .core-inspector-tab.is-active{color:#f1f4fa!important;background:rgba(126,138,255,.08)!important;box-shadow:inset 0 -2px #8290ff!important}
-html.core-editor-premium .core-inspector-tab.has-active-job::after{animation:none!important;box-shadow:none!important;background:#8f98ff!important}
-html.core-editor-premium .core-inspector-panes{scrollbar-width:thin}
-html.core-editor-premium .core-inspector-pane{padding:10px!important}
+html.core-editor-premium .core-inspector-tab:hover:not(.is-active){background:rgba(255,255,255,.035)!important;color:#cdd5e1!important;transform:none!important}
+html.core-editor-premium .core-inspector-tab.is-active{
+  color:#f5f7fb!important;
+  background:rgba(126,138,255,.10)!important;
+  box-shadow:inset 0 -2px #8794ff!important;
+}
+html.core-editor-premium .core-inspector-tab:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--accent) 72%,white)!important;
+  outline-offset:1px!important;
+}
+html.core-editor-premium .core-inspector-tab.is-blocked:not(.is-active){opacity:.48!important}
+html.core-editor-premium .core-inspector-tab.has-active-job::after{animation:none!important;box-shadow:0 0 0 3px rgba(143,152,255,.09)!important;background:#8f98ff!important}
+html.core-editor-premium .core-inspector-panes{scrollbar-width:thin;scrollbar-color:#33415e transparent}
+html.core-editor-premium .core-inspector-pane{padding:12px!important}
 html.core-editor-premium .core-inspector-card,
 html.core-editor-premium .core-inspector-static{
-  border-color:rgba(255,255,255,.05)!important;background:#101925!important;box-shadow:none!important;
+  border-color:rgba(255,255,255,.055)!important;
+  background:#101925!important;
+  box-shadow:none!important;
 }
-html.core-editor-premium .core-inspector-card{padding:8px!important;border:1px solid rgba(255,255,255,.05)!important;border-radius:9px!important}
-html.core-editor-premium .core-inspector-static{border-radius:9px!important}
-html.core-editor-premium .core-inspector-card .speech-card-head{margin-bottom:8px!important}
-html.core-editor-premium .core-inspector-card .speech-card-head h3{font-size:13px!important;color:#e3e8f0!important}
-html.core-editor-premium .core-inspector-card .speech-card-head p{font-size:10px!important;color:#758196!important}
-html.core-editor-premium .core-inspector-card .eyebrow{color:#77849a!important}
-html.core-editor-premium .core-inspector-card .button{min-height:32px!important;border-radius:8px!important;padding:6px 9px!important}
+html.core-editor-premium .core-inspector-card{
+  padding:11px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:10px!important;
+}
+html.core-editor-premium .core-inspector-static{border-radius:10px!important}
+html.core-editor-premium .core-inspector-card .speech-card-head{
+  gap:9px!important;
+  margin-bottom:12px!important;
+  padding-bottom:10px!important;
+  border-bottom:1px solid rgba(255,255,255,.05)!important;
+}
+html.core-editor-premium .core-inspector-card .speech-card-head h3,
+html.core-editor-premium .core-inspector-card > h3,
+html.core-editor-premium .core-inspector-static > h3{
+  margin:0!important;
+  color:#edf1f7!important;
+  font-size:14px!important;
+  line-height:20px!important;
+  font-weight:650!important;
+}
+html.core-editor-premium .core-inspector-card .speech-card-head p,
+html.core-editor-premium .core-inspector-card > p,
+html.core-editor-premium .core-inspector-static > p{
+  margin-top:4px!important;
+  color:#8d9ab0!important;
+  font-size:11px!important;
+  line-height:16px!important;
+}
+html.core-editor-premium .core-inspector-card .eyebrow{margin-bottom:4px!important;color:#77859b!important;font-size:10px!important;letter-spacing:.055em!important}
+html.core-editor-premium .core-inspector-card .speech-controls,
+html.core-editor-premium .core-inspector-card .translation-controls,
+html.core-editor-premium .core-inspector-card .voice-top-controls{gap:10px!important}
+html.core-editor-premium .core-inspector-card label{color:#aeb8c8!important;font-size:11px!important;line-height:16px!important}
 html.core-editor-premium .core-inspector-card .select,
-html.core-editor-premium .core-inspector-card input{min-height:34px!important}
-html.core-editor-premium .core-output-actions{gap:7px!important}
-html.core-editor-premium .core-inspector-render{min-height:36px!important}
+html.core-editor-premium .core-inspector-card input{
+  min-height:36px!important;
+  border-color:rgba(255,255,255,.07)!important;
+  border-radius:8px!important;
+}
+html.core-editor-premium .core-inspector-card .select:focus-visible,
+html.core-editor-premium .core-inspector-card input:focus-visible,
+html.core-editor-premium .core-inspector-card .button:focus-visible,
+html.core-editor-premium .core-inspector-render:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--accent) 68%,white)!important;
+  outline-offset:2px!important;
+}
+html.core-editor-premium .core-inspector-card .button{
+  min-height:36px!important;
+  border-radius:8px!important;
+  padding:7px 10px!important;
+  font-size:12px!important;
+}
+html.core-editor-premium .core-inspector-card .button.primary,
+html.core-editor-premium .core-inspector-render{
+  font-weight:650!important;
+  box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 9%,transparent)!important;
+}
+html.core-editor-premium .core-inspector-card .speech-choice-help,
+html.core-editor-premium .core-inspector-card .translation-warning,
+html.core-editor-premium .core-inspector-card .speech-alert,
+html.core-editor-premium .core-inspector-card .voice-feature-pending,
+html.core-editor-premium .core-inspector-card .ai-voice-disclosure,
+html.core-editor-premium .core-inspector-card .speech-job-state{
+  font-size:11px!important;
+  line-height:16px!important;
+}
+html.core-editor-premium .core-output-actions{gap:9px!important}
+html.core-editor-premium .core-inspector-render{min-height:38px!important;border-radius:9px!important;font-size:12px!important}
 
 @media(max-width:1320px){
-  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{grid-template-columns:48px minmax(0,1fr) 340px!important}
-  html.core-editor-premium .core-editor-assets-panel{width:48px!important}
+  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{grid-template-columns:52px minmax(0,1fr) 340px!important}
+  html.core-editor-premium .core-editor-assets-panel{width:52px!important}
   html.core-editor-premium .core-editor-assets-panel .core-assets-head strong,
   html.core-editor-premium .core-editor-assets-panel .core-assets-section-label,
   html.core-editor-premium .core-editor-assets-panel .core-asset-copy{display:none!important}
-  html.core-editor-premium .core-editor-assets-panel .core-assets-head{justify-content:center!important;padding-inline:5px!important}
-  html.core-editor-premium .core-editor-assets-panel .core-assets-body{padding:7px!important}
-  html.core-editor-premium .core-editor-assets-panel .core-asset-item{grid-template-columns:1fr!important;padding:6px!important;place-items:center!important}
+  html.core-editor-premium .core-editor-assets-panel .core-assets-head{justify-content:center!important;padding-inline:6px!important}
+  html.core-editor-premium .core-editor-assets-panel .core-assets-body{padding:8px!important}
+  html.core-editor-premium .core-editor-assets-panel .core-asset-item{min-height:44px!important;grid-template-columns:1fr!important;padding:5px!important;place-items:center!important;box-shadow:none!important}
+  html.core-editor-premium .core-editor-assets-panel .core-asset-icon{width:34px!important;height:34px!important}
 }
 @media(max-width:1120px){html.core-editor-premium .core-editor-assets-panel{display:none!important}}
-@media(prefers-reduced-motion:reduce){html.core-editor-premium .core-asset-item,html.core-editor-premium .core-inspector-tab{transition:none!important}}
-html[data-motion="reduced"].core-editor-premium .core-asset-item,html[data-motion="reduced"].core-editor-premium .core-inspector-tab{transition:none!important}
+@media(prefers-reduced-motion:reduce){
+  html.core-editor-premium .core-assets-head button,
+  html.core-editor-premium .core-asset-item,
+  html.core-editor-premium .core-inspector-tab{transition:none!important}
+}
+html[data-motion="reduced"].core-editor-premium .core-assets-head button,
+html[data-motion="reduced"].core-editor-premium .core-asset-item,
+html[data-motion="reduced"].core-editor-premium .core-inspector-tab{transition:none!important}
