@@ -61,7 +61,10 @@ assert(creator.includes("current?.cloud?.auth?.authenticated === true"), "Cloud 
 assert(!creator.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply connectivity.");
 assert(creator.includes("current?.speech?.providerStatus?.local"), "Local readiness must come from the real speech provider state.");
 assert(creator.includes("local.ready === true"), "Local must only say ready when the provider reports ready.");
-assert(creator.includes("Cần thiết lập"), "Unavailable local AI must show a setup-required state.");
+assert(
+  creator.includes("Device setup needed") && creator.includes("Cần hoàn tất thiết lập trên thiết bị"),
+  "Unavailable local AI must keep an explicit setup-required state in both locales."
+);
 assert(creator.includes("projectSource()"), "Creator route recovery must keep persisted projects recoverable.");
 
 for (const token of ["setting-row", "1080p", "4K", "__coreProductionSettings"]) {
