@@ -7,6 +7,7 @@
   let selectedKey = "";
   let selectedSegmentIndex = -1;
   let currentSource = "";
+  let restoredTranscriptSource = "";
 
   function page() {
     return document.getElementById("page");
@@ -73,6 +74,14 @@
     }));
   }
 
+  function restoreTranscriptSelection() {
+    if (selectedSegmentIndex < 0 || restoredTranscriptSource === currentSource) return;
+    restoredTranscriptSource = currentSource;
+    window.dispatchEvent(new CustomEvent("viral-ai:editor-segment-selected", {
+      detail: { index: selectedSegmentIndex, source: "project-restore" }
+    }));
+  }
+
   function restoreSelection() {
     queued = false;
     const root = dock();
@@ -81,11 +90,13 @@
     const nextSource = sourceKey();
     if (nextSource !== currentSource) {
       currentSource = nextSource;
+      restoredTranscriptSource = "";
       loadStoredSelection();
     }
 
     if (!selectedKey) {
       applySourceSelection(root, null);
+      restoreTranscriptSelection();
       return;
     }
 
@@ -115,6 +126,7 @@
     if (!key) return;
     selectedKey = key;
     selectedSegmentIndex = -1;
+    restoredTranscriptSource = currentSource;
     persistSelection();
     applySourceSelection(root, item);
     clearTranscriptSelectionForSource();
@@ -134,6 +146,7 @@
       selectedSegmentIndex = -1;
     }
 
+    if (event?.detail?.source !== "project-restore") restoredTranscriptSource = currentSource;
     persistSelection();
     const root = dock();
     if (root instanceof HTMLElement) applySourceSelection(root, itemForKey(root, selectedKey));
