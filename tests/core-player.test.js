@@ -137,7 +137,9 @@ for (const required of [
   "ArrowRight",
   "event.shiftKey ? -10 : -5",
   "event.shiftKey ? 10 : 5",
-  "video.paused"
+  "video.paused",
+  "const video = activeVideoFor(host)",
+  "if (!(video instanceof HTMLVideoElement)) return"
 ]) {
   assert(interactions.includes(required), "Core player interactions are missing: " + required);
 }
