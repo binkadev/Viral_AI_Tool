@@ -109,6 +109,10 @@
     return [view, context.source.editedAt || "", context.translation?.staleAt || "", context.translationStale ? "stale" : "fresh", textSignature, translationSignature].join("::");
   }
 
+  function toolbarSignature(context, view) {
+    return [locale(), view, context.source.segments.length, context.translationAvailable ? "translated" : "source-only", context.translationStale ? "stale" : "fresh"].join("|");
+  }
+
   function ensureToolbar(result, context, view) {
     const copy = labels();
     let toolbar = result.querySelector(".core-transcript-toolbar");
@@ -121,7 +125,11 @@
       else result.prepend(toolbar);
     }
 
+    const signature = toolbarSignature(context, view);
+    if (toolbar.dataset.workstationSignature === signature) return;
+    toolbar.dataset.workstationSignature = signature;
     toolbar.replaceChildren();
+
     const switcher = document.createElement("div");
     switcher.className = "core-transcript-view-switcher";
     switcher.setAttribute("role", "tablist");
@@ -284,7 +292,6 @@
       observer.observe(page, { childList: true, subtree: true });
     }
     window.addEventListener("viral-ai:core-state-changed", schedule);
-    window.addEventListener("viral-ai:player-sync", schedule);
     schedule();
   }
 
