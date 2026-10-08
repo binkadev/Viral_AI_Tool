@@ -22,6 +22,36 @@
     } catch {}
   }
 
+  function activeSourcePath(current, edit) {
+    if (current?.speech?.result?.sourcePath) return String(current.speech.result.sourcePath);
+    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
+    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+      const job = jobs[index];
+      if (!job?.isRenderOutput && job?.sourcePath) return String(job.sourcePath);
+    }
+    return edit?.source ? String(edit.source) : null;
+  }
+
+  function staleValue(value, sourcePath, reason) {
+    if (!value) return value;
+    if (sourcePath && !model.sourceMatches(value, sourcePath)) return value;
+    return {
+      ...value,
+      status: "stale",
+      staleReason: reason,
+      staleAt: new Date().toISOString()
+    };
+  }
+
+  function archiveStale(bucket, activeKey, archiveKey, sourcePath, reason) {
+    const active = bucket?.[activeKey];
+    if (!active) return;
+    const stale = staleValue(active, sourcePath, reason);
+    if (stale === active) return;
+    bucket[archiveKey] = stale;
+    bucket[activeKey] = null;
+  }
+
   function markRenderOutputsStale(current, sourcePath) {
     if (!Array.isArray(current?.jobs)) return;
     current.jobs = current.jobs.map(job => {
@@ -29,25 +59,19 @@
       if (sourcePath && job.sourcePath && String(job.sourcePath) !== String(sourcePath)) return job;
       return {
         ...job,
-        status: "stale",
-        staleReason: "transcript-edited"
+        status: "failed",
+        stale: true,
+        staleReason: "transcript-edited",
+        staleAt: new Date().toISOString()
       };
     });
   }
 
   function invalidateDownstream(current, sourcePath) {
-    if (model.sourceMatches(current?.translation?.result, sourcePath)) {
-      current.translation.result = null;
-    }
-    if (model.sourceMatches(current?.translation?.job, sourcePath)) {
-      current.translation.job = null;
-    }
-    if (model.sourceMatches(current?.voice?.result, sourcePath)) {
-      current.voice.result = null;
-    }
-    if (model.sourceMatches(current?.voice?.job, sourcePath)) {
-      current.voice.job = null;
-    }
+    archiveStale(current?.translation, "result", "staleResult", sourcePath, "source-transcript-edited");
+    archiveStale(current?.translation, "job", "staleJob", sourcePath, "source-transcript-edited");
+    archiveStale(current?.voice, "result", "staleResult", sourcePath, "source-transcript-edited");
+    archiveStale(current?.voice, "job", "staleJob", sourcePath, "source-transcript-edited");
     markRenderOutputsStale(current, sourcePath);
   }
 
@@ -56,7 +80,7 @@
     if (!current?.speech?.result) return;
 
     const edit = event?.detail || {};
-    const sourcePath = current.speech.result.sourcePath || null;
+    const sourcePath = activeSourcePath(current, edit);
     const applied = model.applySourceEdit(current.speech.result, edit);
     if (!applied.changed) return;
 

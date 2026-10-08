@@ -72,22 +72,51 @@ assert.strictEqual(byStart.result.segments[1].text, "world edited");
 assert.strictEqual(byStart.result.segments[1].start, 3);
 assert.strictEqual(byStart.result.segments[1].end, 4);
 
+const longSource = {
+  sourcePath: "C:/long-video.mp4",
+  segments: Array.from({ length: 1800 }, (_, index) => ({
+    id: "long-" + index,
+    start: index * 2.5,
+    end: index * 2.5 + 2.25,
+    text: "Segment " + index,
+    translatedText: "Bản dịch " + index,
+    speaker: index % 2 ? "S2" : "S1"
+  }))
+};
+const longNormalized = model.normalizeDocument(longSource);
+assert.strictEqual(longNormalized.segments.length, 1800, "long-form transcripts must keep every segment");
+const longEdited = model.applySourceEdit(longNormalized, { segmentId: "long-1799", text: "Final segment edited" });
+assert.strictEqual(longEdited.changed, true);
+assert.strictEqual(longEdited.result.segments.length, 1800, "editing a long transcript must not truncate segments");
+assert.strictEqual(longEdited.result.segments[1799].start, 4497.5, "long transcript timing must remain intact");
+assert.strictEqual(longEdited.result.segments[1799].end, 4499.75, "long transcript end timing must remain intact");
+assert.strictEqual(longEdited.result.segments[1799].speaker, "S2", "long transcript metadata must remain intact");
+
 for (const required of [
   "current.speech.result = applied.result",
-  "current.translation.result = null",
-  "current.translation.job = null",
-  "current.voice.result = null",
-  "current.voice.job = null",
+  "function archiveStale",
+  'archiveStale(current?.translation, "result", "staleResult"',
+  'archiveStale(current?.translation, "job", "staleJob"',
+  'archiveStale(current?.voice, "result", "staleResult"',
+  'archiveStale(current?.voice, "job", "staleJob"',
   'status: "stale"',
+  'staleReason: reason',
+  'status: "failed"',
+  "stale: true",
+  '"source-transcript-edited"',
   "persistState()",
   "viral-ai:core-state-changed"
 ]) {
   assert(bridge.includes(required), "Transcript state bridge is missing: " + required);
 }
 
+assert(bridge.includes("bucket[archiveKey] = stale"), "Stale translation/voice data must remain archived for recovery/audit.");
+assert(bridge.includes("bucket[activeKey] = null"), "Stale translation/voice data must leave active production action paths.");
+assert(!bridge.includes('status: "stale",\n        staleReason: "transcript-edited"'), "Render jobs must use an existing localized status while retaining stale metadata.");
 assert(!bridge.includes("render()"), "Transcript text edits must not trigger a full UI render/video reload.");
 assert(workflow.includes('window.addEventListener("viral-ai:core-state-changed", queueRefresh)'), "Workflow must refresh immediately after transcript state changes.");
 assert(index.includes('src="core-transcript-model.js"'));
 assert(index.includes('src="core-transcript-state.js"'));
+assert(index.includes('src="core-transcript-workstation.js"'));
 
-console.log("Core transcript editing, state invalidation and reopen persistence tests passed.");
+console.log("Core transcript editing, long-form timing, stale archive and reopen persistence tests passed.");
