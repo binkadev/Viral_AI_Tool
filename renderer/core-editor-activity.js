@@ -17,6 +17,15 @@
     return appState()?.locale === "en" ? "en" : "vi";
   }
 
+  function tr(key, vars) {
+    try {
+      const value = window.I18N?.t?.(locale(), key, vars);
+      return typeof value === "string" ? value : key;
+    } catch {
+      return key;
+    }
+  }
+
   function copy() {
     return locale() === "en"
       ? {
@@ -97,6 +106,13 @@
             cancelled: "Bước này đã được dừng. Bạn có thể chạy lại khi sẵn sàng."
           }
         };
+  }
+
+  function commercialCopy() {
+    const labels = copy();
+    labels.steps.render = tr("common.export");
+    labels.phases.rendering = tr("media.renderStarted");
+    return labels;
   }
 
   function latestRenderJob(current) {
@@ -221,7 +237,7 @@
       return;
     }
 
-    const labels = copy();
+    const labels = commercialCopy();
     const { job, meta } = active;
     const progress = progressFor(job);
     const rawPhase = String(meta.phase || job?.status || job?.state || meta.state || "processing").toLowerCase();
