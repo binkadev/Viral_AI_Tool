@@ -49,6 +49,7 @@ for (const required of [
 
 for (const required of [
   "selectedKey",
+  "selectedSegmentIndex",
   "currentSource",
   "sourceKey()",
   "itemKey(node)",
@@ -57,6 +58,12 @@ for (const required of [
   '"subtitle:"',
   'classList.toggle("is-selected", active)',
   'setAttribute("aria-selected", active ? "true" : "false")',
+  "clearTranscriptSelectionForSource()",
+  'new CustomEvent("viral-ai:editor-segment-selected"',
+  'detail: { index: -1, source: "timeline-source" }',
+  "function onSegmentSelection(event)",
+  'event?.detail?.source === "timeline-source"',
+  'window.addEventListener("viral-ai:editor-segment-selected", onSegmentSelection)',
   "MutationObserver",
   'root.addEventListener("click", onClick, true)',
   "requestAnimationFrame(restoreSelection)"
@@ -78,4 +85,4 @@ assert(
   "Timeline selection must augment the real bottom dock after it is installed."
 );
 
-console.log("Workstation timeline hierarchy, selection and stability tests passed.");
+console.log("Workstation timeline hierarchy, shared selection ownership and stability tests passed.");
