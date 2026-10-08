@@ -130,6 +130,7 @@
       page: source ? "ai-video" : String(editor.page || "download"),
       playback: {
         position,
+        sourceIdentity: playback.sourceIdentity ? String(playback.sourceIdentity) : source?.identity || null,
         sourcePath: playback.sourcePath ? String(playback.sourcePath) : source?.path || null
       },
       timeline: {
@@ -204,7 +205,7 @@
   function editorFromLegacy(ui = {}, source = null) {
     return normalizeEditor({
       page: source ? "ai-video" : "download",
-      playback: { position: 0, sourcePath: source?.path || null },
+      playback: { position: 0, sourceIdentity: source?.identity || null, sourcePath: source?.path || null },
       timeline: {
         tab: ui.bottomTab,
         height: ui.bottomHeight,
