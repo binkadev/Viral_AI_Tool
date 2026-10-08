@@ -68,8 +68,7 @@
 
   function wireHost(host) {
     if (!(host instanceof HTMLElement) || host.dataset.coreKeyboardWired === "true") return;
-    const video = host.querySelector("video.preview-video, video.core-player-media");
-    if (!(video instanceof HTMLVideoElement)) return;
+    if (!(activeVideoFor(host) instanceof HTMLVideoElement)) return;
     host.dataset.coreKeyboardWired = "true";
     if (!host.hasAttribute("tabindex")) host.tabIndex = 0;
     host.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight");
@@ -78,6 +77,8 @@
       const target = event.target;
       if (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true'], [contenteditable='plaintext-only']")) return;
 
+      const video = activeVideoFor(host);
+      if (!(video instanceof HTMLVideoElement)) return;
       const duration = Number(video.duration || 0);
       if (event.key === " " || event.key === "k" || event.key === "K") {
         event.preventDefault();
