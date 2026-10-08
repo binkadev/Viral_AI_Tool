@@ -106,6 +106,7 @@ for (const required of [
   "seekToRatio(video",
   '"play", "pause", "ended"',
   "const wiredSeeks = new WeakSet()",
+  "const wiredPlayButtons = new WeakSet()",
   "const wiredTracks = new WeakSet()",
   "const surfaceObservers = new WeakMap()",
   "function wireSurface(video)",
@@ -120,12 +121,22 @@ for (const required of [
   "current?.observer?.disconnect?.()",
   'video.closest(".preview") !== host',
   "observer.observe(host)",
+  'host.querySelector("[data-core-play], [data-core-toggle-play]")',
+  "wiredPlayButtons.has(playButton)",
+  "await currentVideo.play()",
+  "currentVideo.pause()",
+  "event.stopImmediatePropagation()",
   "data-bottom-playhead",
   "data-bottom-time",
   ".core-bottom-segment"
 ]) {
   assert(rebind.includes(required), "Core player rebind is missing hardening behavior: " + required);
 }
+
+assert(
+  !rebind.includes("event.stopPropagation();\n        seekToRatio(currentVideo"),
+  "Seek hardening must stop same-element stale listeners, not only event bubbling."
+);
 
 for (const required of [
   "pointerdown",
