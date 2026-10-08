@@ -1,0 +1,32 @@
+/* Current project context shown in the desktop topbar. */
+html[data-theme="midnight"] .breadcrumb[data-project-context="true"]{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  max-width:min(56vw,640px);
+  padding-inline:7px 9px!important;
+  color:#8d99ad!important;
+  background:rgba(255,255,255,.028)!important;
+}
+html[data-theme="midnight"] .breadcrumb[data-project-context="true"]::before{
+  content:"";
+  width:6px;
+  height:6px;
+  flex:0 0 6px;
+  border-radius:999px;
+  background:#33c27f;
+  box-shadow:0 0 0 3px rgba(51,194,127,.08);
+}
+html[data-theme="midnight"] .breadcrumb[data-project-context="true"][data-source-state="needs-action"]{
+  color:#c8b890!important;
+  border-color:rgba(240,180,76,.15)!important;
+  background:rgba(240,180,76,.045)!important;
+}
+html[data-theme="midnight"] .breadcrumb[data-project-context="true"][data-source-state="needs-action"]::before{
+  background:#f0b44c;
+  box-shadow:0 0 0 3px rgba(240,180,76,.09);
+}
+@media(max-width:860px){
+  html[data-theme="midnight"] .breadcrumb[data-project-context="true"]{max-width:38vw}
+}
