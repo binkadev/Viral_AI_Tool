@@ -74,7 +74,7 @@ for (const required of ["pointerdown","pointermove","pointerup","setPointerCaptu
   assert(interactions.includes(required), "Core player interactions are missing: " + required);
 }
 
-for (const required of ["resolveDuration","seekableEnd(video)","data-bottom-playhead","data-bottom-time","data-core-playhead","data-core-seek","data-core-time","viral-ai:player-seek","viral-ai:player-sync","video.currentTime","requestAnimationFrame(scan)"]) {
+for (const required of ["resolveDuration","seekableEnd(video)","data-bottom-playhead","data-bottom-time","data-core-playhead","data-core-seek","data-core-time","viral-ai:player-seek","viral-ai:player-sync","video.currentTime","requestAnimationFrame(scan)","function isAuthoritativeVideo(video)","video.isConnected","currentVideo() === video","if (!isAuthoritativeVideo(video)) return"]) {
   assert(sync.includes(required), "Unified player sync is missing: " + required);
 }
 
