@@ -2,8 +2,10 @@
   "use strict";
 
   const wired = new WeakSet();
+  const wiredRetries = new WeakSet();
   const retryCount = new WeakMap();
   const timers = new WeakMap();
+  const surfaceStates = new WeakMap();
 
   function locale() {
     try {
@@ -38,6 +40,11 @@
     return video?.closest?.(".preview.core-player-host, .preview.preview-real") || null;
   }
 
+  function mediaFor(host) {
+    const video = host?.querySelector?.("video.preview-video, video.core-player-media");
+    return video instanceof HTMLVideoElement ? video : null;
+  }
+
   function clearTimer(video) {
     const timer = timers.get(video);
     if (timer) clearTimeout(timer);
@@ -59,10 +66,27 @@
     return overlay;
   }
 
-  function setState(video, state, details = {}) {
+  function wireRetry(host, overlay) {
+    const retry = overlay?.querySelector?.("[data-media-retry]");
+    if (!(host instanceof HTMLElement) || !(retry instanceof HTMLButtonElement) || wiredRetries.has(retry)) return;
+    wiredRetries.add(retry);
+    retry.addEventListener("click", () => {
+      const video = mediaFor(host);
+      if (!(video instanceof HTMLVideoElement)) return;
+      retryCount.set(video, 0);
+      setState(video, "loading");
+      try { video.load(); } catch {}
+      armMetadataTimeout(video);
+    });
+  }
+
+  function renderState(video, state, details = {}, logFailure = false) {
     const host = hostFor(video);
     if (!(host instanceof HTMLElement)) return;
     const overlay = ensureOverlay(host);
+    if (!(overlay instanceof HTMLElement)) return;
+    wireRetry(host, overlay);
+
     const c = copy();
     host.dataset.coreMediaState = state;
 
@@ -93,16 +117,41 @@
       retry.textContent = c.retry;
     }
 
-    console.warn("[CoreMediaPreview]", {
-      state,
-      errorCode: details.errorCode || null,
-      networkState: video.networkState,
-      readyState: video.readyState,
-      duration: Number.isFinite(video.duration) ? video.duration : null,
-      videoWidth: video.videoWidth || 0,
-      videoHeight: video.videoHeight || 0,
-      src: String(video.currentSrc || video.src || "")
-    });
+    if (logFailure) {
+      console.warn("[CoreMediaPreview]", {
+        state,
+        errorCode: details.errorCode || null,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        duration: Number.isFinite(video.duration) ? video.duration : null,
+        videoWidth: video.videoWidth || 0,
+        videoHeight: video.videoHeight || 0,
+        src: String(video.currentSrc || video.src || "")
+      });
+    }
+  }
+
+  function setState(video, state, details = {}) {
+    surfaceStates.set(video, { state, details });
+    renderState(video, state, details, state === "failed");
+  }
+
+  function syncSurface(video) {
+    if (!(video instanceof HTMLVideoElement)) return;
+    const host = hostFor(video);
+    if (!(host instanceof HTMLElement)) return;
+    const overlay = ensureOverlay(host);
+    wireRetry(host, overlay);
+
+    const saved = surfaceStates.get(video);
+    if (saved) {
+      renderState(video, saved.state, saved.details, false);
+      return;
+    }
+
+    if (video.error) renderState(video, "failed", { errorCode: video.error?.code || 0 }, false);
+    else if (video.readyState >= 1 && Number(video.duration) > 0) renderState(video, "ready", {}, false);
+    else renderState(video, "loading", {}, false);
   }
 
   function armMetadataTimeout(video) {
@@ -123,20 +172,10 @@
   }
 
   function wire(video) {
-    if (!(video instanceof HTMLVideoElement) || wired.has(video)) return;
+    if (!(video instanceof HTMLVideoElement)) return;
+    syncSurface(video);
+    if (wired.has(video)) return;
     wired.add(video);
-
-    const host = hostFor(video);
-    if (!(host instanceof HTMLElement)) return;
-    const overlay = ensureOverlay(host);
-    const retry = overlay?.querySelector("[data-media-retry]");
-
-    retry?.addEventListener("click", () => {
-      retryCount.set(video, 0);
-      setState(video, "loading");
-      try { video.load(); } catch {}
-      armMetadataTimeout(video);
-    });
 
     video.addEventListener("loadstart", () => {
       setState(video, "loading");
@@ -183,6 +222,7 @@
   const start = () => {
     const page = document.getElementById("page");
     if (page) observer.observe(page, { childList: true, subtree: true });
+    window.addEventListener("viral-ai:editor-preview-preserved", scan);
     scan();
   };
 
