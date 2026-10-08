@@ -11,10 +11,29 @@
     try { return JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}"); } catch { return {}; }
   }
   function locale() { return appState()?.locale === "en" ? "en" : "vi"; }
-  function labels() {
-    return locale() === "en"
-      ? { eyebrow:"Output", ready:"Exported video is ready", readyBody:"The final video file is available on this device.", show:"Open folder", checking:"Checking exported video…", missing:"Exported video was not found", missingBody:"The exported file may have been moved, renamed, or deleted. Your project is still available and can be exported again.", rerender:"Export again", unverified:"Could not check the exported video", unverifiedBody:"The file check failed temporarily. Your project was not changed.", recheck:"Check again", waiting:"Export the video to create the final file." }
-      : { eyebrow:"Đầu ra", ready:"Video đã xuất sẵn sàng", readyBody:"Tệp video cuối đang có trên máy này.", show:"Mở thư mục", checking:"Đang kiểm tra video đã xuất…", missing:"Không tìm thấy video đã xuất", missingBody:"Tệp video có thể đã bị di chuyển, đổi tên hoặc xóa. Dự án vẫn còn và bạn có thể xuất lại.", rerender:"Xuất lại", unverified:"Chưa kiểm tra được video đã xuất", unverifiedBody:"Việc kiểm tra tệp tạm thời gặp lỗi. Dự án của bạn không bị thay đổi.", recheck:"Kiểm tra lại", waiting:"Xuất video để tạo tệp video cuối." };
+  function tr(key, vars) {
+    try {
+      const value = window.I18N?.t?.(locale(), key, vars);
+      return typeof value === "string" ? value : key;
+    } catch {
+      return key;
+    }
+  }
+  function labels(fileName) {
+    return {
+      eyebrow: tr("common.export"),
+      ready: tr("media.renderDone"),
+      readyBody: tr("media.exportDone"),
+      show: tr("media.showFile"),
+      checking: tr("settings.updateChecking"),
+      missing: tr("file.missingTitle"),
+      missingBody: tr("file.missingBody", { name: fileName || tr("common.video") }),
+      rerender: tr("export.retry"),
+      unverified: tr("file.unknownDetails"),
+      unverifiedBody: "",
+      recheck: tr("translation.retry"),
+      waiting: tr("common.export")
+    };
   }
   function output() {
     try { return model?.derive?.(appState())?.renderOutput || null; } catch { return null; }
@@ -126,8 +145,8 @@
     queued = false;
     const pane = document.querySelector('#page .core-inspector-pane[data-inspector-pane="output"]');
     if (!(pane instanceof HTMLElement)) return;
-    const c = labels();
     const out = output();
+    const c = labels(basename(out?.outputPath));
     const { card, hint } = ensure(pane);
     if (!out?.outputPath) {
       card.hidden = true;
