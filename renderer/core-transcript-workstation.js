@@ -6,7 +6,7 @@
 
   const VIEW_KEY = "viral-ai-core-transcript-view";
   const VALID_VIEWS = new Set(["source", "translation"]);
-  let scheduled = 0;
+  let refreshQueued = false;
 
   function appState() {
     try {
@@ -44,7 +44,7 @@
   }
 
   function isStale(value) {
-    return String(value?.status || value?.state || "").toLowerCase() === "stale";
+    return Boolean(value?.stale) || String(value?.status || value?.state || "").toLowerCase() === "stale";
   }
 
   function latestSourcePath(current, source) {
@@ -57,18 +57,20 @@
     return null;
   }
 
-  function translationForContext(current, source) {
-    const result = current?.translation?.result || null;
+  function matchingTranslation(current, source, result) {
     if (!result) return null;
-
     const sourcePath = latestSourcePath(current, source);
     if (sourcePath && String(result?.sourcePath || "") !== sourcePath) return null;
-
     const activeTarget = String(current?.translation?.targetLanguage || "");
     const resultTarget = String(result?.targetLanguage || "");
     if (activeTarget && resultTarget !== activeTarget) return null;
-
     return result;
+  }
+
+  function translationForContext(current, source) {
+    const active = matchingTranslation(current, source, current?.translation?.result || null);
+    if (active) return active;
+    return matchingTranslation(current, source, current?.translation?.staleResult || null);
   }
 
   function translationSegments(result) {
@@ -312,9 +314,10 @@
   }
 
   function schedule() {
-    cancelAnimationFrame(scheduled);
-    scheduled = requestAnimationFrame(() => {
-      scheduled = 0;
+    if (refreshQueued) return;
+    refreshQueued = true;
+    queueMicrotask(() => {
+      refreshQueued = false;
       hydrate();
     });
   }
