@@ -177,7 +177,7 @@
     });
     list.replaceChildren(fragment);
     list.dataset.coreTranscriptCount = String(segments.length);
-    list.dataset.coreTranscriptWorkstation = "ready";
+    list.setAttribute("data-core-transcript-workstation", "ready");
     lastSignature = signature;
 
     window.dispatchEvent(new CustomEvent("viral-ai:transcript-workstation-ready", {
