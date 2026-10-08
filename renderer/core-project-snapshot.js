@@ -176,6 +176,7 @@
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       projectId: String(snapshot.projectId || source.identity),
+      projectName: String(snapshot.projectName || source.name || source.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
       workflow,
@@ -229,6 +230,7 @@
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       projectId: source.identity,
+      projectName: String(legacyState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(legacyState),
@@ -247,6 +249,9 @@
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       projectId: sameProject ? previousSnapshot.projectId : source.identity,
+      projectName: sameProject
+        ? String(previousSnapshot.projectName || source.name || source.identity)
+        : String(appState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(appState),
