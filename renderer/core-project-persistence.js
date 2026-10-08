@@ -9,9 +9,11 @@
     LEGACY_STATE_KEY,
     LEGACY_UI_KEYS
   } = model;
+  const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1";
   const DEBOUNCE_MS = 320;
   const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)]);
   const storagePrototype = Storage.prototype;
+  const nativeGetItem = storagePrototype.getItem;
   const nativeSetItem = storagePrototype.setItem;
   const nativeRemoveItem = storagePrototype.removeItem;
   const restoredVideos = new WeakSet();
@@ -91,7 +93,10 @@
       writeNative(SNAPSHOT_KEY, JSON.stringify(currentSnapshot));
     }
 
-    if (currentSnapshot) projectLegacyProjection(currentSnapshot);
+    if (currentSnapshot) {
+      projectLegacyProjection(currentSnapshot);
+      try { nativeRemoveItem.call(localStorage, LEGACY_TRANSCRIPT_EDIT_KEY); } catch {}
+    }
   }
 
   bootstrapSnapshot();
@@ -118,10 +123,20 @@
     return node instanceof HTMLElement ? node : null;
   }
 
+  function storedSelectionValue() {
+    const raw = localStorage.getItem(LEGACY_UI_KEYS.timelineSelection);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && typeof parsed.selection === "string") return parsed.selection;
+    } catch {}
+    return raw;
+  }
+
   function currentTimelineSelection() {
     const dock = document.querySelector("#page .core-editor-bottom-dock");
     if (dock instanceof HTMLElement && dock.dataset.timelineSelection) return dock.dataset.timelineSelection;
-    return localStorage.getItem(LEGACY_UI_KEYS.timelineSelection) || currentSnapshot?.editor?.timeline?.selection || "none";
+    return storedSelectionValue() || currentSnapshot?.editor?.timeline?.selection || "none";
   }
 
   function playbackState(current) {
@@ -184,8 +199,16 @@
     const next = model.buildSnapshot(current, editorState(current), currentSnapshot);
     if (!next) return null;
     if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return currentSnapshot;
+    try {
+      writeNative(SNAPSHOT_KEY, JSON.stringify(next));
+    } catch (error) {
+      try { removeNative(SNAPSHOT_KEY); } catch {}
+      window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-save-failed", {
+        detail: { reason, message: String(error?.message || error || "storage-write-failed") }
+      }));
+      return null;
+    }
     currentSnapshot = next;
-    writeNative(SNAPSHOT_KEY, JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
       detail: { reason, schemaVersion: next.schemaVersion, projectId: next.projectId }
     }));
@@ -198,10 +221,17 @@
     saveTimer = setTimeout(() => flush(reason), DEBOUNCE_MS);
   }
 
+  storagePrototype.getItem = function patchedGetItem(key) {
+    const normalizedKey = String(key);
+    if (this === localStorage && normalizedKey === LEGACY_TRANSCRIPT_EDIT_KEY && currentSnapshot) return null;
+    return nativeGetItem.call(this, key);
+  };
+
   storagePrototype.setItem = function patchedSetItem(key, value) {
+    const normalizedKey = String(key);
+    if (this === localStorage && normalizedKey === LEGACY_TRANSCRIPT_EDIT_KEY && currentSnapshot) return;
     nativeSetItem.call(this, key, value);
     if (suppressStorageObservation || this !== localStorage) return;
-    const normalizedKey = String(key);
     if (normalizedKey === SNAPSHOT_KEY) return;
     if (observedLegacyKeys.has(normalizedKey)) schedule("storage:" + normalizedKey);
   };
