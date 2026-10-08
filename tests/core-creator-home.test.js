@@ -25,16 +25,26 @@ for (const token of [
   "data-creator-open",
   "data-job-action=\"relink\"",
   'document.addEventListener("drop"',
+  'document.addEventListener("dragenter"',
+  'document.addEventListener("dragleave"',
   'requestAnimationFrame(() => {',
   "function sourceAvailability(job)",
   "function cloudStatus()",
+  "function setDropActive(value)",
   "creator-status-strip",
+  'data-status-kind="device"',
+  'data-status-kind="sync"',
   "creator-home-professional",
   "creator-recent-open",
+  "creator-import-zone",
+  "is-drag-active",
   'fileState === "trashed"',
   'fileState === "missing"',
   'sourceAvailability(source)',
-  'sourceAvailability(job)'
+  'sourceAvailability(job)',
+  'title: "Bắt đầu với video của bạn"',
+  'importAction: "Chọn video"',
+  'syncLocal: "Được lưu trên thiết bị"'
 ]) {
   assert(js.includes(token), "Creator Home behavior missing: " + token);
 }
@@ -45,7 +55,10 @@ assert(!js.includes("creatorWorkspacePreparing"), "Opening the editor must not u
 assert(!js.includes("workflowRail()"), "The removed five-step orbit demo must not remain in the Creator Home render path.");
 assert(js.includes("current?.cloud?.accountOffline"), "Cloud status must reflect offline runtime state.");
 assert(js.includes("current?.cloud?.auth?.authenticated === true"), "Cloud connected state must require authenticated runtime state.");
-assert(!js.includes("current?.cloud?.account || current?.cloud?.auth"), "A truthy auth object alone must never imply a connected cloud session.");
+assert(!js.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply a connected cloud session on Creator Home.");
+assert(!js.includes("trình chỉnh sửa production"), "Creator Home copy must not expose internal production wording.");
+assert(!js.includes('local: "Local"'), "Creator Home must not label a user-facing chip with internal Local terminology.");
+assert(!js.includes('cloud: "Cloud"'), "Creator Home must not label a user-facing chip with internal Cloud terminology.");
 
 for (const token of [
   ".creator-home-hero",
@@ -54,6 +67,7 @@ for (const token of [
   ".creator-status-strip",
   ".creator-status-chip",
   ".creator-import-zone",
+  ".creator-import-zone.is-drag-active",
   ".creator-import-symbol",
   ".creator-current-project",
   ".creator-recent-open",
@@ -68,6 +82,7 @@ for (const token of [
 assert(!css.includes("@keyframes"), "Creator Home must not reintroduce decorative looping animations.");
 assert(!css.includes("creator-drop-orbit"), "Import surface must use a static commercial icon instead of an orbit visual.");
 assert(!css.includes("creator-home-visual"), "Removed hero demo visual styles must not remain in the active Creator Home stylesheet.");
+assert(css.includes(".creator-home-hero::after"), "Commercial Creator Home may use static visual depth without a demo surface.");
 
 for (const token of [
   ".creator-home-hero",
@@ -119,4 +134,4 @@ for (const locale of ["vi", "en"]) {
 
 assert(!/FFmpeg|ffmpeg|stack trace|shell command/.test(js), "Creator Home must not expose implementation details.");
 
-console.log("Creator Home tests passed.");
+console.log("Creator Home commercial entry tests passed.");
