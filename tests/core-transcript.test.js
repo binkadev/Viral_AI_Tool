@@ -8,6 +8,7 @@ const playerModel = require("../renderer/core-player-model");
 
 const root = path.resolve(__dirname, "..");
 const bridge = fs.readFileSync(path.join(root, "renderer", "core-transcript-state.js"), "utf8");
+const locale = fs.readFileSync(path.join(root, "renderer", "core-transcript-locale.js"), "utf8");
 const workstation = fs.readFileSync(path.join(root, "renderer", "core-transcript-workstation.js"), "utf8");
 const workstationCss = fs.readFileSync(path.join(root, "renderer", "core-transcript-workstation.css"), "utf8");
 const player = fs.readFileSync(path.join(root, "renderer", "core-player.js"), "utf8");
@@ -119,11 +120,28 @@ for (const required of [
 }
 
 for (const required of [
+  'Object.assign(messages.vi.speech',
+  'Object.assign(messages.en.speech',
+  'workstationSource: "Nguồn"',
+  'workstationSource: "Source"',
+  'workstationEmptyTranslation: "Chưa có bản dịch"',
+  'workstationEmptyTranslation: "No translation yet"'
+]) {
+  assert(locale.includes(required), "Transcript locale catalog is missing: " + required);
+}
+
+for (const required of [
   "translationLookup",
   "translatedTextFor",
+  "translations.has(idKey)",
+  "translations.has(startKey)",
+  "translations.has(indexKey)",
+  'tr("speech.workstationSource")',
+  'tr("speech.workstationTranslation")',
   "segments.forEach",
   "list.replaceChildren(fragment)",
   "data-core-transcript-workstation",
+  "coreTranscriptGeneration",
   "list.contains(document.activeElement)",
   "MutationObserver",
   "requestAnimationFrame",
@@ -135,6 +153,7 @@ for (const required of [
 assert(!workstation.includes("setInterval("), "Transcript workstation must be event-driven, never polling.");
 assert(!workstation.includes("segments.slice("), "Transcript workstation must render the complete transcript without demo limits.");
 assert(!workstation.includes("render()"), "Transcript workstation must not trigger a full app render/video replacement.");
+assert(!workstation.includes('source: "Nguồn"'), "Workstation UI copy must come from the locale catalog.");
 
 for (const required of [
   ".core-transcript-workstation-head",
@@ -146,6 +165,8 @@ for (const required of [
   "max-height:min(48vh,560px)",
   "overflow:auto",
   "scrollbar-gutter:stable",
+  "content-visibility:auto",
+  "contain-intrinsic-size:auto 72px",
   'html[data-motion="reduced"].core-editor-premium'
 ]) {
   assert(workstationCss.includes(required), "Transcript workstation CSS is missing: " + required);
@@ -155,21 +176,28 @@ assert(!workstationCss.includes("@keyframes"), "Transcript workstation must not 
 for (const required of [
   "seekVideo(activeVideo, Number(row.dataset.start || 0))",
   "model.activeSegmentIndex",
-  "row.classList.toggle(\"is-active\", active)",
+  'previousRow.classList.remove("is-active")',
+  'activeRow.classList.add("is-active")',
   "activeRow.scrollIntoView",
   'paragraph.setAttribute("contenteditable", "plaintext-only")',
   "viral-ai:transcript-edit",
-  "video.currentTime is the single source of truth"
+  "video.currentTime is the single source of truth",
+  "const transcriptCaches = new WeakMap()",
+  "coreTranscriptGeneration"
 ]) {
   assert(player.includes(required), "Transcript/player integration is missing: " + required);
 }
+assert(!player.includes('rows.forEach((row, index) => {\n      const active = index === activeIndex'), "Playback must not update every transcript row on each video frame.");
 
 assert(!bridge.includes("render()"), "Transcript text edits must not trigger a full UI render/video reload.");
 assert(workflow.includes('window.addEventListener("viral-ai:core-state-changed", queueRefresh)'), "Workflow must refresh immediately after transcript state changes.");
 assert(index.includes('src="core-transcript-model.js"'));
 assert(index.includes('src="core-transcript-state.js"'));
+assert(index.includes('src="core-transcript-locale.js"'));
 assert(index.includes('src="core-transcript-workstation.js"'));
 assert(index.includes('href="core-transcript-workstation.css"'));
+assert(index.indexOf('src="i18n.js"') < index.indexOf('src="core-transcript-locale.js"'), "Transcript locale catalog must extend I18N after the base catalog loads.");
+assert(index.indexOf('src="core-transcript-locale.js"') < index.indexOf('src="app.js"'), "Transcript locale keys must exist before app copy is resolved.");
 assert(index.indexOf('src="core-transcript-state.js"') < index.indexOf('src="core-transcript-workstation.js"'), "Transcript projection must load after persistence bridge.");
 
-console.log("Core transcript workstation, long-form editing, stale downstream retention and timing tests passed.");
+console.log("Core transcript workstation, long-form cached playback, fresh translation precedence, stale retention and timing tests passed.");
