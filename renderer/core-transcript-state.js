@@ -22,6 +22,16 @@
     } catch {}
   }
 
+  function activeSourcePath(current, edit) {
+    if (current?.speech?.result?.sourcePath) return String(current.speech.result.sourcePath);
+    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
+    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+      const job = jobs[index];
+      if (!job?.isRenderOutput && job?.sourcePath) return String(job.sourcePath);
+    }
+    return edit?.source ? String(edit.source) : null;
+  }
+
   function staleValue(value, sourcePath, reason) {
     if (!value) return value;
     if (sourcePath && !model.sourceMatches(value, sourcePath)) return value;
@@ -67,7 +77,7 @@
     if (!current?.speech?.result) return;
 
     const edit = event?.detail || {};
-    const sourcePath = current.speech.result.sourcePath || null;
+    const sourcePath = activeSourcePath(current, edit);
     const applied = model.applySourceEdit(current.speech.result, edit);
     if (!applied.changed) return;
 
