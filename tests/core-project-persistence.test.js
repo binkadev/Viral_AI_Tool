@@ -157,6 +157,7 @@ const v1WithoutProjectName = { ...persisted };
 delete v1WithoutProjectName.projectName;
 const normalizedV1 = snapshotModel.migrateSnapshot(v1WithoutProjectName);
 assert.strictEqual(normalizedV1.snapshot.projectName, sourceJob.name, "existing schema-v1 snapshots must normalize projectName without data loss");
+assert.strictEqual(normalizedV1.migrated, true, "schema-v1 snapshots missing projectName must be rewritten durably during bootstrap");
 
 const v0 = { ...migrated };
 delete v0.schemaVersion;
