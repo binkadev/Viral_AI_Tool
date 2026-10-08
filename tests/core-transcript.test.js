@@ -94,12 +94,15 @@ assert.strictEqual(longEdited.result.segments[1799].speaker, "S2", "long transcr
 
 for (const required of [
   "current.speech.result = applied.result",
-  "staleValue(current.translation.result",
-  "staleValue(current.translation.job",
-  "staleValue(current.voice.result",
-  "staleValue(current.voice.job",
+  "function archiveStale",
+  'archiveStale(current?.translation, "result", "staleResult"',
+  'archiveStale(current?.translation, "job", "staleJob"',
+  'archiveStale(current?.voice, "result", "staleResult"',
+  'archiveStale(current?.voice, "job", "staleJob"',
   'status: "stale"',
   'staleReason: reason',
+  'status: "failed"',
+  "stale: true",
   '"source-transcript-edited"',
   "persistState()",
   "viral-ai:core-state-changed"
@@ -107,12 +110,13 @@ for (const required of [
   assert(bridge.includes(required), "Transcript state bridge is missing: " + required);
 }
 
-assert(!bridge.includes("current.translation.result = null"), "Transcript edits must preserve stale translation data for recovery/audit.");
-assert(!bridge.includes("current.voice.result = null"), "Transcript edits must preserve stale voice data for recovery/audit.");
+assert(bridge.includes("bucket[archiveKey] = stale"), "Stale translation/voice data must remain archived for recovery/audit.");
+assert(bridge.includes("bucket[activeKey] = null"), "Stale translation/voice data must leave active production action paths.");
+assert(!bridge.includes('status: "stale",\n        staleReason: "transcript-edited"'), "Render jobs must use an existing localized status while retaining stale metadata.");
 assert(!bridge.includes("render()"), "Transcript text edits must not trigger a full UI render/video reload.");
 assert(workflow.includes('window.addEventListener("viral-ai:core-state-changed", queueRefresh)'), "Workflow must refresh immediately after transcript state changes.");
 assert(index.includes('src="core-transcript-model.js"'));
 assert(index.includes('src="core-transcript-state.js"'));
 assert(index.includes('src="core-transcript-workstation.js"'));
 
-console.log("Core transcript editing, long-form timing, stale dependency and reopen persistence tests passed.");
+console.log("Core transcript editing, long-form timing, stale archive and reopen persistence tests passed.");
