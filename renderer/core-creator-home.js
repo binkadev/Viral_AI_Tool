@@ -5,6 +5,7 @@
   let preparing = false;
   let dropSourceSignature = "";
   let importBusy = false;
+  let dragDepth = 0;
 
   function currentState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -28,44 +29,42 @@
   function copy() {
     return locale() === "en"
       ? {
-          kicker: "Creator workspace",
-          title: "Start a new video project",
-          body: "Import one source video and continue directly in the production editor.",
-          importAction: "Import video",
-          dropTitle: "Drop a video here or choose a file",
+          kicker: "Viral AI Studio",
+          title: "Start with your video",
+          body: "Choose a video and continue straight into your editing workspace.",
+          importAction: "Choose video",
+          dropTitle: "Drop a video here or click to choose",
           dropMeta: "MP4 · MOV · MKV · WEBM · AVI · M4V",
-          local: "Local",
-          localReady: "Ready",
-          cloud: "Cloud",
-          cloudConnected: "Connected",
-          cloudOffline: "Offline",
-          cloudNotConnected: "Not connected",
-          currentProject: "Current project",
-          recent: "Recent projects",
+          statusLabel: "Studio status",
+          deviceReady: "Device ready",
+          syncConnected: "Account sync is on",
+          syncOffline: "Working offline",
+          syncLocal: "Saved on this device",
+          currentProject: "Continue where you left off",
+          recent: "Recent",
           continue: "Continue editing",
-          noProject: "No project yet",
-          noProjectBody: "Import a source video to create your first project.",
-          relink: "Relink source"
+          noProject: "No active video",
+          noProjectBody: "Choose a video to create your first project.",
+          relink: "Choose video again"
         }
       : {
-          kicker: "Không gian sáng tạo",
-          title: "Bắt đầu dự án video mới",
-          body: "Nhập một video nguồn và tiếp tục trực tiếp trong trình chỉnh sửa production.",
-          importAction: "Nhập video",
-          dropTitle: "Kéo video vào đây hoặc chọn tệp",
+          kicker: "Viral AI Studio",
+          title: "Bắt đầu với video của bạn",
+          body: "Chọn một video và vào thẳng không gian chỉnh sửa.",
+          importAction: "Chọn video",
+          dropTitle: "Kéo video vào đây hoặc bấm để chọn",
           dropMeta: "MP4 · MOV · MKV · WEBM · AVI · M4V",
-          local: "Local",
-          localReady: "Sẵn sàng",
-          cloud: "Cloud",
-          cloudConnected: "Đã kết nối",
-          cloudOffline: "Ngoại tuyến",
-          cloudNotConnected: "Chưa kết nối",
-          currentProject: "Dự án đang làm",
-          recent: "Dự án gần đây",
+          statusLabel: "Trạng thái studio",
+          deviceReady: "Thiết bị sẵn sàng",
+          syncConnected: "Đồng bộ tài khoản đã bật",
+          syncOffline: "Đang làm việc ngoại tuyến",
+          syncLocal: "Được lưu trên thiết bị",
+          currentProject: "Tiếp tục nơi bạn đã dừng",
+          recent: "Gần đây",
           continue: "Tiếp tục chỉnh sửa",
-          noProject: "Chưa có dự án",
-          noProjectBody: "Nhập video nguồn để bắt đầu dự án đầu tiên.",
-          relink: "Chọn lại video nguồn"
+          noProject: "Chưa có video đang làm",
+          noProjectBody: "Chọn một video để tạo dự án đầu tiên.",
+          relink: "Chọn lại video"
         };
   }
 
@@ -114,19 +113,17 @@
   function cloudStatus() {
     const current = currentState();
     const c = copy();
-    if (current?.cloud?.accountOffline) return { label: c.cloudOffline, tone: "offline" };
-    if (current?.cloud?.auth?.authenticated === true || Boolean(current?.cloud?.account)) {
-      return { label: c.cloudConnected, tone: "connected" };
-    }
-    return { label: c.cloudNotConnected, tone: "idle" };
+    if (current?.cloud?.accountOffline) return { label: c.syncOffline, tone: "offline" };
+    if (current?.cloud?.auth?.authenticated === true) return { label: c.syncConnected, tone: "connected" };
+    return { label: c.syncLocal, tone: "idle" };
   }
 
   function statusStrip() {
     const c = copy();
     const cloud = cloudStatus();
-    return '<div class="creator-status-strip" aria-label="Workspace status">' +
-      '<span class="creator-status-chip is-ready"><i></i><b>' + esc(c.local) + '</b><span>' + esc(c.localReady) + '</span></span>' +
-      '<span class="creator-status-chip is-' + cloud.tone + '"><i></i><b>' + esc(c.cloud) + '</b><span>' + esc(cloud.label) + '</span></span>' +
+    return '<div class="creator-status-strip" aria-label="' + esc(c.statusLabel) + '">' +
+      '<span class="creator-status-chip is-ready" data-status-kind="device"><i></i><span>' + esc(c.deviceReady) + '</span></span>' +
+      '<span class="creator-status-chip is-' + cloud.tone + '" data-status-kind="sync"><i></i><span>' + esc(cloud.label) + '</span></span>' +
     '</div>';
   }
 
@@ -244,6 +241,11 @@
     });
   }
 
+  function setDropActive(value) {
+    const zone = document.getElementById("creatorImportZone");
+    if (zone instanceof HTMLElement) zone.classList.toggle("is-drag-active", Boolean(value));
+  }
+
   function openEditor(jobId) {
     if (preparing) return;
     const current = currentState();
@@ -315,6 +317,7 @@
     });
 
     setImportBusy(importBusy);
+    setDropActive(dragDepth > 0);
   }
 
   function watchDroppedImport(before, startedAt) {
@@ -327,8 +330,27 @@
     window.setTimeout(() => watchDroppedImport(before, startedAt), 100);
   }
 
+  function isFileDrag(event) {
+    try { return [...(event.dataTransfer?.types || [])].includes("Files"); }
+    catch { return false; }
+  }
+
   function installDropHandoff() {
+    document.addEventListener("dragenter", event => {
+      if (currentState()?.page !== "download" || !isFileDrag(event)) return;
+      dragDepth += 1;
+      setDropActive(true);
+    }, true);
+
+    document.addEventListener("dragleave", () => {
+      if (currentState()?.page !== "download") return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) setDropActive(false);
+    }, true);
+
     document.addEventListener("drop", event => {
+      dragDepth = 0;
+      setDropActive(false);
       if (currentState()?.page !== "download") return;
       const files = [...(event.dataTransfer?.files || [])];
       if (!files.some(file => /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(file.name))) return;
@@ -340,6 +362,11 @@
       const files = [...(event.dataTransfer?.files || [])];
       if (!files.some(file => /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(file.name))) return;
       watchDroppedImport(dropSourceSignature, performance.now());
+    });
+
+    window.addEventListener("blur", () => {
+      dragDepth = 0;
+      setDropActive(false);
     });
   }
 

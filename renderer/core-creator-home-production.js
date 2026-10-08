@@ -17,18 +17,22 @@
   function cloudCopy() {
     const current = appState();
     const en = current?.locale === "en";
-    if (current?.cloud?.accountOffline === true) return { label: en ? "Offline" : "Ngoại tuyến", tone: "offline" };
-    if (current?.cloud?.auth?.authenticated === true) return { label: en ? "Connected" : "Đã kết nối", tone: "connected" };
-    return { label: en ? "Not connected" : "Chưa kết nối", tone: "idle" };
+    if (current?.cloud?.accountOffline === true) {
+      return { label: en ? "Working offline" : "Đang làm việc ngoại tuyến", tone: "offline" };
+    }
+    if (current?.cloud?.auth?.authenticated === true) {
+      return { label: en ? "Account sync is on" : "Đồng bộ tài khoản đã bật", tone: "connected" };
+    }
+    return { label: en ? "Saved on this device" : "Được lưu trên thiết bị", tone: "idle" };
   }
 
   function localCopy() {
     const current = appState();
     const en = current?.locale === "en";
     const local = current?.speech?.providerStatus?.local;
-    if (!local) return { label: en ? "Checking" : "Đang kiểm tra", tone: "idle" };
-    if (local.ready === true) return { label: en ? "Ready" : "Sẵn sàng", tone: "ready" };
-    return { label: en ? "Setup required" : "Cần thiết lập", tone: "idle" };
+    if (!local) return { label: en ? "Checking device" : "Đang kiểm tra thiết bị", tone: "idle" };
+    if (local.ready === true) return { label: en ? "Device ready" : "Thiết bị sẵn sàng", tone: "ready" };
+    return { label: en ? "Device setup needed" : "Cần hoàn tất thiết lập trên thiết bị", tone: "idle" };
   }
 
   function updateChip(chip, status) {
@@ -41,10 +45,10 @@
 
   function syncStatusChips() {
     queued = false;
-    const chips = [...document.querySelectorAll(".creator-status-strip .creator-status-chip")];
-    const find = name => chips.find(chip => String(chip.querySelector("b")?.textContent || "").trim().toLowerCase() === name);
-    updateChip(find("local"), localCopy());
-    updateChip(find("cloud"), cloudCopy());
+    const device = document.querySelector('.creator-status-strip [data-status-kind="device"]');
+    const sync = document.querySelector('.creator-status-strip [data-status-kind="sync"]');
+    updateChip(device, localCopy());
+    updateChip(sync, cloudCopy());
   }
 
   function queueSync() {
