@@ -17,29 +17,20 @@
   }
 
   function locale() {
+    const current = appState();
+    if (current?.locale === "en") return "en";
     return document.documentElement.lang === "en" ? "en" : "vi";
   }
 
-  function labels() {
-    return locale() === "en"
-      ? {
-          source: "Source",
-          translation: "Translation",
-          segments: "segments",
-          stale: "Needs update",
-          unavailable: "No translation yet",
-          sourceLabel: "Source transcript text",
-          translationLabel: "Translated transcript text"
-        }
-      : {
-          source: "Nguồn",
-          translation: "Bản dịch",
-          segments: "đoạn",
-          stale: "Cần cập nhật",
-          unavailable: "Chưa có bản dịch",
-          sourceLabel: "Nội dung transcript nguồn",
-          translationLabel: "Nội dung transcript đã dịch"
-        };
+  function tr(key, vars) {
+    try {
+      if (typeof t === "function") return t(key, vars);
+    } catch {}
+    try {
+      return window.I18N?.t?.(locale(), key, vars) || key;
+    } catch {
+      return key;
+    }
   }
 
   function storedView() {
@@ -56,11 +47,36 @@
     return String(value?.status || value?.state || "").toLowerCase() === "stale";
   }
 
+  function latestSourcePath(current, source) {
+    if (source?.sourcePath) return String(source.sourcePath);
+    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
+    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+      const job = jobs[index];
+      if (!job?.isRenderOutput && job?.sourcePath) return String(job.sourcePath);
+    }
+    return null;
+  }
+
+  function translationForContext(current, source) {
+    const result = current?.translation?.result || null;
+    if (!result) return null;
+
+    const sourcePath = latestSourcePath(current, source);
+    if (sourcePath && result.sourcePath && String(result.sourcePath) !== sourcePath) return null;
+
+    const activeTarget = String(current?.translation?.targetLanguage || "");
+    const resultTarget = String(result?.targetLanguage || "");
+    if (activeTarget && resultTarget && resultTarget !== activeTarget) return null;
+
+    return result;
+  }
+
   function translationSegments(result) {
     return Array.isArray(result?.segments) ? result.segments : [];
   }
 
   function translatedTextFor(segment, index, translation) {
+    if (!translation) return "";
     const list = translationSegments(translation);
     const byId = list.find(item => String(item?.id || "") === String(segment.id));
     const candidate = byId || list[index] || null;
@@ -68,8 +84,6 @@
       candidate?.translatedText ??
       candidate?.translated ??
       candidate?.text ??
-      segment?.translatedText ??
-      segment?.translated ??
       ""
     );
   }
@@ -86,18 +100,25 @@
       : [two(minutes), two(seconds)].join(":");
   }
 
+  function transcriptDuration(source) {
+    const explicit = Number(source?.duration || 0);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const segments = Array.isArray(source?.segments) ? source.segments : [];
+    return segments.reduce((max, segment) => Math.max(max, Number(segment?.end || 0)), 0);
+  }
+
   function transcriptContext() {
     const current = appState();
     if (!current?.speech?.result) return null;
     const source = model.normalizeDocument(current.speech.result);
     if (!source.segments.length) return null;
-    const translation = current?.translation?.result || null;
+    const translation = translationForContext(current, source);
     const translated = source.segments.map((segment, index) => translatedTextFor(segment, index, translation));
     return {
       source,
       translation,
       translated,
-      translationAvailable: translated.some(text => text.trim().length > 0),
+      translationAvailable: Boolean(translation) && translated.some(text => text.trim().length > 0),
       translationStale: isStale(translation)
     };
   }
@@ -106,15 +127,29 @@
     const segments = context.source.segments;
     const textSignature = segments.map(segment => [segment.id, segment.start, segment.end, segment.sourceText].join("~")).join("|");
     const translationSignature = context.translated.join("|");
-    return [view, context.source.editedAt || "", context.translation?.staleAt || "", context.translationStale ? "stale" : "fresh", textSignature, translationSignature].join("::");
+    return [
+      view,
+      context.source.editedAt || "",
+      context.translation?.targetLanguage || "",
+      context.translation?.staleAt || "",
+      context.translationStale ? "stale" : "fresh",
+      textSignature,
+      translationSignature
+    ].join("::");
   }
 
   function toolbarSignature(context, view) {
-    return [locale(), view, context.source.segments.length, context.translationAvailable ? "translated" : "source-only", context.translationStale ? "stale" : "fresh"].join("|");
+    return [
+      locale(),
+      view,
+      context.source.segments.length,
+      context.translation?.targetLanguage || "",
+      context.translationAvailable ? "translated" : "source-only",
+      context.translationStale ? "stale" : "fresh"
+    ].join("|");
   }
 
   function ensureToolbar(result, context, view) {
-    const copy = labels();
     let toolbar = result.querySelector(".core-transcript-toolbar");
     if (!toolbar) {
       toolbar = document.createElement("div");
@@ -133,7 +168,7 @@
     const switcher = document.createElement("div");
     switcher.className = "core-transcript-view-switcher";
     switcher.setAttribute("role", "tablist");
-    switcher.setAttribute("aria-label", locale() === "en" ? "Transcript view" : "Chế độ transcript");
+    switcher.setAttribute("aria-label", tr("speech.resultTitle"));
 
     ["source", "translation"].forEach(mode => {
       const button = document.createElement("button");
@@ -143,10 +178,10 @@
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", mode === view ? "true" : "false");
       button.classList.toggle("is-active", mode === view);
-      button.textContent = mode === "source" ? copy.source : copy.translation;
+      button.textContent = mode === "source" ? tr("speech.resultTitle") : tr("translation.resultTitle");
       if (mode === "translation" && !context.translationAvailable) {
         button.disabled = true;
-        button.title = copy.unavailable;
+        button.setAttribute("aria-disabled", "true");
       }
       button.addEventListener("click", () => {
         if (button.disabled) return;
@@ -159,23 +194,23 @@
     const meta = document.createElement("div");
     meta.className = "core-transcript-meta";
     const count = document.createElement("span");
-    count.textContent = context.source.segments.length + " " + copy.segments;
+    count.textContent = tr("speech.resultDesc", {
+      count: context.source.segments.length,
+      duration: formatTimestamp(transcriptDuration(context.source))
+    });
     meta.appendChild(count);
     if (context.translationStale) {
       const stale = document.createElement("span");
       stale.className = "core-transcript-stale";
-      stale.textContent = copy.stale;
-      stale.title = locale() === "en"
-        ? "The source transcript changed. This translation must be regenerated before downstream use."
-        : "Transcript nguồn đã thay đổi. Cần tạo lại bản dịch trước khi dùng tiếp.";
+      stale.textContent = tr("translation.translateAgain");
+      stale.setAttribute("aria-label", tr("translation.translateAgain"));
       meta.appendChild(stale);
     }
 
     toolbar.append(switcher, meta);
   }
 
-  function makeRow(segment, translatedText, index, view) {
-    const copy = labels();
+  function makeRow(segment, translatedText, view) {
     const row = document.createElement("div");
     row.className = "transcript-row core-transcript-row";
     row.dataset.segmentId = String(segment.id);
@@ -186,7 +221,6 @@
     if (segment.speaker) row.dataset.speaker = String(segment.speaker);
     if (segment.voice) row.dataset.voice = String(segment.voice);
     row.dataset.transcriptView = view;
-    row.setAttribute("aria-label", (locale() === "en" ? "Transcript segment " : "Đoạn transcript ") + (index + 1));
 
     const time = document.createElement("time");
     time.className = "core-transcript-time";
@@ -200,13 +234,13 @@
     const source = document.createElement("p");
     source.className = "core-transcript-source";
     source.textContent = String(segment.sourceText ?? segment.text ?? "");
-    source.setAttribute("aria-label", copy.sourceLabel);
+    source.setAttribute("aria-label", tr("speech.resultTitle"));
     source.hidden = view === "translation";
 
     const translation = document.createElement("div");
     translation.className = "core-transcript-translation";
     translation.textContent = translatedText || "—";
-    translation.setAttribute("aria-label", copy.translationLabel);
+    translation.setAttribute("aria-label", tr("translation.resultTitle"));
     translation.hidden = view !== "translation";
 
     content.append(source, translation);
@@ -244,7 +278,7 @@
     const activeId = list.querySelector(".transcript-row.is-active")?.dataset.segmentId || null;
     const fragment = document.createDocumentFragment();
     context.source.segments.forEach((segment, index) => {
-      fragment.appendChild(makeRow(segment, context.translated[index], index, view));
+      fragment.appendChild(makeRow(segment, context.translated[index], view));
     });
     list.replaceChildren(fragment);
     list.dataset.workstationSignature = signature;
