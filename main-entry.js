@@ -1,35 +1,45 @@
 'use strict';
 
-const { BrowserWindow } = require('electron');
+const { app, BrowserWindow } = require('electron');
 
 const nativeShow = BrowserWindow.prototype.show;
 const revealState = new WeakMap();
 
 function revealWindow(win, state) {
-  if (!win || win.isDestroyed() || state.ready) return;
-  state.ready = true;
-  setImmediate(() => {
-    if (!win || win.isDestroyed()) return;
-    nativeShow.call(win);
-  });
+  if (!win || win.isDestroyed() || state.revealed) return;
+  state.revealed = true;
+  nativeShow.call(win);
 }
 
-BrowserWindow.prototype.show = function showAfterRendererLoad() {
-  const win = this;
-  let state = revealState.get(win);
-
-  if (state?.ready) return nativeShow.call(win);
-  if (state?.scheduled) return;
-
-  state = { scheduled: true, ready: false };
+app.on('browser-window-created', (_event, win) => {
+  const state = {
+    loaded: false,
+    showRequested: false,
+    revealed: false
+  };
   revealState.set(win, state);
 
-  if (win.webContents?.isLoadingMainFrame?.()) {
-    win.webContents.once('did-finish-load', () => revealWindow(win, state));
-    return;
-  }
+  const release = () => {
+    state.loaded = true;
+    if (state.showRequested) revealWindow(win, state);
+  };
 
-  revealWindow(win, state);
+  win.webContents.once('did-finish-load', release);
+  win.webContents.once('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
+    if (isMainFrame === false) return;
+    release();
+  });
+  win.webContents.once('render-process-gone', release);
+});
+
+BrowserWindow.prototype.show = function showAfterMainFrameLoad() {
+  const win = this;
+  const state = revealState.get(win);
+
+  if (!state) return nativeShow.call(win);
+  state.showRequested = true;
+  if (state.loaded) return revealWindow(win, state);
+  return undefined;
 };
 
 require('./main.js');
