@@ -58,11 +58,12 @@ for (const required of [
   'classList.toggle("is-selected", active)',
   'setAttribute("aria-selected", active ? "true" : "false")',
   "MutationObserver",
-  'root.addEventListener("click", onClick)',
+  'root.addEventListener("click", onClick, true)',
   "requestAnimationFrame(restoreSelection)"
 ]) {
   assert(selectionJs.includes(required), "Timeline selection behavior missing: " + required);
 }
+assert(!selectionJs.includes('root.addEventListener("click", onClick);'), "Timeline selection must run in capture phase before existing seek handlers stop propagation.");
 assert(!selectionJs.includes("setInterval("), "Timeline selection must remain event/DOM driven without polling.");
 assert(!selectionJs.includes("setTimeout("), "Timeline selection must not use artificial timing delays.");
 
