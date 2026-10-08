@@ -104,7 +104,17 @@ for (const required of [
   "coreMediaReady",
   "querySelectorAll(\"#page video.preview-video, #page video.core-player-media\")",
   "seekToRatio(video",
-  '"play", "pause", "ended"'
+  '"play", "pause", "ended"',
+  "const wiredSeeks = new WeakSet()",
+  "const wiredTracks = new WeakSet()",
+  "function wireSurface(video)",
+  "function syncEditorDock(video, duration, current)",
+  ".core-editor-bottom-dock",
+  "currentVideo !== video",
+  "wireSurface(video);",
+  "data-bottom-playhead",
+  "data-bottom-time",
+  ".core-bottom-segment"
 ]) {
   assert(rebind.includes(required), "Core player rebind is missing hardening behavior: " + required);
 }
