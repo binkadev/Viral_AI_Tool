@@ -24,7 +24,17 @@ for (const required of [
   "retryCount",
   "armMetadataTimeout",
   "current?.thumbnail",
-  "console.warn(\"[CoreMediaPreview]\""
+  "console.warn(\"[CoreMediaPreview]\"",
+  "const wiredRetries = new WeakSet()",
+  "const surfaceStates = new WeakMap()",
+  "function mediaFor(host)",
+  "function wireRetry(host, overlay)",
+  "function renderState(video, state, details = {}, logFailure = false)",
+  "function syncSurface(video)",
+  "surfaceStates.set(video, { state, details })",
+  "const video = mediaFor(host)",
+  "syncSurface(video);\n    if (wired.has(video)) return;",
+  'window.addEventListener("viral-ai:editor-preview-preserved", scan)'
 ]) {
   assert(health.includes(required), "Media health layer is missing: " + required);
 }
@@ -36,4 +46,4 @@ assert(css.includes('@media(prefers-reduced-motion:reduce)'));
 assert(index.includes('href="core-media-health.css"'));
 assert(index.includes('src="core-media-health.js"'));
 
-console.log("Core media loading, error and retry state tests passed.");
+console.log("Core media loading, error, retry and live-surface state tests passed.");
