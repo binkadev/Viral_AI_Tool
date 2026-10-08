@@ -4,6 +4,7 @@
   const wired = new WeakSet();
   const wiredSeeks = new WeakSet();
   const wiredTracks = new WeakSet();
+  const surfaceObservers = new WeakMap();
   let queued = false;
 
   function parseDurationHint(video) {
@@ -130,6 +131,20 @@
     syncEditorDock(video, duration, current);
   }
 
+  function bindSurfaceResize(video, host) {
+    if (!(video instanceof HTMLVideoElement) || !(host instanceof HTMLElement) || typeof ResizeObserver !== "function") return;
+    const current = surfaceObservers.get(video);
+    if (current?.host === host) return;
+    try { current?.observer?.disconnect?.(); } catch {}
+
+    const observer = new ResizeObserver(() => {
+      if (video.closest(".preview") !== host) return;
+      refresh(video);
+    });
+    observer.observe(host);
+    surfaceObservers.set(video, { host, observer });
+  }
+
   function nudgeCorePlayer(video) {
     const host = video?.closest?.(".preview");
     if (!(host instanceof HTMLElement)) return;
@@ -155,6 +170,8 @@
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
     if (!(host instanceof HTMLElement)) return;
+
+    bindSurfaceResize(video, host);
 
     const seek = host.querySelector("[data-core-seek]");
     if (seek instanceof HTMLInputElement && !wiredSeeks.has(seek)) {
