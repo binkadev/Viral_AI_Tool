@@ -19,20 +19,24 @@
   function copy() {
     return locale() === "en"
       ? {
-          loading: "Loading preview…",
-          waiting: "Preparing video preview…",
-          failedTitle: "Preview could not be played",
-          failedBody: "The source file is still safe. Retry the preview or continue with processing.",
-          unsupportedBody: "This video codec is not supported by the desktop preview yet. The source file is unchanged.",
-          retry: "Retry preview"
+          loading: "Opening video…",
+          loadingBody: "Your video is being prepared for playback.",
+          waiting: "Preparing video…",
+          waitingBody: "Playback will continue when the video is ready.",
+          failedTitle: "Video could not be played",
+          failedBody: "Your original video is safe. You can try again or continue processing.",
+          unsupportedBody: "This video format cannot be viewed directly in the app yet. Your original video is unchanged.",
+          retry: "Try again"
         }
       : {
-          loading: "Đang tải bản xem trước…",
-          waiting: "Đang chuẩn bị video để xem…",
-          failedTitle: "Chưa thể phát bản xem trước",
-          failedBody: "Video gốc vẫn an toàn. Hãy thử tải lại preview hoặc tiếp tục xử lý.",
-          unsupportedBody: "Codec của video này chưa được player desktop hỗ trợ trực tiếp. Video gốc không bị thay đổi.",
-          retry: "Thử lại preview"
+          loading: "Đang mở video…",
+          loadingBody: "Video của bạn đang được chuẩn bị để phát.",
+          waiting: "Đang chuẩn bị video…",
+          waitingBody: "Video sẽ tiếp tục phát khi sẵn sàng.",
+          failedTitle: "Chưa thể phát video",
+          failedBody: "Video gốc vẫn an toàn. Bạn có thể thử lại hoặc tiếp tục xử lý.",
+          unsupportedBody: "Định dạng video này chưa thể xem trực tiếp trong ứng dụng. Video gốc vẫn được giữ nguyên.",
+          retry: "Thử lại"
         };
   }
 
@@ -57,10 +61,16 @@
     overlay = document.createElement("div");
     overlay.className = "core-media-state";
     overlay.hidden = true;
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.setAttribute("aria-atomic", "true");
     overlay.innerHTML = [
-      '<div class="core-media-state-icon" aria-hidden="true">▶</div>',
+      '<div class="core-media-state-panel">',
+      '<div class="core-media-state-icon" aria-hidden="true"><span data-media-state-symbol></span></div>',
       '<div class="core-media-state-copy"><b data-media-state-title></b><span data-media-state-body></span></div>',
-      '<button type="button" class="core-media-retry" data-media-retry></button>'
+      '<div class="core-media-progress" aria-hidden="true"><i></i></div>',
+      '<button type="button" class="core-media-retry" data-media-retry></button>',
+      '</div>'
     ].join("");
     host.appendChild(overlay);
     return overlay;
@@ -89,6 +99,7 @@
 
     const c = copy();
     host.dataset.coreMediaState = state;
+    overlay.dataset.state = state;
 
     if (state === "ready") {
       overlay.hidden = true;
@@ -97,14 +108,15 @@
 
     const title = overlay.querySelector("[data-media-state-title]");
     const body = overlay.querySelector("[data-media-state-body]");
+    const symbol = overlay.querySelector("[data-media-state-symbol]");
     const retry = overlay.querySelector("[data-media-retry]");
 
     overlay.hidden = false;
-    overlay.dataset.state = state;
 
     if (state === "loading" || state === "waiting") {
       if (title) title.textContent = state === "loading" ? c.loading : c.waiting;
-      if (body) body.textContent = "";
+      if (body) body.textContent = state === "loading" ? c.loadingBody : c.waitingBody;
+      if (symbol) symbol.textContent = "";
       if (retry) retry.hidden = true;
       return;
     }
@@ -112,6 +124,7 @@
     const unsupported = Number(details.errorCode) === 4;
     if (title) title.textContent = c.failedTitle;
     if (body) body.textContent = unsupported ? c.unsupportedBody : c.failedBody;
+    if (symbol) symbol.textContent = "!";
     if (retry) {
       retry.hidden = false;
       retry.textContent = c.retry;
