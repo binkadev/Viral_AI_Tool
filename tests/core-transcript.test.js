@@ -103,11 +103,15 @@ assert.strictEqual(longEdit.result.segments[1200].voice, "voice-a", "deep transc
 
 for (const required of [
   "current.speech.result = applied.result",
-  "current.translation.result = null",
-  "current.translation.job = null",
-  "current.voice.result = null",
-  "current.voice.job = null",
+  "staleSnapshot",
+  "retainStaleSlot",
+  'const staleKey = key === "result" ? "staleResult" : "staleJob"',
   'status: "stale"',
+  'staleReason: "transcript-edited"',
+  'retainStaleSlot(current.translation, "result")',
+  'retainStaleSlot(current.translation, "job")',
+  'retainStaleSlot(current.voice, "result")',
+  'retainStaleSlot(current.voice, "job")',
   "persistState()",
   "viral-ai:core-state-changed"
 ]) {
@@ -168,4 +172,4 @@ assert(index.includes('src="core-transcript-workstation.js"'));
 assert(index.includes('href="core-transcript-workstation.css"'));
 assert(index.indexOf('src="core-transcript-state.js"') < index.indexOf('src="core-transcript-workstation.js"'), "Transcript projection must load after persistence bridge.");
 
-console.log("Core transcript workstation, long-form editing, state invalidation and timing tests passed.");
+console.log("Core transcript workstation, long-form editing, stale downstream retention and timing tests passed.");
