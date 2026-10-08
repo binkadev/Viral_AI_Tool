@@ -29,13 +29,13 @@
 }
 
 .core-transcript-view-button{
-  min-height:30px;
+  min-height:32px;
   padding:6px 10px;
   border:0;
   border-radius:8px;
   background:transparent;
   color:#8592a8;
-  font:650 11px/1.2 "Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif;
+  font:650 13px/1.25 "Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif;
   cursor:pointer;
   transition:background .14s ease,color .14s ease,box-shadow .14s ease;
 }
@@ -70,14 +70,14 @@
   gap:8px;
   min-width:0;
   color:#748198;
-  font:600 10px/1.2 "Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif;
+  font:600 12px/1.25 "Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif;
 }
 
 .core-transcript-stale{
   display:inline-flex;
   align-items:center;
-  min-height:22px;
-  padding:4px 7px;
+  min-height:24px;
+  padding:4px 8px;
   border:1px solid rgba(246,189,96,.18);
   border-radius:999px;
   color:#d7af67;
