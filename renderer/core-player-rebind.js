@@ -3,6 +3,7 @@
 
   const wired = new WeakSet();
   const wiredSeeks = new WeakSet();
+  const wiredPlayButtons = new WeakSet();
   const wiredTracks = new WeakSet();
   const surfaceObservers = new WeakMap();
   let queued = false;
@@ -178,14 +179,31 @@
 
     bindSurfaceResize(video, host);
 
+    const playButton = host.querySelector("[data-core-play], [data-core-toggle-play]");
+    if (playButton instanceof HTMLButtonElement && !wiredPlayButtons.has(playButton)) {
+      wiredPlayButtons.add(playButton);
+      playButton.addEventListener("click", async event => {
+        const currentVideo = currentSurfaceVideo(host, video);
+        if (!(currentVideo instanceof HTMLVideoElement)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (currentVideo.paused) {
+          try { await currentVideo.play(); } catch {}
+        } else {
+          currentVideo.pause();
+        }
+        refresh(currentVideo);
+      }, true);
+    }
+
     const seek = host.querySelector("[data-core-seek]");
     if (seek instanceof HTMLInputElement && !wiredSeeks.has(seek)) {
       wiredSeeks.add(seek);
       seek.addEventListener("input", event => {
         const currentVideo = currentSurfaceVideo(host, video);
         const duration = effectiveDuration(currentVideo);
+        event.stopImmediatePropagation();
         if (!duration) return;
-        event.stopPropagation();
         seekToRatio(currentVideo, Number(seek.value || 0) / 1000);
       }, true);
     }
