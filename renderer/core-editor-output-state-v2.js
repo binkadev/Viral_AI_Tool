@@ -13,8 +13,8 @@
   function locale() { return appState()?.locale === "en" ? "en" : "vi"; }
   function labels() {
     return locale() === "en"
-      ? { eyebrow:"Output", ready:"Rendered video is ready", readyBody:"The final rendered file is available.", show:"Show file", checking:"Checking file…", missing:"Rendered file is no longer available", missingBody:"The output may have been moved, renamed, or deleted. Your project can be rendered again.", rerender:"Render again", unverified:"Could not verify the rendered file", unverifiedBody:"The file check failed temporarily. The project was not changed.", recheck:"Check again", waiting:"Render the localized video to create the final output file." }
-      : { eyebrow:"Đầu ra", ready:"Video render đã sẵn sàng", readyBody:"File video cuối hiện còn khả dụng.", show:"Hiện file", checking:"Đang kiểm tra file…", missing:"File render không còn khả dụng", missingBody:"File đầu ra có thể đã bị di chuyển, đổi tên hoặc xóa. Dự án vẫn còn và có thể render lại.", rerender:"Render lại", unverified:"Chưa xác minh được file render", unverifiedBody:"Việc kiểm tra file tạm thời gặp lỗi. Dự án của bạn không bị thay đổi.", recheck:"Kiểm tra lại", waiting:"Hãy render video đã localize để tạo file đầu ra cuối." };
+      ? { eyebrow:"Output", ready:"Exported video is ready", readyBody:"The final video file is available on this device.", show:"Open folder", checking:"Checking exported video…", missing:"Exported video was not found", missingBody:"The exported file may have been moved, renamed, or deleted. Your project is still available and can be exported again.", rerender:"Export again", unverified:"Could not check the exported video", unverifiedBody:"The file check failed temporarily. Your project was not changed.", recheck:"Check again", waiting:"Export the video to create the final file." }
+      : { eyebrow:"Đầu ra", ready:"Video đã xuất sẵn sàng", readyBody:"Tệp video cuối đang có trên máy này.", show:"Mở thư mục", checking:"Đang kiểm tra video đã xuất…", missing:"Không tìm thấy video đã xuất", missingBody:"Tệp video có thể đã bị di chuyển, đổi tên hoặc xóa. Dự án vẫn còn và bạn có thể xuất lại.", rerender:"Xuất lại", unverified:"Chưa kiểm tra được video đã xuất", unverifiedBody:"Việc kiểm tra tệp tạm thời gặp lỗi. Dự án của bạn không bị thay đổi.", recheck:"Kiểm tra lại", waiting:"Xuất video để tạo tệp video cuối." };
   }
   function output() {
     try { return model?.derive?.(appState())?.renderOutput || null; } catch { return null; }
@@ -55,6 +55,8 @@
     if (!(card instanceof HTMLElement)) {
       card = document.createElement("section");
       card.className = "core-output-state-card";
+      card.setAttribute("role", "status");
+      card.setAttribute("aria-live", "polite");
       card.innerHTML = '<div class="core-output-state-icon" aria-hidden="true"></div><div class="core-output-state-copy"><small data-output-eyebrow></small><b data-output-title></b><span data-output-body></span><code data-output-file></code></div><button type="button" class="core-output-state-action" data-output-show></button>';
       pane.prepend(card);
     }
@@ -77,6 +79,7 @@
     card.hidden = false;
     card.dataset.outputState = stateName;
     card.dataset.outputReady = stateName === "ready" ? "true" : "false";
+    card.setAttribute("aria-busy", stateName === "checking" || stateName === "idle" ? "true" : "false");
     const icon = card.querySelector(".core-output-state-icon");
     const eyebrow = card.querySelector("[data-output-eyebrow]");
     const title = card.querySelector("[data-output-title]");
@@ -128,6 +131,7 @@
     const { card, hint } = ensure(pane);
     if (!out?.outputPath) {
       card.hidden = true;
+      card.setAttribute("aria-busy", "false");
       hint.hidden = false;
       hint.textContent = c.waiting;
       reset();
