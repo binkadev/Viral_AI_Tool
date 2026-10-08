@@ -191,7 +191,9 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      return { snapshot: normalizeV1(input), migrated: false, unsupportedVersion: null };
+      const snapshot = normalizeV1(input);
+      const migrated = Boolean(snapshot && String(input.projectName || "") !== snapshot.projectName);
+      return { snapshot, migrated, unsupportedVersion: null };
     }
     if (version === 0 && input.source && input.workflow) {
       return {
