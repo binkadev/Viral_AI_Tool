@@ -42,12 +42,23 @@ for (const required of [
   ".core-player-volume",
   "grid-template-columns:34px minmax(90px,1fr) auto 34px minmax(66px,92px) 34px!important",
   ":fullscreen",
-  "prefers-reduced-motion"
+  "prefers-reduced-motion",
+  ".core-player-button[data-core-play]",
+  'data-core-playback-state="playing"',
+  '.core-player-mute[aria-pressed="true"]',
+  "font-variant-numeric:tabular-nums",
+  ":focus-within",
+  ".core-player-button:focus-visible",
+  'html[data-motion="reduced"].core-editor-premium',
+  "transition:none!important"
 ]) {
   assert(css.includes(required), "Workstation player CSS missing: " + required);
 }
 assert(!css.includes("object-fit:cover"), "Workstation player must never crop source media.");
 assert(!css.includes("@keyframes"), "Workstation player geometry must not introduce decorative animation loops.");
+assert(css.includes('font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif!important'), "Timecode must remain on the product Windows font stack.");
+assert(!css.includes('font-family:"Cascadia Mono"'), "Timecode must not introduce an alternate monospace font stack.");
+assert(css.includes("outline-offset:2px!important"), "Transport controls need a visible keyboard focus treatment.");
 
 assert(index.includes('href="core-player-workstation.css"'), "Final workstation player CSS must be loaded.");
 assert(index.includes('src="core-player-workstation.js"'), "Workstation player controls must be loaded.");
@@ -60,4 +71,4 @@ assert(
   "Volume controls must augment the hardened core player after rebind wiring."
 );
 
-console.log("Workstation player fit and native volume controls tests passed.");
+console.log("Workstation player fit, transport hierarchy and native volume controls tests passed.");
