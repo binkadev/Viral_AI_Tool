@@ -22,6 +22,16 @@
     } catch {}
   }
 
+  function staleValue(value, sourcePath, reason) {
+    if (!model.sourceMatches(value, sourcePath)) return value;
+    return {
+      ...value,
+      status: "stale",
+      staleReason: reason,
+      staleAt: new Date().toISOString()
+    };
+  }
+
   function markRenderOutputsStale(current, sourcePath) {
     if (!Array.isArray(current?.jobs)) return;
     current.jobs = current.jobs.map(job => {
@@ -36,17 +46,17 @@
   }
 
   function invalidateDownstream(current, sourcePath) {
-    if (model.sourceMatches(current?.translation?.result, sourcePath)) {
-      current.translation.result = null;
+    if (current?.translation?.result) {
+      current.translation.result = staleValue(current.translation.result, sourcePath, "source-transcript-edited");
     }
-    if (model.sourceMatches(current?.translation?.job, sourcePath)) {
-      current.translation.job = null;
+    if (current?.translation?.job) {
+      current.translation.job = staleValue(current.translation.job, sourcePath, "source-transcript-edited");
     }
-    if (model.sourceMatches(current?.voice?.result, sourcePath)) {
-      current.voice.result = null;
+    if (current?.voice?.result) {
+      current.voice.result = staleValue(current.voice.result, sourcePath, "source-transcript-edited");
     }
-    if (model.sourceMatches(current?.voice?.job, sourcePath)) {
-      current.voice.job = null;
+    if (current?.voice?.job) {
+      current.voice.job = staleValue(current.voice.job, sourcePath, "source-transcript-edited");
     }
     markRenderOutputsStale(current, sourcePath);
   }
