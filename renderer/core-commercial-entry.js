@@ -7,6 +7,8 @@
   let generation = 0;
   let lastKind = "";
   let lastKey = "";
+  let settleTarget = null;
+  let settleHandler = null;
 
   function currentState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -39,15 +41,44 @@
     return null;
   }
 
+  function detachSettleListener() {
+    if (settleTarget instanceof HTMLElement && typeof settleHandler === "function") {
+      settleTarget.removeEventListener("transitionend", settleHandler);
+    }
+    settleTarget = null;
+    settleHandler = null;
+  }
+
   function clearEntryState() {
+    detachSettleListener();
     delete root.dataset.creatorEntry;
     delete root.dataset.editorEntry;
+  }
+
+  function armEditorCleanup(key, token) {
+    detachSettleListener();
+    const page = document.getElementById("page");
+    if (!(page instanceof HTMLElement)) return;
+    const target = page.querySelector(".core-editor-bottom-dock") || page.querySelector(".core-editor-focus-section");
+    if (!(target instanceof HTMLElement)) return;
+
+    settleTarget = target;
+    settleHandler = event => {
+      if (event.target !== target || event.propertyName !== "translate") return;
+      if (token !== generation) return;
+      const current = surface();
+      if (!current || current.kind !== "editor" || current.key !== key) return;
+      delete root.dataset.editorEntry;
+      detachSettleListener();
+    };
+    target.addEventListener("transitionend", settleHandler);
   }
 
   function activate(kind, key) {
     const token = ++generation;
     const reduced = reducedMotion();
 
+    detachSettleListener();
     if (kind === "home") {
       delete root.dataset.editorEntry;
       root.dataset.creatorEntry = reduced ? "ready" : "pending";
@@ -63,8 +94,12 @@
         if (token !== generation) return;
         const current = surface();
         if (!current || current.kind !== kind || current.key !== key) return;
-        if (kind === "home") root.dataset.creatorEntry = "ready";
-        else root.dataset.editorEntry = "ready";
+        if (kind === "home") {
+          root.dataset.creatorEntry = "ready";
+        } else {
+          armEditorCleanup(key, token);
+          root.dataset.editorEntry = "ready";
+        }
       });
     });
   }
