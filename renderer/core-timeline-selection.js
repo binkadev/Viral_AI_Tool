@@ -1,6 +1,7 @@
 (function installCoreTimelineSelection() {
   "use strict";
 
+  const SELECTION_KEY = "viral-ai-core-timeline-selection";
   let observer = null;
   let queued = false;
   let selectedKey = "";
@@ -40,6 +41,22 @@
     return selectedSegmentIndex >= 0 ? "subtitle:" + selectedSegmentIndex : "none";
   }
 
+  function loadStoredSelection() {
+    const value = String(localStorage.getItem(SELECTION_KEY) || "none");
+    if (value === "video" || value === "audio") {
+      selectedKey = value;
+      selectedSegmentIndex = -1;
+      return;
+    }
+    const match = /^subtitle:(\d+)$/.exec(value);
+    selectedKey = "";
+    selectedSegmentIndex = match ? Number(match[1]) : -1;
+  }
+
+  function persistSelection() {
+    localStorage.setItem(SELECTION_KEY, selectionLabel());
+  }
+
   function applySourceSelection(root, selected) {
     if (!(root instanceof HTMLElement)) return;
     root.querySelectorAll(".core-source-clip").forEach(node => {
@@ -64,8 +81,7 @@
     const nextSource = sourceKey();
     if (nextSource !== currentSource) {
       currentSource = nextSource;
-      selectedKey = "";
-      selectedSegmentIndex = -1;
+      loadStoredSelection();
     }
 
     if (!selectedKey) {
@@ -80,6 +96,7 @@
     }
 
     selectedKey = "";
+    persistSelection();
     applySourceSelection(root, null);
   }
 
@@ -98,6 +115,7 @@
     if (!key) return;
     selectedKey = key;
     selectedSegmentIndex = -1;
+    persistSelection();
     applySourceSelection(root, item);
     clearTranscriptSelectionForSource();
   }
@@ -116,6 +134,7 @@
       selectedSegmentIndex = -1;
     }
 
+    persistSelection();
     const root = dock();
     if (root instanceof HTMLElement) applySourceSelection(root, itemForKey(root, selectedKey));
   }
@@ -123,6 +142,7 @@
   function start() {
     const root = page();
     if (!(root instanceof HTMLElement)) return;
+    loadStoredSelection();
     // Capture before the existing source seek handlers stop propagation.
     root.addEventListener("click", onClick, true);
     observer = new MutationObserver(queue);
