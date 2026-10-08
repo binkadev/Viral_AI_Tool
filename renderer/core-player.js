@@ -9,8 +9,9 @@
   const enhancedRows = new WeakSet();
   const frameCallbacks = new WeakMap();
   const resizeObservers = new WeakMap();
+  const transcriptCaches = new WeakMap();
+  const timelineSegmentCaches = new WeakMap();
   let activeVideo = null;
-  let lastActiveRow = null;
   let rafId = 0;
 
   function safeJsonParse(value, fallback) {
@@ -31,37 +32,26 @@
     return String(video.currentSrc || video.src || "unknown-video");
   }
 
+  function transcriptList() {
+    return document.querySelector(".transcript-list");
+  }
+
   function transcriptRows() {
     return Array.from(document.querySelectorAll(".transcript-list .transcript-row"));
   }
 
-  function parseRows(video) {
-    const rows = transcriptRows();
-    const raw = rows.map((row, index) => {
-      const time = row.querySelector("time");
-      const text = row.querySelector("p");
-      return {
-        id: row.dataset.segmentId || ("segment-" + (index + 1)),
-        start: Number.isFinite(Number(row.dataset.start))
-          ? Number(row.dataset.start)
-          : model.parseTimeLabel(time?.textContent),
-        end: Number(row.dataset.end || 0),
-        text: String(text?.textContent || ""),
-        translatedText: String(row.dataset.translatedText || ""),
-        speaker: row.dataset.speaker || null,
-        voice: row.dataset.voice || null,
-        status: row.dataset.status || "ready"
-      };
-    });
-    const normalized = model.normalizeSegments(raw, Number(video?.duration || 0));
-    normalized.forEach((segment, index) => {
-      const row = rows[index];
-      if (!row) return;
-      row.dataset.segmentId = segment.id;
-      row.dataset.start = String(segment.start);
-      row.dataset.end = String(segment.end);
-    });
-    return { rows, segments: normalized };
+  function transcriptGeneration(list) {
+    if (!(list instanceof HTMLElement)) return "none";
+    const explicit = list.dataset.coreTranscriptGeneration;
+    if (explicit) return "workstation:" + explicit;
+    const first = list.firstElementChild;
+    const last = list.lastElementChild;
+    return [
+      "legacy",
+      list.children.length,
+      first?.dataset?.segmentId || first?.dataset?.start || "",
+      last?.dataset?.segmentId || last?.dataset?.start || ""
+    ].join(":");
   }
 
   function isTextSelectionInside(row) {
@@ -107,45 +97,107 @@
     updateFromPlayback(video, { forceScroll });
   }
 
-  function enhanceTranscriptRows(video) {
-    const { rows } = parseRows(video);
-    rows.forEach(row => {
-      const paragraph = row.querySelector("p");
-      if (!paragraph) return;
-      applyStoredTranscriptEdit(video, row, paragraph);
-      paragraph.setAttribute("contenteditable", "plaintext-only");
-      paragraph.setAttribute("spellcheck", "true");
-      paragraph.setAttribute("aria-label", "Transcript text");
-      row.tabIndex = 0;
-      row.setAttribute("role", "group");
+  function wireTranscriptRow(video, row) {
+    const paragraph = row.querySelector("p");
+    if (!paragraph) return;
+    applyStoredTranscriptEdit(video, row, paragraph);
+    paragraph.setAttribute("contenteditable", "plaintext-only");
+    paragraph.setAttribute("spellcheck", "true");
+    paragraph.setAttribute("aria-label", "Transcript text");
+    row.tabIndex = 0;
+    row.setAttribute("role", "group");
 
-      if (enhancedRows.has(row)) return;
-      enhancedRows.add(row);
+    if (enhancedRows.has(row)) return;
+    enhancedRows.add(row);
 
-      row.addEventListener("click", event => {
-        if (!activeVideo || event.defaultPrevented) return;
-        if (isTextSelectionInside(row)) return;
-        if (event.target instanceof HTMLElement && event.target.closest("p[contenteditable]")) return;
-        seekVideo(activeVideo, Number(row.dataset.start || 0));
-      });
-
-      row.addEventListener("keydown", event => {
-        if (!activeVideo) return;
-        if ((event.key === "Enter" || event.key === " ") && event.target === row) {
-          event.preventDefault();
-          seekVideo(activeVideo, Number(row.dataset.start || 0));
-        }
-      });
-
-      paragraph.addEventListener("input", () => {
-        row.classList.add("is-editing");
-      });
-
-      paragraph.addEventListener("blur", () => {
-        row.classList.remove("is-editing");
-        persistTranscriptEdit(activeVideo || video, row, paragraph);
-      });
+    row.addEventListener("click", event => {
+      if (!activeVideo || event.defaultPrevented) return;
+      if (isTextSelectionInside(row)) return;
+      if (event.target instanceof HTMLElement && event.target.closest("p[contenteditable]")) return;
+      seekVideo(activeVideo, Number(row.dataset.start || 0));
     });
+
+    row.addEventListener("keydown", event => {
+      if (!activeVideo) return;
+      if ((event.key === "Enter" || event.key === " ") && event.target === row) {
+        event.preventDefault();
+        seekVideo(activeVideo, Number(row.dataset.start || 0));
+      }
+    });
+
+    paragraph.addEventListener("input", () => {
+      row.classList.add("is-editing");
+    });
+
+    paragraph.addEventListener("blur", () => {
+      row.classList.remove("is-editing");
+      persistTranscriptEdit(activeVideo || video, row, paragraph);
+    });
+  }
+
+  function buildTranscriptCache(video, list, generation, duration) {
+    const rows = transcriptRows();
+    const raw = rows.map((row, index) => {
+      const time = row.querySelector("time");
+      const text = row.querySelector("p");
+      return {
+        id: row.dataset.segmentId || ("segment-" + (index + 1)),
+        start: Number.isFinite(Number(row.dataset.start))
+          ? Number(row.dataset.start)
+          : model.parseTimeLabel(time?.textContent),
+        end: Number(row.dataset.end || 0),
+        text: String(text?.textContent || ""),
+        translatedText: String(row.dataset.translatedText || ""),
+        speaker: row.dataset.speaker || null,
+        voice: row.dataset.voice || null,
+        status: row.dataset.status || "ready"
+      };
+    });
+    const segments = model.normalizeSegments(raw, duration);
+    segments.forEach((segment, index) => {
+      const row = rows[index];
+      if (!row) return;
+      row.dataset.segmentId = segment.id;
+      row.dataset.start = String(segment.start);
+      row.dataset.end = String(segment.end);
+      wireTranscriptRow(video, row);
+    });
+    const cache = {
+      list,
+      generation,
+      duration,
+      rows,
+      segments,
+      activeIndex: -1
+    };
+    transcriptCaches.set(video, cache);
+    return cache;
+  }
+
+  function transcriptCacheFor(video, { force = false } = {}) {
+    const list = transcriptList();
+    const generation = transcriptGeneration(list);
+    const duration = Number.isFinite(video?.duration) ? Number(video.duration) : 0;
+    const existing = transcriptCaches.get(video);
+    if (!force && existing && existing.list === list && existing.generation === generation && existing.duration === duration) {
+      return existing;
+    }
+    return buildTranscriptCache(video, list, generation, duration);
+  }
+
+  function parseRows(video) {
+    const cache = transcriptCacheFor(video);
+    return { rows: cache.rows, segments: cache.segments };
+  }
+
+  function enhanceTranscriptRows(video) {
+    transcriptCacheFor(video);
+  }
+
+  function invalidateTranscriptCache(video) {
+    if (!video) return;
+    transcriptCaches.delete(video);
+    timelineSegmentCaches.delete(video);
   }
 
   function controlsFor(video) {
@@ -166,44 +218,49 @@
     }
   }
 
-  function segmentSignature(segments, duration) {
-    return [Number(duration || 0).toFixed(3)]
-      .concat(segments.map(segment => [segment.id, Number(segment.start).toFixed(3), Number(segment.end).toFixed(3)].join(":")))
-      .join("|");
-  }
-
   function renderTimelineSegments(video) {
     const timeline = timelineFor(video);
     if (!timeline) return;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const { segments } = parseRows(video);
+    const transcript = transcriptCacheFor(video);
     const track = timeline.querySelector("[data-core-timeline-track]");
     if (!track) return;
 
-    const signature = segmentSignature(segments, duration);
-    if (track.dataset.signature === signature) return;
-    track.dataset.signature = signature;
+    const existing = timelineSegmentCaches.get(video);
+    if (existing && existing.generation === transcript.generation && existing.duration === duration && existing.track === track) return;
 
     track.querySelectorAll(".core-timeline-segment").forEach(node => node.remove());
-    if (!duration || !segments.length) return;
-
-    segments.forEach((segment, index) => {
-      const start = model.clampTime(segment.start, duration);
-      const end = model.clampTime(Math.max(segment.end, start), duration);
-      const segmentButton = document.createElement("button");
-      segmentButton.type = "button";
-      segmentButton.className = "core-timeline-segment";
-      segmentButton.dataset.segmentIndex = String(index);
-      segmentButton.dataset.start = String(start);
-      segmentButton.style.left = String(model.seekRatio(start, duration) * 100) + "%";
-      segmentButton.style.width = String(Math.max(0.35, model.seekRatio(end - start, duration) * 100)) + "%";
-      segmentButton.title = model.formatClock(start) + " – " + model.formatClock(end);
-      segmentButton.setAttribute("aria-label", "Seek to transcript segment " + (index + 1));
-      segmentButton.addEventListener("click", event => {
-        event.stopPropagation();
-        seekVideo(video, start);
+    const nodes = [];
+    if (duration && transcript.segments.length) {
+      const fragment = document.createDocumentFragment();
+      transcript.segments.forEach((segment, index) => {
+        const start = model.clampTime(segment.start, duration);
+        const end = model.clampTime(Math.max(segment.end, start), duration);
+        const segmentButton = document.createElement("button");
+        segmentButton.type = "button";
+        segmentButton.className = "core-timeline-segment";
+        segmentButton.dataset.segmentIndex = String(index);
+        segmentButton.dataset.start = String(start);
+        segmentButton.style.left = String(model.seekRatio(start, duration) * 100) + "%";
+        segmentButton.style.width = String(Math.max(0.35, model.seekRatio(end - start, duration) * 100)) + "%";
+        segmentButton.title = model.formatClock(start) + " – " + model.formatClock(end);
+        segmentButton.setAttribute("aria-label", "Seek to transcript segment " + (index + 1));
+        segmentButton.addEventListener("click", event => {
+          event.stopPropagation();
+          seekVideo(video, start);
+        });
+        nodes.push(segmentButton);
+        fragment.appendChild(segmentButton);
       });
-      track.appendChild(segmentButton);
+      track.appendChild(fragment);
+    }
+
+    timelineSegmentCaches.set(video, {
+      track,
+      generation: transcript.generation,
+      duration,
+      nodes,
+      activeIndex: -1
     });
   }
 
@@ -215,34 +272,42 @@
     const playhead = timeline.querySelector("[data-core-playhead]");
     if (playhead) playhead.style.left = String(model.seekRatio(currentTime, duration) * 100) + "%";
 
-    timeline.querySelectorAll(".core-timeline-segment").forEach((segment, index) => {
-      const active = index === activeIndex;
-      segment.classList.toggle("is-active", active);
-      segment.setAttribute("aria-current", active ? "true" : "false");
-    });
+    const cache = timelineSegmentCaches.get(video);
+    if (!cache || cache.activeIndex === activeIndex) return;
+    const previous = cache.nodes[cache.activeIndex];
+    const next = cache.nodes[activeIndex];
+    if (previous) {
+      previous.classList.remove("is-active");
+      previous.setAttribute("aria-current", "false");
+    }
+    if (next) {
+      next.classList.add("is-active");
+      next.setAttribute("aria-current", "true");
+    }
+    cache.activeIndex = activeIndex;
   }
 
   function updateTranscript(video, currentTime, forceScroll) {
-    enhanceTranscriptRows(video);
-    const { rows, segments } = parseRows(video);
-    const activeIndex = model.activeSegmentIndex(segments, currentTime);
-    const activeRow = activeIndex >= 0 ? rows[activeIndex] : null;
+    const cache = transcriptCacheFor(video);
+    const activeIndex = model.activeSegmentIndex(cache.segments, currentTime);
+    if (cache.activeIndex === activeIndex) return activeIndex;
 
-    rows.forEach((row, index) => {
-      const active = index === activeIndex;
-      row.classList.toggle("is-active", active);
-      row.setAttribute("aria-current", active ? "true" : "false");
-    });
-
-    if (activeRow && activeRow !== lastActiveRow) {
+    const previousRow = cache.rows[cache.activeIndex];
+    const activeRow = activeIndex >= 0 ? cache.rows[activeIndex] : null;
+    if (previousRow) {
+      previousRow.classList.remove("is-active");
+      previousRow.setAttribute("aria-current", "false");
+    }
+    if (activeRow) {
+      activeRow.classList.add("is-active");
+      activeRow.setAttribute("aria-current", "true");
       const paragraph = activeRow.querySelector("p");
       const editing = paragraph && document.activeElement === paragraph;
       if (!editing && (forceScroll || !video.paused)) {
         activeRow.scrollIntoView({ block: "nearest", behavior: forceScroll ? "auto" : "smooth" });
       }
-      lastActiveRow = activeRow;
     }
-
+    cache.activeIndex = activeIndex;
     return activeIndex;
   }
 
@@ -256,7 +321,7 @@
       const controls = controlsFor(video);
       const seek = controls?.querySelector("[data-core-seek]");
       const time = controls?.querySelector("[data-core-time]");
-      if (seek) seek.value = String(Math.round(model.seekRatio(current, duration) * 1000));
+      if (seek) seek.value = String(Math.round(model.seekRatio(video.currentTime, video.duration) * 1000));
       if (time) time.textContent = model.formatClock(current) + " / " + model.formatClock(duration);
       setPlayingUi(video);
       const activeIndex = updateTranscript(video, current, forceScroll);
@@ -396,6 +461,8 @@
         host.style.setProperty("--core-video-ratio", video.videoWidth + " / " + video.videoHeight);
         host.dataset.videoRatio = (video.videoWidth / video.videoHeight).toFixed(4);
       }
+      invalidateTranscriptCache(video);
+      enhanceTranscriptRows(video);
       renderTimelineSegments(video);
       updateFromPlayback(video);
     });
@@ -423,6 +490,13 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 
+  window.addEventListener("viral-ai:transcript-workstation-ready", () => {
+    if (!activeVideo) return;
+    invalidateTranscriptCache(activeVideo);
+    enhanceTranscriptRows(activeVideo);
+    renderTimelineSegments(activeVideo);
+    updateFromPlayback(activeVideo, { forceScroll: false });
+  });
   window.addEventListener("resize", () => activeVideo && updateFromPlayback(activeVideo));
   document.addEventListener("fullscreenchange", () => activeVideo && updateFromPlayback(activeVideo));
 })();

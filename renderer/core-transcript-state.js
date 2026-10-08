@@ -22,6 +22,22 @@
     } catch {}
   }
 
+  function staleSnapshot(value) {
+    if (!value || typeof value !== "object") return value || null;
+    return {
+      ...value,
+      status: "stale",
+      staleReason: "transcript-edited"
+    };
+  }
+
+  function retainStaleSlot(container, key) {
+    if (!container || !container[key]) return;
+    const staleKey = key === "result" ? "staleResult" : "staleJob";
+    container[staleKey] = staleSnapshot(container[key]);
+    container[key] = null;
+  }
+
   function markRenderOutputsStale(current, sourcePath) {
     if (!Array.isArray(current?.jobs)) return;
     current.jobs = current.jobs.map(job => {
@@ -37,16 +53,16 @@
 
   function invalidateDownstream(current, sourcePath) {
     if (model.sourceMatches(current?.translation?.result, sourcePath)) {
-      current.translation.result = null;
+      retainStaleSlot(current.translation, "result");
     }
     if (model.sourceMatches(current?.translation?.job, sourcePath)) {
-      current.translation.job = null;
+      retainStaleSlot(current.translation, "job");
     }
     if (model.sourceMatches(current?.voice?.result, sourcePath)) {
-      current.voice.result = null;
+      retainStaleSlot(current.voice, "result");
     }
     if (model.sourceMatches(current?.voice?.job, sourcePath)) {
-      current.voice.job = null;
+      retainStaleSlot(current.voice, "job");
     }
     markRenderOutputsStale(current, sourcePath);
   }
