@@ -29,15 +29,31 @@ for (const required of [
   ".core-editor-assets-panel",
   ".core-editor-inspector",
   ".core-inspector-tab.is-active",
+  ".core-inspector-tab.is-blocked",
   ".core-asset-item:hover:not(:disabled)",
+  ".core-asset-item:focus-visible",
+  ".core-inspector-tab:focus-visible",
+  ".core-inspector-card .speech-card-head",
+  ".core-inspector-card .button.primary",
+  ".core-inspector-card .select:focus-visible",
+  "font-size:var(--type-control)!important",
+  "font-size:var(--type-body)!important",
+  "font-size:var(--type-meta)!important",
+  "font-size:var(--type-caption)!important",
+  "font-size:var(--type-section)!important",
+  "min-height:36px!important",
   "transform:none!important",
   "backdrop-filter:none!important",
   "animation:none!important",
-  "prefers-reduced-motion"
+  "prefers-reduced-motion",
+  'html[data-motion="reduced"].core-editor-premium'
 ]) {
   assert(css.includes(required), "Final editor panel CSS missing: " + required);
 }
 assert(!css.includes("@keyframes"), "Final editor panels must not add decorative animation loops.");
+assert(!css.includes("filter:blur"), "Final editor panels must not use blur motion effects.");
+assert(!/font-size:(?:9|10)px!important/.test(css), "Commercial panel copy must not use fixed text below the helper-text floor.");
+assert(css.includes("outline-offset:2px!important"), "Assets and inspector controls need visible keyboard focus.");
 
 assert(index.includes('href="core-editor-panels-workstation.css"'), "Final editor panels CSS must be loaded.");
 assert(index.includes('src="core-inspector-workflow.js"'), "Inspector workflow helper must be loaded.");
@@ -50,4 +66,4 @@ assert(
   "Inspector workflow helper must augment the workbench after it exists."
 );
 
-console.log("Editor panels and workflow-aware inspector tests passed.");
+console.log("Editor panels, scale-aware readability and workflow-aware inspector tests passed.");
