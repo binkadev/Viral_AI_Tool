@@ -43,11 +43,13 @@
     }
   }
 
-  function wireVideo(video, host, controls) {
+  function wireVideo(video) {
     if (!(video instanceof HTMLVideoElement) || wiredVideos.has(video)) return;
     wiredVideos.add(video);
     video.addEventListener("volumechange", () => {
-      if (mediaFor(host) !== video) return;
+      const host = video.closest(".preview");
+      const controls = host?.querySelector?.(".core-player-controls");
+      if (!(host instanceof HTMLElement) || !(controls instanceof HTMLElement)) return;
       sync(host, controls);
     });
   }
@@ -58,7 +60,7 @@
     const controls = host.querySelector(".core-player-controls");
     if (!(video instanceof HTMLVideoElement) || !(controls instanceof HTMLElement)) return;
 
-    wireVideo(video, host, controls);
+    wireVideo(video);
 
     if (controls.dataset.coreVolumeWired === "true") {
       sync(host, controls);
