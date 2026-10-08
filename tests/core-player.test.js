@@ -61,6 +61,25 @@ for (const required of ["video.currentTime = target","video.currentTime, video.d
 }
 
 for (const required of [
+  "const transcriptCaches = new WeakMap()",
+  "const timelineSegmentCaches = new WeakMap()",
+  "function transcriptGeneration(list)",
+  "function transcriptCacheFor(video",
+  "existing.generation === generation",
+  "cache.activeIndex === activeIndex",
+  'previousRow.classList.remove("is-active")',
+  'activeRow.classList.add("is-active")',
+  "previous.classList.remove(\"is-active\")",
+  "next.classList.add(\"is-active\")",
+  'window.addEventListener("viral-ai:transcript-workstation-ready"',
+  "invalidateTranscriptCache(activeVideo)"
+]) {
+  assert(player.includes(required), "Long-form transcript playback cache is missing: " + required);
+}
+assert(!player.includes('rows.forEach((row, index) => {\n      const active = index === activeIndex'), "Playback must not toggle every transcript row on each frame.");
+assert(!player.includes('timeline.querySelectorAll(".core-timeline-segment").forEach((segment, index)'), "Playback must not rescan every transcript timeline segment on each frame.");
+
+for (const required of [
   'setProperty("object-fit", "contain", "important")','setProperty("object-position", "center center", "important")','setProperty("transform", "none", "important")',
   "data-core-playhead","corePlaybackState","coreMediaReady","querySelectorAll(\"#page video.preview-video, #page video.core-player-media\")","seekToRatio(video",'"play", "pause", "ended"',
   "const wiredSeeks = new WeakSet()","const wiredPlayButtons = new WeakSet()","const wiredTracks = new WeakSet()","const surfaceObservers = new WeakMap()","function wireSurface(video)","function syncEditorDock(video, duration, current)","function bindSurfaceResize(video, host)","function currentSurfaceVideo(host, fallback)",".core-editor-bottom-dock","currentVideo !== video","wireSurface(video);","bindSurfaceResize(video, host);","currentSurfaceVideo(host, video)","current?.observer?.disconnect?.()",'video.closest(".preview") !== host',"observer.observe(host)",'host.querySelector("[data-core-play], [data-core-toggle-play]")',"wiredPlayButtons.has(playButton)","await currentVideo.play()","currentVideo.pause()","event.stopImmediatePropagation()","data-bottom-playhead","data-bottom-time",".core-bottom-segment"
@@ -90,4 +109,4 @@ assert(index.includes('src="core-player-rebind.js"'));
 assert(index.includes('src="core-player-sync.js"'));
 assert(index.indexOf('src="core-player-rebind.js"') < index.indexOf('src="core-player-sync.js"'));
 
-console.log("Core player geometry, timeline, scrubbing and synchronization tests passed.");
+console.log("Core player geometry, cached long-form transcript, timeline, scrubbing and synchronization tests passed.");
