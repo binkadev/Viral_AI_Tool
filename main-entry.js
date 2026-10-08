@@ -5,22 +5,16 @@ const { BrowserWindow } = require('electron');
 const nativeShow = BrowserWindow.prototype.show;
 const revealState = new WeakMap();
 
-async function revealAfterRendererPaint(win, state) {
-  if (!win || win.isDestroyed() || state.ready) return;
-
-  try {
-    await win.webContents.executeJavaScript(
-      'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-      true
-    );
-  } catch {}
-
+function revealWindow(win, state) {
   if (!win || win.isDestroyed() || state.ready) return;
   state.ready = true;
-  nativeShow.call(win);
+  setImmediate(() => {
+    if (!win || win.isDestroyed()) return;
+    nativeShow.call(win);
+  });
 }
 
-BrowserWindow.prototype.show = function showAfterRendererPaint() {
+BrowserWindow.prototype.show = function showAfterRendererLoad() {
   const win = this;
   let state = revealState.get(win);
 
@@ -30,12 +24,12 @@ BrowserWindow.prototype.show = function showAfterRendererPaint() {
   state = { scheduled: true, ready: false };
   revealState.set(win, state);
 
-  const reveal = () => revealAfterRendererPaint(win, state);
   if (win.webContents?.isLoadingMainFrame?.()) {
-    win.webContents.once('did-finish-load', reveal);
-  } else {
-    reveal();
+    win.webContents.once('did-finish-load', () => revealWindow(win, state));
+    return;
   }
+
+  revealWindow(win, state);
 };
 
 require('./main.js');
