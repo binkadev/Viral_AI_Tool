@@ -10,6 +10,7 @@ const css = fs.readFileSync(path.join(root, "renderer", "core-editor.css"), "utf
 const player = fs.readFileSync(path.join(root, "renderer", "core-player.js"), "utf8");
 const rebind = fs.readFileSync(path.join(root, "renderer", "core-player-rebind.js"), "utf8");
 const interactions = fs.readFileSync(path.join(root, "renderer", "core-player-interactions.js"), "utf8");
+const sync = fs.readFileSync(path.join(root, "renderer", "core-player-sync.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 assert.strictEqual(model.parseTimeLabel("01:30"), 90);
@@ -19,6 +20,10 @@ assert.strictEqual(model.formatClock(65.9), "01:05");
 assert.strictEqual(model.clampTime(-4, 10), 0);
 assert.strictEqual(model.clampTime(14, 10), 10);
 assert.strictEqual(model.seekRatio(5, 20), 0.25);
+assert.strictEqual(model.resolveDuration(12, 10, 8), 12);
+assert.strictEqual(model.resolveDuration(NaN, 10, 8), 10);
+assert.strictEqual(model.resolveDuration(Infinity, 0, 8), 8);
+assert.strictEqual(model.resolveDuration(0, 0, 0), 0);
 
 for (const media of [
   [1920, 1080],
@@ -114,7 +119,9 @@ for (const required of [
   "pointermove",
   "pointerup",
   "setPointerCapture",
+  "durationFor(video)",
   "video.currentTime = ratio * duration",
+  "viral-ai:player-seek",
   "ArrowLeft",
   "ArrowRight",
   "event.shiftKey ? -10 : -5",
@@ -124,13 +131,33 @@ for (const required of [
   assert(interactions.includes(required), "Core player interactions are missing: " + required);
 }
 
+for (const required of [
+  "resolveDuration",
+  "seekableEnd(video)",
+  "data-bottom-playhead",
+  "data-bottom-time",
+  "data-core-playhead",
+  "data-core-seek",
+  "data-core-time",
+  "viral-ai:player-seek",
+  "viral-ai:player-sync",
+  "video.currentTime",
+  "requestAnimationFrame(scan)"
+]) {
+  assert(sync.includes(required), "Unified player sync is missing: " + required);
+}
+
 assert(!player.includes("setInterval("), "Player synchronization must not use an independent timer clock.");
 assert(!interactions.includes("setInterval("), "Scrubbing must not introduce a second playback clock.");
 assert(!rebind.includes("setInterval("), "Player rebind must stay synchronized to media events instead of an independent timer clock.");
+assert(!sync.includes("setInterval("), "Unified playback sync must stay media-event driven.");
 assert(index.includes('href="core-editor.css"'));
 assert(index.includes('src="core-player-model.js"'));
 assert(index.includes('src="core-player.js"'));
 assert(index.includes('src="core-player-interactions.js"'));
 assert(index.includes('src="core-player-rebind.js"'));
+assert(index.includes('src="core-player-sync.js"'));
+assert(index.indexOf('src="core-player-model.js"') < index.indexOf('src="core-player-sync.js"'));
+assert(index.indexOf('src="core-player-rebind.js"') < index.indexOf('src="core-player-sync.js"'));
 
 console.log("Core player geometry, timeline, scrubbing and synchronization tests passed.");
