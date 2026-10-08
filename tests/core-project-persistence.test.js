@@ -74,6 +74,7 @@ const migrated = snapshotModel.fromLegacy(legacy, {
 assert(migrated, "legacy project with a source must migrate into a snapshot");
 assert.strictEqual(migrated.schemaVersion, 1);
 assert.strictEqual(migrated.projectId, "source-1");
+assert.strictEqual(migrated.projectName, "Long Interview.mp4", "legacy projects must gain a stable project name from the current source");
 assert.strictEqual(migrated.source.path, sourceJob.sourcePath);
 assert.strictEqual(migrated.source.fileState, "missing", "missing source must remain a recoverable project state");
 assert.strictEqual(migrated.workflow.speech.result.segments[0].start, 12.5);
@@ -125,6 +126,7 @@ const reopenedEditor = {
 };
 const persisted = snapshotModel.buildSnapshot(legacy, reopenedEditor, migrated, Date.UTC(2026, 9, 8, 12, 1, 0));
 assert.strictEqual(persisted.projectId, migrated.projectId);
+assert.strictEqual(persisted.projectName, migrated.projectName, "reopen/autosave must retain the project name");
 assert.strictEqual(persisted.editor.playback.position, 3678.25);
 assert.strictEqual(persisted.editor.timeline.scrollLeft, 812);
 assert.strictEqual(persisted.editor.timeline.selection, "subtitle:0");
@@ -140,6 +142,7 @@ const relinked = snapshotModel.buildSnapshot(relinkedState, {
   playback: { position: 3678.25, sourcePath: relinkedState.jobs[0].sourcePath }
 }, persisted, Date.UTC(2026, 9, 8, 12, 2, 0));
 assert.strictEqual(relinked.projectId, migrated.projectId, "relinking the same source job must not create a different project");
+assert.strictEqual(relinked.projectName, persisted.projectName, "relinking the same source must not rename the project");
 assert.strictEqual(relinked.source.path, "D:/relinked/Long Interview.mp4");
 assert.strictEqual(relinked.source.fileState, "available");
 
@@ -150,11 +153,18 @@ assert.strictEqual(
   "updatedAt must not cause an autosave loop"
 );
 
+const v1WithoutProjectName = { ...persisted };
+delete v1WithoutProjectName.projectName;
+const normalizedV1 = snapshotModel.migrateSnapshot(v1WithoutProjectName);
+assert.strictEqual(normalizedV1.snapshot.projectName, sourceJob.name, "existing schema-v1 snapshots must normalize projectName without data loss");
+assert.strictEqual(normalizedV1.migrated, true, "schema-v1 snapshots missing projectName must be rewritten durably during bootstrap");
+
 const v0 = { ...migrated };
 delete v0.schemaVersion;
 const upgraded = snapshotModel.migrateSnapshot(v0);
 assert.strictEqual(upgraded.migrated, true);
 assert.strictEqual(upgraded.snapshot.schemaVersion, 1);
+assert.strictEqual(upgraded.snapshot.projectName, migrated.projectName);
 const future = snapshotModel.migrateSnapshot({ schemaVersion: 99, source: migrated.source, workflow: migrated.workflow });
 assert.strictEqual(future.snapshot, null, "future schemas must never be silently downgraded");
 assert.strictEqual(future.unsupportedVersion, 99);
@@ -169,6 +179,10 @@ for (const required of [
   'const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1"',
   'const DEBOUNCE_MS = 320',
   'const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)])',
+  'function dispatchSaveFailure(reason, error)',
+  'function writeBootstrapSnapshot(snapshot, reason)',
+  'writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")',
+  'dispatchSaveFailure("bootstrap-legacy-projection", error)',
   'storagePrototype.getItem = function patchedGetItem',
   'storagePrototype.setItem = function patchedSetItem',
   'storagePrototype.removeItem = function patchedRemoveItem',
@@ -193,6 +207,10 @@ for (const required of [
 assert(
   persistence.indexOf('writeNative(SNAPSHOT_KEY, JSON.stringify(next))') < persistence.indexOf('currentSnapshot = next'),
   "in-memory snapshot must advance only after the durable write succeeds"
+);
+assert(
+  persistence.indexOf('currentSnapshot = migrated.snapshot') < persistence.indexOf('writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")'),
+  "bootstrap migration must retain the normalized in-memory snapshot before attempting a best-effort durable backfill"
 );
 assert(persistence.includes('try { removeNative(SNAPSHOT_KEY); } catch {}'), "failed durable writes must remove the stale durable snapshot so startup cannot roll legacy state backward");
 assert(!persistence.includes("setInterval("), "project autosave must be semantic/debounced, never polling");
@@ -225,4 +243,4 @@ assert(index.indexOf('src="core-project-persistence.js"') < index.indexOf('src="
 assert(pkg.scripts["test:core-project-persistence"], "package.json must expose the project persistence regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-project-persistence"), "commercial regression must gate project persistence");
 
-console.log("Core project snapshot schema, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
+console.log("Core project snapshot schema, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
