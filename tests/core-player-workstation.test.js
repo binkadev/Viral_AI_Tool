@@ -56,7 +56,8 @@ for (const required of [
 }
 assert(!css.includes("object-fit:cover"), "Workstation player must never crop source media.");
 assert(!css.includes("@keyframes"), "Workstation player geometry must not introduce decorative animation loops.");
-assert(css.includes('font-family:"Cascadia Mono"'), "Timecode must use a legible monospaced workstation font stack.");
+assert(css.includes('font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI","Noto Sans",Arial,sans-serif!important'), "Timecode must remain on the product Windows font stack.");
+assert(!css.includes('font-family:"Cascadia Mono"'), "Timecode must not introduce an alternate monospace font stack.");
 assert(css.includes("outline-offset:2px!important"), "Transport controls need a visible keyboard focus treatment.");
 
 assert(index.includes('href="core-player-workstation.css"'), "Final workstation player CSS must be loaded.");
