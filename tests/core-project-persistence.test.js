@@ -179,6 +179,10 @@ for (const required of [
   'const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1"',
   'const DEBOUNCE_MS = 320',
   'const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)])',
+  'function dispatchSaveFailure(reason, error)',
+  'function writeBootstrapSnapshot(snapshot, reason)',
+  'writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")',
+  'dispatchSaveFailure("bootstrap-legacy-projection", error)',
   'storagePrototype.getItem = function patchedGetItem',
   'storagePrototype.setItem = function patchedSetItem',
   'storagePrototype.removeItem = function patchedRemoveItem',
@@ -203,6 +207,10 @@ for (const required of [
 assert(
   persistence.indexOf('writeNative(SNAPSHOT_KEY, JSON.stringify(next))') < persistence.indexOf('currentSnapshot = next'),
   "in-memory snapshot must advance only after the durable write succeeds"
+);
+assert(
+  persistence.indexOf('currentSnapshot = migrated.snapshot') < persistence.indexOf('writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")'),
+  "bootstrap migration must retain the normalized in-memory snapshot before attempting a best-effort durable backfill"
 );
 assert(persistence.includes('try { removeNative(SNAPSHOT_KEY); } catch {}'), "failed durable writes must remove the stale durable snapshot so startup cannot roll legacy state backward");
 assert(!persistence.includes("setInterval("), "project autosave must be semantic/debounced, never polling");
@@ -235,4 +243,4 @@ assert(index.indexOf('src="core-project-persistence.js"') < index.indexOf('src="
 assert(pkg.scripts["test:core-project-persistence"], "package.json must expose the project persistence regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-project-persistence"), "commercial regression must gate project persistence");
 
-console.log("Core project snapshot schema, naming, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
+console.log("Core project snapshot schema, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
