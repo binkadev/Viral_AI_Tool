@@ -41,12 +41,16 @@ for (const token of [
 for (const token of [
   "function activeSourceKey()",
   "function reducedMotion()",
+  "function detachSettleListener()",
+  "function armEditorCleanup(key, token)",
   "new MutationObserver(queue)",
   "{ childList: true, subtree: true }",
   'root.dataset.creatorEntry = reduced ? "ready" : "pending"',
   'root.dataset.editorEntry = reduced ? "ready" : "pending"',
   'root.dataset.creatorEntry = "ready"',
   'root.dataset.editorEntry = "ready"',
+  'event.propertyName !== "translate"',
+  "delete root.dataset.editorEntry",
   "requestAnimationFrame(() => {",
   "viral-ai:core-state-changed"
 ]) {
@@ -56,6 +60,7 @@ for (const token of [
 for (const token of [
   'html[data-creator-entry="pending"] .creator-home-hero',
   'html[data-creator-entry="pending"] .creator-start-grid',
+  'html[data-editor-entry] #page .core-editor-assets-panel',
   'html[data-editor-entry="pending"] #page .core-editor-assets-panel',
   'html[data-editor-entry="pending"] #page .core-editor-focus-section',
   'html[data-editor-entry="pending"] #page .core-editor-inspector',
@@ -70,6 +75,7 @@ assert(!entry.includes("setInterval("), "Commercial entry choreography must not 
 assert(!entry.includes("setTimeout("), "Commercial entry choreography must not fake loading time.");
 assert(!entryCss.includes("@keyframes"), "Commercial entry choreography must remain non-looping and state-driven.");
 assert(!entryCss.includes("position:fixed"), "Commercial entry choreography must not reintroduce a full-screen preparing layer.");
+assert(!entryCss.includes("\n#page .core-editor-assets-panel,#page .core-editor-focus-section"), "Entry-only transitions must not permanently override editor panel transitions.");
 
 assert(index.includes('data-motion="balanced"'), "Balanced must be the static first-paint motion mode.");
 assert(index.includes('saved.motion = "balanced"'), "New users must initialize to balanced motion.");
