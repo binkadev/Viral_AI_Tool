@@ -4,6 +4,7 @@
   let observer = null;
   let queued = false;
   let selectedKey = "";
+  let selectedSegmentIndex = -1;
   let currentSource = "";
 
   function page() {
@@ -24,7 +25,6 @@
     if (!(node instanceof HTMLElement)) return "";
     if (node.classList.contains("core-video-clip")) return "video";
     if (node.classList.contains("core-audio-clip")) return "audio";
-    if (node.classList.contains("core-bottom-segment")) return "subtitle:" + String(node.dataset.segmentIndex || "");
     return "";
   }
 
@@ -32,21 +32,28 @@
     if (!(root instanceof HTMLElement) || !key) return null;
     if (key === "video") return root.querySelector(".core-video-clip");
     if (key === "audio") return root.querySelector(".core-audio-clip");
-    if (key.startsWith("subtitle:")) {
-      const index = key.slice("subtitle:".length);
-      return Array.from(root.querySelectorAll(".core-bottom-segment")).find(node => String(node.dataset.segmentIndex || "") === index) || null;
-    }
     return null;
   }
 
-  function applySelection(root, selected) {
+  function selectionLabel() {
+    if (selectedKey) return selectedKey;
+    return selectedSegmentIndex >= 0 ? "subtitle:" + selectedSegmentIndex : "none";
+  }
+
+  function applySourceSelection(root, selected) {
     if (!(root instanceof HTMLElement)) return;
-    root.querySelectorAll(".core-source-clip, .core-bottom-segment").forEach(node => {
+    root.querySelectorAll(".core-source-clip").forEach(node => {
       const active = node === selected;
       node.classList.toggle("is-selected", active);
       node.setAttribute("aria-selected", active ? "true" : "false");
     });
-    root.dataset.timelineSelection = selected ? itemKey(selected) : "none";
+    root.dataset.timelineSelection = selectionLabel();
+  }
+
+  function clearTranscriptSelectionForSource() {
+    window.dispatchEvent(new CustomEvent("viral-ai:editor-segment-selected", {
+      detail: { index: -1, source: "timeline-source" }
+    }));
   }
 
   function restoreSelection() {
@@ -58,21 +65,22 @@
     if (nextSource !== currentSource) {
       currentSource = nextSource;
       selectedKey = "";
+      selectedSegmentIndex = -1;
     }
 
     if (!selectedKey) {
-      applySelection(root, null);
+      applySourceSelection(root, null);
       return;
     }
 
     const selected = itemForKey(root, selectedKey);
     if (selected instanceof HTMLElement) {
-      applySelection(root, selected);
+      applySourceSelection(root, selected);
       return;
     }
 
     selectedKey = "";
-    applySelection(root, null);
+    applySourceSelection(root, null);
   }
 
   function queue() {
@@ -83,22 +91,43 @@
 
   function onClick(event) {
     if (!(event.target instanceof Element)) return;
-    const item = event.target.closest(".core-source-clip, .core-bottom-segment");
+    const item = event.target.closest(".core-source-clip");
     const root = dock();
     if (!(item instanceof HTMLElement) || !(root instanceof HTMLElement) || !root.contains(item)) return;
     const key = itemKey(item);
     if (!key) return;
     selectedKey = key;
-    applySelection(root, item);
+    selectedSegmentIndex = -1;
+    applySourceSelection(root, item);
+    clearTranscriptSelectionForSource();
+  }
+
+  function onSegmentSelection(event) {
+    const index = Number(event?.detail?.index);
+    if (!Number.isInteger(index)) return;
+
+    if (event?.detail?.source === "timeline-source" && index < 0) {
+      selectedSegmentIndex = -1;
+    } else if (index >= 0) {
+      selectedKey = "";
+      selectedSegmentIndex = index;
+    } else {
+      selectedKey = "";
+      selectedSegmentIndex = -1;
+    }
+
+    const root = dock();
+    if (root instanceof HTMLElement) applySourceSelection(root, itemForKey(root, selectedKey));
   }
 
   function start() {
     const root = page();
     if (!(root instanceof HTMLElement)) return;
-    // Capture before the existing timeline/clip seek handlers stop propagation.
+    // Capture before the existing source seek handlers stop propagation.
     root.addEventListener("click", onClick, true);
     observer = new MutationObserver(queue);
     observer.observe(root, { childList: true, subtree: true });
+    window.addEventListener("viral-ai:editor-segment-selected", onSegmentSelection);
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
     queue();
