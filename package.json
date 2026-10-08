@@ -34,6 +34,7 @@
     "test:core-player": "node tests/core-player.test.js",
     "test:core-player-workstation": "node tests/core-player-workstation.test.js",
     "test:core-transcript": "node tests/core-transcript.test.js",
+    "test:core-transcript-workstation": "node tests/core-transcript-workstation.test.js",
     "test:core-workflow": "node tests/core-workflow.test.js",
     "test:core-layout": "node tests/core-layout.test.js",
     "test:core-capabilities": "node tests/core-capabilities.test.js",
@@ -64,7 +65,7 @@
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
+    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-transcript-workstation && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
   },
   "devDependencies": {
     "electron": "38.2.0",
