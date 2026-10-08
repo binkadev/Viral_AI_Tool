@@ -16,20 +16,26 @@ for (const required of [
   "current?.cloud?.auth?.authenticated === true",
   "current?.speech?.providerStatus?.local",
   'local.ready === true',
-  '"Đang kiểm tra"',
-  '"Cần thiết lập"',
+  '"Đang kiểm tra thiết bị"',
+  '"Thiết bị sẵn sàng"',
+  '"Cần hoàn tất thiết lập trên thiết bị"',
+  '"Đồng bộ tài khoản đã bật"',
+  '"Được lưu trên thiết bị"',
   'current.page = "ai-video"',
   'current.page !== "download"',
   "syncStatusChips",
+  'data-status-kind="device"',
+  'data-status-kind="sync"',
   "subtree:false"
 ]) {
   assert(js.includes(required), "Creator Home production guard missing: " + required);
 }
 assert(!js.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply an authenticated Cloud connection.");
+assert(!js.includes('querySelector("b")'), "Runtime status wiring must not depend on translated visible labels.");
 assert(!/projectSource\([\s\S]*?fileState\s*!==\s*["']missing/.test(js), "A missing source is still a project and must remain recoverable in Core Editor.");
 assert(creator.includes('if (current) current.page = "download"'), "Legacy startup override stays detectable until the creator module is refactored.");
 assert(bootstrap.includes('core-creator-home-production.js'), "Bootstrap must load the Creator Home production guard.");
 assert(bootstrap.includes("hasProjectSource"), "Bootstrap must preserve Core Editor for persisted source projects.");
 assert(!js.includes("setInterval("), "Creator Home production guard must not poll.");
 
-console.log("core Creator Home production guard tests passed");
+console.log("core Creator Home production guard commercial-status tests passed");
