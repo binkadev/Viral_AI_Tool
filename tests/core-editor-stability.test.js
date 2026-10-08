@@ -11,10 +11,13 @@ const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8")
 for (const required of [
   "legacyRender",
   "previewSnapshot",
+  "replacementVideoFor",
   "sameMedia",
   "preserveEditorPreview",
   'state?.page === "ai-video"',
-  "replacement.replaceWith(snapshot.preview)",
+  "replacementVideo.replaceWith(snapshot.video)",
+  'replacement.dataset.corePersistentPreview = "true"',
+  'snapshot.video.dataset.corePersistentMedia = "true"',
   "snapshot.currentTime",
   "snapshot.paused",
   "snapshot.volume",
@@ -30,8 +33,12 @@ assert(
   "Preview preservation must only happen when the source URL is unchanged."
 );
 assert(
+  !stability.includes("replacement.replaceWith(snapshot.preview)"),
+  "Persistent media must never restore the stale preview shell."
+);
+assert(
   !stability.includes("innerHTML = snapshot"),
-  "Persistent preview must retain the existing DOM node, not clone/recreate it."
+  "Persistent preview must retain the existing media DOM node, not clone/recreate it."
 );
 assert(index.includes('src="core-editor-stability.js"'));
 assert(
