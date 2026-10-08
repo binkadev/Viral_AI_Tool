@@ -66,7 +66,11 @@ for (const token of [
   'html[data-editor-entry="pending"] #page .core-editor-inspector',
   'html[data-editor-entry="pending"] #page .core-editor-bottom-dock',
   "prefers-reduced-motion:reduce",
-  'html[data-motion="reduced"]'
+  'html[data-motion="reduced"]',
+  "transition:none!important",
+  "animation:none!important",
+  "transform:none!important",
+  "filter:none!important"
 ]) {
   assert(entryCss.includes(token), "Commercial entry style missing: " + token);
 }
