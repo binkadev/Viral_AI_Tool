@@ -18,17 +18,21 @@ for (const required of [
   '"ready"',
   '"missing"',
   '"unverified"',
-  "Rendered video is ready",
-  "Video render đã sẵn sàng",
-  "Chưa xác minh được file render",
+  "Exported video is ready",
+  "Video đã xuất sẵn sàng",
+  "Chưa kiểm tra được video đã xuất",
   "Kiểm tra lại",
-  "Render lại",
+  "Xuất lại",
+  "Mở thư mục",
   "window.desktopAPI?.fileStatus",
   "window.desktopAPI.showFile",
   "onRenderProgress",
   "beforeunload",
   "data-output-show",
   "core-output-state-card",
+  'setAttribute("role", "status")',
+  'setAttribute("aria-live", "polite")',
+  'setAttribute("aria-busy"',
   "subtree:false"
 ]) {
   assert(js.includes(required), "Output state v2 missing: " + required);
@@ -38,6 +42,9 @@ assert(preload.includes("onRenderProgress"), "Desktop bridge must expose render 
 assert(!js.includes("setInterval("), "Output verification must remain event-driven.");
 assert(!js.includes("subtree:true"), "Output card mutations must not retrigger a subtree observer loop.");
 assert(!js.includes("outputExists = null"), "V2 must not overload null as both unchecked and verification failure.");
+for (const forbidden of ["Video render đã sẵn sàng", "File render không còn khả dụng", "Render lại", "Hãy render video"] ) {
+  assert(!js.includes(forbidden), "Customer output copy must not expose render jargon: " + forbidden);
+}
 
 for (const required of [
   ".core-output-state-card",
@@ -45,13 +52,22 @@ for (const required of [
   '.core-output-state-card[data-output-state="unverified"]',
   '.core-output-state-card[data-output-state="missing"]',
   ".core-output-state-action",
-  ".core-output-state-hint"
+  ".core-output-state-action:focus-visible",
+  ".core-output-state-hint",
+  "font-size:var(--type-control)!important",
+  "font-size:var(--type-meta)!important",
+  "font-size:var(--type-caption)!important",
+  "font-size:var(--type-section)!important",
+  "font-family:var(--font)!important",
+  'html[data-motion="reduced"].core-editor-premium'
 ]) {
   assert(css.includes(required), "Output state CSS missing: " + required);
 }
+assert(!css.includes("@keyframes"), "Output state must not introduce decorative animation loops.");
+assert(!/font-size:(?:9|10)px/.test(css), "Output state copy must respect the commercial readability floor.");
 
 assert(index.includes('href="core-editor-output-state.css"'), "Output state CSS must be loaded.");
 assert(index.includes('src="core-editor-output-state-v2.js"'), "Production shell must load output state v2.");
 assert(!index.includes('src="core-editor-output-state.js"'), "Legacy output state must not run beside v2.");
 
-console.log("core-editor-output-state v2 tests passed");
+console.log("core-editor-output-state commercial export UX tests passed");
