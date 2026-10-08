@@ -72,7 +72,11 @@ for (const stateName of ["idle", "checking", "ready", "missing", "unverified"]) 
   assert(output.includes('"' + stateName + '"'), "Output verifier missing state: " + stateName);
 }
 assert(output.includes("Kiểm tra lại"), "Output verification failure must offer an explicit retry.");
-assert(output.includes("Render lại"), "Missing output must offer rerender recovery.");
+assert(output.includes("Xuất lại"), "Missing output must offer export recovery using customer-facing language.");
+assert(output.includes("Video đã xuất sẵn sàng"), "Completed output must use customer-facing export language.");
+for (const forbidden of ["Render lại", "Video render đã sẵn sàng", "File render không còn khả dụng", "Hãy render video"]) {
+  assert(!output.includes(forbidden), "Customer-facing output must not expose internal render wording: " + forbidden);
+}
 assert(!output.includes("setInterval("), "Output verifier must not poll.");
 assert(output.includes("subtree:false"), "Output observer must stay scoped to page replacement.");
 
