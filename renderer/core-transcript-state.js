@@ -23,7 +23,8 @@
   }
 
   function staleValue(value, sourcePath, reason) {
-    if (!model.sourceMatches(value, sourcePath)) return value;
+    if (!value) return value;
+    if (sourcePath && !model.sourceMatches(value, sourcePath)) return value;
     return {
       ...value,
       status: "stale",
