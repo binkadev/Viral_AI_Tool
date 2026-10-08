@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
+const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -9,6 +10,7 @@ const js = read("renderer/core-editor-output-state-v2.js");
 const css = read("renderer/core-editor-output-state.css");
 const index = read("renderer/index.html");
 const preload = read("preload.js");
+const i18n = read("renderer/i18n.js");
 
 assert.doesNotThrow(() => new Function(js), "Output-state v2 must parse.");
 
@@ -18,12 +20,17 @@ for (const required of [
   '"ready"',
   '"missing"',
   '"unverified"',
-  "Exported video is ready",
-  "Video đã xuất sẵn sàng",
-  "Chưa kiểm tra được video đã xuất",
-  "Kiểm tra lại",
-  "Xuất lại",
-  "Mở thư mục",
+  "window.I18N?.t?.(locale(), key, vars)",
+  'tr("common.export")',
+  'tr("media.renderDone")',
+  'tr("media.exportDone")',
+  'tr("media.showFile")',
+  'tr("settings.updateChecking")',
+  'tr("file.missingTitle")',
+  'tr("file.missingBody"',
+  'tr("export.retry")',
+  'tr("file.unknownDetails")',
+  'tr("translation.retry")',
   "window.desktopAPI?.fileStatus",
   "window.desktopAPI.showFile",
   "onRenderProgress",
@@ -42,9 +49,43 @@ assert(preload.includes("onRenderProgress"), "Desktop bridge must expose render 
 assert(!js.includes("setInterval("), "Output verification must remain event-driven.");
 assert(!js.includes("subtree:true"), "Output card mutations must not retrigger a subtree observer loop.");
 assert(!js.includes("outputExists = null"), "V2 must not overload null as both unchecked and verification failure.");
-for (const forbidden of ["Video render đã sẵn sàng", "File render không còn khả dụng", "Render lại", "Hãy render video"] ) {
-  assert(!js.includes(forbidden), "Customer output copy must not expose render jargon: " + forbidden);
+for (const forbidden of [
+  "Exported video is ready",
+  "Video đã xuất sẵn sàng",
+  "Chưa kiểm tra được video đã xuất",
+  "Kiểm tra lại",
+  "Xuất lại",
+  "Mở thư mục",
+  "Video render đã sẵn sàng",
+  "File render không còn khả dụng",
+  "Render lại",
+  "Hãy render video"
+]) {
+  assert(!js.includes(forbidden), "Output module must not hard-code customer copy: " + forbidden);
 }
+
+const context = { window: {} };
+vm.createContext(context);
+vm.runInContext(i18n, context);
+for (const locale of ["vi", "en"]) {
+  for (const key of [
+    "common.export",
+    "media.renderDone",
+    "media.exportDone",
+    "media.showFile",
+    "settings.updateChecking",
+    "file.missingTitle",
+    "file.missingBody",
+    "export.retry",
+    "file.unknownDetails",
+    "translation.retry"
+  ]) {
+    const value = context.window.I18N.t(locale, key, { name: "video.mp4" });
+    assert(typeof value === "string" && value && value !== key, `Missing ${locale} catalog entry for ${key}`);
+  }
+}
+assert(!/\bRender lại\b|Video render|File render/.test(context.window.I18N.t("vi", "media.renderDone")), "Visible completion copy must not expose render jargon.");
+assert(!/\bRender again\b|Rendered video/.test(context.window.I18N.t("en", "media.renderDone")), "English completion copy must stay customer-facing.");
 
 for (const required of [
   ".core-output-state-card",
@@ -70,4 +111,4 @@ assert(index.includes('href="core-editor-output-state.css"'), "Output state CSS 
 assert(index.includes('src="core-editor-output-state-v2.js"'), "Production shell must load output state v2.");
 assert(!index.includes('src="core-editor-output-state.js"'), "Legacy output state must not run beside v2.");
 
-console.log("core-editor-output-state commercial export UX tests passed");
+console.log("core-editor-output-state locale-backed commercial export UX tests passed");
