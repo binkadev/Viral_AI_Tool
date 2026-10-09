@@ -1,30 +1,61 @@
 'use strict';
 
+const os = require('os');
 const { app } = require('electron');
 
-const WINDOWS_STARTUP_BACKGROUND = '#080d17';
+const WINDOWS_11_MIN_BUILD = 22000;
+const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
 
-// Viral AI Tool is Windows-first and uses a frameless BrowserWindow. Keeping
-// that window hidden until `ready-to-show` has proven unreliable on the target
-// Windows setup: Chromium can render the document background while the native
-// surface never presents the composed shell. Electron's own BrowserWindow docs
-// recommend showing complex windows immediately with a matching background.
-//
-// Keep the existing main process untouched. We only intercept window creation
-// on Windows, set a startup color that matches the production dark shell and
-// reveal the native window before the renderer starts loading. main.js may call
-// show() again on `ready-to-show`; that second call is intentionally harmless.
+function windowsBuildNumber() {
+  if (process.platform !== 'win32') return 0;
+  const release = String(os.release() || '');
+  const parts = release.split('.');
+  const build = Number(parts[2] || 0);
+  return Number.isFinite(build) ? build : 0;
+}
+
+const windowsBuild = windowsBuildNumber();
+const forceGpu = process.env.VIRAL_AI_FORCE_GPU === '1';
+const forceSoftware = process.env.VIRAL_AI_FORCE_SOFTWARE_RENDERING === '1';
+const windows10SafeMode =
+  process.platform === 'win32' &&
+  windowsBuild > 0 &&
+  windowsBuild < WINDOWS_11_MIN_BUILD &&
+  !forceGpu;
+const softwareRendering = process.platform === 'win32' && (forceSoftware || windows10SafeMode);
+
 if (process.platform === 'win32') {
-  app.on('browser-window-created', (_event, win) => {
-    if (!win || win.isDestroyed()) return;
+  // Keep hidden/covered frameless windows paintable while Chromium starts.
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
-    try {
-      win.setBackgroundColor(WINDOWS_STARTUP_BACKGROUND);
-    } catch {}
+  // Chromium persists compiled GPU shaders in sessionData. On affected Windows
+  // machines a bad/driver-stale shader cache can leave a frameless Electron
+  // window presenting only its background even though the renderer is alive.
+  // Keep GPU acceleration on supported systems but never reuse the disk shader
+  // cache until the Electron runtime is upgraded past this unstable baseline.
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
-    if (!win.isVisible()) {
-      win.show();
-    }
+  // Viral AI Tool targets Windows 10 as well as Windows 11. The current Electron
+  // 38 runtime is not reliable enough on some Windows 10 GPU/driver stacks.
+  // Prefer a deterministic software compositor there. Video processing itself
+  // remains handled by the existing media pipeline; this only protects the UI
+  // compositor. Windows 11 keeps normal GPU acceleration by default.
+  if (softwareRendering) {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
+  }
+}
+
+if (STARTUP_DIAGNOSTICS) {
+  console.log('[viral-ai:start] windows-rendering-policy', {
+    platform: process.platform,
+    windowsBuild,
+    windows10SafeMode,
+    softwareRendering,
+    forceGpu,
+    forceSoftware
   });
 }
 
