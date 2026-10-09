@@ -4,6 +4,12 @@
   let busy = false;
   let queued = false;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
@@ -86,10 +92,10 @@
     }
 
     overlay.dataset.sourceRecovery = "true";
-    if (title) title.textContent = source?.fileState === "trashed" ? c.trashedTitle : c.missingTitle;
-    if (body) body.textContent = c.body;
+    setTextIfChanged(title, source?.fileState === "trashed" ? c.trashedTitle : c.missingTitle);
+    setTextIfChanged(body, c.body);
     if (action instanceof HTMLButtonElement) {
-      action.textContent = busy ? c.relinking : c.relink;
+      setTextIfChanged(action, busy ? c.relinking : c.relink);
       action.disabled = busy;
       action.dataset.sourceRecoveryAction = "relink";
       action.setAttribute("aria-busy", busy ? "true" : "false");
@@ -122,7 +128,7 @@
       hint.className = "core-source-recovery-hint";
       button.appendChild(hint);
     }
-    hint.textContent = busy ? c.relinking : c.sourceHint;
+    setTextIfChanged(hint, busy ? c.relinking : c.sourceHint);
   }
 
   function sync() {
