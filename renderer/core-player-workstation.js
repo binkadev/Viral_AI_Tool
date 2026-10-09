@@ -17,6 +17,12 @@
       : '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 9h4l5-4v14l-5-4H5z" fill="currentColor"/><path d="M17 9.2c1 .8 1.5 1.7 1.5 2.8S18 14 17 14.8M19 7c1.7 1.4 2.6 3 2.6 5S20.7 15.6 19 17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   }
 
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
   function mediaFor(host) {
     const video = host?.querySelector?.("video.preview-video, video.core-player-media");
     return video instanceof HTMLVideoElement ? video : null;
@@ -31,15 +37,21 @@
     const silent = video.muted || Number(video.volume) <= 0.001;
 
     if (button instanceof HTMLButtonElement) {
-      button.innerHTML = volumeIcon(silent);
-      button.setAttribute("aria-label", silent ? copy.unmute : copy.mute);
-      button.title = silent ? copy.unmute : copy.mute;
-      button.setAttribute("aria-pressed", silent ? "true" : "false");
+      const iconState = silent ? "silent" : "audible";
+      if (button.dataset.coreVolumeIcon !== iconState) {
+        button.innerHTML = volumeIcon(silent);
+        button.dataset.coreVolumeIcon = iconState;
+      }
+      const nextTitle = silent ? copy.unmute : copy.mute;
+      setAttrIfChanged(button, "aria-label", nextTitle);
+      if (button.title !== nextTitle) button.title = nextTitle;
+      setAttrIfChanged(button, "aria-pressed", silent ? "true" : "false");
     }
     if (slider instanceof HTMLInputElement && document.activeElement !== slider) {
-      slider.value = String(video.muted ? 0 : Number(video.volume));
-      slider.setAttribute("aria-label", copy.volume);
-      slider.title = copy.volume;
+      const nextValue = String(video.muted ? 0 : Number(video.volume));
+      if (slider.value !== nextValue) slider.value = nextValue;
+      setAttrIfChanged(slider, "aria-label", copy.volume);
+      if (slider.title !== copy.volume) slider.title = copy.volume;
     }
   }
 
