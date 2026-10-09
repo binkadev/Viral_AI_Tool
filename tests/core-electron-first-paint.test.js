@@ -25,8 +25,9 @@ assert(entry.includes("require('./main.js')"), "The bridge must delegate applica
 assert(entry.includes("CalculateNativeWinOcclusion"), "Windows startup must disable Chromium native occlusion classification.");
 assert(entry.includes("disable-renderer-backgrounding"), "Windows startup must keep the renderer active while the window is initially hidden.");
 assert(entry.includes("disable-backgrounding-occluded-windows"), "Windows startup must keep occluded windows paintable.");
-assert(entry.includes("app.disableHardwareAcceleration()"), "Windows startup must provide a deterministic software compositor fallback.");
-assert(entry.includes("VIRAL_AI_ENABLE_HARDWARE_ACCELERATION"), "Hardware acceleration must remain explicitly testable without editing source.");
+assert(entry.includes("app.disableHardwareAcceleration()"), "Windows startup must retain an opt-in software compositor fallback.");
+assert(entry.includes("VIRAL_AI_FORCE_SOFTWARE_RENDERING"), "Software rendering must remain explicitly available for affected machines.");
+assert(!entry.includes("VIRAL_AI_ENABLE_HARDWARE_ACCELERATION"), "GPU acceleration must be the production default without an enable-only override.");
 assert(!entry.includes("BrowserWindow.prototype.show"), "The hotfix must not monkey-patch BrowserWindow.show.");
 assert(!entry.includes("showRequested"), "The hotfix must not gate show requests behind custom state.");
 assert(!entry.includes("WeakMap"), "The hotfix must not retain custom per-window reveal ownership.");
@@ -86,21 +87,21 @@ function hasSwitch(switches, name, value) {
   assert(hasSwitch(boot.switches, "disable-features", "CalculateNativeWinOcclusion"), "Windows must disable native occlusion before app readiness.");
   assert(hasSwitch(boot.switches, "disable-renderer-backgrounding"), "Windows must disable renderer backgrounding before app readiness.");
   assert(hasSwitch(boot.switches, "disable-backgrounding-occluded-windows"), "Windows must keep occluded windows paintable before app readiness.");
-  assert.strictEqual(boot.hardwareAccelerationDisableCount, 1, "Windows must use the software compositor by default for startup stability.");
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Windows must preserve GPU acceleration by default for the video workstation.");
 }
 
 {
   const boot = bootBridge({
-    env: { VIRAL_AI_ENABLE_HARDWARE_ACCELERATION: "1" }
+    env: { VIRAL_AI_FORCE_SOFTWARE_RENDERING: "1" }
   });
-  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Explicit GPU validation must bypass the software compositor fallback.");
-  assert(hasSwitch(boot.switches, "disable-features", "CalculateNativeWinOcclusion"), "GPU validation must still retain the native occlusion fix.");
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 1, "Affected Windows machines must be able to opt into the software compositor fallback.");
+  assert(hasSwitch(boot.switches, "disable-features", "CalculateNativeWinOcclusion"), "Software fallback must still retain the native occlusion fix.");
 }
 
 {
-  const boot = bootBridge({ platform: "linux" });
+  const boot = bootBridge({ platform: "linux", env: { VIRAL_AI_FORCE_SOFTWARE_RENDERING: "1" } });
   assert.strictEqual(boot.switches.length, 0, "Windows compositor switches must not leak to other platforms.");
-  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Non-Windows startup must not disable hardware acceleration.");
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Non-Windows startup must not disable hardware acceleration through the Windows fallback flag.");
 }
 
 function createWindowHarness(initialUrl = "about:blank") {
