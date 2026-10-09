@@ -2,7 +2,7 @@
   "name": "viral-ai-tool",
   "version": "0.14.0",
   "description": "Viral AI Tool desktop video automation studio",
-  "main": "main.js",
+  "main": "main-entry.js",
   "author": { "name": "Viral AI Tool" },
   "license": "UNLICENSED",
   "scripts": {
@@ -76,7 +76,7 @@
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "release-info.json"],
+    "files": ["main-entry.js", "main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "release-info.json"],
     "win": {
       "icon": "assets/icon.ico",
       "target": [{ "target": "nsis", "arch": ["x64"] }],
