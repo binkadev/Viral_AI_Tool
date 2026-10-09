@@ -7,6 +7,12 @@
   const timers = new WeakMap();
   const surfaceStates = new WeakMap();
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function locale() {
     try {
       const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
@@ -97,37 +103,37 @@
     if (!(overlay instanceof HTMLElement)) return;
     wireRetry(host, overlay);
 
-    const c = copy();
-    host.dataset.coreMediaState = state;
-    overlay.dataset.state = state;
+    if (host.dataset.coreMediaState !== state) host.dataset.coreMediaState = state;
+    if (overlay.dataset.state !== state) overlay.dataset.state = state;
 
     if (state === "ready") {
-      overlay.hidden = true;
+      if (!overlay.hidden) overlay.hidden = true;
       return;
     }
 
+    const c = copy();
     const title = overlay.querySelector("[data-media-state-title]");
     const body = overlay.querySelector("[data-media-state-body]");
     const symbol = overlay.querySelector("[data-media-state-symbol]");
     const retry = overlay.querySelector("[data-media-retry]");
 
-    overlay.hidden = false;
+    if (overlay.hidden) overlay.hidden = false;
 
     if (state === "loading" || state === "waiting") {
-      if (title) title.textContent = state === "loading" ? c.loading : c.waiting;
-      if (body) body.textContent = state === "loading" ? c.loadingBody : c.waitingBody;
-      if (symbol) symbol.textContent = "";
-      if (retry) retry.hidden = true;
+      setTextIfChanged(title, state === "loading" ? c.loading : c.waiting);
+      setTextIfChanged(body, state === "loading" ? c.loadingBody : c.waitingBody);
+      setTextIfChanged(symbol, "");
+      if (retry && !retry.hidden) retry.hidden = true;
       return;
     }
 
     const unsupported = Number(details.errorCode) === 4;
-    if (title) title.textContent = c.failedTitle;
-    if (body) body.textContent = unsupported ? c.unsupportedBody : c.failedBody;
-    if (symbol) symbol.textContent = "!";
+    setTextIfChanged(title, c.failedTitle);
+    setTextIfChanged(body, unsupported ? c.unsupportedBody : c.failedBody);
+    setTextIfChanged(symbol, "!");
     if (retry) {
-      retry.hidden = false;
-      retry.textContent = c.retry;
+      if (retry.hidden) retry.hidden = false;
+      setTextIfChanged(retry, c.retry);
     }
 
     if (logFailure) {
