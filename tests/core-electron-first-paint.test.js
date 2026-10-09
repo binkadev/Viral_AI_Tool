@@ -3,6 +3,8 @@
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
+const vm = require("vm");
+const { EventEmitter } = require("events");
 
 const root = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -26,4 +28,83 @@ assert(!entry.includes("executeJavaScript"), "First reveal must not depend on re
 assert(!entry.includes("setInterval("), "First-paint reveal must not poll.");
 assert(!entry.includes("setTimeout("), "First-paint reveal must not use fake timing delays.");
 
-console.log("core Electron first-paint bridge passed");
+function bootBridge() {
+  const app = new EventEmitter();
+  let delegated = 0;
+  const sandbox = {
+    require(id) {
+      if (id === "electron") return { app };
+      if (id === "./main.js") {
+        delegated += 1;
+        return {};
+      }
+      throw new Error(`Unexpected require: ${id}`);
+    },
+    console
+  };
+
+  vm.runInNewContext(entry, sandbox, { filename: "main-entry.js" });
+  assert.strictEqual(delegated, 1, "The entry bridge must delegate to main.js exactly once.");
+  return app;
+}
+
+function createWindowHarness() {
+  const webContents = new EventEmitter();
+  let visible = false;
+  let destroyed = false;
+  let showCount = 0;
+
+  return {
+    win: {
+      webContents,
+      isDestroyed: () => destroyed,
+      isVisible: () => visible,
+      show() {
+        showCount += 1;
+        visible = true;
+      }
+    },
+    webContents,
+    get showCount() { return showCount; },
+    setVisible(value) { visible = Boolean(value); },
+    destroy() { destroyed = true; }
+  };
+}
+
+const app = bootBridge();
+
+{
+  const harness = createWindowHarness();
+  app.emit("browser-window-created", {}, harness.win);
+  assert.strictEqual(harness.showCount, 0, "Window must remain hidden before renderer load completes.");
+  harness.webContents.emit("did-finish-load");
+  assert.strictEqual(harness.showCount, 1, "did-finish-load must reveal the hidden window.");
+  harness.webContents.emit("did-fail-load", {}, -1, "late failure", "file://renderer", true);
+  assert.strictEqual(harness.showCount, 1, "Later lifecycle events must not reveal an already-visible window twice.");
+}
+
+{
+  const harness = createWindowHarness();
+  app.emit("browser-window-created", {}, harness.win);
+  harness.webContents.emit("did-fail-load", {}, -1, "subframe", "file://subframe", false);
+  assert.strictEqual(harness.showCount, 0, "Subframe load failure must not reveal the application window.");
+  harness.webContents.emit("did-fail-load", {}, -2, "main frame failed", "file://renderer", true);
+  assert.strictEqual(harness.showCount, 1, "Main-frame load failure must reveal the window for recovery instead of hiding forever.");
+}
+
+{
+  const harness = createWindowHarness();
+  app.emit("browser-window-created", {}, harness.win);
+  harness.webContents.emit("render-process-gone", {}, { reason: "crashed" });
+  assert.strictEqual(harness.showCount, 1, "Renderer exit must reveal the window for recovery instead of hiding forever.");
+}
+
+{
+  const harness = createWindowHarness();
+  harness.destroy();
+  app.emit("browser-window-created", {}, harness.win);
+  harness.webContents.emit("did-finish-load");
+  assert.strictEqual(harness.showCount, 0, "Destroyed windows must never be shown.");
+}
+
+console.log("core Electron first-paint bridge behavior passed");
