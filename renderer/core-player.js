@@ -14,6 +14,18 @@
   let activeVideo = null;
   let rafId = 0;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch { return fallback; }
   }
@@ -212,9 +224,11 @@
     const controls = controlsFor(video);
     const play = controls?.querySelector("[data-core-play]");
     if (play) {
-      play.textContent = video.paused ? "▶" : "❚❚";
-      play.setAttribute("aria-label", video.paused ? "Play" : "Pause");
-      play.title = video.paused ? "Play" : "Pause";
+      const paused = video.paused;
+      setTextIfChanged(play, paused ? "▶" : "❚❚");
+      const label = paused ? "Play" : "Pause";
+      setAttrIfChanged(play, "aria-label", label);
+      if (play.title !== label) play.title = label;
     }
   }
 
@@ -315,14 +329,16 @@
     if (!video || video !== activeVideo) return;
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
-      // video.currentTime is the single source of truth for player, timeline and transcript.
       const current = model.clampTime(video.currentTime, video.duration);
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const controls = controlsFor(video);
       const seek = controls?.querySelector("[data-core-seek]");
       const time = controls?.querySelector("[data-core-time]");
-      if (seek) seek.value = String(Math.round(model.seekRatio(video.currentTime, video.duration) * 1000));
-      if (time) time.textContent = model.formatClock(current) + " / " + model.formatClock(duration);
+      if (seek) {
+        const nextSeek = String(Math.round(model.seekRatio(video.currentTime, video.duration) * 1000));
+        if (seek.value !== nextSeek) seek.value = nextSeek;
+      }
+      if (time) setTextIfChanged(time, model.formatClock(current) + " / " + model.formatClock(duration));
       setPlayingUi(video);
       const activeIndex = updateTranscript(video, current, forceScroll);
       updateTimeline(video, current, duration, activeIndex);
