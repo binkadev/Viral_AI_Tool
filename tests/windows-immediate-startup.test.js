@@ -25,6 +25,8 @@ assert(entry.includes("getBoundingClientRect()"), "The stabilizer must force ren
 assert(entry.includes("capturePage({ x: 0, y: 0, width: 2, height: 2 })"), "The stabilizer must use only a tiny in-memory compositor flush capture.");
 assert(entry.includes("contents.invalidate()"), "The first-paint stabilizer must request compositor resubmission after the flush.");
 assert(entry.includes("VIRAL_AI_DISABLE_STARTUP_STABILIZER"), "Support must be able to disable the first-paint stabilizer for controlled comparison.");
+assert(!entry.includes("VIRAL_AI_STARTUP_PROBE"), "Production entry must not retain the heavy startup probe.");
+assert(!entry.includes("nativeImageSummary"), "Production entry must not retain diagnostic frame analysis.");
 assert(!entry.includes("BrowserWindow.prototype"), "Rendering policy must not monkey-patch BrowserWindow.");
 assert(!entry.includes("requestAnimationFrame"), "Native rendering policy must not depend on renderer timing.");
 
