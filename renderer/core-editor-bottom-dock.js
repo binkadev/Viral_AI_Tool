@@ -11,6 +11,12 @@
   const wiredVideos = new WeakSet();
   let queued = false;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function locale() {
     try {
       const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
@@ -111,9 +117,10 @@
     dock.classList.toggle("is-collapsed", collapsed);
     const button = dock.querySelector("[data-bottom-collapse]");
     if (button instanceof HTMLButtonElement) {
-      button.textContent = collapsed ? "⌃" : "⌄";
-      button.title = collapsed ? c.expand : c.collapse;
-      button.setAttribute("aria-label", button.title);
+      setTextIfChanged(button, collapsed ? "⌃" : "⌄");
+      const nextTitle = collapsed ? c.expand : c.collapse;
+      if (button.title !== nextTitle) button.title = nextTitle;
+      button.setAttribute("aria-label", nextTitle);
       button.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
     if (persist) localStorage.setItem(COLLAPSED_KEY, collapsed ? "true" : "false");
@@ -378,7 +385,7 @@
     const time = dock.querySelector("[data-bottom-time]");
 
     if (playhead instanceof HTMLElement) playhead.style.left = (ratio * 100) + "%";
-    if (time instanceof HTMLOutputElement) time.textContent = formatClock(current) + " / " + formatClock(duration);
+    if (time instanceof HTMLOutputElement) setTextIfChanged(time, formatClock(current) + " / " + formatClock(duration));
 
     renderRuler(dock, duration);
     ensureSourceClips(dock, video, duration);
