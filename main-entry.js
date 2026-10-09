@@ -48,13 +48,13 @@ function probeLog(label, value) {
 }
 
 /*
- * Windows can occasionally present only the BrowserWindow background after the
- * renderer has already painted the complete shell. The startup probe made the
- * issue disappear because it invalidated the renderer around first paint.
- * Keep that successful behavior without the expensive DOM inspection/capture:
- * invalidate a handful of times around did-finish-load and the first show.
- * This does not rebuild the DOM, change routing, disable the GPU, or retain any
- * screenshots. It only asks Chromium to submit the already-rendered surface.
+ * On the affected Windows compositor path, invalidate() alone is not enough:
+ * the app can briefly paint the complete shell and then present only the
+ * BrowserWindow background. The diagnostics probe stays healthy because it
+ * also performs a renderer read followed by capturePage(), which forces a real
+ * compositor submission. Reproduce only that harmless flush in production:
+ * force layout, capture a tiny 2x2 region into memory, discard it immediately,
+ * then invalidate. Nothing is persisted, logged or transmitted.
  */
 function installWindowsFirstPaintStabilizer() {
   if (process.platform !== 'win32' || STARTUP_STABILIZER_DISABLED) return;
@@ -65,29 +65,48 @@ function installWindowsFirstPaintStabilizer() {
     if (!contents) return;
 
     const timers = new Set();
-    const scheduleInvalidate = (delay, phase) => {
+    let flushInFlight = false;
+
+    const flushCompositor = async phase => {
+      if (flushInFlight || win.isDestroyed?.() || contents.isDestroyed?.()) return;
+      flushInFlight = true;
+      try {
+        try {
+          await contents.executeJavaScript(
+            'void document.documentElement.getBoundingClientRect(); void document.body?.getBoundingClientRect(); true;',
+            true
+          );
+        } catch {}
+
+        if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
+
+        try {
+          await win.capturePage({ x: 0, y: 0, width: 2, height: 2 });
+        } catch {}
+
+        if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
+
+        try { contents.invalidate(); } catch {}
+        probeLog('stabilizer:' + phase, { ok: true });
+      } finally {
+        flushInFlight = false;
+      }
+    };
+
+    const scheduleFlush = (delay, phase) => {
       const timer = setTimeout(() => {
         timers.delete(timer);
-        if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
-        try {
-          contents.invalidate();
-          probeLog('stabilizer:' + phase + '+' + delay + 'ms', { ok: true });
-        } catch (error) {
-          probeLog('stabilizer:' + phase + '+' + delay + 'ms', {
-            ok: false,
-            error: String(error?.message || error)
-          });
-        }
+        flushCompositor(phase + '+' + delay + 'ms').catch(() => {});
       }, delay);
       timers.add(timer);
     };
 
     contents.once('did-finish-load', () => {
-      [0, 80, 220, 700].forEach(delay => scheduleInvalidate(delay, 'load'));
+      [0, 150, 500, 1500].forEach(delay => scheduleFlush(delay, 'load'));
     });
 
     win.once('show', () => {
-      [0, 120, 500].forEach(delay => scheduleInvalidate(delay, 'show'));
+      [0, 250, 900].forEach(delay => scheduleFlush(delay, 'show'));
     });
 
     win.once('closed', () => {
