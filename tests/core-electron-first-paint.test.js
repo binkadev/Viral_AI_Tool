@@ -40,6 +40,7 @@ function bootBridge() {
       }
       throw new Error(`Unexpected require: ${id}`);
     },
+    process: { env: {} },
     console
   };
 
