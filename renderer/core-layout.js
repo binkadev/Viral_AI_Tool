@@ -11,7 +11,20 @@
   }
 
   function setPref(key, value) {
-    localStorage.setItem(key, value ? "true" : "false");
+    const next = value ? "true" : "false";
+    if (localStorage.getItem(key) !== next) localStorage.setItem(key, next);
+  }
+
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
   }
 
   function ensureLeftToggle() {
@@ -31,12 +44,12 @@
         const collapsed = !document.documentElement.classList.contains("core-left-collapsed");
         document.documentElement.classList.toggle("core-left-collapsed", collapsed);
         setPref(LEFT_KEY, collapsed);
-        button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+        setAttrIfChanged(button, "aria-pressed", collapsed ? "true" : "false");
       });
     }
     const collapsed = boolPref(LEFT_KEY);
     document.documentElement.classList.toggle("core-left-collapsed", collapsed);
-    button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+    setAttrIfChanged(button, "aria-pressed", collapsed ? "true" : "false");
   }
 
   function dockTranscript(grid) {
@@ -67,9 +80,10 @@
 
     const apply = collapsed => {
       grid.classList.toggle("core-right-collapsed", collapsed);
-      button.setAttribute("aria-pressed", collapsed ? "true" : "false");
-      button.textContent = collapsed ? "⇤" : "⇥";
-      button.title = collapsed ? "Mở bảng thuộc tính" : "Thu gọn bảng thuộc tính";
+      setAttrIfChanged(button, "aria-pressed", collapsed ? "true" : "false");
+      setTextIfChanged(button, collapsed ? "⇤" : "⇥");
+      const nextTitle = collapsed ? "Mở bảng thuộc tính" : "Thu gọn bảng thuộc tính";
+      if (button.title !== nextTitle) button.title = nextTitle;
     };
 
     apply(boolPref(RIGHT_KEY));
