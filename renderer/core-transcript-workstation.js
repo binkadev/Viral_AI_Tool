@@ -8,6 +8,12 @@
   let lastSignature = "";
   let renderGeneration = 0;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function appState() {
     try {
       return typeof state !== "undefined" ? state : null;
@@ -150,9 +156,9 @@
     const source = header.querySelector('[data-column="source"]');
     const translation = header.querySelector('[data-column="translation"]');
     const countNode = header.querySelector(".core-transcript-count");
-    if (source) source.textContent = copy.source;
-    if (translation) translation.textContent = copy.translation;
-    if (countNode) countNode.textContent = count + " " + copy.segments;
+    setTextIfChanged(source, copy.source);
+    setTextIfChanged(translation, copy.translation);
+    setTextIfChanged(countNode, count + " " + copy.segments);
   }
 
   function projectTranscript() {
