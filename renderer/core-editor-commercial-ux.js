@@ -4,6 +4,24 @@
   let queued = false;
   let toastObserver = null;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
+  function setDatasetIfChanged(node, key, value) {
+    if (!(node instanceof HTMLElement)) return;
+    const next = String(value);
+    if (node.dataset[key] !== next) node.dataset[key] = next;
+  }
+
   function locale() {
     try {
       const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
@@ -135,32 +153,32 @@
     const overlay = ensureCommercialMediaState(host);
     if (!(overlay instanceof HTMLElement)) return;
 
-    host.dataset.commercialMediaState = visualState;
+    setDatasetIfChanged(host, "commercialMediaState", visualState);
     const title = overlay.querySelector("[data-commercial-media-title]");
     const body = overlay.querySelector("[data-commercial-media-body]");
     const action = overlay.querySelector("[data-commercial-media-action]");
     const c = copy();
 
     if (!["missing", "trashed", "preview-unavailable"].includes(visualState)) {
-      overlay.hidden = true;
+      if (!overlay.hidden) overlay.hidden = true;
       return;
     }
 
-    overlay.hidden = false;
-    overlay.dataset.state = visualState;
+    if (overlay.hidden) overlay.hidden = false;
+    setDatasetIfChanged(overlay, "state", visualState);
 
     if (visualState === "missing") {
-      if (title) title.textContent = c.sourceMissingTitle;
-      if (body) body.textContent = c.sourceMissingBody;
-      if (action) action.textContent = c.addAnother;
+      setTextIfChanged(title, c.sourceMissingTitle);
+      setTextIfChanged(body, c.sourceMissingBody);
+      setTextIfChanged(action, c.addAnother);
     } else if (visualState === "trashed") {
-      if (title) title.textContent = c.sourceTrashedTitle;
-      if (body) body.textContent = c.sourceTrashedBody;
-      if (action) action.textContent = c.addAnother;
+      setTextIfChanged(title, c.sourceTrashedTitle);
+      setTextIfChanged(body, c.sourceTrashedBody);
+      setTextIfChanged(action, c.addAnother);
     } else {
-      if (title) title.textContent = c.previewUnavailableTitle;
-      if (body) body.textContent = c.previewUnavailableBody;
-      if (action) action.textContent = c.retryPreview;
+      setTextIfChanged(title, c.previewUnavailableTitle);
+      setTextIfChanged(body, c.previewUnavailableBody);
+      setTextIfChanged(action, c.retryPreview);
     }
 
     if (action instanceof HTMLButtonElement && action.dataset.wired !== visualState) {
@@ -178,9 +196,9 @@
 
     const c = copy();
     const isCollapsed = panel.classList.contains("is-collapsed");
-    panel.dataset.collapsed = isCollapsed ? "true" : "false";
-    if (isCollapsed) panel.setAttribute("aria-description", c.collapsedAssets);
-    else panel.removeAttribute("aria-description");
+    setDatasetIfChanged(panel, "collapsed", isCollapsed ? "true" : "false");
+    if (isCollapsed) setAttrIfChanged(panel, "aria-description", c.collapsedAssets);
+    else if (panel.hasAttribute("aria-description")) panel.removeAttribute("aria-description");
 
     const source = latestSource();
     const stateName = sourceVisualState(source);
@@ -188,17 +206,19 @@
     const transcriptButton = panel.querySelector("[data-transcript-asset]");
 
     if (sourceButton instanceof HTMLElement) {
-      sourceButton.dataset.fileState = stateName;
-      sourceButton.title = stateName === "missing" || stateName === "trashed"
+      setDatasetIfChanged(sourceButton, "fileState", stateName);
+      const nextTitle = stateName === "missing" || stateName === "trashed"
         ? c.sourceUnavailable
         : c.sourceReady;
-      sourceButton.setAttribute("aria-label", sourceButton.title);
+      if (sourceButton.title !== nextTitle) sourceButton.title = nextTitle;
+      setAttrIfChanged(sourceButton, "aria-label", nextTitle);
     }
 
     if (transcriptButton instanceof HTMLElement) {
       const status = transcriptButton.querySelector("[data-transcript-status]")?.textContent?.trim();
-      transcriptButton.title = status ? c.transcript + " · " + status : c.transcript;
-      transcriptButton.setAttribute("aria-label", transcriptButton.title);
+      const nextTitle = status ? c.transcript + " · " + status : c.transcript;
+      if (transcriptButton.title !== nextTitle) transcriptButton.title = nextTitle;
+      setAttrIfChanged(transcriptButton, "aria-label", nextTitle);
     }
 
     panel.querySelectorAll(".core-asset-item").forEach(item => {
@@ -225,7 +245,7 @@
       node = walker.nextNode();
     }
 
-    touched.forEach(owner => owner.setAttribute("aria-label", replacement));
+    touched.forEach(owner => setAttrIfChanged(owner, "aria-label", replacement));
   }
 
   function syncConnectionPanels(page) {
@@ -250,7 +270,7 @@
           ? "needs-action"
           : "neutral";
 
-      panel.dataset.commercialConnectionState = stateName;
+      setDatasetIfChanged(panel, "commercialConnectionState", stateName);
       let badge = panel.querySelector(":scope > .core-commercial-connection-badge");
       if (!badge) {
         badge = document.createElement("span");
@@ -261,12 +281,12 @@
 
       const text = badge.querySelector("span");
       if (stateName === "ready") {
-        badge.hidden = false;
-        if (text) text.textContent = c.ready;
+        if (badge.hidden) badge.hidden = false;
+        setTextIfChanged(text, c.ready);
       } else if (stateName === "needs-action") {
-        badge.hidden = false;
-        if (text) text.textContent = c.needsSetup;
-      } else {
+        if (badge.hidden) badge.hidden = false;
+        setTextIfChanged(text, c.needsSetup);
+      } else if (!badge.hidden) {
         badge.hidden = true;
       }
     });
@@ -310,12 +330,12 @@
 
       if (button instanceof HTMLButtonElement) {
         button.classList.add("core-commercial-action");
-        button.dataset.commercialActionState = value;
-        button.setAttribute("aria-busy", value === "processing" ? "true" : "false");
+        setDatasetIfChanged(button, "commercialActionState", value);
+        setAttrIfChanged(button, "aria-busy", value === "processing" ? "true" : "false");
       }
 
       if (!(tab instanceof HTMLButtonElement)) return;
-      tab.setAttribute("data-commercial-stage-state", value);
+      setAttrIfChanged(tab, "data-commercial-stage-state", value);
       tab.classList.toggle("has-commercial-active", value === "processing");
       tab.classList.toggle("is-commercial-blocked", value === "blocked");
 
@@ -332,15 +352,16 @@
       }
       const base = tab.dataset.commercialBaseLabel || String(tab.textContent || "").trim();
       const status = stageStatusLabel(value);
-      tab.title = base + " · " + status;
-      tab.setAttribute("aria-label", tab.title);
+      const nextTitle = base + " · " + status;
+      if (tab.title !== nextTitle) tab.title = nextTitle;
+      setAttrIfChanged(tab, "aria-label", nextTitle);
     });
 
     page?.querySelectorAll?.(".core-inspector-card").forEach(card => {
       if (!(card instanceof HTMLElement)) return;
       const processing = card.querySelector('[data-commercial-action-state="processing"]');
       const available = card.querySelector('[data-commercial-action-state="ready"]');
-      card.dataset.commercialCardState = processing ? "processing" : available ? "ready" : "idle";
+      setDatasetIfChanged(card, "commercialCardState", processing ? "processing" : available ? "ready" : "idle");
     });
   }
 
@@ -353,8 +374,8 @@
     else if (/(thành công|hoàn tất|đã lưu|sẵn sàng|completed|success|saved|ready)/i.test(value)) tone = "success";
     else if (/(đang |đợi|processing|preparing|uploading|loading|waiting)/i.test(value)) tone = "info";
 
-    toast.dataset.tone = tone;
-    toast.setAttribute("role", tone === "error" ? "alert" : "status");
+    setDatasetIfChanged(toast, "tone", tone);
+    setAttrIfChanged(toast, "role", tone === "error" ? "alert" : "status");
   }
 
   function wireToast() {
