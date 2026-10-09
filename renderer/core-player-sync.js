@@ -4,6 +4,12 @@
   const wiredVideos = new WeakSet();
   let queued = false;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function model() { return window.ViralCorePlayerModel || null; }
 
   function seekableEnd(video) {
@@ -53,34 +59,49 @@
     const duration = durationFor(video);
     const current = duration > 0 ? clamp(Number(video.currentTime || 0), 0, duration) : Math.max(0, Number(video.currentTime || 0));
     const ratio = duration > 0 ? clamp(current / duration, 0, 1) : 0;
+    const timeCopy = duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--";
 
     document.querySelectorAll("#page [data-core-playhead]").forEach(node => {
-      if (node instanceof HTMLElement) node.style.left = (ratio * 100) + "%";
+      if (!(node instanceof HTMLElement)) return;
+      const nextLeft = (ratio * 100) + "%";
+      if (node.style.left !== nextLeft) node.style.left = nextLeft;
     });
     document.querySelectorAll("#page [data-core-seek]").forEach(node => {
       if (!(node instanceof HTMLInputElement)) return;
-      node.disabled = !(duration > 0);
-      if (duration > 0) node.value = String(Math.round(ratio * 1000));
+      const disabled = !(duration > 0);
+      if (node.disabled !== disabled) node.disabled = disabled;
+      if (duration > 0) {
+        const nextValue = String(Math.round(ratio * 1000));
+        if (node.value !== nextValue) node.value = nextValue;
+      }
     });
     document.querySelectorAll("#page [data-core-time]").forEach(node => {
-      node.textContent = duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--";
+      setTextIfChanged(node, timeCopy);
     });
 
     const dock = document.querySelector("#page .core-editor-bottom-dock");
     if (dock instanceof HTMLElement) {
       const bottomPlayhead = dock.querySelector("[data-bottom-playhead]");
       const bottomTime = dock.querySelector("[data-bottom-time]");
-      if (bottomPlayhead instanceof HTMLElement) bottomPlayhead.style.left = (ratio * 100) + "%";
-      if (bottomTime instanceof HTMLElement) bottomTime.textContent = duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--";
-      dock.dataset.playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-      dock.dataset.mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+      if (bottomPlayhead instanceof HTMLElement) {
+        const nextLeft = (ratio * 100) + "%";
+        if (bottomPlayhead.style.left !== nextLeft) bottomPlayhead.style.left = nextLeft;
+      }
+      if (bottomTime instanceof HTMLElement) setTextIfChanged(bottomTime, timeCopy);
+      const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+      if (dock.dataset.playbackState !== playbackState) dock.dataset.playbackState = playbackState;
+      const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+      if (dock.dataset.mediaReady !== mediaReady) dock.dataset.mediaReady = mediaReady;
     }
 
     const host = video.closest(".preview");
     if (host instanceof HTMLElement) {
-      host.dataset.coreDurationResolved = duration > 0 ? "true" : "false";
-      host.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-      host.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+      const resolved = duration > 0 ? "true" : "false";
+      if (host.dataset.coreDurationResolved !== resolved) host.dataset.coreDurationResolved = resolved;
+      const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+      if (host.dataset.corePlaybackState !== playbackState) host.dataset.corePlaybackState = playbackState;
+      const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+      if (host.dataset.coreMediaReady !== mediaReady) host.dataset.coreMediaReady = mediaReady;
     }
 
     window.dispatchEvent(new CustomEvent("viral-ai:player-sync", { detail: { currentTime: current, duration, ratio, paused: video.paused, ended: video.ended } }));
