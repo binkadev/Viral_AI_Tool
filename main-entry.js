@@ -6,6 +6,7 @@ const { app } = require('electron');
 const WINDOWS_11_MIN_BUILD = 22000;
 const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
 const STARTUP_PROBE = process.env.VIRAL_AI_STARTUP_PROBE === '1';
+const STARTUP_STABILIZER_DISABLED = process.env.VIRAL_AI_DISABLE_STARTUP_STABILIZER === '1';
 
 function windowsBuildNumber() {
   if (process.platform !== 'win32') return 0;
@@ -44,6 +45,56 @@ function probeLog(label, value) {
   } catch {
     console.log('[viral-ai:probe] ' + label, String(value));
   }
+}
+
+/*
+ * Windows can occasionally present only the BrowserWindow background after the
+ * renderer has already painted the complete shell. The startup probe made the
+ * issue disappear because it invalidated the renderer around first paint.
+ * Keep that successful behavior without the expensive DOM inspection/capture:
+ * invalidate a handful of times around did-finish-load and the first show.
+ * This does not rebuild the DOM, change routing, disable the GPU, or retain any
+ * screenshots. It only asks Chromium to submit the already-rendered surface.
+ */
+function installWindowsFirstPaintStabilizer() {
+  if (process.platform !== 'win32' || STARTUP_STABILIZER_DISABLED) return;
+
+  app.on('browser-window-created', (_event, win) => {
+    if (!win || win.isDestroyed?.()) return;
+    const contents = win.webContents;
+    if (!contents) return;
+
+    const timers = new Set();
+    const scheduleInvalidate = (delay, phase) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
+        try {
+          contents.invalidate();
+          probeLog('stabilizer:' + phase + '+' + delay + 'ms', { ok: true });
+        } catch (error) {
+          probeLog('stabilizer:' + phase + '+' + delay + 'ms', {
+            ok: false,
+            error: String(error?.message || error)
+          });
+        }
+      }, delay);
+      timers.add(timer);
+    };
+
+    contents.once('did-finish-load', () => {
+      [0, 80, 220, 700].forEach(delay => scheduleInvalidate(delay, 'load'));
+    });
+
+    win.once('show', () => {
+      [0, 120, 500].forEach(delay => scheduleInvalidate(delay, 'show'));
+    });
+
+    win.once('closed', () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    });
+  });
 }
 
 function nativeImageSummary(image) {
@@ -194,6 +245,7 @@ function installStartupProbe() {
   });
 }
 
+installWindowsFirstPaintStabilizer();
 installStartupProbe();
 
 if (STARTUP_DIAGNOSTICS || STARTUP_PROBE) {
@@ -204,7 +256,8 @@ if (STARTUP_DIAGNOSTICS || STARTUP_PROBE) {
     softwareRendering,
     forceGpu,
     forceSoftware,
-    startupProbe: STARTUP_PROBE
+    startupProbe: STARTUP_PROBE,
+    startupStabilizer: process.platform === 'win32' && !STARTUP_STABILIZER_DISABLED
   });
 }
 
