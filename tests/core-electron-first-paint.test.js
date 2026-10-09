@@ -14,14 +14,14 @@ const main = fs.readFileSync(path.join(root, "main.js"), "utf8");
 assert.strictEqual(pkg.main, "main-entry.js", "Electron must boot through the paint-safe entry bridge.");
 assert(Array.isArray(pkg.build?.files) && pkg.build.files.includes("main-entry.js"), "Packaged builds must include the first-paint entry bridge.");
 assert(main.includes("show: false"), "The native window must remain hidden during renderer startup.");
+assert(main.includes("mainWindow.once('ready-to-show', () => mainWindow.show())"), "Successful startup must reveal through Electron's painted ready-to-show lifecycle.");
 assert(entry.includes("app.on('browser-window-created'"), "The first-paint bridge must observe BrowserWindow creation before main.js creates the window.");
-assert(entry.includes("did-finish-load"), "The bridge must reveal after the renderer main frame finishes loading.");
-assert(entry.includes("did-fail-load"), "A failed main-frame load must not leave the window hidden forever.");
+assert(entry.includes("did-fail-load"), "A failed app main-frame load must not leave the window hidden forever.");
 assert(entry.includes("render-process-gone"), "Renderer failure must not leave the native window hidden forever.");
-assert(entry.includes("win.show()"), "The bridge must use the BrowserWindow instance's native show path.");
+assert(entry.includes("win.once('unresponsive'"), "A startup renderer hang must reveal a recoverable window instead of staying hidden forever.");
+assert(entry.includes("renderer/index.html"), "Load-failure recovery must be gated to the real renderer document.");
+assert(entry.includes("win.show()"), "Failure recovery must use the BrowserWindow instance's native show path.");
 assert(entry.includes("require('./main.js')"), "The bridge must delegate application behavior to the existing main process.");
-assert(entry.includes("renderer/index.html"), "Reveal ownership must be gated to the real renderer document.");
-assert(entry.includes("webContents.getURL"), "Reveal gating must inspect the currently loaded document.");
 assert(!entry.includes("BrowserWindow.prototype.show"), "The hotfix must not monkey-patch BrowserWindow.show.");
 assert(!entry.includes("showRequested"), "The hotfix must not gate show requests behind custom state.");
 assert(!entry.includes("WeakMap"), "The hotfix must not retain custom per-window reveal ownership.");
@@ -60,7 +60,7 @@ function createWindowHarness(initialUrl = "about:blank") {
   webContents.getURL = () => currentUrl;
 
   return {
-    win: {
+    win: Object.assign(new EventEmitter(), {
       webContents,
       isDestroyed: () => destroyed,
       isVisible: () => visible,
@@ -68,7 +68,7 @@ function createWindowHarness(initialUrl = "about:blank") {
         showCount += 1;
         visible = true;
       }
-    },
+    }),
     webContents,
     get showCount() { return showCount; },
     setVisible(value) { visible = Boolean(value); },
@@ -83,17 +83,14 @@ const rendererUrl = "file:///C:/workspace/Viral_AI_Tool/renderer/index.html";
 {
   const harness = createWindowHarness();
   app.emit("browser-window-created", {}, harness.win);
-  assert.strictEqual(harness.showCount, 0, "Window must remain hidden before renderer load completes.");
+  assert.strictEqual(harness.showCount, 0, "Window must remain hidden before Electron reports a painted success frame.");
 
   harness.webContents.emit("did-finish-load");
-  assert.strictEqual(harness.showCount, 0, "Initial about:blank must never reveal the application window.");
+  assert.strictEqual(harness.showCount, 0, "about:blank did-finish-load must never reveal the application window.");
 
   harness.setUrl(rendererUrl);
   harness.webContents.emit("did-finish-load");
-  assert.strictEqual(harness.showCount, 1, "The real renderer document must reveal the hidden window.");
-
-  harness.webContents.emit("did-fail-load", {}, -1, "late failure", rendererUrl, true);
-  assert.strictEqual(harness.showCount, 1, "Later lifecycle events must not reveal an already-visible window twice.");
+  assert.strictEqual(harness.showCount, 0, "Successful renderer did-finish-load must stay hidden until main.js receives ready-to-show.");
 }
 
 {
@@ -118,11 +115,18 @@ const rendererUrl = "file:///C:/workspace/Viral_AI_Tool/renderer/index.html";
 }
 
 {
+  const harness = createWindowHarness();
+  app.emit("browser-window-created", {}, harness.win);
+  harness.win.emit("unresponsive");
+  assert.strictEqual(harness.showCount, 1, "An unresponsive startup renderer must reveal the window for recovery instead of hiding forever.");
+}
+
+{
   const harness = createWindowHarness(rendererUrl);
   harness.destroy();
   app.emit("browser-window-created", {}, harness.win);
-  harness.webContents.emit("did-finish-load");
-  assert.strictEqual(harness.showCount, 0, "Destroyed windows must never be shown.");
+  harness.webContents.emit("did-fail-load", {}, -2, "renderer main frame failed", rendererUrl, true);
+  assert.strictEqual(harness.showCount, 0, "Destroyed windows must never be shown by failure recovery.");
 }
 
 console.log("core Electron first-paint bridge behavior passed");
