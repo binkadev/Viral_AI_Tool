@@ -22,6 +22,11 @@ assert(entry.includes("win.once('unresponsive'"), "A startup renderer hang must 
 assert(entry.includes("renderer/index.html"), "Load-failure recovery must be gated to the real renderer document.");
 assert(entry.includes("win.show()"), "Failure recovery must use the BrowserWindow instance's native show path.");
 assert(entry.includes("require('./main.js')"), "The bridge must delegate application behavior to the existing main process.");
+assert(entry.includes("CalculateNativeWinOcclusion"), "Windows startup must disable Chromium native occlusion classification.");
+assert(entry.includes("disable-renderer-backgrounding"), "Windows startup must keep the renderer active while the window is initially hidden.");
+assert(entry.includes("disable-backgrounding-occluded-windows"), "Windows startup must keep occluded windows paintable.");
+assert(entry.includes("app.disableHardwareAcceleration()"), "Windows startup must provide a deterministic software compositor fallback.");
+assert(entry.includes("VIRAL_AI_ENABLE_HARDWARE_ACCELERATION"), "Hardware acceleration must remain explicitly testable without editing source.");
 assert(!entry.includes("BrowserWindow.prototype.show"), "The hotfix must not monkey-patch BrowserWindow.show.");
 assert(!entry.includes("showRequested"), "The hotfix must not gate show requests behind custom state.");
 assert(!entry.includes("WeakMap"), "The hotfix must not retain custom per-window reveal ownership.");
@@ -30,9 +35,21 @@ assert(!entry.includes("executeJavaScript"), "First reveal must not depend on re
 assert(!entry.includes("setInterval("), "First-paint reveal must not poll.");
 assert(!entry.includes("setTimeout("), "First-paint reveal must not use fake timing delays.");
 
-function bootBridge() {
+function bootBridge({ platform = "win32", env = {} } = {}) {
   const app = new EventEmitter();
+  const switches = [];
+  let hardwareAccelerationDisableCount = 0;
   let delegated = 0;
+
+  app.commandLine = {
+    appendSwitch(name, value) {
+      switches.push([String(name), value === undefined ? undefined : String(value)]);
+    }
+  };
+  app.disableHardwareAcceleration = () => {
+    hardwareAccelerationDisableCount += 1;
+  };
+
   const sandbox = {
     require(id) {
       if (id === "electron") return { app };
@@ -42,13 +59,48 @@ function bootBridge() {
       }
       throw new Error(`Unexpected require: ${id}`);
     },
-    process: { env: {} },
+    process: { env: { ...env }, platform },
     console
   };
 
   vm.runInNewContext(entry, sandbox, { filename: "main-entry.js" });
   assert.strictEqual(delegated, 1, "The entry bridge must delegate to main.js exactly once.");
-  return app;
+
+  return {
+    app,
+    switches,
+    get hardwareAccelerationDisableCount() {
+      return hardwareAccelerationDisableCount;
+    }
+  };
+}
+
+function hasSwitch(switches, name, value) {
+  return switches.some(([switchName, switchValue]) =>
+    switchName === name && (value === undefined || switchValue === value)
+  );
+}
+
+{
+  const boot = bootBridge();
+  assert(hasSwitch(boot.switches, "disable-features", "CalculateNativeWinOcclusion"), "Windows must disable native occlusion before app readiness.");
+  assert(hasSwitch(boot.switches, "disable-renderer-backgrounding"), "Windows must disable renderer backgrounding before app readiness.");
+  assert(hasSwitch(boot.switches, "disable-backgrounding-occluded-windows"), "Windows must keep occluded windows paintable before app readiness.");
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 1, "Windows must use the software compositor by default for startup stability.");
+}
+
+{
+  const boot = bootBridge({
+    env: { VIRAL_AI_ENABLE_HARDWARE_ACCELERATION: "1" }
+  });
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Explicit GPU validation must bypass the software compositor fallback.");
+  assert(hasSwitch(boot.switches, "disable-features", "CalculateNativeWinOcclusion"), "GPU validation must still retain the native occlusion fix.");
+}
+
+{
+  const boot = bootBridge({ platform: "linux" });
+  assert.strictEqual(boot.switches.length, 0, "Windows compositor switches must not leak to other platforms.");
+  assert.strictEqual(boot.hardwareAccelerationDisableCount, 0, "Non-Windows startup must not disable hardware acceleration.");
 }
 
 function createWindowHarness(initialUrl = "about:blank") {
@@ -77,7 +129,7 @@ function createWindowHarness(initialUrl = "about:blank") {
   };
 }
 
-const app = bootBridge();
+const { app } = bootBridge();
 const rendererUrl = "file:///C:/workspace/Viral_AI_Tool/renderer/index.html";
 
 {
