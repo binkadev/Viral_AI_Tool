@@ -42,24 +42,15 @@ app.on('browser-window-created', (_event, win) => {
     win.show();
   };
 
-  const detachLifecycle = () => {
-    webContents.removeListener('did-finish-load', onDidFinishLoad);
+  const detachFailureFallbacks = () => {
     webContents.removeListener('did-fail-load', onDidFailLoad);
     webContents.removeListener('render-process-gone', onRenderProcessGone);
+    win.removeListener('unresponsive', onUnresponsive);
   };
 
-  const finishReveal = () => {
-    detachLifecycle();
+  const revealFailure = () => {
+    detachFailureFallbacks();
     revealWindow();
-  };
-
-  const onDidFinishLoad = () => {
-    const url = currentUrl();
-    if (!isAppRendererUrl(url)) {
-      if (STARTUP_DIAGNOSTICS) console.log('[viral-ai:start] ignored-finish-load', url || '(empty)');
-      return;
-    }
-    finishReveal();
   };
 
   const onDidFailLoad = (_event, _code, _description, url, isMainFrame) => {
@@ -69,17 +60,19 @@ app.on('browser-window-created', (_event, win) => {
       if (STARTUP_DIAGNOSTICS) console.log('[viral-ai:start] ignored-fail-load', failedUrl || '(empty)');
       return;
     }
-    finishReveal();
+    revealFailure();
   };
 
-  const onRenderProcessGone = () => finishReveal();
+  const onRenderProcessGone = () => revealFailure();
+  const onUnresponsive = () => revealFailure();
 
-  // `BrowserWindow` may complete an initial about:blank document before
-  // loadFile() finishes the real renderer. Keep listening until the actual app
-  // document settles instead of revealing that blank intermediate surface.
-  webContents.on('did-finish-load', onDidFinishLoad);
+  // Successful startup stays on BrowserWindow's native `ready-to-show` path in
+  // main.js so the first visible frame is already painted. These listeners are
+  // failure-only fallbacks: they prevent a load error, renderer exit or startup
+  // hang from leaving the only application window hidden forever.
   webContents.on('did-fail-load', onDidFailLoad);
   webContents.once('render-process-gone', onRenderProcessGone);
+  win.once('unresponsive', onUnresponsive);
 });
 
 require('./main.js');
