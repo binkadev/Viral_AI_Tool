@@ -7,6 +7,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, "renderer", file), "utf8");
 
+const player = read("core-player.js");
 const workstation = read("core-player-workstation.js");
 const assets = read("core-editor-assets.js");
 const layout = read("core-layout.js");
@@ -14,6 +15,7 @@ const rebind = read("core-player-rebind.js");
 const commercialUx = read("core-editor-commercial-ux.js");
 
 for (const [name, source] of [
+  ["core-player.js", player],
   ["core-player-workstation.js", workstation],
   ["core-editor-assets.js", assets],
   ["core-layout.js", layout],
@@ -23,6 +25,11 @@ for (const [name, source] of [
   assert.doesNotThrow(() => new Function(source), name + " must parse.");
   assert(source.includes("setTextIfChanged") || source.includes("setAttrIfChanged"), name + " must use idempotent DOM writes around observed surfaces.");
 }
+
+assert(!player.includes('play.textContent = video.paused ? "▶" : "❚❚"'), "Core player must not rewrite the play button from its own childList observer.");
+assert(!player.includes('if (time) time.textContent = model.formatClock'), "Core player must not rewrite the time label from its own childList observer.");
+assert(player.includes("setTextIfChanged(play"));
+assert(player.includes("if (time) setTextIfChanged(time"));
 
 assert(workstation.includes("button.dataset.coreVolumeIcon !== iconState"), "Player workstation must not rebuild its SVG on every observer scan.");
 assert(!workstation.includes('button.innerHTML = volumeIcon(silent);\n      button.setAttribute'), "Player workstation must not unconditionally mutate childList from its observer scan.");
