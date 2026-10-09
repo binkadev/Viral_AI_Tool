@@ -28,8 +28,10 @@ assert(bootstrap.includes("hasProjectSource"), "Startup bootstrap must identify 
 assert(bootstrap.includes('saved.page = hasProjectSource ? "ai-video" : "download"'), "First render must go directly to the workflow route.");
 assert(bootstrap.includes('root.dataset.coreFirstPaint = "pending"'), "First paint must be gated until production routing settles.");
 assert(bootstrap.includes('visibility:hidden!important'), "First-paint guard must hide only intermediate page content.");
-assert(bootstrap.includes("requestAnimationFrame(() =>"), "Production page must be revealed on the pre-paint frame.");
+assert(bootstrap.includes('document.addEventListener("DOMContentLoaded"'), "First-paint unlock must follow the real DOM lifecycle.");
+assert(!bootstrap.includes("requestAnimationFrame(() =>"), "First-paint unlock must not depend on animation frames while the native window may still be hidden.");
 assert(bootstrap.includes('root.dataset.coreFirstPaint = "ready"'), "Production page must explicitly complete first paint.");
+assert(bootstrap.includes('viral-ai:core-first-paint-ready'), "First-paint completion must publish an observable lifecycle event.");
 assert(!bootstrap.includes("opacity:0"), "First-paint guard must not introduce another fade animation.");
 assert(!bootstrap.includes("setInterval("), "Startup stabilization must not poll.");
 

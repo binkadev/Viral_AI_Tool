@@ -72,20 +72,24 @@
   }
 
   function settleFirstPaint() {
-    requestAnimationFrame(() => {
-      try {
-        if (typeof state !== "undefined" && state) {
-          const project = Array.isArray(state.jobs) && state.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-          const target = project ? "ai-video" : "download";
-          if (state.page !== target) {
-            state.page = target;
-            if (typeof render === "function") render();
-          }
+    try {
+      if (typeof state !== "undefined" && state) {
+        const project = Array.isArray(state.jobs) && state.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
+        const target = project ? "ai-video" : "download";
+        if (state.page !== target) {
+          state.page = target;
+          if (typeof render === "function") render();
         }
-      } catch {}
-      root.dataset.coreFirstPaint = "ready";
-      firstPaintStyle.remove();
-    });
+      }
+    } catch {}
+
+    root.dataset.coreFirstPaint = "ready";
+    firstPaintStyle.remove();
+    try {
+      window.dispatchEvent(new CustomEvent("viral-ai:core-first-paint-ready", {
+        detail: { route: typeof state !== "undefined" && state ? state.page : null }
+      }));
+    } catch {}
   }
 
   document.addEventListener("DOMContentLoaded", () => {
