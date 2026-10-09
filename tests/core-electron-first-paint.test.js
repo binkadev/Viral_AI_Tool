@@ -20,6 +20,8 @@ assert(entry.includes("did-fail-load"), "A failed main-frame load must not leave
 assert(entry.includes("render-process-gone"), "Renderer failure must not leave the native window hidden forever.");
 assert(entry.includes("win.show()"), "The bridge must use the BrowserWindow instance's native show path.");
 assert(entry.includes("require('./main.js')"), "The bridge must delegate application behavior to the existing main process.");
+assert(entry.includes("renderer/index.html"), "Reveal ownership must be gated to the real renderer document.");
+assert(entry.includes("webContents.getURL"), "Reveal gating must inspect the currently loaded document.");
 assert(!entry.includes("BrowserWindow.prototype.show"), "The hotfix must not monkey-patch BrowserWindow.show.");
 assert(!entry.includes("showRequested"), "The hotfix must not gate show requests behind custom state.");
 assert(!entry.includes("WeakMap"), "The hotfix must not retain custom per-window reveal ownership.");
@@ -49,11 +51,13 @@ function bootBridge() {
   return app;
 }
 
-function createWindowHarness() {
+function createWindowHarness(initialUrl = "about:blank") {
   const webContents = new EventEmitter();
   let visible = false;
   let destroyed = false;
   let showCount = 0;
+  let currentUrl = initialUrl;
+  webContents.getURL = () => currentUrl;
 
   return {
     win: {
@@ -68,29 +72,42 @@ function createWindowHarness() {
     webContents,
     get showCount() { return showCount; },
     setVisible(value) { visible = Boolean(value); },
+    setUrl(value) { currentUrl = String(value || ""); },
     destroy() { destroyed = true; }
   };
 }
 
 const app = bootBridge();
+const rendererUrl = "file:///C:/workspace/Viral_AI_Tool/renderer/index.html";
 
 {
   const harness = createWindowHarness();
   app.emit("browser-window-created", {}, harness.win);
   assert.strictEqual(harness.showCount, 0, "Window must remain hidden before renderer load completes.");
+
   harness.webContents.emit("did-finish-load");
-  assert.strictEqual(harness.showCount, 1, "did-finish-load must reveal the hidden window.");
-  harness.webContents.emit("did-fail-load", {}, -1, "late failure", "file://renderer", true);
+  assert.strictEqual(harness.showCount, 0, "Initial about:blank must never reveal the application window.");
+
+  harness.setUrl(rendererUrl);
+  harness.webContents.emit("did-finish-load");
+  assert.strictEqual(harness.showCount, 1, "The real renderer document must reveal the hidden window.");
+
+  harness.webContents.emit("did-fail-load", {}, -1, "late failure", rendererUrl, true);
   assert.strictEqual(harness.showCount, 1, "Later lifecycle events must not reveal an already-visible window twice.");
 }
 
 {
   const harness = createWindowHarness();
   app.emit("browser-window-created", {}, harness.win);
-  harness.webContents.emit("did-fail-load", {}, -1, "subframe", "file://subframe", false);
+
+  harness.webContents.emit("did-fail-load", {}, -1, "subframe", "file:///subframe.html", false);
   assert.strictEqual(harness.showCount, 0, "Subframe load failure must not reveal the application window.");
-  harness.webContents.emit("did-fail-load", {}, -2, "main frame failed", "file://renderer", true);
-  assert.strictEqual(harness.showCount, 1, "Main-frame load failure must reveal the window for recovery instead of hiding forever.");
+
+  harness.webContents.emit("did-fail-load", {}, -2, "blank main frame failed", "about:blank", true);
+  assert.strictEqual(harness.showCount, 0, "A non-app main-frame failure must not reveal a blank window.");
+
+  harness.webContents.emit("did-fail-load", {}, -2, "renderer main frame failed", rendererUrl, true);
+  assert.strictEqual(harness.showCount, 1, "The app renderer main-frame failure must reveal the window for recovery instead of hiding forever.");
 }
 
 {
@@ -101,7 +118,7 @@ const app = bootBridge();
 }
 
 {
-  const harness = createWindowHarness();
+  const harness = createWindowHarness(rendererUrl);
   harness.destroy();
   app.emit("browser-window-created", {}, harness.win);
   harness.webContents.emit("did-finish-load");
