@@ -18,6 +18,9 @@ assert(entry.includes("showRequested"), "A ready-to-show request must be retaine
 assert(entry.includes("did-finish-load"), "The reveal lifecycle must observe main-frame load completion from window creation time.");
 assert(entry.includes("did-fail-load"), "A failed main-frame load must not leave the window hidden forever.");
 assert(entry.includes("render-process-gone"), "Renderer failure must not leave the native window hidden forever.");
+assert(entry.includes("function releaseFailure()"), "Renderer failure must use an explicit reveal path.");
+assert(entry.includes("state.showRequested = true"), "Failure recovery must not depend on ready-to-show being emitted.");
+assert(entry.includes("revealWindow(win, state)"), "Failure recovery must reveal the native window directly.");
 assert(entry.includes("nativeShow.call(win)"), "The window must reveal through Electron's native show implementation.");
 assert(entry.includes("require('./main.js')"), "The guard must delegate all application behavior to the existing main process.");
 assert(!entry.includes("requestAnimationFrame"), "A hidden Electron window must not wait on renderer animation frames before show.");

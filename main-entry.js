@@ -19,17 +19,23 @@ app.on('browser-window-created', (_event, win) => {
   };
   revealState.set(win, state);
 
-  const release = () => {
+  const releaseLoaded = () => {
     state.loaded = true;
     if (state.showRequested) revealWindow(win, state);
   };
 
-  win.webContents.once('did-finish-load', release);
+  const releaseFailure = () => {
+    state.loaded = true;
+    state.showRequested = true;
+    revealWindow(win, state);
+  };
+
+  win.webContents.once('did-finish-load', releaseLoaded);
   win.webContents.once('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
     if (isMainFrame === false) return;
-    release();
+    releaseFailure();
   });
-  win.webContents.once('render-process-gone', release);
+  win.webContents.once('render-process-gone', releaseFailure);
 });
 
 BrowserWindow.prototype.show = function showAfterMainFrameLoad() {
