@@ -3,6 +3,27 @@
 const { app } = require('electron');
 
 const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
+const WINDOWS_SOFTWARE_RENDERING =
+  process.platform === 'win32' &&
+  process.env.VIRAL_AI_ENABLE_HARDWARE_ACCELERATION !== '1';
+
+// Windows/Chromium can occasionally classify an initially hidden frameless
+// BrowserWindow as occluded before the first visible frame. On affected GPU /
+// driver combinations the document still reaches DOM-ready and did-finish-load,
+// but the native surface keeps showing only its clear/background color. Keep
+// startup rendering alive while the window is hidden and use the software
+// compositor by default on Windows for a deterministic commercial startup.
+// Hardware acceleration can still be explicitly re-enabled for validation with
+// VIRAL_AI_ENABLE_HARDWARE_ACCELERATION=1.
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
+  if (WINDOWS_SOFTWARE_RENDERING) {
+    app.disableHardwareAcceleration();
+  }
+}
 
 function isAppRendererUrl(value) {
   const normalized = String(value || '')
@@ -11,6 +32,14 @@ function isAppRendererUrl(value) {
     .split('?')[0]
     .toLowerCase();
   return normalized.startsWith('file:') && normalized.endsWith('/renderer/index.html');
+}
+
+if (STARTUP_DIAGNOSTICS) {
+  console.log('[viral-ai:start] renderer-bootstrap', {
+    platform: process.platform,
+    softwareRendering: WINDOWS_SOFTWARE_RENDERING,
+    nativeWinOcclusionDisabled: process.platform === 'win32'
+  });
 }
 
 app.on('browser-window-created', (_event, win) => {
