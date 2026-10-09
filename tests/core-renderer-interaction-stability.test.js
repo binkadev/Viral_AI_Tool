@@ -18,6 +18,7 @@ const assets = read("core-editor-assets.js");
 const layout = read("core-layout.js");
 const rebind = read("core-player-rebind.js");
 const commercialUx = read("core-editor-commercial-ux.js");
+const sourceRecovery = read("core-source-recovery.js");
 
 for (const [name, source] of [
   ["core-player.js", player],
@@ -30,7 +31,8 @@ for (const [name, source] of [
   ["core-editor-assets.js", assets],
   ["core-layout.js", layout],
   ["core-player-rebind.js", rebind],
-  ["core-editor-commercial-ux.js", commercialUx]
+  ["core-editor-commercial-ux.js", commercialUx],
+  ["core-source-recovery.js", sourceRecovery]
 ]) {
   assert.doesNotThrow(() => new Function(source), name + " must parse.");
   assert(source.includes("setTextIfChanged") || source.includes("setAttrIfChanged"), name + " must use idempotent DOM writes around observed surfaces.");
@@ -89,5 +91,10 @@ assert(!commercialUx.includes("if (text) text.textContent = c.needsSetup"));
 assert(commercialUx.includes("setTextIfChanged(text, c.ready)"));
 assert(commercialUx.includes("setTextIfChanged(text, c.needsSetup)"));
 assert(commercialUx.includes("setDatasetIfChanged"));
+
+assert(!sourceRecovery.includes("if (title) title.textContent = source?.fileState"));
+assert(!sourceRecovery.includes("hint.textContent = busy ? c.relinking : c.sourceHint"));
+assert(sourceRecovery.includes("setTextIfChanged(title"));
+assert(sourceRecovery.includes("setTextIfChanged(hint"));
 
 console.log("Renderer interaction observers are mutation-safe and will not starve click handling.");
