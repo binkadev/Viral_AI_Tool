@@ -37,6 +37,18 @@
         };
   }
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
@@ -85,12 +97,15 @@
     panel.classList.toggle("is-collapsed", value);
     const button = panel.querySelector("[data-assets-collapse]");
     if (button instanceof HTMLButtonElement) {
-      button.textContent = value ? "›" : "‹";
-      button.title = value ? c.expand : c.collapse;
-      button.setAttribute("aria-label", button.title);
-      button.setAttribute("aria-expanded", value ? "false" : "true");
+      const nextText = value ? "›" : "‹";
+      setTextIfChanged(button, nextText);
+      const nextTitle = value ? c.expand : c.collapse;
+      if (button.title !== nextTitle) button.title = nextTitle;
+      setAttrIfChanged(button, "aria-label", nextTitle);
+      setAttrIfChanged(button, "aria-expanded", value ? "false" : "true");
     }
-    localStorage.setItem(COLLAPSED_KEY, value ? "true" : "false");
+    const nextPref = value ? "true" : "false";
+    if (localStorage.getItem(COLLAPSED_KEY) !== nextPref) localStorage.setItem(COLLAPSED_KEY, nextPref);
   }
 
   function ensurePanel(grid) {
@@ -142,7 +157,7 @@
     const transcriptStatus = panel.querySelector("[data-transcript-status]");
 
     const sourceName = source?.name || source?.sourcePath || video?.currentSrc || video?.src;
-    if (name) name.textContent = basename(sourceName);
+    setTextIfChanged(name, basename(sourceName));
 
     if (meta) {
       const nativeWidth = Number(video?.videoWidth || 0);
@@ -153,16 +168,18 @@
       const height = nativeHeight > 0 ? nativeHeight : storedHeight;
       const duration = durationFor(video, source);
       const dimensions = width > 0 && height > 0 ? width + "×" + height : "—";
-      meta.textContent = dimensions + " · " + formatDuration(duration);
+      setTextIfChanged(meta, dimensions + " · " + formatDuration(duration));
     }
 
     const count = document.querySelectorAll(".transcript-list .transcript-row").length;
+    const statusCopy = count === 0 ? c.noTranscript : c.segments(count);
     if (transcript instanceof HTMLButtonElement) {
-      transcript.disabled = count === 0;
-      transcript.classList.toggle("is-disabled", count === 0);
-      transcript.title = count === 0 ? c.noTranscript : c.segments(count);
+      const disabled = count === 0;
+      if (transcript.disabled !== disabled) transcript.disabled = disabled;
+      transcript.classList.toggle("is-disabled", disabled);
+      if (transcript.title !== statusCopy) transcript.title = statusCopy;
     }
-    if (transcriptStatus) transcriptStatus.textContent = count === 0 ? c.noTranscript : c.segments(count);
+    setTextIfChanged(transcriptStatus, statusCopy);
   }
 
   function enhance() {
