@@ -5,6 +5,12 @@
   let queued = false;
   const progressUnsubscribers = [];
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function appState() {
     try {
       if (typeof state !== "undefined") return state;
@@ -216,7 +222,7 @@
     if (!(activity instanceof HTMLElement)) return;
 
     if (!active) {
-      activity.hidden = true;
+      if (!activity.hidden) activity.hidden = true;
       activity.removeAttribute("data-state");
       return;
     }
@@ -228,7 +234,7 @@
     const phaseLabel = labels.phases[rawPhase] || labels.phases[meta.state] || labels.phases.processing;
     const isAttention = meta.state === "failed" || meta.state === "cancelled";
 
-    activity.hidden = false;
+    if (activity.hidden) activity.hidden = false;
     activity.dataset.state = isAttention ? meta.state : "processing";
     activity.dataset.step = active.id;
 
@@ -241,13 +247,12 @@
     const stop = activity.querySelector("[data-activity-stop]");
     const retry = activity.querySelector("[data-activity-retry]");
 
-    if (kicker) kicker.textContent = labels.title;
-    if (title) title.textContent = labels.steps[active.id] || active.id;
-    if (detail) detail.textContent = isAttention
+    setTextIfChanged(kicker, labels.title);
+    setTextIfChanged(title, labels.steps[active.id] || active.id);
+    setTextIfChanged(detail, isAttention
       ? failureCopy(job, meta, labels) + " " + labels.projectSafe
-      : phaseLabel;
-
-    if (percent) percent.textContent = !isAttention && !progress.indeterminate ? labels.percent(progress.value) : "";
+      : phaseLabel);
+    setTextIfChanged(percent, !isAttention && !progress.indeterminate ? labels.percent(progress.value) : "");
 
     if (track instanceof HTMLElement) {
       track.hidden = isAttention;
@@ -267,7 +272,7 @@
     const canStop = (stopTarget instanceof HTMLButtonElement && !stopTarget.disabled) || renderCanStop(active);
     if (stop instanceof HTMLButtonElement) {
       stop.hidden = !meta.busy || !canStop;
-      stop.textContent = rawPhase === "cancelling" ? labels.stopping : labels.stop;
+      setTextIfChanged(stop, rawPhase === "cancelling" ? labels.stopping : labels.stop);
       stop.disabled = rawPhase === "cancelling" || !canStop;
       stop.onclick = () => stopActivity(active, stopTarget);
     }
@@ -275,7 +280,7 @@
     const retryTarget = buttonFor(active.start);
     if (retry instanceof HTMLButtonElement) {
       retry.hidden = !isAttention;
-      retry.textContent = labels.retry;
+      setTextIfChanged(retry, labels.retry);
       retry.disabled = !(retryTarget instanceof HTMLButtonElement) || retryTarget.disabled;
       retry.title = retryTarget?.title || "";
       retry.onclick = () => {
