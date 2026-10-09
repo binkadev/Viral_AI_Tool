@@ -8,6 +8,18 @@
   const surfaceObservers = new WeakMap();
   let queued = false;
 
+  function setTextIfChanged(node, value) {
+    if (!(node instanceof Node)) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setAttrIfChanged(node, name, value) {
+    if (!(node instanceof Element)) return;
+    const next = String(value);
+    if (node.getAttribute(name) !== next) node.setAttribute(name, next);
+  }
+
   function parseDurationHint(video) {
     const direct = Number(video?.dataset?.coreDurationHint || 0);
     if (Number.isFinite(direct) && direct > 0) return direct;
@@ -52,7 +64,7 @@
     video.style.setProperty("height", "100%", "important");
     video.style.setProperty("transform", "none", "important");
 
-    host.dataset.coreMediaFit = "contain";
+    if (host.dataset.coreMediaFit !== "contain") host.dataset.coreMediaFit = "contain";
   }
 
   function syncEditorDock(video, duration, current) {
@@ -69,11 +81,15 @@
     const playhead = dock.querySelector("[data-bottom-playhead]");
     const time = dock.querySelector("[data-bottom-time]");
 
-    if (playhead instanceof HTMLElement) playhead.style.left = String(ratio * 100) + "%";
+    if (playhead instanceof HTMLElement) {
+      const nextLeft = String(ratio * 100) + "%";
+      if (playhead.style.left !== nextLeft) playhead.style.left = nextLeft;
+    }
     if (time instanceof HTMLOutputElement) {
-      time.textContent = duration > 0
+      const nextTime = duration > 0
         ? formatClock(current) + " / " + formatClock(duration)
         : formatClock(current) + " / --:--";
+      setTextIfChanged(time, nextTime);
     }
 
     dock.querySelectorAll(".core-bottom-segment").forEach(segment => {
@@ -81,11 +97,13 @@
       const end = Number(segment.dataset.end || start);
       const active = duration > 0 && current >= start && (current < end || (current === duration && end === duration));
       segment.classList.toggle("is-active", active);
-      segment.setAttribute("aria-current", active ? "true" : "false");
+      setAttrIfChanged(segment, "aria-current", active ? "true" : "false");
     });
 
-    dock.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-    dock.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    if (dock.dataset.corePlaybackState !== playbackState) dock.dataset.corePlaybackState = playbackState;
+    const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    if (dock.dataset.coreMediaReady !== mediaReady) dock.dataset.coreMediaReady = mediaReady;
   }
 
   function refresh(video) {
@@ -105,30 +123,40 @@
     const playButton = controls?.querySelector("[data-core-play], [data-core-toggle-play]");
 
     if (time) {
-      time.textContent = duration > 0
+      const nextTime = duration > 0
         ? formatClock(current) + " / " + formatClock(duration)
         : formatClock(current) + " / --:--";
+      setTextIfChanged(time, nextTime);
     }
 
     if (seek instanceof HTMLInputElement) {
-      seek.disabled = !(duration > 0);
-      if (duration > 0) seek.value = String(Math.round((current / duration) * 1000));
+      const disabled = !(duration > 0);
+      if (seek.disabled !== disabled) seek.disabled = disabled;
+      if (duration > 0) {
+        const nextValue = String(Math.round((current / duration) * 1000));
+        if (seek.value !== nextValue) seek.value = nextValue;
+      }
     }
 
     if (playhead instanceof HTMLElement) {
-      playhead.style.left = duration > 0
+      const nextLeft = duration > 0
         ? String(Math.max(0, Math.min(100, (current / duration) * 100))) + "%"
         : "0%";
+      if (playhead.style.left !== nextLeft) playhead.style.left = nextLeft;
     }
 
     if (playButton instanceof HTMLElement) {
-      playButton.dataset.playing = video.paused ? "false" : "true";
-      playButton.setAttribute("aria-pressed", video.paused ? "false" : "true");
+      const playing = video.paused ? "false" : "true";
+      if (playButton.dataset.playing !== playing) playButton.dataset.playing = playing;
+      setAttrIfChanged(playButton, "aria-pressed", playing);
     }
 
-    host.dataset.coreDurationResolved = duration > 0 ? "true" : "false";
-    host.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-    host.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    const durationResolved = duration > 0 ? "true" : "false";
+    if (host.dataset.coreDurationResolved !== durationResolved) host.dataset.coreDurationResolved = durationResolved;
+    const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    if (host.dataset.corePlaybackState !== playbackState) host.dataset.corePlaybackState = playbackState;
+    const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    if (host.dataset.coreMediaReady !== mediaReady) host.dataset.coreMediaReady = mediaReady;
     syncEditorDock(video, duration, current);
   }
 
