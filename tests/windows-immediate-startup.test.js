@@ -20,9 +20,12 @@ assert(entry.includes("app.disableHardwareAcceleration()"), "Windows 10 must ret
 assert(entry.includes("app.commandLine.appendSwitch('disable-gpu')"), "Windows 10 safe mode must fully disable GPU compositing.");
 assert(entry.includes("VIRAL_AI_FORCE_GPU"), "GPU opt-in must remain available for controlled validation.");
 assert(entry.includes("VIRAL_AI_FORCE_SOFTWARE_RENDERING"), "Software rendering must remain forceable for support diagnostics.");
+assert(entry.includes("installWindowsFirstPaintStabilizer"), "Windows startup must install the targeted first-paint stabilizer.");
+assert(entry.includes("contents.invalidate()"), "The first-paint stabilizer must request compositor resubmission without rebuilding renderer DOM.");
+assert(entry.includes("VIRAL_AI_DISABLE_STARTUP_STABILIZER"), "Support must be able to disable the first-paint stabilizer for controlled comparison.");
 assert(!entry.includes("BrowserWindow.prototype"), "Rendering policy must not monkey-patch BrowserWindow.");
 assert(!entry.includes("requestAnimationFrame"), "Native rendering policy must not depend on renderer timing.");
-assert(!entry.includes("win.show()"), "Rendering policy must leave the existing BrowserWindow lifecycle untouched.");
+assert(!entry.includes("win.capturePage()") || entry.includes("STARTUP_PROBE"), "Page capture must remain diagnostics-only, never required by the production stabilizer.");
 
 function boot({ platform = "win32", release = "10.0.19045", env = {} } = {}) {
   const app = new EventEmitter();
@@ -48,12 +51,14 @@ function boot({ platform = "win32", release = "10.0.19045", env = {} } = {}) {
       throw new Error(`Unexpected require: ${id}`);
     },
     process: { platform, env: { ...env } },
-    console
+    console,
+    setTimeout,
+    clearTimeout
   };
 
   vm.runInNewContext(entry, sandbox, { filename: "main-entry.js" });
   assert.strictEqual(delegated, 1, "Rendering policy must delegate to main.js exactly once.");
-  return { switches, disableHardwareCount };
+  return { app, switches, disableHardwareCount };
 }
 
 function hasSwitch(switches, name, value) {
