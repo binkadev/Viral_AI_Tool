@@ -52,11 +52,14 @@
     const resolvedAssets = Array.isArray(automation.resolvedAssets) ? automation.resolvedAssets : [];
     const staleIds = staleSet(automation);
 
+    // Request synchronization may mark old assets stale, but it must never clear an
+    // existing stale marker because that marker can also represent a missing/corrupt
+    // local file discovered by the A5 health check. A successful re-resolution is the
+    // only operation that clears an asset's stale marker.
     for (const asset of resolvedAssets) {
       const id = String(asset?.id || "");
       if (!id) continue;
-      if (validSignatures.has(String(asset?.requestSignature || ""))) staleIds.delete(id);
-      else staleIds.add(id);
+      if (!validSignatures.has(String(asset?.requestSignature || ""))) staleIds.add(id);
     }
 
     automation.resolvedAssets = resolvedAssets;
@@ -186,9 +189,6 @@
 
     const staleIds = staleSet(automation);
     let changed = false;
-    for (const id of available) {
-      if (staleIds.delete(id)) changed = true;
-    }
     for (const id of missing) {
       if (!staleIds.has(id)) {
         staleIds.add(id);
