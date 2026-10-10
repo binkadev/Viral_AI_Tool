@@ -89,8 +89,20 @@
   color:var(--text-faint);
   font-size:11px;
 }
+.automation-asset-refresh-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+  flex:0 0 auto;
+}
+.automation-asset-refresh-button{
+  min-inline-size:82px;
+}
 .automation-composition-actions .button:focus-visible,
-.automation-composition-export-result .button:focus-visible{
+.automation-composition-export-result .button:focus-visible,
+.automation-asset-refresh-actions .button:focus-visible{
   outline:2px solid rgba(125,140,255,.72);
   outline-offset:2px;
 }
@@ -103,6 +115,10 @@
   .automation-composition-export-result{
     align-items:flex-start;
     flex-direction:column;
+  }
+  .automation-asset-refresh-actions{
+    inline-size:100%;
+    justify-content:flex-start;
   }
 }
 @media(prefers-reduced-motion:reduce){
