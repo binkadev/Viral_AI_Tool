@@ -61,6 +61,16 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   clearCloudConfig: () => ipcRenderer.invoke('cloud:config-clear'),
   testCloudConnection: backendUrl => ipcRenderer.invoke('cloud:test-connection', backendUrl),
 
+  getAutomationScriptStatus: () => ipcRenderer.invoke('automation:script-status'),
+  startAutomationScript: payload => ipcRenderer.invoke('automation:script-start', payload),
+  cancelAutomationScript: jobId => ipcRenderer.invoke('automation:script-cancel', jobId),
+  onAutomationScriptProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('automation:script-progress', listener);
+    return () => ipcRenderer.removeListener('automation:script-progress', listener);
+  },
+
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
   installSpeechModel: payload => ipcRenderer.invoke('speech:model-install', payload),
