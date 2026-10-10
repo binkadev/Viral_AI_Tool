@@ -30,14 +30,16 @@
             "Review, edit and save the script before turning it into visual scenes.",
             "Create scene beats, then refine narration, visual intent and media search terms.",
             "Resolve each scene into a healthy local media asset before timeline composition begins.",
-            "Timeline composition starts after media assets are resolved."
+            "Build the editable Composition Plan from approved scene timings and resolved local assets."
           ],
           backBrief: "Back to brief",
           backScript: "Back to script",
           backScenes: "Back to scenes",
+          backAssets: "Back to assets",
           viewScript: "Review script",
           continueScenes: "Continue to scenes",
           continueAssets: "Continue to assets",
+          continueTimeline: "Continue to timeline",
           locked: "Locked",
           complete: "Done",
           current: "Current",
@@ -52,14 +54,16 @@
             "Đọc lại, chỉnh sửa và lưu kịch bản trước khi chuyển sang phân cảnh.",
             "Tạo các nhịp cảnh rồi chỉnh lời đọc, ý đồ hình ảnh và từ khóa tìm tư liệu.",
             "Giải quyết từng cảnh thành file tư liệu cục bộ còn hoạt động trước khi dựng timeline.",
-            "Timeline sẽ mở sau khi tư liệu đã được giải quyết."
+            "Tạo Composition Plan có thể chỉnh sửa từ timing của cảnh và các file tư liệu đã chốt."
           ],
           backBrief: "Quay lại Brief",
           backScript: "Quay lại Kịch bản",
           backScenes: "Quay lại Phân cảnh",
+          backAssets: "Quay lại Tư liệu",
           viewScript: "Kiểm tra kịch bản",
           continueScenes: "Tiếp tục: Phân cảnh",
           continueAssets: "Tiếp tục: Tư liệu",
+          continueTimeline: "Tiếp tục: Timeline",
           locked: "Chưa mở",
           complete: "Đã xong",
           current: "Đang làm",
@@ -93,14 +97,21 @@
     if (!hasAssetRequests() || !requests.length) return false;
     return requests.every(request => assets.some(asset =>
       String(asset?.requestSignature || "") === String(request?.requestSignature || "") &&
-      !stale.has(String(asset?.id || ""))
+      !stale.has(String(asset?.id || "")) &&
+      Boolean(asset?.localPath)
     ));
+  }
+
+  function hasComposition() {
+    const current = automation();
+    return Boolean(current?.composition) && current?.stale?.composition !== true && window.ViralAutomationCompositionState?.isCurrent?.() === true;
   }
 
   function stageAvailable(stage) {
     if (stage === 1) return true;
     if (stage === 2 || stage === 3) return hasScript();
     if (stage === 4) return hasScenePlan();
+    if (stage === 5) return hasResolvedAssets();
     return false;
   }
 
@@ -117,7 +128,8 @@
 
   function initialStage() {
     const saved = storedStage();
-    if (saved >= 1 && saved <= 4 && stageAvailable(saved)) return saved;
+    if (saved >= 1 && saved <= 5 && stageAvailable(saved)) return saved;
+    if (hasComposition()) return 5;
     if (hasAssetRequests()) return 4;
     if (hasScenePlan()) return 3;
     if (hasScript()) return 2;
@@ -149,7 +161,7 @@
 
     const c = copy();
     const stageIndex = Math.max(1, Math.min(5, activeStage));
-    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests(), hasResolvedAssets()].join("|");
+    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests(), hasResolvedAssets(), hasComposition()].join("|");
     if (context.dataset.signature === signature) return context;
     context.dataset.signature = signature;
 
@@ -163,7 +175,10 @@
       actions = '<button class="button ghost" type="button" data-automation-workspace-go="2">← ' + c.backScript + '</button>' +
         (hasScenePlan() ? '<button class="button primary" type="button" data-automation-workspace-go="4">' + c.continueAssets + ' →</button>' : '');
     } else if (stageIndex === 4) {
-      actions = '<button class="button ghost" type="button" data-automation-workspace-go="3">← ' + c.backScenes + '</button>';
+      actions = '<button class="button ghost" type="button" data-automation-workspace-go="3">← ' + c.backScenes + '</button>' +
+        (hasResolvedAssets() ? '<button class="button primary" type="button" data-automation-workspace-go="5">' + c.continueTimeline + ' →</button>' : '');
+    } else if (stageIndex === 5) {
+      actions = '<button class="button ghost" type="button" data-automation-workspace-go="4">← ' + c.backAssets + '</button>';
     }
 
     context.innerHTML = '<div class="automation-step-copy"><span>' + c.step + ' ' + stageIndex + ' ' + c.of + ' 5</span><h3>' + c.titles[stageIndex - 1] + '</h3><p>' + c.desc[stageIndex - 1] + '</p></div>' +
@@ -177,7 +192,7 @@
     stages.forEach((node, index) => {
       const stage = index + 1;
       const available = stageAvailable(stage);
-      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasResolvedAssets());
+      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasResolvedAssets()) || (stage === 5 && hasComposition());
       node.dataset.workspaceStage = String(stage);
       node.classList.toggle("workspace-active", stage === activeStage);
       node.classList.toggle("workspace-completed", completed && stage !== activeStage);
@@ -202,6 +217,7 @@
     const script = creator.querySelector(".automation-script-card");
     const scenes = creator.querySelector(":scope > .automation-scenes-host");
     const assets = creator.querySelector(":scope > .automation-assets-host");
+    const composition = creator.querySelector(":scope > .automation-composition-host");
     const quick = creator.querySelector(":scope > .automation-scene-quick");
 
     if (grid instanceof HTMLElement) {
@@ -212,6 +228,7 @@
     if (script instanceof HTMLElement) script.hidden = activeStage !== 2;
     if (scenes instanceof HTMLElement) scenes.hidden = activeStage !== 3;
     if (assets instanceof HTMLElement) assets.hidden = activeStage !== 4;
+    if (composition instanceof HTMLElement) composition.hidden = activeStage !== 5;
     if (quick instanceof HTMLElement) quick.hidden = true;
 
     if (activeStage === 3 && !(scenes instanceof HTMLElement)) {
@@ -219,6 +236,9 @@
     }
     if (activeStage === 4 && !(assets instanceof HTMLElement)) {
       try { window.ViralAutomationAssetsUi?.refresh?.(); } catch {}
+    }
+    if (activeStage === 5 && !(composition instanceof HTMLElement)) {
+      try { window.ViralAutomationCompositionUi?.refresh?.(); } catch {}
     }
   }
 
