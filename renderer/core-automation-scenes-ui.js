@@ -139,19 +139,38 @@
     sceneStage.classList.toggle("active", hasScript && !hasPlan);
     sceneStage.classList.toggle("ready", hasPlan);
     const small = sceneStage.querySelector("small");
-    if (small) small.textContent = hasPlan ? copy().ready : hasScript ? copy().generate : (locale() === "en" ? "Next phase" : "Phase tiếp theo");
+    const label = hasPlan ? copy().ready : hasScript ? copy().generate : (locale() === "en" ? "Next phase" : "Phase tiếp theo");
+    if (small && small.textContent !== label) small.textContent = label;
+  }
+
+  function ensureHost() {
+    const creator = document.querySelector(".automation-creator");
+    if (!(creator instanceof HTMLElement)) return null;
+
+    let host = creator.querySelector(":scope > .automation-scenes-host");
+    if (host instanceof HTMLElement) return host;
+
+    const legacyNext = creator.querySelector(":scope > .automation-next-card");
+    host = document.createElement("div");
+    host.className = "card automation-next-card automation-scenes-host";
+    host.dataset.scenePlannerMount = "true";
+
+    if (legacyNext instanceof HTMLElement) legacyNext.replaceWith(host);
+    else creator.appendChild(host);
+    return host;
   }
 
   function scan() {
     queued = false;
     if (appState()?.page !== "automation") return;
-    const target = document.querySelector(".automation-next-card");
-    if (!(target instanceof HTMLElement)) return;
+    const host = ensureHost();
+    if (!(host instanceof HTMLElement)) return;
+
     const nextSignature = signature();
-    if (target.dataset.sceneUiSignature !== nextSignature) {
-      target.dataset.sceneUiSignature = nextSignature;
-      target.classList.add("automation-scenes-host");
-      target.innerHTML = panelMarkup();
+    if (host.dataset.sceneUiSignature !== nextSignature) {
+      host.dataset.sceneUiSignature = nextSignature;
+      const markup = panelMarkup();
+      if (host.innerHTML !== markup) host.innerHTML = markup;
     }
     updateStage();
   }
@@ -202,14 +221,25 @@
   }, true);
 
   window.addEventListener("viral-ai:core-state-changed", queueScan);
+  window.addEventListener("viral-ai:automation-page-rendered", queueScan);
 
   const start = () => {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queueScan).observe(page, { childList: true, subtree: false });
+    if (page) {
+      // The Automation creator can rerender nested children after provider/status
+      // changes. Observe that subtree, but keep updates idempotent so our own
+      // mount never creates a mutation feedback loop.
+      new MutationObserver(queueScan).observe(page, { childList: true, subtree: true });
+    }
     queueScan();
     document.documentElement.dataset.automationScenePlanner = "enabled";
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
+
+  window.ViralAutomationScenesUi = {
+    renderPanel: panelMarkup,
+    refresh: queueScan
+  };
 })();
