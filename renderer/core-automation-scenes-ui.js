@@ -20,6 +20,7 @@
           intro: "Split the accepted script into editable scene beats with timing, visual intent and stock-search terms.",
           generate: "Create scenes",
           regenerate: "Rebuild scenes",
+          open: "Open scenes",
           required: "Generate or save a script before creating scenes.",
           stale: "The script changed. Rebuild scenes before continuing.",
           scene: "Scene",
@@ -40,6 +41,7 @@
           intro: "Tách kịch bản đã chốt thành các nhịp cảnh có thể chỉnh sửa, gồm timing, visual intent và từ khóa tìm stock.",
           generate: "Tạo phân cảnh",
           regenerate: "Tạo lại phân cảnh",
+          open: "Xem phân cảnh",
           required: "Hãy tạo hoặc lưu kịch bản trước khi tạo phân cảnh.",
           stale: "Kịch bản đã thay đổi. Hãy tạo lại phân cảnh trước khi đi tiếp.",
           scene: "Cảnh",
@@ -160,6 +162,43 @@
     return host;
   }
 
+  function ensureQuickAction() {
+    const rail = document.querySelector(".automation-stage-rail");
+    if (!(rail instanceof HTMLElement)) return null;
+    const current = automation();
+    const script = current?.script;
+    let quick = document.getElementById("automationSceneQuickAction");
+
+    if (!script) {
+      quick?.remove();
+      return null;
+    }
+
+    if (!(quick instanceof HTMLElement)) {
+      quick = document.createElement("div");
+      quick.id = "automationSceneQuickAction";
+      quick.className = "automation-scene-quick";
+      rail.insertAdjacentElement("afterend", quick);
+    }
+
+    const hasPlan = Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
+    const c = copy();
+    const quickSignature = [locale(), current?.script?.outputSignature || "", current?.scenePlan?.outputSignature || "", current?.stale?.scenes === true].join("|");
+    if (quick.dataset.signature !== quickSignature) {
+      quick.dataset.signature = quickSignature;
+      quick.innerHTML = '<div><span>' + esc(c.eyebrow) + '</span><b>' + esc(c.title) + '</b><small>' + esc(hasPlan ? c.ready : c.intro) + '</small></div>' +
+        '<button id="automationSceneQuickButton" class="button primary" type="button">' + (hasPlan ? esc(c.open) : '✦ ' + esc(c.generate)) + '</button>';
+    }
+    return quick;
+  }
+
+  function scrollToScenes() {
+    const host = ensureHost();
+    if (!(host instanceof HTMLElement)) return;
+    try { host.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    catch { host.scrollIntoView(); }
+  }
+
   function scan() {
     queued = false;
     if (appState()?.page !== "automation") return;
@@ -173,6 +212,7 @@
       if (host.innerHTML !== markup) host.innerHTML = markup;
     }
     updateStage();
+    ensureQuickAction();
   }
 
   function queueScan() {
@@ -181,7 +221,7 @@
     requestAnimationFrame(scan);
   }
 
-  function generateScenes() {
+  function generateScenes({ scroll = false } = {}) {
     const result = window.ViralAutomationSceneState?.generatePlan?.();
     if (!result?.ok) {
       try { if (typeof toast === "function") toast(copy().required); } catch {}
@@ -189,6 +229,7 @@
     }
     try { if (typeof toast === "function") toast(copy().generated); } catch {}
     queueScan();
+    if (scroll) requestAnimationFrame(() => requestAnimationFrame(scrollToScenes));
   }
 
   function saveScene(sceneId, card) {
@@ -212,6 +253,14 @@
       generateScenes();
       return;
     }
+    if (button.id === "automationSceneQuickButton") {
+      event.preventDefault();
+      const current = automation();
+      const hasPlan = Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
+      if (hasPlan) scrollToScenes();
+      else generateScenes({ scroll: true });
+      return;
+    }
     const sceneId = button.dataset.sceneSave;
     if (sceneId) {
       event.preventDefault();
@@ -226,9 +275,6 @@
   const start = () => {
     const page = document.getElementById("page");
     if (page) {
-      // The Automation creator can rerender nested children after provider/status
-      // changes. Observe that subtree, but keep updates idempotent so our own
-      // mount never creates a mutation feedback loop.
       new MutationObserver(queueScan).observe(page, { childList: true, subtree: true });
     }
     queueScan();
@@ -240,6 +286,7 @@
 
   window.ViralAutomationScenesUi = {
     renderPanel: panelMarkup,
-    refresh: queueScan
+    refresh: queueScan,
+    scrollToScenes
   };
 })();
