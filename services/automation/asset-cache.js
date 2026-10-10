@@ -66,6 +66,10 @@ function createAssetCache({ rootDir, now = () => Date.now(), fetchImpl = global.
     try {
       const stat = await fsp.stat(record.localPath);
       if (!stat.isFile() || stat.size <= 0) return null;
+      if (record.checksum) {
+        const actualChecksum = await checksumFile(record.localPath);
+        if (actualChecksum !== String(record.checksum)) return null;
+      }
       return { ...record, size: stat.size };
     } catch {
       return null;
@@ -93,7 +97,7 @@ function createAssetCache({ rootDir, now = () => Date.now(), fetchImpl = global.
     await ensureLoaded();
     const key = safeText(cacheKey, 300);
     if (!key) throw new Error('Asset cache key is required.');
-    const valid = await validateRecord(record);
+    const valid = await validateRecord({ ...record, checksum: '' });
     if (!valid) throw new Error('Asset cache file is missing or empty.');
     const timestamp = new Date(now()).toISOString();
     records[key] = {
