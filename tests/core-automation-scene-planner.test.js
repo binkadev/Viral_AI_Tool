@@ -84,8 +84,12 @@ for (const required of [
   "ViralAutomationSceneState?.generatePlan",
   "ViralAutomationSceneState?.editScene",
   "automation-scenes-list",
-  'new MutationObserver(queueScan).observe(page, { childList: true, subtree: false })',
-  "automationScenePlanner"
+  "function ensureHost()",
+  'legacyNext.replaceWith(host)',
+  'host.dataset.scenePlannerMount = "true"',
+  'new MutationObserver(queueScan).observe(page, { childList: true, subtree: true })',
+  "automationScenePlanner",
+  "ViralAutomationScenesUi"
 ]) {
   assert(uiSource.includes(required), "Scene Planner UI missing: " + required);
 }
@@ -108,4 +112,4 @@ assert(index.indexOf('src="core-automation-scene-state.js"') < index.indexOf('sr
 assert(pkg.scripts["test:core-automation-scene-planner"], "package.json must expose Scene Planner regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-scene-planner"), "commercial regression must gate Scene Planner");
 
-console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation and UI contracts passed.");
+console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation and resilient runtime mount tests passed.");
