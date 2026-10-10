@@ -56,7 +56,7 @@ for (const required of ["object-fit:contain!important","aspect-ratio:auto!import
 for (const eventName of ["loadedmetadata","durationchange","timeupdate","seeking","seeked","play","pause","ended"]) {
   assert(player.includes('"' + eventName + '"'), "Player must subscribe to " + eventName);
 }
-for (const required of ["video.currentTime = target","video.currentTime, video.duration","model.activeSegmentIndex","scrollIntoView","contenteditable","requestFullscreen","video.controls = false","viral-ai:transcript-edit","requestVideoFrameCallback","ResizeObserver","data-core-timeline-track","data-core-playhead","seekVideo(video, ratio * video.duration)","video.currentTime is the single source of truth"]) {
+for (const required of ["video.currentTime = target","video.currentTime, video.duration","model.activeSegmentIndex","scrollIntoView","contenteditable","requestFullscreen","video.controls = false","viral-ai:transcript-edit","requestVideoFrameCallback","ResizeObserver","data-core-timeline-track","data-core-playhead","seekVideo(video, ratio * video.duration)","const current = model.clampTime(video.currentTime, video.duration)"]) {
   assert(player.includes(required), "Core player is missing behavior: " + required);
 }
 
