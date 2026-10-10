@@ -1,3 +1,6 @@
+html[data-automation-workspace="guided"] #page>.core-editor-activity,
+html[data-automation-workspace="guided"] #page>.core-workflow-shell{display:none!important}
+
 .automation-workspace-v2{gap:12px!important}
 
 /* Header: use the same restrained surface language as the rest of the product. */
