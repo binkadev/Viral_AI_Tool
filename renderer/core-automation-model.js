@@ -165,6 +165,8 @@
       scenePlan: null,
       assetRequests: [],
       resolvedAssets: [],
+      voiceSettings: { voiceId: "default", provider: null },
+      voiceResult: null,
       composition: null,
       variations: [],
       jobs: {},
@@ -185,6 +187,10 @@
     normalized.scenePlan = clone(input.scenePlan, null);
     normalized.assetRequests = Array.isArray(input.assetRequests) ? clone(input.assetRequests, []) : [];
     normalized.resolvedAssets = Array.isArray(input.resolvedAssets) ? clone(input.resolvedAssets, []) : [];
+    normalized.voiceSettings = input.voiceSettings && typeof input.voiceSettings === "object"
+      ? { voiceId: text(input.voiceSettings.voiceId, 120) || "default", provider: text(input.voiceSettings.provider, 80) || null }
+      : { voiceId: "default", provider: null };
+    normalized.voiceResult = clone(input.voiceResult, null);
     normalized.composition = clone(input.composition, null);
     normalized.variations = Array.isArray(input.variations) ? clone(input.variations, []) : [];
     normalized.jobs = input.jobs && typeof input.jobs === "object" && !Array.isArray(input.jobs)
