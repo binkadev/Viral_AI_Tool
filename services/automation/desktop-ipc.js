@@ -4,7 +4,9 @@ const { ipcMain } = require('electron');
 const provider = require('./openai-script-provider');
 const {
   createScriptEngine,
-  serializeScriptError
+  serializeScriptError,
+  activeScriptCount,
+  cancelAllScripts
 } = require('./script-engine');
 
 let installed = false;
@@ -57,6 +59,16 @@ function installAutomationScriptIpc() {
   });
 }
 
+function activeAutomationScriptCount() {
+  return activeScriptCount();
+}
+
+async function cancelAllAutomationScripts() {
+  return cancelAllScripts();
+}
+
 module.exports = {
-  installAutomationScriptIpc
+  installAutomationScriptIpc,
+  activeAutomationScriptCount,
+  cancelAllAutomationScripts
 };
