@@ -73,7 +73,8 @@ for (const required of [
   "automation:composition-export-start",
   "automation:composition-export-cancel",
   "automation:composition-export-status",
-  "automation:composition-export-progress"
+  "automation:composition-export-progress",
+  "getActiveAutomationCompositionExportCount"
 ]) assert(ipc.includes(required), "Composition export IPC missing: " + required);
 
 for (const required of [
@@ -83,8 +84,16 @@ for (const required of [
   "onAutomationCompositionExportProgress"
 ]) assert(preload.includes(required), "Preload export bridge missing: " + required);
 
-assert(mainEntry.includes("installAutomationCompositionExportIpc();"));
-assert(mainEntry.includes("cancelAllAutomationCompositionExports();"));
+for (const required of [
+  "installAutomationCompositionExportIpc();",
+  "cancelAllAutomationCompositionExports();",
+  "getActiveAutomationCompositionExportCount",
+  "installAutomationCompositionCloseGuard();",
+  "event.defaultPrevented",
+  't(\"export.stopTitle\")',
+  't(\"export.stopBody\"',
+  't(\"export.keepGoing\")'
+]) assert(mainEntry.includes(required), "Composition export main-process guard missing: " + required);
 
 for (const required of [
   'tr("common.export")',
@@ -124,4 +133,4 @@ assert(pkg.scripts["test:core-automation-composition-export"], "package.json mus
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-composition-export"), "commercial regression must gate composition export");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
-console.log("Automation composition asset refresh, safe export lifecycle, cancellation, output isolation and commercial UI tests passed.");
+console.log("Automation composition asset refresh, safe export lifecycle, cancellation, close guard, output isolation and commercial UI tests passed.");
