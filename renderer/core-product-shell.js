@@ -24,8 +24,11 @@
           workflow: "Create video",
           manage: "Manage",
           workspaceName: "Video Studio",
+          automation: "Create with AI",
           import: "Import video",
           editor: "Video studio",
+          automationTitle: "AI Automation",
+          automationBreadcrumb: "Create video / AI Automation",
           importTitle: "Import video",
           importBreadcrumb: "Create video / Import",
           editorTitle: "Video studio",
@@ -50,8 +53,11 @@
           workflow: "Tạo video",
           manage: "Quản lý",
           workspaceName: "Studio video",
+          automation: "Tạo bằng AI",
           import: "Nhập video",
           editor: "Studio video",
+          automationTitle: "AI Automation",
+          automationBreadcrumb: "Tạo video / AI Automation",
           importTitle: "Nhập video",
           importBreadcrumb: "Tạo video / Nhập video",
           editorTitle: "Studio video",
@@ -85,6 +91,10 @@
     return Array.isArray(current?.jobs) && current.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
   }
 
+  function hasAutomationProject() {
+    return Boolean(appState()?.automation?.brief);
+  }
+
   function removeLegacyDemoJobs() {
     const current = appState();
     if (!Array.isArray(current?.jobs) || current.jobs.length === 0) return;
@@ -106,6 +116,7 @@
 
     navItems.splice(0, navItems.length,
       { group: "core-workflow" },
+      { id: "automation", icon: "✦", label: "core-automation" },
       { id: "download", icon: "⇩", label: "core-import" },
       { id: "ai-video", icon: "◫", label: "core-editor" },
       { group: "core-manage" },
@@ -128,11 +139,13 @@
             return '<div class="nav-group">' + groupLabel + '</div>';
           }
 
-          const label = item.id === "download"
-            ? c.import
-            : item.id === "ai-video"
-              ? c.editor
-              : (typeof t === "function" ? t(item.label) : item.label);
+          const label = item.id === "automation"
+            ? c.automation
+            : item.id === "download"
+              ? c.import
+              : item.id === "ai-video"
+                ? c.editor
+                : (typeof t === "function" ? t(item.label) : item.label);
 
           return '<button class="nav-item ' + (appState()?.page === item.id ? "active" : "") + '" data-page="' + item.id + '" type="button">' +
             '<span class="nav-icon" aria-hidden="true">' + item.icon + '</span>' +
@@ -178,8 +191,16 @@
     const current = appState();
     if (!current) return;
 
-    const startupPage = hasSourceVideo() ? "ai-video" : "download";
-    if (current.page === startupPage) return;
+    const allowed = new Set(["automation", "download", "ai-video", "library", "accounts", "usage", "billing", "settings"]);
+    if (allowed.has(current.page)) {
+      if (current.page === "ai-video" && !hasSourceVideo()) {
+        current.page = hasAutomationProject() ? "automation" : "download";
+        persist();
+      }
+      return;
+    }
+
+    const startupPage = hasSourceVideo() ? "ai-video" : hasAutomationProject() ? "automation" : "download";
     current.page = startupPage;
     persist();
   }
@@ -196,7 +217,10 @@
     if (projectLabel) projectLabel.textContent = c.importAction;
     if (workspaceName) workspaceName.textContent = c.workspaceName;
 
-    if (current.page === "download") {
+    if (current.page === "automation") {
+      if (title) title.textContent = c.automationTitle;
+      if (breadcrumb) breadcrumb.textContent = c.automationBreadcrumb;
+    } else if (current.page === "download") {
       if (title) title.textContent = c.importTitle;
       if (breadcrumb) breadcrumb.textContent = c.importBreadcrumb;
     } else if (current.page === "ai-video") {
