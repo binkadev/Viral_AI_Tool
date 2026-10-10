@@ -24,18 +24,20 @@
       ? {
           step: "Step",
           of: "of",
-          titles: ["Prepare the brief", "Review the script", "Build scenes", "Resolve assets", "Compose timeline"],
+          titles: ["Prepare the brief", "Review the script", "Build scenes", "Prepare assets", "Compose timeline"],
           desc: [
             "Enter the idea and output settings, then generate the first editable script.",
             "Review, edit and save the script before turning it into visual scenes.",
             "Create scene beats, then refine narration, visual intent and media search terms.",
-            "Asset routing starts after the Scene Planner is verified.",
-            "Timeline composition starts after assets are resolved."
+            "Normalize each scene into a provider-neutral media request before any stock source is called.",
+            "Timeline composition starts after media assets are resolved."
           ],
           backBrief: "Back to brief",
           backScript: "Back to script",
+          backScenes: "Back to scenes",
           viewScript: "Review script",
           continueScenes: "Continue to scenes",
+          continueAssets: "Continue to assets",
           locked: "Locked",
           complete: "Done",
           current: "Current",
@@ -44,18 +46,20 @@
       : {
           step: "Bước",
           of: "trên",
-          titles: ["Chuẩn bị nội dung", "Kiểm tra kịch bản", "Tạo phân cảnh", "Tìm tư liệu", "Dựng timeline"],
+          titles: ["Chuẩn bị nội dung", "Kiểm tra kịch bản", "Tạo phân cảnh", "Chuẩn bị tư liệu", "Dựng timeline"],
           desc: [
             "Nhập ý tưởng và cấu hình đầu ra, sau đó tạo kịch bản đầu tiên có thể chỉnh sửa.",
             "Đọc lại, chỉnh sửa và lưu kịch bản trước khi chuyển sang phân cảnh.",
             "Tạo các nhịp cảnh rồi chỉnh lời đọc, ý đồ hình ảnh và từ khóa tìm tư liệu.",
-            "Phần tìm tư liệu sẽ mở sau khi Scene Planner được verify.",
-            "Timeline sẽ mở sau khi tư liệu đã được chuẩn hóa."
+            "Chuẩn hóa từng cảnh thành yêu cầu media độc lập trước khi gọi bất kỳ nguồn stock nào.",
+            "Timeline sẽ mở sau khi tư liệu đã được giải quyết."
           ],
           backBrief: "Quay lại Brief",
           backScript: "Quay lại Kịch bản",
+          backScenes: "Quay lại Phân cảnh",
           viewScript: "Kiểm tra kịch bản",
           continueScenes: "Tiếp tục: Phân cảnh",
+          continueAssets: "Tiếp tục: Tư liệu",
           locked: "Chưa mở",
           complete: "Đã xong",
           current: "Đang làm",
@@ -72,9 +76,19 @@
     return Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
   }
 
+  function hasAssetRequests() {
+    const current = automation();
+    const scenes = Array.isArray(current?.scenePlan?.scenes) ? current.scenePlan.scenes : [];
+    const requests = Array.isArray(current?.assetRequests) ? current.assetRequests : [];
+    if (!hasScenePlan() || !scenes.length || requests.length !== scenes.length) return false;
+    const planSignature = String(current?.scenePlan?.outputSignature || "");
+    return requests.every(request => String(request?.inputSignature || "") === planSignature);
+  }
+
   function stageAvailable(stage) {
     if (stage === 1) return true;
     if (stage === 2 || stage === 3) return hasScript();
+    if (stage === 4) return hasScenePlan();
     return false;
   }
 
@@ -91,7 +105,8 @@
 
   function initialStage() {
     const saved = storedStage();
-    if (saved >= 1 && saved <= 3 && stageAvailable(saved)) return saved;
+    if (saved >= 1 && saved <= 4 && stageAvailable(saved)) return saved;
+    if (hasAssetRequests()) return 4;
     if (hasScenePlan()) return 3;
     if (hasScript()) return 2;
     return 1;
@@ -122,7 +137,7 @@
 
     const c = copy();
     const stageIndex = Math.max(1, Math.min(5, activeStage));
-    const signature = [locale(), stageIndex, hasScript(), hasScenePlan()].join("|");
+    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests()].join("|");
     if (context.dataset.signature === signature) return context;
     context.dataset.signature = signature;
 
@@ -133,7 +148,10 @@
       actions = '<button class="button ghost" type="button" data-automation-workspace-go="1">← ' + c.backBrief + '</button>' +
         '<button class="button primary" type="button" data-automation-workspace-go="3">' + c.continueScenes + ' →</button>';
     } else if (stageIndex === 3) {
-      actions = '<button class="button ghost" type="button" data-automation-workspace-go="2">← ' + c.backScript + '</button>';
+      actions = '<button class="button ghost" type="button" data-automation-workspace-go="2">← ' + c.backScript + '</button>' +
+        (hasScenePlan() ? '<button class="button primary" type="button" data-automation-workspace-go="4">' + c.continueAssets + ' →</button>' : '');
+    } else if (stageIndex === 4) {
+      actions = '<button class="button ghost" type="button" data-automation-workspace-go="3">← ' + c.backScenes + '</button>';
     }
 
     context.innerHTML = '<div class="automation-step-copy"><span>' + c.step + ' ' + stageIndex + ' ' + c.of + ' 5</span><h3>' + c.titles[stageIndex - 1] + '</h3><p>' + c.desc[stageIndex - 1] + '</p></div>' +
@@ -147,7 +165,7 @@
     stages.forEach((node, index) => {
       const stage = index + 1;
       const available = stageAvailable(stage);
-      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan());
+      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasAssetRequests());
       node.dataset.workspaceStage = String(stage);
       node.classList.toggle("workspace-active", stage === activeStage);
       node.classList.toggle("workspace-completed", completed && stage !== activeStage);
@@ -171,19 +189,24 @@
     const brief = creator.querySelector(".automation-brief-card");
     const script = creator.querySelector(".automation-script-card");
     const scenes = creator.querySelector(":scope > .automation-scenes-host");
+    const assets = creator.querySelector(":scope > .automation-assets-host");
     const quick = creator.querySelector(":scope > .automation-scene-quick");
 
     if (grid instanceof HTMLElement) {
       grid.dataset.workspaceStage = String(activeStage);
-      grid.hidden = activeStage === 3;
+      grid.hidden = activeStage >= 3;
     }
     if (brief instanceof HTMLElement) brief.hidden = activeStage !== 1;
     if (script instanceof HTMLElement) script.hidden = activeStage !== 2;
     if (scenes instanceof HTMLElement) scenes.hidden = activeStage !== 3;
+    if (assets instanceof HTMLElement) assets.hidden = activeStage !== 4;
     if (quick instanceof HTMLElement) quick.hidden = true;
 
     if (activeStage === 3 && !(scenes instanceof HTMLElement)) {
       try { window.ViralAutomationScenesUi?.refresh?.(); } catch {}
+    }
+    if (activeStage === 4 && !(assets instanceof HTMLElement)) {
+      try { window.ViralAutomationAssetsUi?.refresh?.(); } catch {}
     }
   }
 
