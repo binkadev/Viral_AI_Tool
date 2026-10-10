@@ -1,5 +1,4 @@
 /* Core capability guard: never present deferred/prototype actions as production-ready. */
-[data-page="automation"],
 [data-page="workflow"],
 [data-page="workflow-builder"],
 [data-page="monitor"],
