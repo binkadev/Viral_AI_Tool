@@ -19,7 +19,7 @@
     bottomTab: "viral-ai-core-editor-bottom-tab",
     bottomHeight: "viral-ai-core-editor-bottom-height",
     bottomCollapsed: "viral-ai-core-editor-bottom-collapsed",
-    timelineZoom: "viral-ai-core-timeline-zoom",
+    timelineZoom: "viral-ai-core-editor-timeline-zoom",
     timelineSelection: "viral-ai-core-timeline-selection"
   });
 
@@ -67,6 +67,14 @@
     const direct = state?.automation;
     if (direct && typeof direct === "object") return normalizeAutomation(direct);
     return normalizeAutomation(previousAutomation);
+  }
+
+  function automationIdentity(automation) {
+    return automation?.brief?.id || automation?.brief?.inputSignature || null;
+  }
+
+  function automationProjectName(automation) {
+    return String(automation?.brief?.topic || automation?.brief?.product || automationIdentity(automation) || "");
   }
 
   function latestSourceJob(state) {
@@ -167,9 +175,8 @@
     };
   }
 
-  function normalizeCurrent(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") return null;
-    const source = snapshot.source && snapshot.source.path
+  function sourceFromSnapshot(snapshot) {
+    return snapshot?.source && snapshot.source.path
       ? {
           identity: String(snapshot.source.identity || snapshot.source.jobId || snapshot.source.path),
           jobId: snapshot.source.jobId ? String(snapshot.source.jobId) : null,
@@ -179,7 +186,15 @@
           meta: clone(snapshot.source.meta, null)
         }
       : null;
-    if (!source) return null;
+  }
+
+  function normalizeCurrent(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    const source = sourceFromSnapshot(snapshot);
+    const automation = normalizeAutomation(snapshot.automation);
+    if (!source && !automation?.brief) return null;
+    const identity = source?.identity || automationIdentity(automation);
+    if (!identity) return null;
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
       renderOptions: snapshot.workflow?.renderOptions,
@@ -190,12 +205,12 @@
     });
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
-      projectId: String(snapshot.projectId || source.identity),
-      projectName: String(snapshot.projectName || source.name || source.identity),
+      projectId: String(snapshot.projectId || identity),
+      projectName: String(snapshot.projectName || source?.name || automationProjectName(automation) || identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
       workflow,
-      automation: normalizeAutomation(snapshot.automation),
+      automation,
       editor: normalizeEditor(snapshot.editor, source)
     };
   }
@@ -211,14 +226,7 @@
       const migrated = Boolean(snapshot && String(input.projectName || "") !== snapshot.projectName);
       return { snapshot, migrated, unsupportedVersion: null };
     }
-    if (version === 1 && input.source && input.workflow) {
-      return {
-        snapshot: normalizeCurrent({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, automation: input.automation || null }),
-        migrated: true,
-        unsupportedVersion: null
-      };
-    }
-    if (version === 0 && input.source && input.workflow) {
+    if ((version === 1 || version === 0) && (input.source || input.automation) && input.workflow) {
       return {
         snapshot: normalizeCurrent({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, automation: input.automation || null }),
         migrated: true,
@@ -228,9 +236,9 @@
     return { snapshot: null, migrated: false, unsupportedVersion: null };
   }
 
-  function editorFromLegacy(ui = {}, source = null) {
+  function editorFromLegacy(ui = {}, source = null, page = null) {
     return normalizeEditor({
-      page: source ? "ai-video" : "download",
+      page: source ? "ai-video" : String(page || "download"),
       playback: { position: 0, sourceIdentity: source?.identity || null, sourcePath: source?.path || null },
       timeline: {
         tab: ui.bottomTab,
@@ -251,37 +259,49 @@
 
   function fromLegacy(legacyState, legacyUi = {}, now = Date.now()) {
     const source = sourceFromState(legacyState);
-    if (!source) return null;
+    const automation = automationFromState(legacyState);
+    if (!source && !automation?.brief) return null;
+    const identity = source?.identity || automationIdentity(automation);
+    if (!identity) return null;
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
-      projectId: source.identity,
-      projectName: String(legacyState?.projectName || source.name || source.identity),
+      projectId: String(identity),
+      projectName: String(legacyState?.projectName || source?.name || automationProjectName(automation) || identity),
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(legacyState),
-      automation: automationFromState(legacyState),
-      editor: editorFromLegacy(legacyUi, source)
+      automation,
+      editor: editorFromLegacy(legacyUi, source, legacyState?.page)
     };
   }
 
   function buildSnapshot(appState, editorState = {}, previous = null, now = Date.now()) {
     const source = sourceFromState(appState);
-    if (!source) return null;
     const previousSnapshot = migrateSnapshot(previous).snapshot;
-    const sameProject = Boolean(
-      previousSnapshot &&
-      ((source.jobId && previousSnapshot.source?.jobId === source.jobId) || previousSnapshot.source?.identity === source.identity)
+    const directAutomation = automationFromState(appState);
+    const sameSource = Boolean(
+      previousSnapshot && source && previousSnapshot.source &&
+      ((source.jobId && previousSnapshot.source.jobId === source.jobId) || previousSnapshot.source.identity === source.identity)
     );
+    const automation = directAutomation || (sameSource || !source ? normalizeAutomation(previousSnapshot?.automation) : null);
+    if (!source && !automation?.brief) return null;
+    const sameAutomation = Boolean(
+      previousSnapshot?.automation?.brief && automation?.brief &&
+      automationIdentity(previousSnapshot.automation) === automationIdentity(automation)
+    );
+    const sameProject = Boolean(previousSnapshot && (sameSource || sameAutomation));
+    const identity = source?.identity || automationIdentity(automation);
+    if (!identity) return null;
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
-      projectId: sameProject ? previousSnapshot.projectId : source.identity,
+      projectId: sameProject ? previousSnapshot.projectId : String(identity),
       projectName: sameProject
-        ? String(previousSnapshot.projectName || source.name || source.identity)
-        : String(appState?.projectName || source.name || source.identity),
+        ? String(previousSnapshot.projectName || source?.name || automationProjectName(automation) || identity)
+        : String(appState?.projectName || source?.name || automationProjectName(automation) || identity),
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(appState),
-      automation: automationFromState(appState, sameProject ? previousSnapshot?.automation : null),
+      automation,
       editor: normalizeEditor(editorState, source)
     };
   }
@@ -292,7 +312,8 @@
     const workflow = migrated.workflow;
     return {
       ...clone(existing, {}),
-      page: "ai-video",
+      page: migrated.editor?.page || (migrated.source ? "ai-video" : "download"),
+      projectName: migrated.projectName,
       output: workflow.output,
       renderOptions: clone(workflow.renderOptions, {}),
       speech: clone(workflow.speech, {}),
