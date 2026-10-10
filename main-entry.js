@@ -2,7 +2,10 @@
 
 const os = require('os');
 const { app } = require('electron');
-const { installAutomationScriptIpc } = require('./services/automation/desktop-ipc');
+const {
+  installAutomationScriptIpc,
+  cancelAllAutomationScripts
+} = require('./services/automation/desktop-ipc');
 
 const WINDOWS_11_MIN_BUILD = 22000;
 const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
@@ -106,6 +109,9 @@ function installWindowsFirstPaintStabilizer() {
 
 installWindowsFirstPaintStabilizer();
 installAutomationScriptIpc();
+app.on('before-quit', () => {
+  cancelAllAutomationScripts().catch(() => {});
+});
 
 if (STARTUP_DIAGNOSTICS) {
   console.log('[viral-ai:start] windows-rendering-policy', {
