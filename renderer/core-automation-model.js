@@ -78,12 +78,19 @@
     if (!value.topic && !value.product) {
       errors.push({ code: "BRIEF_SUBJECT_REQUIRED", field: "topic", message: "Topic or product is required." });
     }
-    if (!ALLOWED_ASPECTS.has(value.aspectRatio)) {
+
+    const rawAspect = text(input.aspectRatio, 16);
+    if (rawAspect && !ALLOWED_ASPECTS.has(rawAspect)) {
       errors.push({ code: "BRIEF_ASPECT_INVALID", field: "aspectRatio", message: "Aspect ratio is invalid." });
     }
-    if (value.targetDurationSec < MIN_DURATION_SEC || value.targetDurationSec > MAX_DURATION_SEC) {
-      errors.push({ code: "BRIEF_DURATION_INVALID", field: "targetDurationSec", message: "Target duration is invalid." });
+
+    if (input.targetDurationSec != null && input.targetDurationSec !== "") {
+      const rawDuration = Number(input.targetDurationSec);
+      if (!Number.isFinite(rawDuration) || rawDuration < MIN_DURATION_SEC || rawDuration > MAX_DURATION_SEC) {
+        errors.push({ code: "BRIEF_DURATION_INVALID", field: "targetDurationSec", message: "Target duration is invalid." });
+      }
     }
+
     return { ok: errors.length === 0, value, errors };
   }
 
@@ -144,7 +151,7 @@
       id: text(options.id, 160) || "brief-" + signature.split(":").pop(),
       ...validated.value,
       inputSignature: signature,
-      createdAt: now,
+      createdAt: options.createdAt ? String(options.createdAt) : now,
       updatedAt: now
     };
     return { ok: true, value, errors: [], signature };
@@ -193,10 +200,15 @@
   }
 
   function withContentBrief(current, briefInput, options = {}) {
-    const created = createContentBrief(briefInput, options);
-    if (!created.ok) return { ...created, automation: normalizeAutomationState(current) };
     const automation = normalizeAutomationState(current) || emptyAutomationState();
-    const previousSignature = automation.brief?.inputSignature || null;
+    const existingBrief = automation.brief;
+    const created = createContentBrief(briefInput, {
+      ...options,
+      id: options.id || existingBrief?.id || undefined,
+      createdAt: options.createdAt || existingBrief?.createdAt || undefined
+    });
+    if (!created.ok) return { ...created, automation };
+    const previousSignature = existingBrief?.inputSignature || null;
     automation.brief = created.value;
     if (previousSignature && previousSignature !== created.signature) {
       automation.stale.script = Boolean(automation.script);
