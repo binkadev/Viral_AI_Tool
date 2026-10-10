@@ -28,6 +28,20 @@
     "UNKNOWN"
   ]);
 
+  const FALLBACK_PROVIDER_CODES = new Set([
+    "AUTH_REQUIRED",
+    "QUOTA_EXCEEDED",
+    "RATE_LIMITED",
+    "NETWORK_ERROR",
+    "PROVIDER_TIMEOUT",
+    "PROVIDER_REJECTED",
+    "NO_RESULTS",
+    "DOWNLOAD_FAILED",
+    "FILE_INVALID",
+    "MATERIALIZATION_UNAVAILABLE",
+    "UNKNOWN"
+  ]);
+
   function normalizedError(code, message, details = {}) {
     const safeCode = NORMALIZED_CODES.has(String(code || "").toUpperCase())
       ? String(code).toUpperCase()
@@ -69,6 +83,15 @@
       strategies: list(source.strategies),
       mediaTypes: list(source.mediaTypes),
       aspects: list(source.aspects)
+    };
+  }
+
+  function publicCapabilities(provider = {}) {
+    const caps = normalizeCapabilities(provider);
+    return {
+      strategies: [...caps.strategies],
+      mediaTypes: [...caps.mediaTypes],
+      aspects: [...caps.aspects]
     };
   }
 
@@ -150,7 +173,7 @@
       let configuredCount = 0;
       let attemptedCount = 0;
       let hadEmptyResults = false;
-      let lastRetryable = null;
+      let lastProviderError = null;
 
       for (const provider of compatible) {
         const providerId = String(provider.id);
@@ -169,6 +192,7 @@
           const candidates = normalizeCandidates(rawCandidates, providerId, request);
           if (!candidates.length) {
             hadEmptyResults = true;
+            lastProviderError = normalizedError("NO_RESULTS", "Provider returned no usable assets.", { provider: providerId, retryable: true, phase: "search" });
             continue;
           }
 
@@ -186,16 +210,14 @@
         } catch (error) {
           const mapped = mapProviderError(error, providerId, "provider");
           if (mapped.code === "CANCELLED") throw mapped;
-          if (mapped.details?.retryable) {
-            lastRetryable = mapped;
-            continue;
-          }
+          lastProviderError = mapped;
+          if (FALLBACK_PROVIDER_CODES.has(mapped.code)) continue;
           throw mapped;
         }
       }
 
       if (!configuredCount) throw normalizedError("PROVIDER_NOT_CONFIGURED", "No compatible asset provider is configured.", { phase: "configuration" });
-      if (hadEmptyResults || attemptedCount) throw lastRetryable || normalizedError("NO_RESULTS", "No provider returned a usable asset.", { phase: "search" });
+      if (hadEmptyResults || attemptedCount) throw lastProviderError || normalizedError("NO_RESULTS", "No provider returned a usable asset.", { phase: "search" });
       throw normalizedError("UNSUPPORTED_REQUEST", "No configured provider can execute this request.", { phase: "routing" });
     }
 
@@ -212,7 +234,7 @@
 
     function status() {
       return {
-        providers: orderedProviders().map(provider => ({ id: String(provider.id), capabilities: normalizeCapabilities(provider) })),
+        providers: orderedProviders().map(provider => ({ id: String(provider.id), capabilities: publicCapabilities(provider) })),
         activeRequestSignatures: [...active.keys()]
       };
     }
@@ -222,9 +244,11 @@
 
   return {
     NORMALIZED_CODES,
+    FALLBACK_PROVIDER_CODES,
     normalizedError,
     mapProviderError,
     normalizeCapabilities,
+    publicCapabilities,
     providerSupports,
     normalizeCandidates,
     createRouter
