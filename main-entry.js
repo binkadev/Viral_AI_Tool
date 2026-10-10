@@ -14,6 +14,10 @@ const {
   installAutomationCompositionPreviewIpc,
   cancelAllAutomationCompositionPreviews
 } = require('./services/automation/composition-preview-ipc');
+const {
+  installAutomationCompositionExportIpc,
+  cancelAllAutomationCompositionExports
+} = require('./services/automation/composition-export-ipc');
 
 const WINDOWS_11_MIN_BUILD = 22000;
 const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
@@ -119,10 +123,12 @@ installWindowsFirstPaintStabilizer();
 installAutomationScriptIpc();
 installAutomationStockIpc();
 installAutomationCompositionPreviewIpc();
+installAutomationCompositionExportIpc();
 app.on('before-quit', () => {
   cancelAllAutomationScripts().catch(() => {});
   cancelAllAutomationStockOperations();
   cancelAllAutomationCompositionPreviews();
+  cancelAllAutomationCompositionExports();
 });
 
 if (STARTUP_DIAGNOSTICS) {
