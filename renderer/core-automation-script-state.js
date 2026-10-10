@@ -41,6 +41,15 @@
     };
   }
 
+  function markDownstreamStale(current) {
+    if (!current?.automation) return;
+    current.automation.stale.scenes = Boolean(current.automation.scenePlan);
+    current.automation.stale.assets = (current.automation.resolvedAssets || [])
+      .map(asset => String(asset?.id || asset?.requestId || ""))
+      .filter(Boolean);
+    current.automation.stale.composition = Boolean(current.automation.composition);
+  }
+
   function acceptScript(input) {
     const current = currentState();
     if (!current) return { ok: false, code: "AUTOMATION_STATE_UNAVAILABLE" };
@@ -65,15 +74,63 @@
     current.automation.stale.script = false;
 
     if (previousOutputSignature && previousOutputSignature !== script.outputSignature) {
-      current.automation.stale.scenes = Boolean(current.automation.scenePlan);
-      current.automation.stale.assets = (current.automation.resolvedAssets || [])
-        .map(asset => String(asset?.id || asset?.requestId || ""))
-        .filter(Boolean);
-      current.automation.stale.composition = Boolean(current.automation.composition);
+      markDownstreamStale(current);
     }
 
     emit("automation-script-accepted");
     return { ok: true, script: clone(script, script) };
+  }
+
+  function editScript(patch = {}) {
+    const current = currentState();
+    const existing = current?.automation?.script;
+    if (!current?.automation?.brief || !existing) {
+      return { ok: false, code: "AUTOMATION_SCRIPT_REQUIRED" };
+    }
+
+    const next = normalizeScriptDocument({
+      ...existing,
+      ...patch,
+      inputSignature: existing.inputSignature,
+      outputSignature: "script-edit:" + Date.now().toString(36),
+      meta: {
+        ...(existing.meta && typeof existing.meta === "object" ? existing.meta : {}),
+        userEdited: true
+      },
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+
+    if (!next) return { ok: false, code: "AUTOMATION_SCRIPT_RESULT_INVALID" };
+    const expectedSignature = String(current.automation.brief.inputSignature || "");
+    if (next.inputSignature !== expectedSignature) {
+      return { ok: false, code: "STALE_INPUT" };
+    }
+
+    const semanticBefore = JSON.stringify({
+      title: existing.title || "",
+      hook: existing.hook || "",
+      body: existing.body || "",
+      callToAction: existing.callToAction || "",
+      narrationText: existing.narrationText || ""
+    });
+    const semanticAfter = JSON.stringify({
+      title: next.title,
+      hook: next.hook,
+      body: next.body,
+      callToAction: next.callToAction,
+      narrationText: next.narrationText
+    });
+
+    if (semanticBefore === semanticAfter) {
+      return { ok: true, script: clone(existing, existing), changed: false };
+    }
+
+    current.automation.script = next;
+    current.automation.stale.script = false;
+    markDownstreamStale(current);
+    emit("automation-script-edited");
+    return { ok: true, script: clone(next, next), changed: true };
   }
 
   function setJob(job) {
@@ -97,6 +154,7 @@
   window.ViralAutomationScriptState = {
     normalizeScriptDocument,
     acceptScript,
+    editScript,
     setJob,
     snapshot
   };
