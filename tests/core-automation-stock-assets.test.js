@@ -33,7 +33,18 @@ async function run() {
   assert(adopted.record.checksum.startsWith("sha256:"));
   const cached = await cache.get("provider:item:1");
   assert(cached && cached.localPath === adopted.record.localPath);
-  await fsp.rm(adopted.record.localPath, { force: true });
+
+  await fsp.writeFile(adopted.record.localPath, Buffer.from("corrupted-cache"));
+  assert.strictEqual(await cache.get("provider:item:1"), null, "checksum mismatch must recover as a cache miss");
+
+  const restored = await cache.adopt({
+    cacheKey: "provider:item:1",
+    sourcePath: source,
+    extension: ".mp4",
+    metadata: { provider: "test", providerAssetId: "1", width: 720, height: 1280, durationSec: 4 }
+  });
+  assert.strictEqual(restored.cacheHit, false);
+  await fsp.rm(restored.record.localPath, { force: true });
   assert.strictEqual(await cache.get("provider:item:1"), null, "missing cached file must recover as a cache miss");
   await fsp.rm(tempRoot, { recursive: true, force: true });
 
@@ -83,9 +94,13 @@ async function run() {
   assert.strictEqual(await dev.isConfigured(), false);
 
   const ipc = read("services/automation/stock-desktop-ipc.js");
+  const cacheSource = read("services/automation/asset-cache.js");
   const preload = read("preload.js");
   const bridge = read("renderer/core-automation-desktop-stock-provider.js");
+  const assetState = read("renderer/core-automation-asset-state.js");
   const assetUi = read("renderer/core-automation-assets-ui.js");
+  const assetCss = read("renderer/core-automation-assets-ui.css");
+  const workspace = read("renderer/core-automation-workspace.js");
   const index = read("renderer/index.html");
   const mainEntry = read("main-entry.js");
   const env = read(".env.example");
@@ -101,6 +116,9 @@ async function run() {
     "cancelAllAutomationStockOperations"
   ]) assert(ipc.includes(required), "Stock IPC missing: " + required);
   assert(!ipc.includes("PEXELS_API_KEY"), "Stock IPC response layer must not read or expose provider secrets directly");
+
+  assert(cacheSource.includes("actualChecksum"), "asset cache must verify stored checksums before reuse");
+  assert(cacheSource.includes("actualChecksum !== String(record.checksum)"));
 
   for (const required of [
     "getAutomationStockStatus",
@@ -119,12 +137,37 @@ async function run() {
   assert(!bridge.includes("PEXELS_API_KEY"));
 
   for (const required of [
+    "async function resolveAll",
+    "async function validateLocalAssets",
+    "function completion()",
+    "automation-asset-file-health",
+    "currentAssetForRequest"
+  ]) assert(assetState.includes(required), "Asset state recovery missing: " + required);
+  assert(assetState.includes("must never clear an"), "request sync must preserve file-health stale markers");
+
+  for (const required of [
     "data-asset-resolve",
     "resolveScene(sceneId)",
     "ViralAutomationAssetState?.resolveScene",
+    "data-asset-resolve-all",
+    "data-asset-cancel-all",
+    "data-asset-validate",
+    "validateAssetHealth",
+    "ViralAutomationAssetState?.resolveAll",
     "data-asset-open",
     "viral-ai:automation-stock-status"
-  ]) assert(assetUi.includes(required), "Assets UI real materialization missing: " + required);
+  ]) assert(assetUi.includes(required), "Assets UI real materialization/recovery missing: " + required);
+
+  for (const required of [
+    ".automation-assets-batch",
+    ".automation-assets-batch-bar",
+    ".automation-asset-nav-state.is-missing",
+    ".automation-asset-status.is-missing",
+    ".automation-asset-resolved.is-unhealthy"
+  ]) assert(assetCss.includes(required), "Assets recovery CSS missing: " + required);
+
+  assert(workspace.includes("function hasResolvedAssets()"));
+  assert(workspace.includes("stage === 4 && hasResolvedAssets()"), "stage 4 must complete only when every asset is resolved and healthy");
 
   assert(index.includes('src="core-automation-desktop-stock-provider.js"'));
   assert(index.indexOf('src="core-automation-asset-state.js"') < index.indexOf('src="core-automation-desktop-stock-provider.js"'));
@@ -136,7 +179,7 @@ async function run() {
   assert(pkg.scripts["test:core-automation-stock-assets"], "package.json must expose stock asset regression.");
   assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-stock-assets"), "commercial regression must gate stock assets.");
 
-  console.log("Automation stock provider bridge, Pexels normalization, no-key dev provider, durable cache and real Assets workspace materialization tests passed.");
+  console.log("Automation stock assets batch resolution, cancellation, local-file recovery, checksum cache integrity and workspace completion tests passed.");
 }
 
 run().catch(error => {
