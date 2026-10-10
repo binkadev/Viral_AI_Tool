@@ -4,6 +4,11 @@
   let queued = false;
   let selectedSceneId = null;
   let resolvingSceneId = null;
+  let batchController = null;
+  let batchProgress = null;
+  let healthScanning = false;
+  let healthScanKey = "";
+  const assetHealth = new Map();
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -19,7 +24,7 @@
       ? {
           eyebrow: "04 · Assets",
           title: "Media requests",
-          intro: "Each scene is converted into a provider-neutral request, then resolved through the configured stock source and local cache.",
+          intro: "Resolve every scene through the configured stock source. Downloaded files remain editable project assets and are verified on reopen.",
           sync: "Prepare requests",
           refresh: "Refresh requests",
           required: "Create and review scenes before preparing media requests.",
@@ -37,20 +42,28 @@
           prepared: "Media requests are ready.",
           resolved: "Resolved",
           stale: "Needs refresh",
+          missingFile: "Local file missing",
           noRequests: "No media requests yet",
           noRequestsBody: "Prepare requests from the accepted Scene Plan. This does not download media yet.",
           total: "requests",
           find: "Find & download media",
           finding: "Finding media...",
           open: "Show downloaded file",
+          recover: "Recover media",
           cacheHit: "Cache reused",
           downloaded: "Downloaded",
-          resolveFailed: "Could not resolve media for this scene."
+          resolveFailed: "Could not resolve media for this scene.",
+          resolveAll: "Resolve all scenes",
+          resolvingAll: "Resolving assets",
+          cancelAll: "Stop",
+          allReady: "All scene assets are ready",
+          batchPartial: "Some scenes still need attention",
+          batchCancelled: "Asset resolution stopped"
         }
       : {
           eyebrow: "04 · Tư liệu",
           title: "Yêu cầu tư liệu",
-          intro: "Mỗi cảnh được chuẩn hóa thành yêu cầu media, sau đó được tìm qua nguồn stock đã cấu hình và lưu vào cache cục bộ.",
+          intro: "Tìm tư liệu cho từng cảnh qua nguồn stock đã cấu hình. File tải về thuộc project và được kiểm tra lại khi mở project.",
           sync: "Chuẩn hóa yêu cầu",
           refresh: "Làm mới yêu cầu",
           required: "Hãy tạo và kiểm tra phân cảnh trước khi chuẩn bị tư liệu.",
@@ -68,15 +81,23 @@
           prepared: "Đã chuẩn bị yêu cầu tư liệu.",
           resolved: "Đã có tư liệu",
           stale: "Cần làm mới",
+          missingFile: "File cục bộ bị thiếu",
           noRequests: "Chưa có yêu cầu tư liệu",
           noRequestsBody: "Chuẩn hóa yêu cầu từ Scene Plan đã chốt. Bước này chưa tải media.",
           total: "yêu cầu",
           find: "Tìm & tải tư liệu",
           finding: "Đang tìm tư liệu...",
           open: "Mở file đã tải",
+          recover: "Khôi phục tư liệu",
           cacheHit: "Đã dùng lại cache",
           downloaded: "Đã tải về",
-          resolveFailed: "Không thể tìm tư liệu phù hợp cho cảnh này."
+          resolveFailed: "Không thể tìm tư liệu phù hợp cho cảnh này.",
+          resolveAll: "Tải tư liệu cho tất cả cảnh",
+          resolvingAll: "Đang xử lý tư liệu",
+          cancelAll: "Dừng",
+          allReady: "Tất cả cảnh đã có tư liệu",
+          batchPartial: "Một số cảnh vẫn cần xử lý",
+          batchCancelled: "Đã dừng xử lý tư liệu"
         };
   }
 
@@ -95,9 +116,27 @@
     return Array.isArray(list) ? list : [];
   }
 
-  function resolvedAssetFor(request) {
+  function staleAssetIds() {
+    return new Set(Array.isArray(automation()?.stale?.assets) ? automation().stale.assets.map(String) : []);
+  }
+
+  function assetRecordFor(request) {
     const assets = Array.isArray(automation()?.resolvedAssets) ? automation().resolvedAssets : [];
     return assets.find(asset => String(asset?.requestSignature || "") === String(request?.requestSignature || "")) || null;
+  }
+
+  function assetStateFor(request) {
+    const asset = assetRecordFor(request);
+    if (!asset) return { asset: null, state: "ready" };
+    const health = assetHealth.get(String(asset.id || ""));
+    if (health === "missing") return { asset, state: "missing" };
+    if (staleAssetIds().has(String(asset.id || ""))) return { asset, state: "stale" };
+    return { asset, state: "resolved" };
+  }
+
+  function resolvedAssetFor(request) {
+    const result = assetStateFor(request);
+    return result.state === "resolved" ? result.asset : null;
   }
 
   function stockStatus() {
@@ -107,6 +146,13 @@
   function readyProviders() {
     const list = Array.isArray(stockStatus()?.providers) ? stockStatus().providers : [];
     return list.filter(item => item?.ready === true);
+  }
+
+  function completion() {
+    const list = requests();
+    let resolved = 0;
+    for (const request of list) if (resolvedAssetFor(request)) resolved += 1;
+    return { total: list.length, resolved, missing: Math.max(0, list.length - resolved), complete: list.length > 0 && resolved === list.length };
   }
 
   function ensureSelection(list = requests()) {
@@ -132,6 +178,35 @@
     return host;
   }
 
+  function healthSignature() {
+    return (Array.isArray(automation()?.resolvedAssets) ? automation().resolvedAssets : [])
+      .map(asset => [asset?.id, asset?.localPath].join("@"))
+      .sort()
+      .join("|");
+  }
+
+  async function validateAssetHealth({ force = false } = {}) {
+    const key = healthSignature();
+    if (!key) {
+      assetHealth.clear();
+      healthScanKey = "";
+      return;
+    }
+    if (healthScanning || (!force && key === healthScanKey)) return;
+    healthScanning = true;
+    healthScanKey = key;
+    try {
+      const result = await window.ViralAutomationAssetState?.validateLocalAssets?.();
+      const missing = new Set(Array.isArray(result?.missing) ? result.missing.map(String) : []);
+      const available = new Set(Array.isArray(result?.available) ? result.available.map(String) : []);
+      for (const id of missing) assetHealth.set(id, "missing");
+      for (const id of available) assetHealth.set(id, "available");
+    } finally {
+      healthScanning = false;
+      render({ force: true });
+    }
+  }
+
   function signature() {
     const current = automation();
     return JSON.stringify({
@@ -139,42 +214,58 @@
       plan: current?.scenePlan?.outputSignature || null,
       selectedSceneId,
       resolvingSceneId,
+      batch: batchProgress,
       requests: requests().map(request => ({ id: request.id, sceneId: request.sceneId, signature: request.requestSignature })),
-      assets: (Array.isArray(current?.resolvedAssets) ? current.resolvedAssets : []).map(asset => ({ id: asset.id, signature: asset.requestSignature, localPath: asset.localPath })),
+      assets: (Array.isArray(current?.resolvedAssets) ? current.resolvedAssets : []).map(asset => ({ id: asset.id, signature: asset.requestSignature, localPath: asset.localPath, health: assetHealth.get(String(asset.id || "")) || "unknown" })),
       stale: current?.stale?.assets || [],
       providers: (Array.isArray(stockStatus()?.providers) ? stockStatus().providers : []).map(provider => ({ id: provider.id, ready: provider.ready }))
     });
   }
 
-  function navItem(request, index, selected) {
+  function stateLabel(state, resolving) {
     const c = copy();
-    const asset = resolvedAssetFor(request);
+    if (resolving) return c.finding;
+    if (state === "resolved") return c.resolved;
+    if (state === "missing") return c.missingFile;
+    if (state === "stale") return c.stale;
+    return c.ready;
+  }
+
+  function navItem(request, index, selected) {
+    const result = assetStateFor(request);
     const resolving = resolvingSceneId === request.sceneId;
+    const stateClass = result.state === "resolved" ? "is-resolved" : result.state === "missing" ? "is-missing" : result.state === "stale" ? "is-stale" : "";
     return '<button class="automation-asset-nav-item' + (selected ? ' is-selected' : '') + '" type="button" data-asset-scene="' + esc(request.sceneId) + '">' +
       '<span class="automation-asset-nav-index">' + String(index + 1).padStart(2, "0") + '</span>' +
-      '<span class="automation-asset-nav-copy"><b>' + esc(c.scene) + ' ' + (index + 1) + '</b><small>' + esc(request.desiredDurationSec) + 's · ' + esc(request.aspectRatio) + '</small><em>' + esc(request.query) + '</em></span>' +
-      '<span class="automation-asset-nav-state ' + (asset ? 'is-resolved' : '') + '">' + esc(resolving ? c.finding : asset ? c.resolved : c.ready) + '</span>' +
+      '<span class="automation-asset-nav-copy"><b>' + esc(copy().scene) + ' ' + (index + 1) + '</b><small>' + esc(request.desiredDurationSec) + 's · ' + esc(request.aspectRatio) + '</small><em>' + esc(request.query) + '</em></span>' +
+      '<span class="automation-asset-nav-state ' + stateClass + '">' + esc(stateLabel(result.state, resolving)) + '</span>' +
     '</button>';
   }
 
   function inspector(request, index) {
     const c = copy();
-    const asset = resolvedAssetFor(request);
+    const result = assetStateFor(request);
+    const asset = result.asset;
+    const healthyAsset = result.state === "resolved" ? asset : null;
     const providers = readyProviders();
     const providerText = asset?.provider || providers.map(provider => provider.id).join(", ") || c.providerMissing;
     const constraints = Array.isArray(request.negativeConstraints) && request.negativeConstraints.length
       ? request.negativeConstraints.join(", ")
       : "—";
     const resolving = resolvingSceneId === request.sceneId;
-    const action = asset
-      ? '<button class="button primary" type="button" data-asset-open="' + esc(asset.localPath) + '">' + esc(c.open) + '</button>'
-      : '<button class="button primary" type="button" data-asset-resolve="' + esc(request.sceneId) + '"' + (providers.length && !resolving ? '' : ' disabled aria-disabled="true"') + '>' + esc(resolving ? c.finding : providers.length ? c.find : c.providerMissing) + '</button>';
+    let action = "";
+    if (healthyAsset) {
+      action = '<button class="button primary" type="button" data-asset-open="' + esc(healthyAsset.localPath) + '">' + esc(c.open) + '</button>';
+    } else {
+      const label = result.state === "missing" || result.state === "stale" ? c.recover : c.find;
+      action = '<button class="button primary" type="button" data-asset-resolve="' + esc(request.sceneId) + '"' + (providers.length && !resolving && !batchController ? '' : ' disabled aria-disabled="true"') + '>' + esc(resolving ? c.finding : providers.length ? label : c.providerMissing) + '</button>';
+    }
     const assetMeta = asset
-      ? '<div class="automation-asset-resolved"><span>' + esc(asset.cacheKey ? c.downloaded : c.resolved) + '</span><strong>' + esc(asset.localPath) + '</strong><small>' + esc([asset.provider, asset.attribution, asset.license].filter(Boolean).join(' · ')) + '</small></div>'
+      ? '<div class="automation-asset-resolved ' + (result.state !== "resolved" ? 'is-unhealthy' : '') + '"><span>' + esc(result.state === "missing" ? c.missingFile : result.state === "stale" ? c.stale : asset.cacheKey ? c.downloaded : c.resolved) + '</span><strong>' + esc(asset.localPath) + '</strong><small>' + esc([asset.provider, asset.attribution, asset.license].filter(Boolean).join(' · ')) + '</small></div>'
       : '';
 
     return '<section class="automation-asset-inspector">' +
-      '<header class="automation-asset-inspector-head"><div><div class="eyebrow">' + esc(c.scene) + ' ' + (index + 1) + '</div><h4>' + esc(request.query) + '</h4><p>' + esc(request.requestSignature) + '</p></div><span class="automation-asset-status' + (asset ? ' is-resolved' : '') + '">' + esc(asset ? c.resolved : c.ready) + '</span></header>' +
+      '<header class="automation-asset-inspector-head"><div><div class="eyebrow">' + esc(c.scene) + ' ' + (index + 1) + '</div><h4>' + esc(request.query) + '</h4><p>' + esc(request.requestSignature) + '</p></div><span class="automation-asset-status ' + (result.state === "resolved" ? 'is-resolved' : result.state === "missing" ? 'is-missing' : result.state === "stale" ? 'is-stale' : '') + '">' + esc(stateLabel(result.state, resolving)) + '</span></header>' +
       '<div class="automation-asset-spec-grid">' +
         '<div class="automation-asset-spec span-2"><span>' + esc(c.query) + '</span><strong>' + esc(request.query) + '</strong></div>' +
         '<div class="automation-asset-spec"><span>' + esc(c.type) + '</span><strong>' + esc(request.mediaType) + '</strong></div>' +
@@ -188,6 +279,24 @@
     '</section>';
   }
 
+  function batchMarkup(list) {
+    const c = copy();
+    const progress = batchProgress;
+    const done = completion();
+    const providers = readyProviders();
+    if (!list.length) return "";
+    if (batchController) {
+      const completed = Number(progress?.completed || 0);
+      const total = Number(progress?.total || list.length);
+      const percent = total ? Math.round((completed / total) * 100) : 0;
+      return '<div class="automation-assets-batch is-running"><div><b>' + esc(c.resolvingAll) + '</b><span>' + completed + '/' + total + ' · ' + percent + '%</span><div class="automation-assets-batch-bar"><i style="width:' + percent + '%"></i></div></div><button class="button ghost" type="button" data-asset-cancel-all>' + esc(c.cancelAll) + '</button></div>';
+    }
+    if (done.complete) {
+      return '<div class="automation-assets-batch is-complete"><div><b>' + esc(c.allReady) + '</b><span>' + done.resolved + '/' + done.total + '</span></div><button class="button ghost" type="button" data-asset-validate>' + esc(c.refresh) + '</button></div>';
+    }
+    return '<div class="automation-assets-batch"><div><b>' + done.resolved + '/' + done.total + ' ' + esc(c.resolved.toLowerCase()) + '</b><span>' + done.missing + ' ' + esc(c.total) + ' ' + esc(c.ready.toLowerCase()) + '</span></div><button class="button primary" type="button" data-asset-resolve-all' + (providers.length ? '' : ' disabled aria-disabled="true"') + '>' + esc(providers.length ? c.resolveAll : c.providerMissing) + '</button></div>';
+  }
+
   function markup() {
     const c = copy();
     const current = automation();
@@ -199,9 +308,9 @@
     const selected = ensureSelection(list);
     const selectedIndex = selected ? list.findIndex(request => request.sceneId === selected.sceneId) : -1;
     return '<section class="automation-assets-panel">' +
-      '<header class="automation-assets-head"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.intro) + '</p></div><button id="automationSyncAssetRequests" class="button primary" type="button">' + esc(list.length ? c.refresh : c.sync) + '</button></header>' +
+      '<header class="automation-assets-head"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.intro) + '</p></div><button id="automationSyncAssetRequests" class="button ghost" type="button"' + (batchController ? ' disabled aria-disabled="true"' : '') + '>' + esc(list.length ? c.refresh : c.sync) + '</button></header>' +
       (list.length
-        ? '<div class="automation-assets-summary"><b>' + list.length + ' ' + esc(c.total) + '</b><span>provider-neutral</span><span>stock-first</span><span>' + esc(readyProviders().length ? readyProviders().map(item => item.id).join(', ') : c.providerMissing) + '</span></div><div class="automation-assets-workbench"><aside class="automation-assets-nav">' + list.map((request, index) => navItem(request, index, request.sceneId === selected?.sceneId)).join("") + '</aside>' + (selected ? inspector(selected, selectedIndex) : '') + '</div>'
+        ? '<div class="automation-assets-summary"><b>' + list.length + ' ' + esc(c.total) + '</b><span>provider-neutral</span><span>stock-first</span><span>' + esc(readyProviders().length ? readyProviders().map(item => item.id).join(', ') : c.providerMissing) + '</span></div>' + batchMarkup(list) + '<div class="automation-assets-workbench"><aside class="automation-assets-nav">' + list.map((request, index) => navItem(request, index, request.sceneId === selected?.sceneId)).join("") + '</aside>' + (selected ? inspector(selected, selectedIndex) : '') + '</div>'
         : '<div class="automation-assets-empty"><div class="automation-assets-empty-icon">04</div><div><h4>' + esc(c.noRequests) + '</h4><p>' + esc(c.noRequestsBody) + '</p><button id="automationSyncAssetRequestsEmpty" class="button primary" type="button">' + esc(c.sync) + '</button></div></div>') +
     '</section>';
   }
@@ -215,31 +324,74 @@
     host.dataset.assetUiSignature = next;
     const html = markup();
     if (host.innerHTML !== html) host.innerHTML = html;
+    validateAssetHealth().catch(() => {});
   }
 
   function sync() {
     const result = window.ViralAutomationAssetState?.syncRequests?.();
     if (result?.ok) {
       selectedSceneId = result.requests?.[0]?.sceneId || selectedSceneId;
+      healthScanKey = "";
       render({ force: true });
       try { if (typeof toast === "function") toast(copy().prepared); } catch {}
     }
   }
 
   async function resolveScene(sceneId) {
-    if (!sceneId || resolvingSceneId) return;
+    if (!sceneId || resolvingSceneId || batchController) return;
     resolvingSceneId = sceneId;
     render({ force: true });
     try {
       const result = await window.ViralAutomationAssetState?.resolveScene?.(sceneId);
       if (!result?.ok) {
         try { if (typeof toast === "function") toast(copy().resolveFailed); } catch {}
+      } else {
+        healthScanKey = "";
+        await validateAssetHealth({ force: true });
       }
     } finally {
       resolvingSceneId = null;
       render({ force: true });
       window.ViralAutomationDesktopStockProvider?.refreshStatus?.().catch?.(() => {});
     }
+  }
+
+  async function resolveAll() {
+    if (batchController || !readyProviders().length) return;
+    batchController = new AbortController();
+    batchProgress = { completed: 0, total: requests().length, resolved: 0, skipped: 0, state: "starting" };
+    render({ force: true });
+    try {
+      const result = await window.ViralAutomationAssetState?.resolveAll?.({
+        signal: batchController.signal,
+        onProgress: progress => {
+          batchProgress = progress;
+          resolvingSceneId = progress?.state === "resolving" ? progress.sceneId : null;
+          if (progress?.sceneId) selectedSceneId = progress.sceneId;
+          render({ force: true });
+        }
+      });
+      if (result?.code === "CANCELLED") {
+        try { if (typeof toast === "function") toast(copy().batchCancelled); } catch {}
+      } else if (!result?.ok) {
+        try { if (typeof toast === "function") toast(copy().batchPartial); } catch {}
+      } else {
+        try { if (typeof toast === "function") toast(copy().allReady); } catch {}
+      }
+      healthScanKey = "";
+      await validateAssetHealth({ force: true });
+    } finally {
+      batchController = null;
+      batchProgress = null;
+      resolvingSceneId = null;
+      render({ force: true });
+      window.ViralAutomationDesktopStockProvider?.refreshStatus?.().catch?.(() => {});
+    }
+  }
+
+  function cancelAll() {
+    if (!batchController) return;
+    try { batchController.abort(); } catch {}
   }
 
   function queue() {
@@ -258,6 +410,22 @@
     if (target.closest("#automationSyncAssetRequests, #automationSyncAssetRequestsEmpty")) {
       event.preventDefault();
       sync();
+      return;
+    }
+    if (target.closest("[data-asset-resolve-all]")) {
+      event.preventDefault();
+      resolveAll();
+      return;
+    }
+    if (target.closest("[data-asset-cancel-all]")) {
+      event.preventDefault();
+      cancelAll();
+      return;
+    }
+    if (target.closest("[data-asset-validate]")) {
+      event.preventDefault();
+      healthScanKey = "";
+      validateAssetHealth({ force: true }).catch(() => {});
       return;
     }
     const resolve = target.closest("[data-asset-resolve]");
@@ -298,5 +466,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 
-  window.ViralAutomationAssetsUi = { refresh: queue, render };
+  window.ViralAutomationAssetsUi = { refresh: queue, render, resolveAll, validateAssetHealth };
 })();
