@@ -1,11 +1,14 @@
 (function attachCoreProjectSnapshot(root, factory) {
-  const api = factory();
+  const automationModel = (typeof module !== "undefined" && module.exports)
+    ? require("./core-automation-model")
+    : root?.ViralAutomationModel;
+  const api = factory(automationModel);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreProjectSnapshot = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot() {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(automationModel) {
   "use strict";
 
-  const CURRENT_SCHEMA_VERSION = 1;
+  const CURRENT_SCHEMA_VERSION = 2;
   const SNAPSHOT_KEY = "viral-ai-core-project-snapshot";
   const LEGACY_STATE_KEY = "viral-ai-tool-state";
   const LEGACY_UI_KEYS = Object.freeze({
@@ -16,7 +19,7 @@
     bottomTab: "viral-ai-core-editor-bottom-tab",
     bottomHeight: "viral-ai-core-editor-bottom-height",
     bottomCollapsed: "viral-ai-core-editor-bottom-collapsed",
-    timelineZoom: "viral-ai-core-editor-timeline-zoom",
+    timelineZoom: "viral-ai-core-timeline-zoom",
     timelineSelection: "viral-ai-core-timeline-selection"
   });
 
@@ -52,6 +55,18 @@
 
   function safeJobs(jobs) {
     return (Array.isArray(jobs) ? jobs : []).map(safeJob).filter(Boolean).slice(0, 100);
+  }
+
+  function normalizeAutomation(value) {
+    if (!value || typeof value !== "object") return null;
+    if (automationModel?.normalizeAutomationState) return automationModel.normalizeAutomationState(value);
+    return clone(value, null);
+  }
+
+  function automationFromState(state, previousAutomation = null) {
+    const direct = state?.automation;
+    if (direct && typeof direct === "object") return normalizeAutomation(direct);
+    return normalizeAutomation(previousAutomation);
   }
 
   function latestSourceJob(state) {
@@ -152,7 +167,7 @@
     };
   }
 
-  function normalizeV1(snapshot) {
+  function normalizeCurrent(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return null;
     const source = snapshot.source && snapshot.source.path
       ? {
@@ -180,6 +195,7 @@
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
       workflow,
+      automation: normalizeAutomation(snapshot.automation),
       editor: normalizeEditor(snapshot.editor, source)
     };
   }
@@ -191,13 +207,20 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV1(input);
+      const snapshot = normalizeCurrent(input);
       const migrated = Boolean(snapshot && String(input.projectName || "") !== snapshot.projectName);
       return { snapshot, migrated, unsupportedVersion: null };
     }
+    if (version === 1 && input.source && input.workflow) {
+      return {
+        snapshot: normalizeCurrent({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, automation: input.automation || null }),
+        migrated: true,
+        unsupportedVersion: null
+      };
+    }
     if (version === 0 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV1({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION }),
+        snapshot: normalizeCurrent({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, automation: input.automation || null }),
         migrated: true,
         unsupportedVersion: null
       };
@@ -236,6 +259,7 @@
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(legacyState),
+      automation: automationFromState(legacyState),
       editor: editorFromLegacy(legacyUi, source)
     };
   }
@@ -257,6 +281,7 @@
       updatedAt: new Date(now).toISOString(),
       source,
       workflow: workflowFromState(appState),
+      automation: automationFromState(appState, sameProject ? previousSnapshot?.automation : null),
       editor: normalizeEditor(editorState, source)
     };
   }
@@ -273,7 +298,8 @@
       speech: clone(workflow.speech, {}),
       translation: clone(workflow.translation, {}),
       voice: clone(workflow.voice, {}),
-      jobs: safeJobs(workflow.jobs)
+      jobs: safeJobs(workflow.jobs),
+      automation: clone(migrated.automation, null)
     };
   }
 
@@ -311,6 +337,7 @@
     latestSourceJob,
     sourceFromState,
     workflowFromState,
+    automationFromState,
     normalizeEditor,
     migrateSnapshot,
     fromLegacy,
