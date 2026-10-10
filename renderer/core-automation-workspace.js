@@ -29,7 +29,7 @@
             "Enter the idea and output settings, then generate the first editable script.",
             "Review, edit and save the script before turning it into visual scenes.",
             "Create scene beats, then refine narration, visual intent and media search terms.",
-            "Normalize each scene into a provider-neutral media request before any stock source is called.",
+            "Resolve each scene into a healthy local media asset before timeline composition begins.",
             "Timeline composition starts after media assets are resolved."
           ],
           backBrief: "Back to brief",
@@ -51,7 +51,7 @@
             "Nhập ý tưởng và cấu hình đầu ra, sau đó tạo kịch bản đầu tiên có thể chỉnh sửa.",
             "Đọc lại, chỉnh sửa và lưu kịch bản trước khi chuyển sang phân cảnh.",
             "Tạo các nhịp cảnh rồi chỉnh lời đọc, ý đồ hình ảnh và từ khóa tìm tư liệu.",
-            "Chuẩn hóa từng cảnh thành yêu cầu media độc lập trước khi gọi bất kỳ nguồn stock nào.",
+            "Giải quyết từng cảnh thành file tư liệu cục bộ còn hoạt động trước khi dựng timeline.",
             "Timeline sẽ mở sau khi tư liệu đã được giải quyết."
           ],
           backBrief: "Quay lại Brief",
@@ -83,6 +83,18 @@
     if (!hasScenePlan() || !scenes.length || requests.length !== scenes.length) return false;
     const planSignature = String(current?.scenePlan?.outputSignature || "");
     return requests.every(request => String(request?.inputSignature || "") === planSignature);
+  }
+
+  function hasResolvedAssets() {
+    const current = automation();
+    const requests = Array.isArray(current?.assetRequests) ? current.assetRequests : [];
+    const assets = Array.isArray(current?.resolvedAssets) ? current.resolvedAssets : [];
+    const stale = new Set(Array.isArray(current?.stale?.assets) ? current.stale.assets.map(String) : []);
+    if (!hasAssetRequests() || !requests.length) return false;
+    return requests.every(request => assets.some(asset =>
+      String(asset?.requestSignature || "") === String(request?.requestSignature || "") &&
+      !stale.has(String(asset?.id || ""))
+    ));
   }
 
   function stageAvailable(stage) {
@@ -137,7 +149,7 @@
 
     const c = copy();
     const stageIndex = Math.max(1, Math.min(5, activeStage));
-    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests()].join("|");
+    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests(), hasResolvedAssets()].join("|");
     if (context.dataset.signature === signature) return context;
     context.dataset.signature = signature;
 
@@ -165,7 +177,7 @@
     stages.forEach((node, index) => {
       const stage = index + 1;
       const available = stageAvailable(stage);
-      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasAssetRequests());
+      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasResolvedAssets());
       node.dataset.workspaceStage = String(stage);
       node.classList.toggle("workspace-active", stage === activeStage);
       node.classList.toggle("workspace-completed", completed && stage !== activeStage);
