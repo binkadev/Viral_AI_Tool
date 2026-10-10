@@ -11,6 +11,10 @@ const {
   cancelAllAutomationStockOperations
 } = require('./services/automation/stock-desktop-ipc');
 const {
+  installAutomationVoiceIpc,
+  cancelAllAutomationVoice
+} = require('./services/automation/voice-desktop-ipc');
+const {
   installAutomationCompositionPreviewIpc,
   cancelAllAutomationCompositionPreviews
 } = require('./services/automation/composition-preview-ipc');
@@ -54,13 +58,6 @@ if (process.platform === 'win32') {
   }
 }
 
-/*
- * Some Windows compositor paths can briefly paint the complete frameless shell
- * and then present only the BrowserWindow background. A tiny in-memory capture
- * forces Chromium to submit the already-rendered surface. We pair that with a
- * layout read and invalidate around first paint. Nothing is persisted, logged,
- * transmitted, or used to rebuild renderer DOM.
- */
 function installWindowsFirstPaintStabilizer() {
   if (process.platform !== 'win32' || STARTUP_STABILIZER_DISABLED) return;
 
@@ -75,7 +72,6 @@ function installWindowsFirstPaintStabilizer() {
     const flushCompositor = async () => {
       if (flushInFlight || win.isDestroyed?.() || contents.isDestroyed?.()) return;
       flushInFlight = true;
-
       try {
         try {
           await contents.executeJavaScript(
@@ -83,13 +79,8 @@ function installWindowsFirstPaintStabilizer() {
             true
           );
         } catch {}
-
         if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
-
-        try {
-          await win.capturePage({ x: 0, y: 0, width: 2, height: 2 });
-        } catch {}
-
+        try { await win.capturePage({ x: 0, y: 0, width: 2, height: 2 }); } catch {}
         if (win.isDestroyed?.() || contents.isDestroyed?.()) return;
         try { contents.invalidate(); } catch {}
       } finally {
@@ -120,13 +111,6 @@ function installWindowsFirstPaintStabilizer() {
   });
 }
 
-/*
- * main.js already owns the normal close confirmation for its native work queue.
- * Composition export lives in a separate Automation service, so attach this
- * listener after the renderer has loaded. If main.js already prevented close,
- * it keeps ownership. Otherwise the existing localized renderer confirm modal
- * is reused instead of introducing another hard-coded native message surface.
- */
 function installAutomationCompositionCloseGuard() {
   const promptOpen = new WeakSet();
   const allowClose = new WeakSet();
@@ -183,11 +167,13 @@ installWindowsFirstPaintStabilizer();
 installAutomationCompositionCloseGuard();
 installAutomationScriptIpc();
 installAutomationStockIpc();
+installAutomationVoiceIpc();
 installAutomationCompositionPreviewIpc();
 installAutomationCompositionExportIpc();
 app.on('before-quit', () => {
   cancelAllAutomationScripts().catch(() => {});
   cancelAllAutomationStockOperations();
+  cancelAllAutomationVoice();
   cancelAllAutomationCompositionPreviews();
   cancelAllAutomationCompositionExports();
 });
