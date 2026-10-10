@@ -80,14 +80,20 @@ for (const required of [
 
 for (const required of [
   "automationGenerateScenes",
-  "automationSceneQuickAction",
-  "automationSceneQuickButton",
-  "function ensureQuickAction()",
-  "function scrollToScenes()",
+  "automationGenerateScenesEmpty",
+  "function ensureSelection",
+  "function navItem",
+  "function editorMarkup",
+  "function selectScene",
+  "function stepScene",
+  "data-scene-select",
+  "data-scene-step",
   "data-scene-save",
   "ViralAutomationSceneState?.generatePlan",
   "ViralAutomationSceneState?.editScene",
-  "automation-scenes-list",
+  "automation-scenes-workbench",
+  "automation-scenes-nav",
+  "automation-scene-inspector",
   "function ensureHost()",
   'legacyNext.replaceWith(host)',
   'host.dataset.scenePlannerMount = "true"',
@@ -99,15 +105,17 @@ for (const required of [
 }
 assert(!uiSource.includes("setInterval("), "Scene Planner UI must remain event-driven.");
 assert(!uiSource.includes("fetch("), "Scene Planner MVP must not require a provider or network call.");
+assert(!uiSource.includes("automationSceneQuickAction"), "Scene Planner must not reintroduce the duplicate quick-action banner.");
+
 for (const required of [
-  ".automation-scene-quick",
-  ".automation-scene-quick::before",
-  ".automation-scenes-list",
-  ".automation-scene-card",
-  ".automation-scene-card:focus-within",
-  "@media (max-width:1450px)"
+  ".automation-scenes-workbench",
+  ".automation-scenes-nav",
+  ".automation-scene-nav-item",
+  ".automation-scene-inspector",
+  ".automation-scene-editor-grid",
+  ".automation-scene-field"
 ]) {
-  assert(uiCss.includes(required), "Scene Planner responsive UI missing: " + required);
+  assert(uiCss.includes(required), "Scene Planner workbench CSS missing: " + required);
 }
 
 for (const required of [
@@ -124,4 +132,4 @@ assert(index.indexOf('src="core-automation-scene-state.js"') < index.indexOf('sr
 assert(pkg.scripts["test:core-automation-scene-planner"], "package.json must expose Scene Planner regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-scene-planner"), "commercial regression must gate Scene Planner");
 
-console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation, responsive polish, resilient mount and above-fold action tests passed.");
+console.log("Automation Scene Planner deterministic timing, stable IDs, navigator-inspector editing, stale propagation and responsive workbench tests passed.");
