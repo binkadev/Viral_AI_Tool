@@ -28,7 +28,7 @@
 
   function currentSignature() {
     const current = automation();
-    if (!current?.scenePlan) return "";
+    if (!current?.scenePlan || current?.stale?.scenes === true) return "";
     return model?.inputSignature?.({
       brief: current.brief || {},
       scenePlan: current.scenePlan,
@@ -38,6 +38,7 @@
 
   function currentResult() {
     const current = automation();
+    if (!current?.scenePlan || current?.stale?.scenes === true) return null;
     const result = model?.normalizeResult?.(current?.voiceResult);
     if (!result) return null;
     return result.inputSignature && result.inputSignature === currentSignature() ? result : null;
@@ -46,6 +47,7 @@
   function snapshot() {
     const current = automation();
     const result = model?.normalizeResult?.(current?.voiceResult);
+    const currentResultValue = currentResult();
     return {
       providerStatus: clone(providerStatus, null),
       operationId,
@@ -54,8 +56,8 @@
       phase,
       inputSignature: currentSignature(),
       result: clone(result, null),
-      current: Boolean(currentResult()),
-      stale: Boolean(result && !currentResult())
+      current: Boolean(currentResultValue),
+      stale: Boolean(result && !currentResultValue)
     };
   }
 
