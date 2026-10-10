@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const ffmpegStatic = require('ffmpeg-static');
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v']);
+const AUDIO_EXTENSIONS = new Set(['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.flac', '.opus']);
 const active = new Map();
 
 function previewError(code, message, details = {}) {
@@ -34,6 +35,16 @@ function safeVideoPath(value) {
   const stat = fs.statSync(resolved);
   if (!stat.isFile() || stat.size <= 0) throw previewError('SOURCE_INVALID', 'Composition clip source is not a readable file.', { path: resolved });
   if (!VIDEO_EXTENSIONS.has(path.extname(resolved).toLowerCase())) throw previewError('SOURCE_UNSUPPORTED', 'Composition clip format is unsupported.');
+  return resolved;
+}
+
+function safeAudioPath(value) {
+  if (typeof value !== 'string' || !value.trim()) throw previewError('AUDIO_SOURCE_INVALID', 'Composition voice source is invalid.');
+  const resolved = path.resolve(value);
+  if (!fs.existsSync(resolved)) throw previewError('SOURCE_MISSING', 'Composition voice source is missing.', { path: resolved });
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile() || stat.size <= 0) throw previewError('AUDIO_SOURCE_INVALID', 'Composition voice source is not readable.', { path: resolved });
+  if (!AUDIO_EXTENSIONS.has(path.extname(resolved).toLowerCase())) throw previewError('AUDIO_SOURCE_UNSUPPORTED', 'Composition voice source format is unsupported.');
   return resolved;
 }
 
@@ -69,17 +80,33 @@ function normalizePayload(payload = {}) {
     };
   });
 
+  const audioTracks = Array.isArray(composition?.tracks?.audio) ? composition.tracks.audio : [];
+  const audio = audioTracks.map((track, index) => {
+    const sourcePath = safeAudioPath(track?.sourcePath);
+    const sourceInSec = Math.max(0, number(track?.sourceInSec, 0));
+    const startSec = Math.max(0, number(track?.startSec, 0));
+    const durationSec = Math.max(0.05, number(track?.durationSec, number(track?.endSec, 0) - startSec));
+    return {
+      index,
+      id: String(track?.id || `audio-${index + 1}`),
+      sourcePath,
+      sourceInSec,
+      startSec,
+      durationSec
+    };
+  });
+
   const totalDuration = normalizedClips.reduce((sum, clip) => sum + clip.durationSec, 0);
   if (!(totalDuration > 0) || totalDuration > 7200) throw previewError('COMPOSITION_DURATION_INVALID', 'Composition preview duration is invalid.');
   const aspectRatio = ['16:9', '9:16', '1:1'].includes(String(composition?.aspectRatio)) ? String(composition.aspectRatio) : '9:16';
   const signature = String(composition?.outputSignature || composition?.id || '').trim();
   if (!signature) throw previewError('COMPOSITION_SIGNATURE_REQUIRED', 'Composition signature is required.');
 
-  return { signature, aspectRatio, clips: normalizedClips, totalDuration };
+  return { signature, aspectRatio, clips: normalizedClips, audio, totalDuration };
 }
 
 function cacheName(normalized) {
-  const hash = crypto.createHash('sha256')
+  const hashValue = crypto.createHash('sha256')
     .update(JSON.stringify({
       signature: normalized.signature,
       aspectRatio: normalized.aspectRatio,
@@ -89,11 +116,18 @@ function cacheName(normalized) {
         in: clip.sourceInSec,
         out: clip.sourceOutSec,
         duration: clip.durationSec
+      })),
+      audio: normalized.audio.map(track => ({
+        id: track.id,
+        path: track.sourcePath,
+        in: track.sourceInSec,
+        start: track.startSec,
+        duration: track.durationSec
       }))
     }))
     .digest('hex')
     .slice(0, 28);
-  return `composition-preview-${hash}.mp4`;
+  return `composition-preview-${hashValue}.mp4`;
 }
 
 function parseProgress(chunk, totalDuration, onProgress) {
@@ -124,10 +158,7 @@ function spawnPreview(args, operationId, totalDuration, onProgress) {
     child.on('close', code => {
       active.delete(operationId);
       if (code === 0) resolve();
-      else {
-        const error = previewError('COMPOSITION_PREVIEW_FAILED', 'Could not build the Studio preview.', { technicalMessage: stderr.trim(), exitCode: code });
-        reject(error);
-      }
+      else reject(previewError('COMPOSITION_PREVIEW_FAILED', 'Could not build the Studio preview.', { technicalMessage: stderr.trim(), exitCode: code }));
     });
   });
 }
@@ -143,12 +174,13 @@ async function buildCompositionPreview({ operationId, composition, cacheRoot, on
   if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
     const dims = dimensionsFor(normalized.aspectRatio);
     onProgress?.({ phase: 'cached', percent: 100 });
-    return { outputPath, cacheHit: true, duration: normalized.totalDuration, ...dims, sizeBytes: fs.statSync(outputPath).size };
+    return { outputPath, cacheHit: true, duration: normalized.totalDuration, audioCount: normalized.audio.length, ...dims, sizeBytes: fs.statSync(outputPath).size };
   }
 
   const dims = dimensionsFor(normalized.aspectRatio);
   const args = ['-y'];
   normalized.clips.forEach(clip => args.push('-i', clip.sourcePath));
+  normalized.audio.forEach(track => args.push('-i', track.sourcePath));
   const filters = [];
   const labels = [];
   normalized.clips.forEach((clip, index) => {
@@ -161,15 +193,34 @@ async function buildCompositionPreview({ operationId, composition, cacheRoot, on
     labels.push(`[${label}]`);
   });
   filters.push(`${labels.join('')}concat=n=${labels.length}:v=1:a=0[vout]`);
+
+  if (normalized.audio.length) {
+    const audioLabels = [];
+    normalized.audio.forEach((track, index) => {
+      const inputIndex = normalized.clips.length + index;
+      const label = `a${index}`;
+      const delayMs = Math.max(0, Math.round(track.startSec * 1000));
+      filters.push(
+        `[${inputIndex}:a:0]atrim=start=${track.sourceInSec.toFixed(3)}:duration=${track.durationSec.toFixed(3)},` +
+        `asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,` +
+        `adelay=${delayMs}:all=1[${label}]`
+      );
+      audioLabels.push(`[${label}]`);
+    });
+    filters.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${normalized.totalDuration.toFixed(3)}[silence]`);
+    filters.push(`[silence]${audioLabels.join('')}amix=inputs=${audioLabels.length + 1}:duration=longest:dropout_transition=0:normalize=0,atrim=duration=${normalized.totalDuration.toFixed(3)},alimiter=limit=0.95[aout]`);
+  }
+
+  args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
+  if (normalized.audio.length) args.push('-map', '[aout]', '-c:a', 'aac', '-b:a', '160k');
+  else args.push('-an');
   args.push(
-    '-filter_complex', filters.join(';'),
-    '-map', '[vout]',
-    '-an',
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-crf', '24',
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
+    '-t', normalized.totalDuration.toFixed(3),
     '-progress', 'pipe:1',
     '-nostats',
     outputPath
@@ -184,7 +235,7 @@ async function buildCompositionPreview({ operationId, composition, cacheRoot, on
     throw previewError('COMPOSITION_PREVIEW_FAILED', 'Could not build the Studio preview.', { technicalMessage: error?.message || String(error) });
   }
   onProgress?.({ phase: 'completed', percent: 100 });
-  return { outputPath, cacheHit: false, duration: normalized.totalDuration, ...dims, sizeBytes: fs.statSync(outputPath).size };
+  return { outputPath, cacheHit: false, duration: normalized.totalDuration, audioCount: normalized.audio.length, ...dims, sizeBytes: fs.statSync(outputPath).size };
 }
 
 function cancelCompositionPreview(operationId) {
