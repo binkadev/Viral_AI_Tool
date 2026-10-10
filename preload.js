@@ -85,6 +85,16 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     return () => ipcRenderer.removeListener('automation:composition-preview-progress', listener);
   },
 
+  startAutomationCompositionExport: payload => ipcRenderer.invoke('automation:composition-export-start', payload),
+  cancelAutomationCompositionExport: operationId => ipcRenderer.invoke('automation:composition-export-cancel', operationId),
+  getAutomationCompositionExportStatus: () => ipcRenderer.invoke('automation:composition-export-status'),
+  onAutomationCompositionExportProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('automation:composition-export-progress', listener);
+    return () => ipcRenderer.removeListener('automation:composition-export-progress', listener);
+  },
+
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
   installSpeechModel: payload => ipcRenderer.invoke('speech:model-install', payload),
