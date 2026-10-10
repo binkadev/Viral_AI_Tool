@@ -71,6 +71,11 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     return () => ipcRenderer.removeListener('automation:script-progress', listener);
   },
 
+  getAutomationStockStatus: () => ipcRenderer.invoke('automation:stock-status'),
+  searchAutomationStock: payload => ipcRenderer.invoke('automation:stock-search', payload),
+  materializeAutomationStock: payload => ipcRenderer.invoke('automation:stock-materialize', payload),
+  cancelAutomationStock: operationId => ipcRenderer.invoke('automation:stock-cancel', operationId),
+
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
   installSpeechModel: payload => ipcRenderer.invoke('speech:model-install', payload),
