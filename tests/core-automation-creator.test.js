@@ -58,7 +58,11 @@ for (const required of [
   ".automation-brief-card",
   ".automation-script-card",
   ".automation-progress",
-  ".automation-next-card"
+  ".automation-next-card",
+  "height:clamp(520px,calc(100vh - 415px),690px)",
+  "@media(max-width:1450px)",
+  ".automation-grid{grid-template-columns:1fr}",
+  "scrollbar-gutter:stable"
 ]) {
   assert(css.includes(required), "Automation Creator CSS missing: " + required);
 }
@@ -96,4 +100,4 @@ for (const required of [
 assert(pkg.scripts["test:core-automation-creator"], "package.json must expose the Automation Creator regression.");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-creator"), "Commercial regression must gate Automation Creator.");
 
-console.log("Automation Creator brief, ScriptEngine runner, editable result, visible production route, navigation and restart-recovery contracts passed.");
+console.log("Automation Creator brief, ScriptEngine runner, editable result, responsive workspace, visible production route, navigation and restart-recovery contracts passed.");
