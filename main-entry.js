@@ -16,7 +16,8 @@ const {
 } = require('./services/automation/composition-preview-ipc');
 const {
   installAutomationCompositionExportIpc,
-  cancelAllAutomationCompositionExports
+  cancelAllAutomationCompositionExports,
+  getActiveAutomationCompositionExportCount
 } = require('./services/automation/composition-export-ipc');
 
 const WINDOWS_11_MIN_BUILD = 22000;
@@ -119,7 +120,67 @@ function installWindowsFirstPaintStabilizer() {
   });
 }
 
+/*
+ * main.js already owns the normal close confirmation for its native work queue.
+ * Composition export lives in a separate Automation service, so attach this
+ * listener after the renderer has loaded. If main.js already prevented close,
+ * it keeps ownership. Otherwise the existing localized renderer confirm modal
+ * is reused instead of introducing another hard-coded native message surface.
+ */
+function installAutomationCompositionCloseGuard() {
+  const promptOpen = new WeakSet();
+  const allowClose = new WeakSet();
+
+  app.on('browser-window-created', (_event, win) => {
+    if (!win || win.isDestroyed?.()) return;
+    const contents = win.webContents;
+    if (!contents) return;
+
+    contents.once('did-finish-load', () => {
+      win.on('close', async event => {
+        if (allowClose.has(win) || event.defaultPrevented) return;
+        if (getActiveAutomationCompositionExportCount() <= 0) return;
+
+        event.preventDefault();
+        if (promptOpen.has(win)) return;
+        promptOpen.add(win);
+
+        let confirmed = false;
+        try {
+          confirmed = await contents.executeJavaScript(`(async () => {
+            try {
+              if (typeof confirmAction !== "function" || typeof t !== "function") return false;
+              const active = (typeof state !== "undefined" && Array.isArray(state.jobs))
+                ? state.jobs.find(job => job?.isAutomationCompositionExport === true && ["processing", "queued", "cancelling"].includes(String(job?.status || "")))
+                : null;
+              return Boolean(await confirmAction({
+                title: t("export.stopTitle"),
+                body: t("export.stopBody", { name: active?.name || t("common.video") }),
+                confirmLabel: t("export.stop"),
+                cancelLabel: t("export.keepGoing"),
+                danger: true
+              }));
+            } catch {
+              return false;
+            }
+          })()`, true);
+        } catch {
+          confirmed = false;
+        } finally {
+          promptOpen.delete(win);
+        }
+
+        if (!confirmed || win.isDestroyed?.()) return;
+        allowClose.add(win);
+        cancelAllAutomationCompositionExports();
+        win.destroy();
+      });
+    });
+  });
+}
+
 installWindowsFirstPaintStabilizer();
+installAutomationCompositionCloseGuard();
 installAutomationScriptIpc();
 installAutomationStockIpc();
 installAutomationCompositionPreviewIpc();
