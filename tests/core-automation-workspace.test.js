@@ -21,12 +21,17 @@ for (const required of [
   "function ensureStepContext",
   "function decorateStages",
   "function applyPanelVisibility",
+  "function hasAssetRequests()",
+  "if (stage === 4) return hasScenePlan()",
+  "data-automation-workspace-go=\"4\"",
   "workspace-active",
   "workspace-completed",
   "workspace-locked",
   "data-automation-workspace-go",
   "aria-current",
   "ViralAutomationScenesUi?.refresh",
+  "ViralAutomationAssetsUi?.refresh",
+  "automation-assets-host",
   "delete document.documentElement.dataset.automationWorkspace",
   "c.locked",
   "c.complete",
@@ -60,8 +65,9 @@ assert(!css.includes('max-width:1120px'), "Automation workspace must not keep th
 assert(index.includes('href="core-automation-workspace.css"'));
 assert(index.includes('src="core-automation-workspace.js"'));
 assert(index.indexOf('src="core-automation-scenes-ui.js"') < index.indexOf('src="core-automation-workspace.js"'), "guided workspace must enhance the Scene Planner after it mounts");
+assert(index.indexOf('src="core-automation-assets-ui.js"') < index.indexOf('src="core-automation-workspace.js"'), "guided workspace must enhance the Asset Router stage after it mounts");
 
 assert(pkg.scripts["test:core-automation-workspace"], "package.json must expose guided Automation workspace regression.");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-workspace"), "commercial regression must gate guided Automation workspace.");
 
-console.log("Guided Automation workspace stage navigation, editor-surface isolation, wide canvas and single-task workflow tests passed.");
+console.log("Guided Automation workspace stage navigation, editor-surface isolation, asset handoff, wide canvas and single-task workflow tests passed.");
