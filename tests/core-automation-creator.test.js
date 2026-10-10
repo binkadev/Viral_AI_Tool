@@ -13,6 +13,7 @@ const stateBridge = read("renderer/core-automation-script-state.js");
 const bootstrap = read("renderer/core-bootstrap.js");
 const shell = read("renderer/core-product-shell.js");
 const capabilities = read("renderer/core-capabilities.js");
+const capabilitiesCss = read("renderer/core-capabilities.css");
 const index = read("renderer/index.html");
 const preload = read("preload.js");
 const pkg = JSON.parse(read("package.json"));
@@ -75,7 +76,8 @@ assert(bootstrap.includes("const hasAutomationProject = Boolean(saved.automation
 assert(bootstrap.includes('saved.page = "automation"'), "Startup must restore Automation projects into their workspace.");
 assert(shell.includes('{ id: "automation", icon: "✦", label: "core-automation" }'), "Commercial nav must expose Automation Creator.");
 assert(shell.includes('current.page === "automation"'), "Product shell must preserve Automation routing.");
-assert(!capabilities.includes('new Set(["automation", "workflow"'), "Automation route must not remain deferred.");
+assert(!capabilities.includes('new Set(["automation", "workflow"'), "Automation route must not remain deferred in the capability runtime.");
+assert(!capabilitiesCss.includes('[data-page="automation"]'), "Automation route must not be hidden by the production capability stylesheet.");
 
 assert(index.includes('href="core-automation-creator.css"'));
 assert(index.includes('src="core-automation-creator.js"'));
@@ -94,4 +96,4 @@ for (const required of [
 assert(pkg.scripts["test:core-automation-creator"], "package.json must expose the Automation Creator regression.");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-creator"), "Commercial regression must gate Automation Creator.");
 
-console.log("Automation Creator brief, ScriptEngine runner, editable result, navigation and restart-recovery contracts passed.");
+console.log("Automation Creator brief, ScriptEngine runner, editable result, visible production route, navigation and restart-recovery contracts passed.");
