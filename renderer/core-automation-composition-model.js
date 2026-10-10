@@ -29,34 +29,6 @@
     return hash.toString(16).padStart(8, "0");
   }
 
-  function compositionInputSignature({ brief = {}, scenePlan = {}, resolvedAssets = [], voiceResult = null } = {}) {
-    const assets = (Array.isArray(resolvedAssets) ? resolvedAssets : [])
-      .map(asset => ({
-        sceneId: text(asset?.sceneId, 160),
-        id: text(asset?.id, 180),
-        requestSignature: text(asset?.requestSignature, 240),
-        checksum: text(asset?.checksum, 300),
-        localPath: text(asset?.localPath, 4000),
-        durationSec: round(asset?.durationSec)
-      }))
-      .sort((a, b) => a.sceneId.localeCompare(b.sceneId));
-    const stable = {
-      aspectRatio: text(brief?.aspectRatio || "9:16", 16),
-      targetDurationSec: round(brief?.targetDurationSec),
-      scenePlanSignature: text(scenePlan?.outputSignature, 240),
-      scenes: (Array.isArray(scenePlan?.scenes) ? scenePlan.scenes : []).map(scene => ({
-        id: text(scene?.id, 160),
-        order: Math.max(1, Math.round(number(scene?.order, 1))),
-        durationHintSec: round(scene?.durationHintSec),
-        narration: text(scene?.narration, 4000),
-        subtitleText: text(scene?.subtitleText || scene?.narration, 4000)
-      })),
-      assets,
-      voiceResultId: text(voiceResult?.id || voiceResult?.jobId, 180)
-    };
-    return "composition-input-v" + VERSION + ":" + hashString(JSON.stringify(stable));
-  }
-
   function assetByScene(resolvedAssets = [], staleAssetIds = []) {
     const stale = new Set((Array.isArray(staleAssetIds) ? staleAssetIds : []).map(String));
     const map = new Map();
@@ -67,6 +39,34 @@
       map.set(sceneId, asset);
     }
     return map;
+  }
+
+  function compositionInputSignature({ brief = {}, scenePlan = {}, resolvedAssets = [], staleAssetIds = [], voiceResult = null } = {}) {
+    const scenes = Array.isArray(scenePlan?.scenes) ? scenePlan.scenes : [];
+    const currentAssets = assetByScene(resolvedAssets, staleAssetIds);
+    const assets = scenes.map(scene => currentAssets.get(String(scene?.id || ""))).filter(Boolean).map(asset => ({
+      sceneId: text(asset?.sceneId, 160),
+      id: text(asset?.id, 180),
+      requestSignature: text(asset?.requestSignature, 240),
+      checksum: text(asset?.checksum, 300),
+      localPath: text(asset?.localPath, 4000),
+      durationSec: round(asset?.durationSec)
+    }));
+    const stable = {
+      aspectRatio: text(brief?.aspectRatio || "9:16", 16),
+      targetDurationSec: round(brief?.targetDurationSec),
+      scenePlanSignature: text(scenePlan?.outputSignature, 240),
+      scenes: scenes.map(scene => ({
+        id: text(scene?.id, 160),
+        order: Math.max(1, Math.round(number(scene?.order, 1))),
+        durationHintSec: round(scene?.durationHintSec),
+        narration: text(scene?.narration, 4000),
+        subtitleText: text(scene?.subtitleText || scene?.narration, 4000)
+      })),
+      assets,
+      voiceResultId: text(voiceResult?.id || voiceResult?.jobId, 180)
+    };
+    return "composition-input-v" + VERSION + ":" + hashString(JSON.stringify(stable));
   }
 
   function buildCompositionPlan({
@@ -161,7 +161,7 @@
       });
     }
 
-    const inputSignature = compositionInputSignature({ brief, scenePlan, resolvedAssets, voiceResult });
+    const inputSignature = compositionInputSignature({ brief, scenePlan, resolvedAssets, staleAssetIds, voiceResult });
     const stableOutput = {
       inputSignature,
       durationSec: round(cursor),
