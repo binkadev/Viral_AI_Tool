@@ -49,10 +49,20 @@
     return Boolean(job.sourcePath || job.outputPath || job.isRenderOutput);
   });
 
-  // A missing source file is still a real project. Start directly in Core Editor
-  // so the relink/recovery UI is available instead of bouncing through Import.
+  // A missing source file is still a real project. An Automation brief is also
+  // a real project even before media exists, so restore directly to its creator
+  // workspace rather than forcing the legacy Import route.
   const hasProjectSource = saved.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-  saved.page = hasProjectSource ? "ai-video" : "download";
+  const hasAutomationProject = Boolean(saved.automation?.brief);
+  if (saved.page === "automation" && hasAutomationProject) {
+    saved.page = "automation";
+  } else if (hasProjectSource) {
+    saved.page = "ai-video";
+  } else if (hasAutomationProject) {
+    saved.page = "automation";
+  } else {
+    saved.page = "download";
+  }
   localStorage.setItem(KEY, JSON.stringify(saved));
 
   function loadProductionOverride(href, kind) {
@@ -76,7 +86,14 @@
       try {
         if (typeof state !== "undefined" && state) {
           const project = Array.isArray(state.jobs) && state.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-          const target = project ? "ai-video" : "download";
+          const automationProject = Boolean(state.automation?.brief);
+          const target = state.page === "automation" && automationProject
+            ? "automation"
+            : project
+              ? "ai-video"
+              : automationProject
+                ? "automation"
+                : "download";
           if (state.page !== target) {
             state.page = target;
             if (typeof render === "function") render();
