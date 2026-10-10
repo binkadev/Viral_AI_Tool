@@ -80,6 +80,10 @@ for (const required of [
 
 for (const required of [
   "automationGenerateScenes",
+  "automationSceneQuickAction",
+  "automationSceneQuickButton",
+  "function ensureQuickAction()",
+  "function scrollToScenes()",
   "data-scene-save",
   "ViralAutomationSceneState?.generatePlan",
   "ViralAutomationSceneState?.editScene",
@@ -95,6 +99,7 @@ for (const required of [
 }
 assert(!uiSource.includes("setInterval("), "Scene Planner UI must remain event-driven.");
 assert(!uiSource.includes("fetch("), "Scene Planner MVP must not require a provider or network call.");
+assert(uiCss.includes(".automation-scene-quick"));
 assert(uiCss.includes(".automation-scenes-list"));
 assert(uiCss.includes(".automation-scene-card"));
 
@@ -112,4 +117,4 @@ assert(index.indexOf('src="core-automation-scene-state.js"') < index.indexOf('sr
 assert(pkg.scripts["test:core-automation-scene-planner"], "package.json must expose Scene Planner regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-scene-planner"), "commercial regression must gate Scene Planner");
 
-console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation and resilient runtime mount tests passed.");
+console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation, resilient mount and above-fold action tests passed.");
