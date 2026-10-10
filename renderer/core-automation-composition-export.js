@@ -46,7 +46,7 @@
 
   function projectName() {
     const current = automation();
-    return String(current?.brief?.topic || current?.brief?.product || "automation-video").trim() || "automation-video";
+    return String(current?.brief?.topic || current?.brief?.product || "Viral-AI").trim() || "Viral-AI";
   }
 
   function exportJobs() {
@@ -153,6 +153,8 @@
     const busy = Boolean(operationId);
     if (!composition && !busy) {
       head.querySelector("[data-composition-export]")?.remove();
+      const panel = head.parentElement;
+      panel?.querySelector(":scope > .automation-composition-export-status")?.remove();
       return;
     }
 
@@ -173,7 +175,10 @@
     button.classList.toggle("danger", busy);
     button.classList.toggle("primary", !busy);
 
-    let status = head.querySelector(":scope > .automation-composition-export-status");
+    const panel = head.parentElement;
+    let status = panel instanceof HTMLElement
+      ? panel.querySelector(":scope > .automation-composition-export-status")
+      : null;
     if (busy) {
       if (!(status instanceof HTMLElement)) {
         status = document.createElement("div");
@@ -226,7 +231,7 @@
     const job = {
       id,
       name: projectName() + ".mp4",
-      status: "processing",
+      status: "validating",
       progress: 1,
       fileState: "unknown",
       isRenderOutput: true,
@@ -379,7 +384,7 @@
     if (Number(status?.activeCount || 0) > 0) return;
     let changed = false;
     for (const job of exportJobs()) {
-      if (!["processing", "queued", "cancelling"].includes(String(job?.status || ""))) continue;
+      if (!["validating", "processing", "queued", "cancelling"].includes(String(job?.status || ""))) continue;
       if (job?.outputPath) continue;
       job.status = "cancelled";
       job.failureCode = "INTERRUPTED";
@@ -414,7 +419,13 @@
     if (!operationId || String(payload?.operationId || "") !== operationId) return;
     progress = Math.max(progress, Number(payload?.percent || 0));
     const job = activeJob();
-    if (job) job.progress = Math.max(Number(job.progress || 0), progress);
+    if (job) {
+      const phase = String(payload?.phase || "");
+      if (phase === "validating") job.status = "validating";
+      else if (phase === "queued") job.status = "queued";
+      else if (phase === "processing") job.status = "processing";
+      job.progress = Math.max(Number(job.progress || 0), progress);
+    }
     if (progress - lastProgressSaved >= 10) {
       lastProgressSaved = progress;
       persist();
