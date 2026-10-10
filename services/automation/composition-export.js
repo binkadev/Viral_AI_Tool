@@ -230,6 +230,7 @@ function spawnExport(args, { operationId, key, totalDuration, onProgress }) {
     }
     active.set(operationId, child);
     activeKeys.set(key, operationId);
+    reservations.delete(operationId);
     let stderr = '';
     child.stdout.on('data', chunk => parseProgress(chunk, totalDuration, onProgress));
     child.stderr.on('data', chunk => { stderr += chunk.toString(); });
@@ -243,6 +244,9 @@ function spawnExport(args, { operationId, key, totalDuration, onProgress }) {
         technicalMessage: stderr.trim()
       }));
     });
+    if (cancelled.has(operationId)) {
+      try { child.kill('SIGTERM'); } catch {}
+    }
   });
 }
 
@@ -340,8 +344,8 @@ async function exportComposition({
     );
 
     if (cancelled.has(id)) return { cancelled: true, outputPath: null };
-    reservations.delete(id);
-    activeKeys.set(key, id);
+    onProgress?.({ phase: 'queued', percent: 2 });
+    if (cancelled.has(id)) return { cancelled: true, outputPath: null };
     onProgress?.({ phase: 'processing', percent: 3 });
 
     try {
