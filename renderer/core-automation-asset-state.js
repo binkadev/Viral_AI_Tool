@@ -35,10 +35,18 @@
 
     automation.assetRequests = result.value;
     const validSignatures = new Set(result.value.map(request => request.requestSignature));
-    automation.resolvedAssets = (Array.isArray(automation.resolvedAssets) ? automation.resolvedAssets : [])
-      .filter(asset => validSignatures.has(String(asset?.requestSignature || "")));
-    automation.stale.assets = (Array.isArray(automation.stale.assets) ? automation.stale.assets : [])
-      .filter(id => automation.resolvedAssets.some(asset => String(asset?.id) === String(id)));
+    const resolvedAssets = Array.isArray(automation.resolvedAssets) ? automation.resolvedAssets : [];
+    const staleIds = new Set(Array.isArray(automation.stale.assets) ? automation.stale.assets.map(String) : []);
+
+    for (const asset of resolvedAssets) {
+      const id = String(asset?.id || "");
+      if (!id) continue;
+      if (validSignatures.has(String(asset?.requestSignature || ""))) staleIds.delete(id);
+      else staleIds.add(id);
+    }
+
+    automation.resolvedAssets = resolvedAssets;
+    automation.stale.assets = [...staleIds];
     automation.stale.composition = Boolean(automation.composition);
     emit("automation-asset-requests-synced");
     return { ok: true, requests: clone(result.value, []) };
