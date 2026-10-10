@@ -31,6 +31,22 @@
     return assets.find(asset => String(asset?.sceneId || "") === String(sceneId || "") && !stale.has(String(asset?.id || "")) && asset?.localPath) || null;
   }
 
+  function currentVoiceResult() {
+    const fromVoiceState = window.ViralAutomationVoiceState?.currentResult?.();
+    if (fromVoiceState) return fromVoiceState;
+    const automation = currentAutomation();
+    if (!automation?.voiceResult) return null;
+    if (window.ViralAutomationVoiceModel?.isCurrent) {
+      const current = window.ViralAutomationVoiceModel.isCurrent(automation.voiceResult, {
+        brief: automation.brief || {},
+        scenePlan: automation.scenePlan || {},
+        voiceId: automation.voiceSettings?.voiceId || "default"
+      });
+      return current ? automation.voiceResult : null;
+    }
+    return null;
+  }
+
   function readiness() {
     const automation = currentAutomation();
     const scenes = Array.isArray(automation?.scenePlan?.scenes) ? automation.scenePlan.scenes : [];
@@ -61,7 +77,7 @@
       scenePlan: automation.scenePlan,
       resolvedAssets: automation.resolvedAssets || [],
       staleAssetIds: automation.stale?.assets || [],
-      voiceResult: automation.voiceResult || null
+      voiceResult: currentVoiceResult()
     }) || "";
   }
 
@@ -85,7 +101,7 @@
       scenePlan: automation.scenePlan,
       resolvedAssets: automation.resolvedAssets || [],
       staleAssetIds: automation.stale?.assets || [],
-      voiceResult: automation.voiceResult || null,
+      voiceResult: currentVoiceResult(),
       now: options.now == null ? Date.now() : options.now
     });
     if (!result?.ok) {
@@ -124,7 +140,8 @@
       composition: clone(automation?.composition, null),
       current: isCurrent(),
       inputSignature: currentInputSignature(),
-      stale: automation?.stale?.composition === true
+      stale: automation?.stale?.composition === true,
+      voiceReady: Boolean(currentVoiceResult())
     };
   }
 
@@ -133,6 +150,7 @@
     compose,
     isCurrent,
     currentInputSignature,
+    currentVoiceResult,
     markStale,
     snapshot
   };
