@@ -100,33 +100,41 @@
     return composition;
   }
 
+  async function cancelBuild() {
+    const id = operationId;
+    operationId = null;
+    building = false;
+    progress = 0;
+    if (id) {
+      try { await window.desktopAPI?.cancelAutomationCompositionPreview?.(id); } catch {}
+    }
+    ensureAutomationAction();
+  }
+
   async function openStudio() {
     const composition = currentComposition();
     if (!composition || !window.desktopAPI?.buildAutomationCompositionPreview) return;
     if (building) {
-      if (operationId) await window.desktopAPI?.cancelAutomationCompositionPreview?.(operationId).catch?.(() => {});
-      building = false;
-      operationId = null;
-      progress = 0;
-      ensureAutomationAction();
+      await cancelBuild();
       return;
     }
 
+    const localOperationId = "composition-preview-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
     building = true;
     progress = 1;
-    operationId = "composition-preview-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    operationId = localOperationId;
     ensureAutomationAction();
 
     let response;
     try {
-      response = await window.desktopAPI.buildAutomationCompositionPreview({ operationId, composition });
+      response = await window.desktopAPI.buildAutomationCompositionPreview({ operationId: localOperationId, composition });
     } catch {
       response = null;
     }
 
-    const completedOperation = operationId;
-    building = false;
+    if (operationId !== localOperationId) return;
     operationId = null;
+    building = false;
     progress = 0;
 
     if (!response?.ok || !response?.data?.outputPath) {
@@ -168,7 +176,6 @@
     projection = {
       compositionId: composition.id,
       outputSignature: composition.outputSignature,
-      operationId: completedOperation,
       previewPath: response.data.outputPath,
       previewUrl,
       cacheHit: response.data.cacheHit === true
