@@ -181,7 +181,7 @@ for (const required of [
   "activeRow.scrollIntoView",
   'paragraph.setAttribute("contenteditable", "plaintext-only")',
   "viral-ai:transcript-edit",
-  "video.currentTime is the single source of truth",
+  "const current = model.clampTime(video.currentTime, video.duration)",
   "const transcriptCaches = new WeakMap()",
   "coreTranscriptGeneration"
 ]) {
