@@ -63,7 +63,10 @@ for (const required of [
   "removePartial(outputPath)",
   "cancelCompositionExport",
   "cancelAllCompositionExports",
-  "getActiveCompositionExportCount"
+  "getActiveCompositionExportCount",
+  "phase: 'validating'",
+  "phase: 'queued'",
+  "phase: 'processing'"
 ]) assert(service.includes(required), "Composition export service missing guardrail: " + required);
 
 for (const required of [
@@ -91,6 +94,10 @@ for (const required of [
   'tr("export.lowSpaceTitle"',
   'tr("export.folderTitle"',
   'tr("export.sourceTitle"',
+  'status: "validating"',
+  'phase === "validating"',
+  'phase === "queued"',
+  'phase === "processing"',
   "isRenderOutput: true",
   "isAutomationCompositionExport: true",
   "compositionSignature",
@@ -118,4 +125,4 @@ assert(pkg.scripts["test:core-automation-composition-export"], "package.json mus
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-composition-export"), "commercial regression must gate composition export");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
-console.log("Automation composition asset refresh, safe export, cancellation, output isolation and commercial UI tests passed.");
+console.log("Automation composition asset refresh, safe export lifecycle, cancellation, output isolation and commercial UI tests passed.");
