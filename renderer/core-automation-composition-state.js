@@ -60,6 +60,7 @@
       brief: automation.brief || {},
       scenePlan: automation.scenePlan,
       resolvedAssets: automation.resolvedAssets || [],
+      staleAssetIds: automation.stale?.assets || [],
       voiceResult: automation.voiceResult || null
     }) || "";
   }
