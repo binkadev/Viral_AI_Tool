@@ -1,7 +1,7 @@
 'use strict';
 
 const { ipcMain } = require('electron');
-const provider = require('./openai-script-provider');
+const provider = require('./script-provider-router');
 const {
   createScriptEngine,
   serializeScriptError,
