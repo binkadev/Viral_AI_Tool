@@ -2,6 +2,7 @@
   "use strict";
 
   let queued = false;
+  let selectedSceneId = null;
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -17,44 +18,52 @@
       ? {
           eyebrow: "03 · Scenes",
           title: "Scene Planner",
-          intro: "Split the accepted script into editable scene beats with timing, visual intent and stock-search terms.",
+          intro: "Review one scene at a time. Each scene keeps narration, visual intent, timing and media-search terms together.",
           generate: "Create scenes",
           regenerate: "Rebuild scenes",
-          open: "Open scenes",
           required: "Generate or save a script before creating scenes.",
           stale: "The script changed. Rebuild scenes before continuing.",
           scene: "Scene",
+          scenes: "Scenes",
           narration: "Narration",
-          visual: "Visual intent",
-          search: "Search terms",
-          timing: "Timing hint",
+          visual: "Visual direction",
+          search: "Media search terms",
+          timing: "Timing",
           save: "Save scene",
           saved: "Scene saved.",
           generated: "Scene plan created.",
-          count: "scenes",
           strategy: "Stock first",
-          ready: "Ready"
+          total: "Total",
+          selected: "Editing",
+          previous: "Previous scene",
+          next: "Next scene",
+          emptyTitle: "No scenes yet",
+          emptyBody: "Create the scene plan from the accepted script, then review each scene before moving to assets."
         }
       : {
           eyebrow: "03 · Phân cảnh",
           title: "Scene Planner",
-          intro: "Tách kịch bản đã chốt thành các nhịp cảnh có thể chỉnh sửa, gồm timing, visual intent và từ khóa tìm stock.",
+          intro: "Chỉnh từng cảnh một. Mỗi cảnh gom lời đọc, ý đồ hình ảnh, thời lượng và từ khóa tìm tư liệu vào cùng một chỗ.",
           generate: "Tạo phân cảnh",
           regenerate: "Tạo lại phân cảnh",
-          open: "Xem phân cảnh",
           required: "Hãy tạo hoặc lưu kịch bản trước khi tạo phân cảnh.",
           stale: "Kịch bản đã thay đổi. Hãy tạo lại phân cảnh trước khi đi tiếp.",
           scene: "Cảnh",
+          scenes: "Phân cảnh",
           narration: "Lời đọc",
           visual: "Ý đồ hình ảnh",
           search: "Từ khóa tìm tư liệu",
-          timing: "Gợi ý thời gian",
+          timing: "Thời lượng",
           save: "Lưu cảnh",
           saved: "Đã lưu cảnh.",
           generated: "Đã tạo phân cảnh.",
-          count: "cảnh",
           strategy: "Ưu tiên stock",
-          ready: "Sẵn sàng"
+          total: "Tổng",
+          selected: "Đang chỉnh",
+          previous: "Cảnh trước",
+          next: "Cảnh sau",
+          emptyTitle: "Chưa có phân cảnh",
+          emptyBody: "Tạo phân cảnh từ kịch bản đã chốt, sau đó kiểm tra từng cảnh trước khi chuyển sang tư liệu."
         };
   }
 
@@ -68,9 +77,39 @@
     return appState()?.automation || null;
   }
 
+  function scenes() {
+    const list = automation()?.scenePlan?.scenes;
+    return Array.isArray(list) ? list : [];
+  }
+
   function formatSec(value) {
     const number = Number(value || 0);
-    return Number.isFinite(number) ? number.toFixed(number % 1 ? 1 : 0) + "s" : "—";
+    if (!Number.isFinite(number)) return "—";
+    return number.toFixed(number % 1 ? 1 : 0) + "s";
+  }
+
+  function sceneEnd(scene) {
+    return Number(scene?.startHintSec || 0) + Number(scene?.durationHintSec || 0);
+  }
+
+  function sceneLabel(scene, index) {
+    return copy().scene + " " + (index + 1);
+  }
+
+  function sceneSnippet(scene) {
+    const text = String(scene?.narration || "").trim().replace(/\s+/g, " ");
+    return text.length > 72 ? text.slice(0, 69) + "…" : text;
+  }
+
+  function ensureSelection(list = scenes()) {
+    if (!list.length) {
+      selectedSceneId = null;
+      return null;
+    }
+    if (!selectedSceneId || !list.some(scene => scene.id === selectedSceneId)) {
+      selectedSceneId = list[0].id;
+    }
+    return list.find(scene => scene.id === selectedSceneId) || list[0];
   }
 
   function signature() {
@@ -80,30 +119,54 @@
       script: current?.script?.outputSignature || null,
       plan: current?.scenePlan?.outputSignature || null,
       stale: current?.stale?.scenes === true,
-      scenes: current?.scenePlan?.scenes?.map(scene => ({
+      selectedSceneId,
+      scenes: scenes().map(scene => ({
         id: scene.id,
         narration: scene.narration,
         visualIntent: scene.visualIntent,
         searchTerms: scene.searchTerms,
         startHintSec: scene.startHintSec,
         durationHintSec: scene.durationHintSec
-      })) || []
+      }))
     });
   }
 
-  function sceneCard(scene, index) {
+  function navItem(scene, index, selected) {
+    return '<button class="automation-scene-nav-item' + (selected ? ' is-selected' : '') + '" type="button" data-scene-select="' + esc(scene.id) + '" aria-pressed="' + (selected ? 'true' : 'false') + '">' +
+      '<span class="automation-scene-nav-index">' + String(index + 1).padStart(2, "0") + '</span>' +
+      '<span class="automation-scene-nav-copy"><b>' + esc(sceneLabel(scene, index)) + '</b><small>' + esc(formatSec(scene.startHintSec)) + ' – ' + esc(formatSec(sceneEnd(scene))) + '</small><em>' + esc(sceneSnippet(scene)) + '</em></span>' +
+      '<span class="automation-scene-nav-arrow" aria-hidden="true">›</span>' +
+    '</button>';
+  }
+
+  function editorMarkup(scene, index, list) {
     const c = copy();
     const terms = Array.isArray(scene.searchTerms) ? scene.searchTerms.join(", ") : "";
-    return '<article class="automation-scene-card" data-scene-id="' + esc(scene.id) + '">' +
-      '<div class="automation-scene-card-head"><div><span>' + esc(c.scene) + ' ' + (index + 1) + '</span><b>' + esc(formatSec(scene.startHintSec)) + ' → ' + esc(formatSec(Number(scene.startHintSec || 0) + Number(scene.durationHintSec || 0))) + '</b></div><small>' + esc(c.strategy) + '</small></div>' +
-      '<label class="label">' + esc(c.narration) + '</label>' +
-      '<textarea class="textarea" data-scene-field="narration" rows="4">' + esc(scene.narration) + '</textarea>' +
-      '<label class="label">' + esc(c.visual) + '</label>' +
-      '<textarea class="textarea" data-scene-field="visualIntent" rows="3">' + esc(scene.visualIntent) + '</textarea>' +
-      '<label class="label">' + esc(c.search) + '</label>' +
-      '<input class="input" data-scene-field="searchTerms" value="' + esc(terms) + '">' +
-      '<div class="automation-scene-card-foot"><span>' + esc(c.timing) + ': ' + esc(formatSec(scene.durationHintSec)) + '</span><button class="button ghost automation-save-scene" type="button" data-scene-save="' + esc(scene.id) + '">' + esc(c.save) + '</button></div>' +
-    '</article>';
+    const previousDisabled = index <= 0;
+    const nextDisabled = index >= list.length - 1;
+
+    return '<section class="automation-scene-inspector" data-scene-id="' + esc(scene.id) + '">' +
+      '<header class="automation-scene-inspector-head">' +
+        '<div><div class="eyebrow">' + esc(c.selected) + '</div><h4>' + esc(sceneLabel(scene, index)) + '</h4><p>' + esc(formatSec(scene.startHintSec)) + ' → ' + esc(formatSec(sceneEnd(scene))) + '</p></div>' +
+        '<div class="automation-scene-inspector-chips"><span>' + esc(formatSec(scene.durationHintSec)) + '</span><span>' + esc(c.strategy) + '</span></div>' +
+      '</header>' +
+      '<div class="automation-scene-editor-grid">' +
+        '<div class="automation-scene-primary">' +
+          '<label class="automation-scene-field"><span>' + esc(c.narration) + '</span><textarea class="textarea" data-scene-field="narration" rows="8">' + esc(scene.narration) + '</textarea></label>' +
+        '</div>' +
+        '<div class="automation-scene-secondary">' +
+          '<label class="automation-scene-field"><span>' + esc(c.visual) + '</span><textarea class="textarea" data-scene-field="visualIntent" rows="5">' + esc(scene.visualIntent) + '</textarea></label>' +
+          '<label class="automation-scene-field"><span>' + esc(c.search) + '</span><input class="input" data-scene-field="searchTerms" value="' + esc(terms) + '"></label>' +
+        '</div>' +
+      '</div>' +
+      '<footer class="automation-scene-inspector-foot">' +
+        '<div class="automation-scene-nav-actions">' +
+          '<button class="button ghost" type="button" data-scene-step="-1"' + (previousDisabled ? ' disabled aria-disabled="true"' : '') + '>← ' + esc(c.previous) + '</button>' +
+          '<button class="button ghost" type="button" data-scene-step="1"' + (nextDisabled ? ' disabled aria-disabled="true"' : '') + '>' + esc(c.next) + ' →</button>' +
+        '</div>' +
+        '<button class="button primary" type="button" data-scene-save="' + esc(scene.id) + '">' + esc(c.save) + '</button>' +
+      '</footer>' +
+    '</section>';
   }
 
   function panelMarkup() {
@@ -114,35 +177,39 @@
     const stale = current?.stale?.scenes === true;
 
     if (!script) {
-      return '<div class="automation-scenes-panel locked"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.required) + '</p></div><button class="button ghost" type="button" disabled aria-disabled="true">' + esc(c.generate) + '</button></div>';
+      return '<section class="automation-scenes-panel is-locked"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.required) + '</p></div><button class="button ghost" type="button" disabled aria-disabled="true">' + esc(c.generate) + '</button></section>';
     }
 
+    const list = scenes();
+    const selected = ensureSelection(list);
+    const selectedIndex = selected ? list.findIndex(scene => scene.id === selected.id) : -1;
     const action = plan ? c.regenerate : c.generate;
-    const scenes = Array.isArray(plan?.scenes) ? plan.scenes : [];
-    return '<div class="automation-scenes-panel">' +
-      '<div class="automation-scenes-head"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.intro) + '</p></div><button id="automationGenerateScenes" class="button primary" type="button">✦ ' + esc(action) + '</button></div>' +
+
+    return '<section class="automation-scenes-panel">' +
+      '<header class="automation-scenes-head"><div><div class="eyebrow">' + esc(c.eyebrow) + '</div><h3>' + esc(c.title) + '</h3><p>' + esc(c.intro) + '</p></div><button id="automationGenerateScenes" class="button primary" type="button">✦ ' + esc(action) + '</button></header>' +
       (stale ? '<div class="automation-inline-warning">! ' + esc(c.stale) + '</div>' : '') +
-      (scenes.length
-        ? '<div class="automation-scenes-summary"><b>' + scenes.length + ' ' + esc(c.count) + '</b><span>' + esc(formatSec(plan.targetDurationSec)) + '</span><span>' + esc(c.strategy) + '</span></div><div class="automation-scenes-list">' + scenes.map(sceneCard).join("") + '</div>'
-        : '<div class="automation-scenes-empty"><span>03</span><div><b>' + esc(c.title) + '</b><p>' + esc(c.intro) + '</p></div></div>') +
-    '</div>';
+      (list.length
+        ? '<div class="automation-scenes-summary"><b>' + list.length + ' ' + esc(c.scenes) + '</b><span>' + esc(c.total) + ': ' + esc(formatSec(plan?.targetDurationSec)) + '</span><span>' + esc(c.strategy) + '</span></div>' +
+          '<div class="automation-scenes-workbench">' +
+            '<aside class="automation-scenes-nav" aria-label="' + esc(c.scenes) + '">' + list.map((scene, index) => navItem(scene, index, scene.id === selected?.id)).join("") + '</aside>' +
+            (selected ? editorMarkup(selected, selectedIndex, list) : '') +
+          '</div>'
+        : '<div class="automation-scenes-empty"><div class="automation-scenes-empty-icon">03</div><div><h4>' + esc(c.emptyTitle) + '</h4><p>' + esc(c.emptyBody) + '</p><button id="automationGenerateScenesEmpty" class="button primary" type="button">✦ ' + esc(c.generate) + '</button></div></div>') +
+    '</section>';
   }
 
-  function updateStage() {
+  function updateLegacyStage() {
+    const creator = document.querySelector(".automation-creator");
+    if (creator?.classList.contains("automation-workspace-v2")) return;
     const rail = document.querySelector(".automation-stage-rail");
     if (!rail) return;
-    const stages = rail.querySelectorAll(".automation-stage");
-    const sceneStage = stages[2];
-    if (!(sceneStage instanceof HTMLElement)) return;
-    const current = automation();
-    const hasScript = Boolean(current?.script);
-    const hasPlan = Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
-    sceneStage.classList.toggle("locked", !hasScript);
-    sceneStage.classList.toggle("active", hasScript && !hasPlan);
-    sceneStage.classList.toggle("ready", hasPlan);
-    const small = sceneStage.querySelector("small");
-    const label = hasPlan ? copy().ready : hasScript ? copy().generate : (locale() === "en" ? "Next phase" : "Phase tiếp theo");
-    if (small && small.textContent !== label) small.textContent = label;
+    const stage = rail.querySelectorAll(".automation-stage")[2];
+    if (!(stage instanceof HTMLElement)) return;
+    const hasScript = Boolean(automation()?.script);
+    const hasPlan = Boolean(automation()?.scenePlan) && automation()?.stale?.scenes !== true;
+    stage.classList.toggle("locked", !hasScript);
+    stage.classList.toggle("active", hasScript && !hasPlan);
+    stage.classList.toggle("ready", hasPlan);
   }
 
   function ensureHost() {
@@ -154,7 +221,7 @@
 
     const legacyNext = creator.querySelector(":scope > .automation-next-card");
     host = document.createElement("div");
-    host.className = "card automation-next-card automation-scenes-host";
+    host.className = "automation-scenes-host";
     host.dataset.scenePlannerMount = "true";
 
     if (legacyNext instanceof HTMLElement) legacyNext.replaceWith(host);
@@ -162,34 +229,8 @@
     return host;
   }
 
-  function ensureQuickAction() {
-    const rail = document.querySelector(".automation-stage-rail");
-    if (!(rail instanceof HTMLElement)) return null;
-    const current = automation();
-    const script = current?.script;
-    let quick = document.getElementById("automationSceneQuickAction");
-
-    if (!script) {
-      quick?.remove();
-      return null;
-    }
-
-    if (!(quick instanceof HTMLElement)) {
-      quick = document.createElement("div");
-      quick.id = "automationSceneQuickAction";
-      quick.className = "automation-scene-quick";
-      rail.insertAdjacentElement("afterend", quick);
-    }
-
-    const hasPlan = Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
-    const c = copy();
-    const quickSignature = [locale(), current?.script?.outputSignature || "", current?.scenePlan?.outputSignature || "", current?.stale?.scenes === true].join("|");
-    if (quick.dataset.signature !== quickSignature) {
-      quick.dataset.signature = quickSignature;
-      quick.innerHTML = '<div><span>' + esc(c.eyebrow) + '</span><b>' + esc(c.title) + '</b><small>' + esc(hasPlan ? c.ready : c.intro) + '</small></div>' +
-        '<button id="automationSceneQuickButton" class="button primary" type="button">' + (hasPlan ? esc(c.open) : '✦ ' + esc(c.generate)) + '</button>';
-    }
-    return quick;
+  function removeLegacyQuickAction() {
+    document.getElementById("automationSceneQuickAction")?.remove();
   }
 
   function scrollToScenes() {
@@ -199,20 +240,23 @@
     catch { host.scrollIntoView(); }
   }
 
+  function renderHost({ force = false } = {}) {
+    const host = ensureHost();
+    if (!(host instanceof HTMLElement)) return;
+    ensureSelection();
+    const nextSignature = signature();
+    if (!force && host.dataset.sceneUiSignature === nextSignature) return;
+    host.dataset.sceneUiSignature = nextSignature;
+    const markup = panelMarkup();
+    if (host.innerHTML !== markup) host.innerHTML = markup;
+  }
+
   function scan() {
     queued = false;
     if (appState()?.page !== "automation") return;
-    const host = ensureHost();
-    if (!(host instanceof HTMLElement)) return;
-
-    const nextSignature = signature();
-    if (host.dataset.sceneUiSignature !== nextSignature) {
-      host.dataset.sceneUiSignature = nextSignature;
-      const markup = panelMarkup();
-      if (host.innerHTML !== markup) host.innerHTML = markup;
-    }
-    updateStage();
-    ensureQuickAction();
+    renderHost();
+    updateLegacyStage();
+    removeLegacyQuickAction();
   }
 
   function queueScan() {
@@ -221,19 +265,19 @@
     requestAnimationFrame(scan);
   }
 
-  function generateScenes({ scroll = false } = {}) {
+  function generateScenes() {
     const result = window.ViralAutomationSceneState?.generatePlan?.();
     if (!result?.ok) {
       try { if (typeof toast === "function") toast(copy().required); } catch {}
       return;
     }
+    selectedSceneId = result.value?.scenes?.[0]?.id || automation()?.scenePlan?.scenes?.[0]?.id || null;
     try { if (typeof toast === "function") toast(copy().generated); } catch {}
-    queueScan();
-    if (scroll) requestAnimationFrame(() => requestAnimationFrame(scrollToScenes));
+    renderHost({ force: true });
   }
 
-  function saveScene(sceneId, card) {
-    const value = field => card.querySelector('[data-scene-field="' + field + '"]')?.value || "";
+  function saveScene(sceneId, inspector) {
+    const value = field => inspector.querySelector('[data-scene-field="' + field + '"]')?.value || "";
     const result = window.ViralAutomationSceneState?.editScene?.(sceneId, {
       narration: value("narration"),
       visualIntent: value("visualIntent"),
@@ -241,31 +285,55 @@
     });
     if (result?.ok) {
       try { if (typeof toast === "function") toast(copy().saved); } catch {}
-      queueScan();
+      renderHost({ force: true });
     }
   }
 
+  function selectScene(sceneId) {
+    if (!sceneId || sceneId === selectedSceneId) return;
+    if (!scenes().some(scene => scene.id === sceneId)) return;
+    selectedSceneId = sceneId;
+    renderHost({ force: true });
+  }
+
+  function stepScene(delta) {
+    const list = scenes();
+    const currentIndex = Math.max(0, list.findIndex(scene => scene.id === selectedSceneId));
+    const nextIndex = Math.max(0, Math.min(list.length - 1, currentIndex + Number(delta || 0)));
+    if (list[nextIndex]) selectScene(list[nextIndex].id);
+  }
+
   document.addEventListener("click", event => {
-    const button = event.target instanceof Element ? event.target.closest("button") : null;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const select = target.closest("[data-scene-select]");
+    if (select) {
+      event.preventDefault();
+      selectScene(select.getAttribute("data-scene-select"));
+      return;
+    }
+
+    const step = target.closest("[data-scene-step]");
+    if (step instanceof HTMLButtonElement && !step.disabled) {
+      event.preventDefault();
+      stepScene(Number(step.getAttribute("data-scene-step") || 0));
+      return;
+    }
+
+    const button = target.closest("button");
     if (!(button instanceof HTMLButtonElement)) return;
-    if (button.id === "automationGenerateScenes") {
+    if (button.id === "automationGenerateScenes" || button.id === "automationGenerateScenesEmpty") {
       event.preventDefault();
       generateScenes();
       return;
     }
-    if (button.id === "automationSceneQuickButton") {
-      event.preventDefault();
-      const current = automation();
-      const hasPlan = Boolean(current?.scenePlan) && current?.stale?.scenes !== true;
-      if (hasPlan) scrollToScenes();
-      else generateScenes({ scroll: true });
-      return;
-    }
+
     const sceneId = button.dataset.sceneSave;
     if (sceneId) {
       event.preventDefault();
-      const card = button.closest(".automation-scene-card");
-      if (card) saveScene(sceneId, card);
+      const inspector = button.closest(".automation-scene-inspector");
+      if (inspector) saveScene(sceneId, inspector);
     }
   }, true);
 
@@ -274,9 +342,7 @@
 
   const start = () => {
     const page = document.getElementById("page");
-    if (page) {
-      new MutationObserver(queueScan).observe(page, { childList: true, subtree: true });
-    }
+    if (page) new MutationObserver(queueScan).observe(page, { childList: true, subtree: true });
     queueScan();
     document.documentElement.dataset.automationScenePlanner = "enabled";
   };
@@ -287,6 +353,7 @@
   window.ViralAutomationScenesUi = {
     renderPanel: panelMarkup,
     refresh: queueScan,
-    scrollToScenes
+    scrollToScenes,
+    selectScene
   };
 })();
