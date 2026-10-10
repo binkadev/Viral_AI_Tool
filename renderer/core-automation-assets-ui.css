@@ -1,4 +1,4 @@
-.automation-assets-host{display:block!important;width:100%;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+.automation-assets-host{display:block!important;width:100%;max-width:1240px;margin:0 auto;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
 .automation-assets-host[hidden]{display:none!important}
 .automation-assets-panel{width:100%;padding:16px;border:1px solid var(--line,#22304a);border-radius:14px;background:var(--surface-solid,#0f141d);box-shadow:none}
 .automation-assets-panel.is-locked{display:flex;align-items:center;justify-content:space-between;gap:16px;opacity:.8}
