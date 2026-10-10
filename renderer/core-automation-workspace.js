@@ -35,11 +35,7 @@
           backBrief: "Back to brief",
           backScript: "Back to script",
           viewScript: "Review script",
-          continueScenes: "Continue to scenes",
-          locked: "Not available yet",
-          complete: "Completed",
-          current: "Current",
-          ready: "Ready"
+          continueScenes: "Continue to scenes"
         }
       : {
           step: "Bước",
@@ -55,11 +51,7 @@
           backBrief: "Quay lại Brief",
           backScript: "Quay lại Kịch bản",
           viewScript: "Kiểm tra kịch bản",
-          continueScenes: "Tiếp tục: Phân cảnh",
-          locked: "Chưa mở",
-          complete: "Đã xong",
-          current: "Đang làm",
-          ready: "Sẵn sàng"
+          continueScenes: "Tiếp tục: Phân cảnh"
         };
   }
 
@@ -142,7 +134,6 @@
   }
 
   function decorateStages(rail) {
-    const c = copy();
     const stages = Array.from(rail.querySelectorAll(".automation-stage"));
     stages.forEach((node, index) => {
       const stage = index + 1;
@@ -157,12 +148,6 @@
       node.setAttribute("aria-disabled", available ? "false" : "true");
       if (stage === activeStage) node.setAttribute("aria-current", "step");
       else node.removeAttribute("aria-current");
-
-      const small = node.querySelector("small");
-      if (small) {
-        const label = !available ? c.locked : stage === activeStage ? c.current : completed ? c.complete : c.ready;
-        if (small.textContent !== label) small.textContent = label;
-      }
     });
   }
 
