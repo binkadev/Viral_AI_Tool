@@ -42,7 +42,6 @@
       version: VERSION,
       language: text(brief?.language || "vi", 32),
       voiceId: text(voiceId || "default", 120),
-      scenePlanSignature: text(scenePlan?.outputSignature, 240),
       segments: segmentsFromScenePlan(scenePlan).map(segment => ({
         sceneId: segment.sceneId,
         text: segment.text,
