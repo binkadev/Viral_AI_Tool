@@ -6,6 +6,10 @@ const {
   installAutomationScriptIpc,
   cancelAllAutomationScripts
 } = require('./services/automation/desktop-ipc');
+const {
+  installAutomationStockIpc,
+  cancelAllAutomationStockOperations
+} = require('./services/automation/stock-desktop-ipc');
 
 const WINDOWS_11_MIN_BUILD = 22000;
 const STARTUP_DIAGNOSTICS = process.env.VIRAL_AI_STARTUP_DIAGNOSTICS === '1';
@@ -109,8 +113,10 @@ function installWindowsFirstPaintStabilizer() {
 
 installWindowsFirstPaintStabilizer();
 installAutomationScriptIpc();
+installAutomationStockIpc();
 app.on('before-quit', () => {
   cancelAllAutomationScripts().catch(() => {});
+  cancelAllAutomationStockOperations();
 });
 
 if (STARTUP_DIAGNOSTICS) {
