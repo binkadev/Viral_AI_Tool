@@ -31,8 +31,9 @@
           constraints: "Constraints",
           provider: "Media source",
           providerMissing: "No media source connected",
-          providerHint: "The router is ready. A stock provider will be connected next without changing this project model.",
+          providerHint: "The router is ready. A stock provider can be connected without changing this project model.",
           ready: "Request ready",
+          prepared: "Media requests are ready.",
           resolved: "Resolved",
           stale: "Needs refresh",
           noRequests: "No media requests yet",
@@ -55,8 +56,9 @@
           constraints: "Ràng buộc",
           provider: "Nguồn tư liệu",
           providerMissing: "Chưa kết nối nguồn tư liệu",
-          providerHint: "Router đã sẵn sàng. Nguồn stock sẽ được nối ở bước tiếp theo mà không đổi cấu trúc dự án.",
+          providerHint: "Router đã sẵn sàng. Có thể nối nguồn stock mà không cần đổi cấu trúc dự án.",
           ready: "Yêu cầu sẵn sàng",
+          prepared: "Đã chuẩn bị yêu cầu tư liệu.",
           resolved: "Đã có tư liệu",
           stale: "Cần làm mới",
           noRequests: "Chưa có yêu cầu tư liệu",
@@ -187,7 +189,7 @@
     if (result?.ok) {
       selectedSceneId = result.requests?.[0]?.sceneId || selectedSceneId;
       render({ force: true });
-      try { if (typeof toast === "function") toast(copy().ready); } catch {}
+      try { if (typeof toast === "function") toast(copy().prepared); } catch {}
     }
   }
 
