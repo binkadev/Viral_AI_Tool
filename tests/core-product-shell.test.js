@@ -11,6 +11,7 @@ const shell = read("renderer/core-product-shell.js");
 const shellCss = read("renderer/core-product-shell.css");
 const index = read("renderer/index.html");
 const capabilities = read("renderer/core-capabilities.css");
+const capabilityJs = read("renderer/core-capabilities.js");
 const shellStability = read("renderer/core-shell-stability.css");
 const shellWorkstation = read("renderer/core-shell-workstation.css");
 const projectContext = read("renderer/core-project-context.js");
@@ -32,16 +33,20 @@ for (const required of [
   "const productionJobs = current.jobs.filter",
   "const isLegacyDemo = LEGACY_DEMO_NAMES.has",
   "current.jobs.filter(job => !job?.isRenderOutput)",
-  'const startupPage = hasSourceVideo() ? "ai-video" : "download"',
+  'hasAutomationProject() ? "automation" : "download"',
+  '{ id: "automation", icon: "✦", label: "core-automation" }',
   '{ id: "download", icon: "⇩", label: "core-import" }',
   '{ id: "ai-video", icon: "◫", label: "core-editor" }',
   "pages.download = function coreImportPage()",
   'workflow: "Tạo video"',
+  'automation: "Tạo bằng AI"',
   'editor: "Studio video"',
   'workspaceName: "Studio video"',
   'workflow: "Create video"',
+  'automation: "Create with AI"',
   'editor: "Video studio"',
   'workspaceName: "Video Studio"',
+  'current.page === "automation"',
   'document.querySelector(".workspace strong")'
 ]) assert(shell.includes(required), "Core product shell missing: " + required);
 
@@ -68,10 +73,13 @@ assert(index.includes('src="core-navigation-stability.js"'));
 assert(index.includes('src="core-project-context.js"'));
 assert(index.includes('href="core-motion-policy.css"'));
 assert(index.includes('href="core-premium-workstation.css"'));
+assert(index.includes('href="core-automation-creator.css"'));
+assert(index.includes('src="core-automation-creator.js"'));
 assert(index.includes('src="brand-mark.svg"'));
 assert(brand.includes('linearGradient id="bg"'));
 assert(shellCss.includes(".core-import-primary"));
 assert(!capabilities.includes('[data-page="ai-video"]'), "Production Core Editor must remain visible.");
+assert(!capabilityJs.includes('new Set(["automation",'), "Automation must no longer be hidden as a deferred page.");
 
 for (const required of [
   "Direct-paint workstation shell",
