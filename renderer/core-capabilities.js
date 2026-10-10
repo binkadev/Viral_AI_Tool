@@ -2,10 +2,10 @@
   "use strict";
 
   // `ai-video` is the legacy internal route name for the real Core Editor
-  // (Speech -> Translation -> Voice -> Render). Do not hide it as a prototype.
-  // Standalone legacy editor/voice pages remain hidden to avoid duplicate or
-  // decorative surfaces getting ahead of the production workflow.
-  const DEFERRED_PAGES = new Set(["automation", "workflow", "workflow-builder", "monitor", "editor", "voice"]);
+  // (Speech -> Translation -> Voice -> Render). Automation now has a real
+  // ContentBrief + ScriptEngine path, while the remaining legacy prototype
+  // surfaces stay hidden until their production implementation exists.
+  const DEFERRED_PAGES = new Set(["workflow", "workflow-builder", "monitor", "editor", "voice"]);
   const FUNCTIONAL_IDS = new Set([
     "quickProject",
     "langMenuButton",
@@ -21,7 +21,10 @@
     "openCloudSettings",
     "cloudAccountAction",
     "cloudLogoutAction",
-    "manageLocalAiPanel"
+    "manageLocalAiPanel",
+    "automationGenerateScript",
+    "automationStopScript",
+    "automationSaveScript"
   ]);
 
   function locale() {
