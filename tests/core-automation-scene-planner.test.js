@@ -99,9 +99,16 @@ for (const required of [
 }
 assert(!uiSource.includes("setInterval("), "Scene Planner UI must remain event-driven.");
 assert(!uiSource.includes("fetch("), "Scene Planner MVP must not require a provider or network call.");
-assert(uiCss.includes(".automation-scene-quick"));
-assert(uiCss.includes(".automation-scenes-list"));
-assert(uiCss.includes(".automation-scene-card"));
+for (const required of [
+  ".automation-scene-quick",
+  ".automation-scene-quick::before",
+  ".automation-scenes-list",
+  ".automation-scene-card",
+  ".automation-scene-card:focus-within",
+  "@media (max-width:1450px)"
+]) {
+  assert(uiCss.includes(required), "Scene Planner responsive UI missing: " + required);
+}
 
 for (const required of [
   'href="core-automation-scenes-ui.css"',
@@ -117,4 +124,4 @@ assert(index.indexOf('src="core-automation-scene-state.js"') < index.indexOf('sr
 assert(pkg.scripts["test:core-automation-scene-planner"], "package.json must expose Scene Planner regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-scene-planner"), "commercial regression must gate Scene Planner");
 
-console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation, resilient mount and above-fold action tests passed.");
+console.log("Automation Scene Planner deterministic timing, editable scenes, stable IDs, stale propagation, responsive polish, resilient mount and above-fold action tests passed.");
