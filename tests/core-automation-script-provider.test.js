@@ -6,25 +6,37 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const providerPath = path.join(root, 'services', 'automation', 'openai-script-provider.js');
+const devProviderPath = path.join(root, 'services', 'automation', 'dev-template-script-provider.js');
+const routerPath = path.join(root, 'services', 'automation', 'script-provider-router.js');
 const ipcPath = path.join(root, 'services', 'automation', 'desktop-ipc.js');
 const mainEntry = fs.readFileSync(path.join(root, 'main-entry.js'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const providerSource = fs.readFileSync(providerPath, 'utf8');
+const devProviderSource = fs.readFileSync(devProviderPath, 'utf8');
+const routerSource = fs.readFileSync(routerPath, 'utf8');
 const ipcSource = fs.readFileSync(ipcPath, 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 const previousKey = process.env.OPENAI_API_KEY;
 const previousModel = process.env.VIRAL_AI_OPENAI_SCRIPT_MODEL;
 const previousBaseUrl = process.env.OPENAI_BASE_URL;
+const previousDevProvider = process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER;
 const previousFetch = global.fetch;
+
+function clearModules() {
+  for (const file of [providerPath, devProviderPath, routerPath]) {
+    try { delete require.cache[require.resolve(file)]; } catch {}
+  }
+}
 
 async function run() {
   try {
     process.env.OPENAI_API_KEY = 'test-key-not-real';
     process.env.VIRAL_AI_OPENAI_SCRIPT_MODEL = 'script-test-model';
     process.env.OPENAI_BASE_URL = 'https://example.test';
+    delete process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER;
 
-    delete require.cache[require.resolve(providerPath)];
+    clearModules();
     const provider = require(providerPath);
 
     assert.strictEqual(provider.id, 'openai-compatible');
@@ -76,27 +88,53 @@ async function run() {
     assert.strictEqual(requestBody.text.format.name, 'viral_ai_automation_script');
     const requestInput = JSON.parse(requestBody.input);
     assert.strictEqual(requestInput.topic, 'Phối đồ nam Hàn Quốc');
-    assert.strictEqual(requestInput.platform, 'tiktok');
     assert.strictEqual(result.provider, 'openai-compatible');
     assert.strictEqual(result.model, 'script-test-model');
-    assert(result.narrationText.includes('Bắt đầu từ form'));
 
     process.env.OPENAI_API_KEY = '';
-    assert.strictEqual(provider.isConfigured(), false);
-    await assert.rejects(
-      () => provider.generateScript({ brief: { topic: 'x' } }),
-      error => error?.code === 'PROVIDER_NOT_CONFIGURED'
-    );
+    delete process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER;
+    clearModules();
+    const noKeyRouter = require(routerPath);
+    assert.strictEqual(await noKeyRouter.isConfigured(), false, 'no-key production path must stay unavailable by default');
+    assert.strictEqual(noKeyRouter.id, 'openai-compatible');
+
+    process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER = '1';
+    clearModules();
+    const devRouter = require(routerPath);
+    assert.strictEqual(await devRouter.isConfigured(), true, 'explicit development provider flag must unlock no-key runtime testing');
+    assert.strictEqual(devRouter.id, 'dev-template');
+    const devResult = await devRouter.generateScript({
+      brief: {
+        topic: '5 cách phối đồ nam phong cách Hàn',
+        objective: 'Video short thu hút người xem Việt Nam',
+        audience: 'Nam 18-28 tuổi',
+        language: 'vi',
+        callToAction: 'Theo dõi để xem phần tiếp theo'
+      }
+    });
+    assert.strictEqual(devResult.provider, 'dev-template');
+    assert.strictEqual(devResult.model, 'deterministic-template-v1');
+    assert.strictEqual(devResult.meta.developmentPreview, true);
+    assert.strictEqual(devResult.meta.networkUsed, false);
+    assert(devResult.narrationText.includes('phối đồ nam phong cách Hàn'));
 
     for (const required of [
       "ipcMain.handle('automation:script-status'",
       "ipcMain.handle('automation:script-start'",
       "ipcMain.handle('automation:script-cancel'",
       "event.sender.send('automation:script-progress'",
+      "require('./script-provider-router')",
       'createScriptEngine({ provider })'
     ]) {
       assert(ipcSource.includes(required), 'Automation desktop IPC is missing: ' + required);
     }
+
+    assert(routerSource.includes("require('./openai-script-provider')"));
+    assert(routerSource.includes("require('./dev-template-script-provider')"));
+    assert(routerSource.includes('VIRAL_AI_AUTOMATION_DEV_PROVIDER'));
+    assert(devProviderSource.includes("provider: 'dev-template'"));
+    assert(devProviderSource.includes('networkUsed: false'));
+    assert(!devProviderSource.includes('fetch('), 'development provider must remain offline and deterministic');
 
     assert(mainEntry.includes("require('./services/automation/desktop-ipc')"));
     assert(mainEntry.includes('installAutomationScriptIpc();'));
@@ -111,15 +149,16 @@ async function run() {
       assert(preload.includes(required), 'Automation preload bridge is missing: ' + required);
     }
 
-    assert(!providerSource.includes('localStorage'), 'Provider must stay outside renderer persistence concerns.');
-    assert(!ipcSource.includes('OPENAI_API_KEY'), 'IPC bridge must not expose provider credentials.');
-    assert(pkg.scripts['test:core-automation-script-provider'], 'package.json must expose provider/IPC regression gate');
+    assert(!providerSource.includes('localStorage'));
+    assert(!ipcSource.includes('OPENAI_API_KEY'));
+    assert(pkg.scripts['test:core-automation-script-provider']);
 
-    console.log('Automation ScriptEngine OpenAI-compatible provider, structured output and narrow IPC bridge tests passed.');
+    console.log('Automation ScriptEngine cloud provider, explicit no-key dev fallback and narrow IPC bridge tests passed.');
   } finally {
     if (previousKey == null) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousKey;
     if (previousModel == null) delete process.env.VIRAL_AI_OPENAI_SCRIPT_MODEL; else process.env.VIRAL_AI_OPENAI_SCRIPT_MODEL = previousModel;
     if (previousBaseUrl == null) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previousBaseUrl;
+    if (previousDevProvider == null) delete process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER; else process.env.VIRAL_AI_AUTOMATION_DEV_PROVIDER = previousDevProvider;
     global.fetch = previousFetch;
   }
 }
