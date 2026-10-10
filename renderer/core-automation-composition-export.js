@@ -136,7 +136,6 @@
       host.className = "automation-composition-actions";
       head.appendChild(host);
     }
-
     const rebuild = head.querySelector(":scope > #automationBuildComposition");
     if (rebuild instanceof HTMLElement) host.appendChild(rebuild);
     const studio = head.querySelector(":scope > [data-composition-open-studio]");
@@ -145,16 +144,14 @@
   }
 
   function ensureAction() {
-    const current = appState();
-    if (current?.page !== "automation") return;
+    if (appState()?.page !== "automation") return;
     const head = document.querySelector(".automation-composition-head");
     if (!(head instanceof HTMLElement)) return;
     const composition = currentComposition();
     const busy = Boolean(operationId);
     if (!composition && !busy) {
       head.querySelector("[data-composition-export]")?.remove();
-      const panel = head.parentElement;
-      panel?.querySelector(":scope > .automation-composition-export-status")?.remove();
+      head.parentElement?.querySelector(":scope > .automation-composition-export-status")?.remove();
       return;
     }
 
@@ -195,8 +192,7 @@
     if (appState()?.page !== "automation") return;
     const panel = document.querySelector(".automation-composition-panel");
     if (!(panel instanceof HTMLElement)) return;
-    const composition = currentComposition();
-    const job = latestCompletedJob(composition);
+    const job = latestCompletedJob(currentComposition());
     let result = panel.querySelector(":scope > .automation-composition-export-result");
     if (!job) {
       result?.remove();
@@ -231,7 +227,8 @@
     const job = {
       id,
       name: projectName() + ".mp4",
-      status: "validating",
+      status: "processing",
+      exportPhase: "validating",
       progress: 1,
       fileState: "unknown",
       isRenderOutput: true,
@@ -255,7 +252,10 @@
     const id = operationId;
     if (!id) return;
     const job = activeJob();
-    if (job) job.status = "cancelling";
+    if (job) {
+      job.status = "cancelling";
+      job.exportPhase = "cancelling";
+    }
     persist();
     ensureAction();
 
@@ -266,6 +266,7 @@
       progress = 0;
       if (job) {
         job.status = "cancelled";
+        job.exportPhase = "cancelled";
         job.progress = Math.max(0, Number(job.progress || 0));
         job.completedAt = Date.now();
       }
@@ -276,7 +277,10 @@
       return;
     }
 
-    if (job) job.status = "processing";
+    if (job) {
+      job.status = "processing";
+      job.exportPhase = "processing";
+    }
     persist();
     toastMessage(tr("export.stopFailed"));
     ensureAction();
@@ -331,6 +335,7 @@
     if (!response?.ok) {
       if (job) {
         job.status = "failed";
+        job.exportPhase = "failed";
         job.failureCode = String(response?.error?.code || "COMPOSITION_EXPORT_FAILED");
         job.completedAt = Date.now();
       }
@@ -344,6 +349,7 @@
     if (response.data?.cancelled) {
       if (job) {
         job.status = "cancelled";
+        job.exportPhase = "cancelled";
         job.completedAt = Date.now();
       }
       persist();
@@ -355,6 +361,7 @@
 
     if (job) {
       job.status = "completed";
+      job.exportPhase = "completed";
       job.progress = 100;
       job.outputPath = response.data.outputPath;
       job.name = fileName(response.data.outputPath) || job.name;
@@ -384,9 +391,10 @@
     if (Number(status?.activeCount || 0) > 0) return;
     let changed = false;
     for (const job of exportJobs()) {
-      if (!["validating", "processing", "queued", "cancelling"].includes(String(job?.status || ""))) continue;
+      if (!["processing", "queued", "cancelling"].includes(String(job?.status || ""))) continue;
       if (job?.outputPath) continue;
       job.status = "cancelled";
+      job.exportPhase = "cancelled";
       job.failureCode = "INTERRUPTED";
       job.completedAt = Date.now();
       changed = true;
@@ -420,10 +428,9 @@
     progress = Math.max(progress, Number(payload?.percent || 0));
     const job = activeJob();
     if (job) {
-      const phase = String(payload?.phase || "");
-      if (phase === "validating") job.status = "validating";
-      else if (phase === "queued") job.status = "queued";
-      else if (phase === "processing") job.status = "processing";
+      const phase = String(payload?.phase || "processing");
+      job.exportPhase = phase;
+      job.status = phase === "queued" ? "queued" : "processing";
       job.progress = Math.max(Number(job.progress || 0), progress);
     }
     if (progress - lastProgressSaved >= 10) {
