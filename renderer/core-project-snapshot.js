@@ -19,7 +19,7 @@
     bottomTab: "viral-ai-core-editor-bottom-tab",
     bottomHeight: "viral-ai-core-editor-bottom-height",
     bottomCollapsed: "viral-ai-core-editor-bottom-collapsed",
-    timelineZoom: "viral-ai-core-editor-timeline-zoom",
+    timelineZoom: "viral-ai-core-timeline-zoom",
     timelineSelection: "viral-ai-core-timeline-selection"
   });
 
@@ -54,7 +54,11 @@
   }
 
   function safeJobs(jobs) {
-    return (Array.isArray(jobs) ? jobs : []).map(safeJob).filter(Boolean).slice(0, 100);
+    return (Array.isArray(jobs) ? jobs : [])
+      .filter(job => job?.isAutomationCompositionPreview !== true)
+      .map(safeJob)
+      .filter(Boolean)
+      .slice(0, 100);
   }
 
   function normalizeAutomation(value) {
@@ -81,7 +85,7 @@
     const jobs = Array.isArray(state?.jobs) ? state.jobs : [];
     for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
-      if (job && !job.isRenderOutput && job.sourcePath) return job;
+      if (job && !job.isRenderOutput && job.isAutomationCompositionPreview !== true && job.sourcePath) return job;
     }
     return null;
   }
