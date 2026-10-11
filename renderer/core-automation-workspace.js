@@ -1,10 +1,13 @@
 (function installAutomationWorkspace() {
   "use strict";
 
-  const STAGE_KEY = "viral-ai-automation-workspace-stage-v1";
+  const STAGE_KEY = "viral-ai-automation-workspace-stage-v2";
   let queued = false;
   let activeStage = 0;
   let lastScriptSignature = null;
+  let lastSceneSignature = null;
+  let lastAssetsComplete = null;
+  let manualSelection = false;
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -24,55 +27,57 @@
       ? {
           step: "Step",
           of: "of",
-          titles: ["Prepare the brief", "Review the script", "Build scenes", "Prepare assets", "Compose timeline"],
+          titles: ["Prepare content", "Review script", "Shape scenes", "Choose media", "Finish timeline"],
           desc: [
-            "Enter the idea and output settings, then generate the first editable script.",
-            "Review, edit and save the script before turning it into visual scenes.",
-            "Create scene beats, then refine narration, visual intent and media search terms.",
-            "Resolve each scene into a healthy local media asset before timeline composition begins.",
-            "Build the editable Composition Plan from approved scene timings and resolved local assets."
+            "Define the idea and output settings, then create the first editable script.",
+            "Review and refine the script before visual planning starts.",
+            "Refine narration, visual intent and media search terms scene by scene.",
+            "Resolve every scene into a healthy local media asset.",
+            "Review voice, composition and export, then continue in Studio when you are ready."
           ],
           backBrief: "Back to brief",
           backScript: "Back to script",
           backScenes: "Back to scenes",
-          backAssets: "Back to assets",
+          backAssets: "Back to media",
           viewScript: "Review script",
           continueScenes: "Continue to scenes",
-          continueAssets: "Continue to assets",
+          continueAssets: "Continue to media",
           continueTimeline: "Continue to timeline",
           locked: "Locked",
           complete: "Done",
-          current: "Current",
-          ready: "Ready"
+          current: "Viewing",
+          ready: "Ready",
+          reviewing: "Reviewing an earlier completed step"
         }
       : {
           step: "Bước",
           of: "trên",
-          titles: ["Chuẩn bị nội dung", "Kiểm tra kịch bản", "Tạo phân cảnh", "Chuẩn bị tư liệu", "Dựng timeline"],
+          titles: ["Chuẩn bị nội dung", "Kiểm tra kịch bản", "Tinh chỉnh phân cảnh", "Chọn tư liệu", "Hoàn thiện timeline"],
           desc: [
-            "Nhập ý tưởng và cấu hình đầu ra, sau đó tạo kịch bản đầu tiên có thể chỉnh sửa.",
-            "Đọc lại, chỉnh sửa và lưu kịch bản trước khi chuyển sang phân cảnh.",
-            "Tạo các nhịp cảnh rồi chỉnh lời đọc, ý đồ hình ảnh và từ khóa tìm tư liệu.",
-            "Giải quyết từng cảnh thành file tư liệu cục bộ còn hoạt động trước khi dựng timeline.",
-            "Tạo Composition Plan có thể chỉnh sửa từ timing của cảnh và các file tư liệu đã chốt."
+            "Xác định ý tưởng và đầu ra, sau đó tạo kịch bản đầu tiên có thể chỉnh sửa.",
+            "Đọc lại và tinh chỉnh kịch bản trước khi chuyển sang phần hình ảnh.",
+            "Tinh chỉnh lời đọc, ý đồ hình ảnh và từ khóa tư liệu cho từng cảnh.",
+            "Chốt file tư liệu cục bộ còn hoạt động cho từng cảnh.",
+            "Kiểm tra giọng đọc, bố cục và bản xuất trước khi tiếp tục chỉnh tay trong Studio."
           ],
-          backBrief: "Quay lại Brief",
-          backScript: "Quay lại Kịch bản",
-          backScenes: "Quay lại Phân cảnh",
-          backAssets: "Quay lại Tư liệu",
+          backBrief: "Về Nội dung",
+          backScript: "Về Kịch bản",
+          backScenes: "Về Phân cảnh",
+          backAssets: "Về Tư liệu",
           viewScript: "Kiểm tra kịch bản",
-          continueScenes: "Tiếp tục: Phân cảnh",
-          continueAssets: "Tiếp tục: Tư liệu",
-          continueTimeline: "Tiếp tục: Timeline",
+          continueScenes: "Tiếp tục Phân cảnh",
+          continueAssets: "Tiếp tục Tư liệu",
+          continueTimeline: "Tiếp tục Timeline",
           locked: "Chưa mở",
           complete: "Đã xong",
-          current: "Đang làm",
-          ready: "Sẵn sàng"
+          current: "Đang xem",
+          ready: "Sẵn sàng",
+          reviewing: "Bạn đang xem lại một bước đã hoàn thành"
         };
   }
 
   function hasScript() {
-    return Boolean(automation()?.script);
+    return Boolean(automation()?.script) && automation()?.stale?.script !== true;
   }
 
   function hasScenePlan() {
@@ -115,38 +120,82 @@
     return false;
   }
 
-  function storedStage() {
-    try {
-      const value = Number(sessionStorage.getItem(STAGE_KEY));
-      return Number.isInteger(value) ? value : 0;
-    } catch { return 0; }
-  }
-
-  function persistStage() {
-    try { sessionStorage.setItem(STAGE_KEY, String(activeStage)); } catch {}
-  }
-
-  function initialStage() {
-    const saved = storedStage();
-    if (saved >= 1 && saved <= 5 && stageAvailable(saved)) return saved;
-    if (hasComposition()) return 5;
-    if (hasAssetRequests()) return 4;
-    if (hasScenePlan()) return 3;
+  function highestRelevantStage() {
+    if (hasResolvedAssets()) return 5;
+    if (hasAssetRequests() || hasScenePlan()) return hasAssetRequests() ? 4 : 3;
     if (hasScript()) return 2;
     return 1;
   }
 
-  function setStage(stage, { scroll = true } = {}) {
-    const next = Number(stage);
-    if (!stageAvailable(next)) return false;
-    activeStage = next;
+  function stageCompletion(stage) {
+    if (stage === 1 || stage === 2) return hasScript();
+    if (stage === 3) return hasScenePlan();
+    if (stage === 4) return hasResolvedAssets();
+    if (stage === 5) return hasComposition();
+    return false;
+  }
+
+  function storedStage() {
+    try {
+      const raw = sessionStorage.getItem(STAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const stage = Number(parsed?.stage);
+      if (!Number.isInteger(stage) || stage < 1 || stage > 5) return null;
+      return { stage, manual: parsed?.manual === true };
+    } catch { return null; }
+  }
+
+  function persistStage() {
+    try { sessionStorage.setItem(STAGE_KEY, JSON.stringify({ stage: activeStage, manual: manualSelection })); } catch {}
+  }
+
+  function initialStage() {
+    const stored = storedStage();
+    if (stored && stored.manual && stageAvailable(stored.stage)) {
+      manualSelection = true;
+      return stored.stage;
+    }
+    manualSelection = false;
+    return highestRelevantStage();
+  }
+
+  function reducedMotion() {
+    try {
+      return document.documentElement.dataset.motion === "reduced" || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+    } catch { return false; }
+  }
+
+  function scrollToStageContext() {
+    requestAnimationFrame(() => {
+      const target = document.querySelector(".automation-step-context") || document.querySelector(".automation-stage-rail");
+      try { target?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" }); } catch {}
+    });
+  }
+
+  function applyStage(stage, { manual = true } = {}) {
+    activeStage = Number(stage);
+    manualSelection = manual;
     persistStage();
-    queueScan();
-    if (scroll) {
-      requestAnimationFrame(() => {
-        const target = document.querySelector(".automation-step-context") || document.querySelector(".automation-stage-rail");
-        try { target?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
-      });
+    scan();
+  }
+
+  function setStage(stage, { scroll = true, manual = true } = {}) {
+    const next = Number(stage);
+    if (!stageAvailable(next) || next === activeStage) return false;
+
+    const change = () => applyStage(next, { manual });
+    if (!reducedMotion() && typeof document.startViewTransition === "function") {
+      try {
+        const transition = document.startViewTransition(change);
+        if (scroll) transition.finished.finally(scrollToStageContext);
+      } catch {
+        change();
+        if (scroll) scrollToStageContext();
+      }
+    } else {
+      change();
+      if (scroll) scrollToStageContext();
     }
     return true;
   }
@@ -156,12 +205,14 @@
     if (!(context instanceof HTMLElement)) {
       context = document.createElement("section");
       context.className = "automation-step-context";
+      context.dataset.automationMotionItem = "step-context";
       rail.insertAdjacentElement("afterend", context);
     }
 
     const c = copy();
     const stageIndex = Math.max(1, Math.min(5, activeStage));
-    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests(), hasResolvedAssets(), hasComposition()].join("|");
+    const reviewingEarlier = stageIndex < highestRelevantStage() && stageCompletion(stageIndex);
+    const signature = [locale(), stageIndex, hasScript(), hasScenePlan(), hasAssetRequests(), hasResolvedAssets(), hasComposition(), reviewingEarlier].join("|");
     if (context.dataset.signature === signature) return context;
     context.dataset.signature = signature;
 
@@ -181,7 +232,7 @@
       actions = '<button class="button ghost" type="button" data-automation-workspace-go="4">← ' + c.backAssets + '</button>';
     }
 
-    context.innerHTML = '<div class="automation-step-copy"><span>' + c.step + ' ' + stageIndex + ' ' + c.of + ' 5</span><h3>' + c.titles[stageIndex - 1] + '</h3><p>' + c.desc[stageIndex - 1] + '</p></div>' +
+    context.innerHTML = '<div class="automation-step-copy"><span>' + c.step + ' ' + stageIndex + ' ' + c.of + ' 5</span><h3>' + c.titles[stageIndex - 1] + '</h3><p>' + c.desc[stageIndex - 1] + (reviewingEarlier ? ' · ' + c.reviewing : '') + '</p></div>' +
       '<div class="automation-step-actions">' + actions + '</div>';
     return context;
   }
@@ -192,7 +243,7 @@
     stages.forEach((node, index) => {
       const stage = index + 1;
       const available = stageAvailable(stage);
-      const completed = (stage === 1 && hasScript()) || (stage === 2 && hasScript()) || (stage === 3 && hasScenePlan()) || (stage === 4 && hasResolvedAssets()) || (stage === 5 && hasComposition());
+      const completed = stageCompletion(stage);
       node.dataset.workspaceStage = String(stage);
       node.classList.toggle("workspace-active", stage === activeStage);
       node.classList.toggle("workspace-completed", completed && stage !== activeStage);
@@ -209,6 +260,15 @@
         if (small.textContent !== label) small.textContent = label;
       }
     });
+  }
+
+  function visiblePanel(creator) {
+    if (activeStage === 1) return creator.querySelector(".automation-brief-card");
+    if (activeStage === 2) return creator.querySelector(".automation-script-card");
+    if (activeStage === 3) return creator.querySelector(":scope > .automation-scenes-host");
+    if (activeStage === 4) return creator.querySelector(":scope > .automation-assets-host");
+    if (activeStage === 5) return creator.querySelector(":scope > .automation-composition-host");
+    return null;
   }
 
   function applyPanelVisibility(creator) {
@@ -240,6 +300,36 @@
     if (activeStage === 5 && !(composition instanceof HTMLElement)) {
       try { window.ViralAutomationCompositionUi?.refresh?.(); } catch {}
     }
+
+    const panel = visiblePanel(creator);
+    creator.querySelectorAll("[data-automation-stage-panel]").forEach(node => node.removeAttribute("data-automation-stage-panel"));
+    if (panel instanceof HTMLElement) panel.dataset.automationStagePanel = "active";
+  }
+
+  function maybeAdvanceFromState() {
+    const scriptSignature = automation()?.script?.outputSignature || null;
+    const sceneSignature = automation()?.scenePlan?.outputSignature || null;
+    const assetsComplete = hasResolvedAssets();
+
+    if (lastScriptSignature === null) lastScriptSignature = scriptSignature;
+    if (lastSceneSignature === null) lastSceneSignature = sceneSignature;
+    if (lastAssetsComplete === null) lastAssetsComplete = assetsComplete;
+
+    if (scriptSignature && scriptSignature !== lastScriptSignature && activeStage === 1) {
+      activeStage = 2;
+      manualSelection = false;
+    } else if (sceneSignature && sceneSignature !== lastSceneSignature && activeStage <= 2) {
+      activeStage = 3;
+      manualSelection = false;
+    } else if (assetsComplete && lastAssetsComplete === false && activeStage <= 4) {
+      activeStage = 5;
+      manualSelection = false;
+    }
+
+    lastScriptSignature = scriptSignature;
+    lastSceneSignature = sceneSignature;
+    lastAssetsComplete = assetsComplete;
+    persistStage();
   }
 
   function scan() {
@@ -255,22 +345,19 @@
     if (!(rail instanceof HTMLElement)) return;
 
     if (!activeStage) activeStage = initialStage();
-    if (!stageAvailable(activeStage)) activeStage = 1;
-
-    const scriptSignature = automation()?.script?.outputSignature || null;
-    if (lastScriptSignature === null) lastScriptSignature = scriptSignature;
-    else if (scriptSignature && scriptSignature !== lastScriptSignature && activeStage === 1) {
-      activeStage = 2;
-      persistStage();
-      lastScriptSignature = scriptSignature;
-    } else {
-      lastScriptSignature = scriptSignature;
+    if (!stageAvailable(activeStage)) {
+      activeStage = highestRelevantStage();
+      manualSelection = false;
     }
+
+    maybeAdvanceFromState();
 
     creator.classList.add("automation-workspace-v2");
     decorateStages(rail);
     ensureStepContext(creator, rail);
     applyPanelVisibility(creator);
+    creator.dataset.activeStage = String(activeStage);
+    creator.dataset.progressStage = String(highestRelevantStage());
     document.documentElement.dataset.automationWorkspace = "guided";
   }
 
@@ -287,14 +374,14 @@
     const go = target.closest("[data-automation-workspace-go]");
     if (go) {
       event.preventDefault();
-      setStage(Number(go.getAttribute("data-automation-workspace-go")));
+      setStage(Number(go.getAttribute("data-automation-workspace-go")), { manual: true });
       return;
     }
 
     const stageNode = target.closest(".automation-stage[data-workspace-stage]");
     if (stageNode) {
       event.preventDefault();
-      setStage(Number(stageNode.getAttribute("data-workspace-stage")));
+      setStage(Number(stageNode.getAttribute("data-workspace-stage")), { manual: true });
     }
   }, true);
 
@@ -303,7 +390,7 @@
     const stageNode = event.target.closest(".automation-stage[data-workspace-stage]");
     if (!stageNode || !["Enter", " "].includes(event.key)) return;
     event.preventDefault();
-    setStage(Number(stageNode.getAttribute("data-workspace-stage")));
+    setStage(Number(stageNode.getAttribute("data-workspace-stage")), { manual: true });
   });
 
   window.addEventListener("viral-ai:core-state-changed", queueScan);
@@ -320,6 +407,8 @@
   window.ViralAutomationWorkspace = {
     setStage,
     refresh: queueScan,
-    getActiveStage: () => activeStage
+    syncToProgress: () => setStage(highestRelevantStage(), { scroll: false, manual: false }),
+    getActiveStage: () => activeStage,
+    getProgressStage: highestRelevantStage
   };
 })();
