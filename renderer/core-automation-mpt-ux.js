@@ -272,5 +272,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 
-  window.ViralAutomationMptUx = { refresh: queue };
+  window.ViralAutomationMptUx = { refresh: queue, syncNow: enhance };
 })();
