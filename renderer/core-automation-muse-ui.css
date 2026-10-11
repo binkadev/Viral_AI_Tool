@@ -1,0 +1,216 @@
+/* Muse Video integration surfaces. Provider controls only; no business logic lives here. */
+
+.automation-muse-card-mount{margin:10px 0}
+.automation-muse-card{
+  margin:10px 0 12px;
+  padding:13px;
+  border:1px solid var(--ui-line);
+  border-radius:10px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ui-panel-soft) 92%,transparent),var(--ui-panel));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.015);
+}
+.automation-muse-card.is-ready{border-color:color-mix(in srgb,var(--ui-accent) 22%,var(--ui-line))}
+.automation-muse-card.is-running{border-color:color-mix(in srgb,var(--ui-accent) 38%,var(--ui-line))}
+.automation-muse-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.automation-muse-brand{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  min-width:0;
+}
+.automation-muse-mark{
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  flex:0 0 36px;
+  border:1px solid color-mix(in srgb,var(--ui-accent) 32%,var(--ui-line));
+  border-radius:9px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--ui-accent) 20%,var(--ui-panel-raised)),var(--ui-panel-raised));
+  color:color-mix(in srgb,var(--ui-accent) 54%,white);
+  font:700 var(--type-card-title)/1 var(--font-display);
+}
+.automation-muse-brand .eyebrow{
+  display:block;
+  margin-bottom:2px;
+  color:var(--ui-faint);
+  font-size:var(--type-caption)!important;
+  letter-spacing:.055em;
+}
+.automation-muse-brand h4{
+  margin:0;
+  color:var(--ui-text);
+  font-size:var(--type-card-title);
+  line-height:1.35;
+  font-weight:660;
+}
+.automation-muse-brand p{
+  max-width:760px;
+  margin:3px 0 0;
+  color:var(--ui-muted);
+  font-size:var(--type-meta);
+  line-height:1.48;
+}
+.automation-muse-head-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:0 0 auto;
+}
+.automation-muse-status{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:30px;
+  padding:5px 8px;
+  border:1px solid var(--ui-line);
+  border-radius:7px;
+  background:var(--ui-panel-raised);
+  color:var(--ui-muted);
+  font-size:var(--type-caption);
+  line-height:1.35;
+  white-space:nowrap;
+}
+.automation-muse-status i{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--ui-faint);
+}
+.automation-muse-card.is-ready .automation-muse-status i{
+  background:var(--success);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 10%,transparent);
+}
+.automation-muse-head-actions .button{min-height:32px!important;padding-inline:10px!important}
+
+.automation-muse-config{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:10px 12px;
+  margin-top:12px;
+  padding:12px;
+  border:1px solid var(--ui-line);
+  border-radius:9px;
+  background:color-mix(in srgb,var(--ui-panel) 94%,black 6%);
+}
+.automation-muse-field{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+.automation-muse-field.span-2,.automation-muse-check.span-2,.automation-muse-config-actions.span-2{grid-column:1/-1}
+.automation-muse-field label{
+  color:var(--ui-muted);
+  font-size:var(--type-meta);
+  line-height:1.35;
+  font-weight:620;
+}
+.automation-muse-field small{
+  color:var(--ui-faint);
+  font-size:var(--type-caption);
+  line-height:1.4;
+}
+.automation-muse-field .input,.automation-muse-field .select{min-height:38px!important}
+.automation-muse-check{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:34px;
+  color:var(--ui-muted);
+  font-size:var(--type-meta);
+}
+.automation-muse-check input{width:16px;height:16px;accent-color:var(--ui-accent)}
+.automation-muse-config-actions{display:flex;justify-content:flex-end}
+.automation-muse-config-actions .button{min-height:38px!important}
+
+.automation-muse-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:11px;
+  padding-top:11px;
+  border-top:1px solid var(--ui-line);
+}
+.automation-muse-actions>div:first-child{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.automation-muse-actions strong{
+  color:var(--ui-text);
+  font-size:var(--type-meta);
+  line-height:1.35;
+}
+.automation-muse-actions span{
+  color:var(--ui-faint);
+  font-size:var(--type-caption);
+  line-height:1.4;
+}
+.automation-muse-buttons{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.automation-muse-buttons .button{min-height:36px!important}
+
+.automation-muse-progress{
+  margin-top:10px;
+  padding:9px 10px;
+  border:1px solid color-mix(in srgb,var(--ui-accent) 20%,var(--ui-line));
+  border-radius:8px;
+  background:var(--ui-accent-soft);
+}
+.automation-muse-progress>div{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:6px;
+}
+.automation-muse-progress span,.automation-muse-progress b{
+  color:var(--ui-muted);
+  font-size:var(--type-caption);
+  line-height:1.35;
+}
+.automation-muse-progress>i{
+  display:block;
+  height:4px;
+  overflow:hidden;
+  border-radius:999px;
+  background:var(--ui-line);
+}
+.automation-muse-progress>i>b{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--ui-accent),color-mix(in srgb,var(--ui-accent) 72%,white));
+  transition:width .22s ease;
+}
+
+@container viral-workpage (max-width:900px){
+  .automation-muse-head,.automation-muse-actions{align-items:stretch;flex-direction:column}
+  .automation-muse-head-actions{justify-content:space-between}
+  .automation-muse-buttons{justify-content:flex-start}
+}
+@container viral-workpage (max-width:620px){
+  .automation-muse-config{grid-template-columns:1fr}
+  .automation-muse-field.span-2,.automation-muse-check.span-2,.automation-muse-config-actions.span-2{grid-column:1}
+  .automation-muse-head-actions{align-items:stretch;flex-direction:column}
+  .automation-muse-status{white-space:normal}
+  .automation-muse-buttons{display:grid;grid-template-columns:1fr}
+  .automation-muse-buttons .button{width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  .automation-muse-progress>i>b{transition:none}
+}
+html[data-motion="reduced"] .automation-muse-progress>i>b{transition:none}
