@@ -67,6 +67,7 @@ const ipc = read("services/automation/composition-preview-ipc.js");
 const preload = read("preload.js");
 const mainEntry = read("main-entry.js");
 const projection = read("renderer/core-automation-studio-projection.js");
+const audioOverlay = read("renderer/core-automation-studio-audio.js");
 const projectionCss = read("renderer/core-automation-studio-projection.css");
 const index = read("renderer/index.html");
 const snapshotSource = read("renderer/core-project-snapshot.js");
@@ -108,6 +109,15 @@ for (const required of [
   "removePreviewJobs()"
 ]) assert(projection.includes(required), "Studio projection runtime missing: " + required);
 
+for (const required of [
+  'closest("[data-automation-back]")',
+  "event.stopImmediatePropagation()",
+  'current.page = "automation"',
+  "removeDerivedPreviewJobs()",
+  'classList.remove("automation-studio-projection")',
+  'flush?.("automation-studio-back")'
+]) assert(audioOverlay.includes(required), "Studio return navigation guard missing: " + required);
+
 assert(projection.includes("operationId !== localOperationId"), "cancelled preview builds must not reopen Studio after cancellation");
 assert(!projection.includes("setInterval("), "Studio projection must not create a second playback clock");
 assert(projectionCss.includes("#page.automation-studio-projection"));
@@ -115,11 +125,13 @@ assert(projectionCss.includes(".automation-composition-timeline-clip"));
 assert(projectionCss.includes(".automation-composition-subtitle-clip"));
 assert(index.includes('href="core-automation-studio-projection.css"'));
 assert(index.includes('src="core-automation-studio-projection.js"'));
+assert(index.includes('src="core-automation-studio-audio.js"'));
 assert(index.indexOf('src="core-automation-composition-ui.js"') < index.indexOf('src="core-automation-studio-projection.js"'));
+assert(index.indexOf('src="core-automation-studio-projection.js"') < index.indexOf('src="core-automation-studio-audio.js"'));
 assert(snapshotSource.includes("job?.isAutomationCompositionPreview !== true"));
 assert(snapshotSource.includes("job.isAutomationCompositionPreview !== true"));
 assert(pkg.scripts["test:core-automation-studio-projection"], "package.json must expose Studio projection regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-studio-projection"), "commercial regression must gate Automation Studio projection");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
-console.log("Automation Composition derived preview, one-clock Studio projection, timeline overlays and project-source isolation tests passed.");
+console.log("Automation Composition derived preview, deterministic return navigation, one-clock Studio projection, timeline overlays and project-source isolation tests passed.");
