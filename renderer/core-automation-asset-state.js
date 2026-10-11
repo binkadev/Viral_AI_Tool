@@ -69,6 +69,49 @@
     return { ok: true, requests: clone(result.value, []) };
   }
 
+  function setSceneStrategy(sceneId, strategy) {
+    const current = appState();
+    const automation = current?.automation;
+    const scenes = Array.isArray(automation?.scenePlan?.scenes) ? automation.scenePlan.scenes : [];
+    const scene = scenes.find(item => String(item?.id || "") === String(sceneId || ""));
+    if (!scene) return { ok: false, code: "AUTOMATION_SCENE_NOT_FOUND" };
+    const next = String(strategy || "").trim().toLowerCase();
+    if (!model?.ALLOWED_STRATEGIES?.has?.(next)) return { ok: false, code: "ASSET_STRATEGY_UNSUPPORTED" };
+    if (String(scene.assetStrategy || "stock") === next) {
+      const request = requestForScene(sceneId);
+      return { ok: true, changed: false, strategy: next, request };
+    }
+    scene.assetStrategy = next;
+    automation.scenePlan.updatedAt = new Date().toISOString();
+    const synced = syncRequests();
+    if (!synced.ok) return synced;
+    return {
+      ok: true,
+      changed: true,
+      strategy: next,
+      request: synced.requests.find(item => String(item.sceneId) === String(sceneId)) || null
+    };
+  }
+
+  function setAllStrategies(strategy) {
+    const current = appState();
+    const automation = current?.automation;
+    const scenes = Array.isArray(automation?.scenePlan?.scenes) ? automation.scenePlan.scenes : [];
+    if (!scenes.length) return { ok: false, code: "ASSET_SCENE_PLAN_REQUIRED", requests: [] };
+    const next = String(strategy || "").trim().toLowerCase();
+    if (!model?.ALLOWED_STRATEGIES?.has?.(next)) return { ok: false, code: "ASSET_STRATEGY_UNSUPPORTED", requests: [] };
+    let changed = false;
+    for (const scene of scenes) {
+      if (String(scene.assetStrategy || "stock") !== next) {
+        scene.assetStrategy = next;
+        changed = true;
+      }
+    }
+    if (changed) automation.scenePlan.updatedAt = new Date().toISOString();
+    const synced = syncRequests();
+    return synced.ok ? { ...synced, changed, strategy: next } : synced;
+  }
+
   function requests() {
     return clone(appState()?.automation?.assetRequests, []);
   }
@@ -230,6 +273,8 @@
 
   window.ViralAutomationAssetState = {
     syncRequests,
+    setSceneStrategy,
+    setAllStrategies,
     requests,
     requestForScene,
     resolveScene,
