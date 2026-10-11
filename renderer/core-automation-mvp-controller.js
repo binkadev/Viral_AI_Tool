@@ -43,7 +43,12 @@
           completeBody: "The Automation result is ready for Studio review and manual editing.",
           failed: "This step could not be completed. Your accepted work was kept.",
           cancelled: "Automation step stopped. You can continue from the same checkpoint.",
-          assetsProgress: "Resolving media"
+          assetsProgress: "Resolving media",
+          recovered: "Previous session recovered",
+          recoveredScript: "an interrupted script step can be retried",
+          missingAssets: "media files need recovery",
+          missingVoice: "voice files need recovery",
+          missingExports: "an older export is missing and can be rendered again"
         }
       : {
           eyebrow: "Automation MVP",
@@ -64,7 +69,12 @@
           completeBody: "Kết quả Automation đã sẵn sàng để kiểm tra và chỉnh tay trong Studio.",
           failed: "Bước này chưa hoàn tất. Các phần đã chấp nhận vẫn được giữ nguyên.",
           cancelled: "Đã dừng bước Automation. Bạn có thể tiếp tục từ đúng checkpoint hiện tại.",
-          assetsProgress: "Đang tìm tư liệu"
+          assetsProgress: "Đang tìm tư liệu",
+          recovered: "Đã khôi phục phiên trước",
+          recoveredScript: "bước tạo kịch bản bị gián đoạn có thể chạy lại",
+          missingAssets: "tệp tư liệu cần khôi phục",
+          missingVoice: "tệp giọng đọc cần khôi phục",
+          missingExports: "video xuất cũ bị thiếu và có thể xuất lại"
         };
   }
 
@@ -87,8 +97,31 @@
       active: false,
       current: false,
       stale: false,
-      result: null
+      result: null,
+      missingSceneIds: []
     };
+  }
+
+  function recoverySnapshot() {
+    return window.ViralAutomationRecovery?.snapshot?.() || {
+      checkedAt: null,
+      recoveredScript: false,
+      missingAssets: [],
+      missingVoice: [],
+      missingExports: [],
+      changed: false
+    };
+  }
+
+  function recoveryMessage(c) {
+    const recovery = recoverySnapshot();
+    if (!recovery?.checkedAt || recovery?.changed !== true) return "";
+    const details = [];
+    if (recovery.recoveredScript) details.push(c.recoveredScript);
+    if (Array.isArray(recovery.missingAssets) && recovery.missingAssets.length) details.push(`${recovery.missingAssets.length} ${c.missingAssets}`);
+    if (Array.isArray(recovery.missingVoice) && recovery.missingVoice.length) details.push(`${recovery.missingVoice.length} ${c.missingVoice}`);
+    if (Array.isArray(recovery.missingExports) && recovery.missingExports.length) details.push(c.missingExports);
+    return details.length ? `${c.recovered}: ${details.join(" · ")}` : "";
   }
 
   function compositionReady(current) {
@@ -104,7 +137,7 @@
     const scenesReady = scriptReady && sceneReady(current);
     const requestsReady = scenesReady && Array.isArray(assets.requests) && assets.requests.length > 0;
     const assetsReady = requestsReady && assets.completion?.complete === true;
-    const voiceReady = voice.current === true;
+    const voiceReady = voice.current === true && !(Array.isArray(voice.missingSceneIds) && voice.missingSceneIds.length);
     const composition = assetsReady && compositionReady(current);
 
     let next = { kind: "script", stage: 1, label: copy().script };
@@ -168,13 +201,15 @@
     host.classList.toggle("is-running", running);
     host.classList.toggle("is-complete", view.compositionReady && !running);
 
-    const progressText = assetProgress && runningKind === "assets-resolve"
+    const baseProgressText = assetProgress && runningKind === "assets-resolve"
       ? `${c.assetsProgress} ${Number(assetProgress.completed || 0)}/${Number(assetProgress.total || view.assets.completion?.total || 0)}`
       : running
         ? `${c.working}: ${runningLabel || view.next.label}`
         : view.compositionReady
           ? c.completeBody
           : `${c.next}: ${view.next.label}`;
+    const recoveredText = recoveryMessage(c);
+    const progressText = recoveredText && !running ? `${baseProgressText} · ${recoveredText}` : baseProgressText;
 
     const title = running
       ? `${c.working}: ${runningLabel || view.next.label}`
@@ -338,6 +373,7 @@
 
   window.addEventListener("viral-ai:core-state-changed", queue);
   window.addEventListener("viral-ai:automation-page-rendered", queue);
+  window.addEventListener("viral-ai:automation-recovery", queue);
 
   const start = () => {
     const page = document.getElementById("page");
