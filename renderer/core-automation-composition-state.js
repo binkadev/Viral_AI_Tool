@@ -32,10 +32,13 @@
   }
 
   function currentVoiceResult() {
-    const fromVoiceState = window.ViralAutomationVoiceState?.currentResult?.();
-    if (fromVoiceState) return fromVoiceState;
+    if (window.ViralAutomationVoiceState?.currentResult) {
+      return window.ViralAutomationVoiceState.currentResult() || null;
+    }
     const automation = currentAutomation();
     if (!automation?.voiceResult) return null;
+    const missing = automation.voiceResult?.fileHealth?.missingSceneIds;
+    if (Array.isArray(missing) && missing.length) return null;
     if (window.ViralAutomationVoiceModel?.isCurrent) {
       const current = window.ViralAutomationVoiceModel.isCurrent(automation.voiceResult, {
         brief: automation.brief || {},
