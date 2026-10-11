@@ -21,7 +21,7 @@ for (const required of [
   "validateLocalAudio",
   "validateExportOutputs",
   "refreshStatus",
-  "AUTOMATION_VOICE",
+  "ViralAutomationVoiceState",
   "viral-ai:automation-recovery",
   "failureCode = \"INTERRUPTED\"",
   "retryable = true"
