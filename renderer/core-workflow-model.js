@@ -30,33 +30,55 @@
     return ["preparing", "uploading", "processing"].includes(canonicalJobState(job));
   }
 
+  function normalizeOwnershipPath(value) {
+    const raw = String(value || "").trim().replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/\/$/, "");
+    if (/^[A-Za-z]:\//.test(raw) || raw.startsWith("//")) return raw.toLowerCase();
+    return raw;
+  }
+
+  function sameSourcePath(left, right) {
+    const a = normalizeOwnershipPath(left);
+    const b = normalizeOwnershipPath(right);
+    return Boolean(a && b && a === b);
+  }
+
+  function ownershipMatches(entity, source) {
+    if (!entity || !source) return false;
+    const sourceId = String(source?.id || "");
+    const explicitId = String(entity?.sourceJobId || entity?.sourceId || "");
+    if (explicitId && sourceId) return explicitId === sourceId;
+    if (entity?.sourcePath && source?.sourcePath) return sameSourcePath(entity.sourcePath, source.sourcePath);
+    return false;
+  }
+
   function latestSourceJob(saved) {
     const jobs = Array.isArray(saved?.jobs) ? saved.jobs : [];
-    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+    // Application history is newest-first (`unshift`). Keep workflow ownership
+    // aligned with app.js/project snapshot instead of accidentally selecting an
+    // older source from the end of the list.
+    for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
-      if (!job?.isRenderOutput && job?.sourcePath) return job;
+      if (job?.sourcePath && !job?.isRenderOutput) return job;
     }
     return null;
   }
 
   function resultMatches(result, source) {
-    if (!result || !source) return false;
-    if (!result.sourcePath) return true;
-    return String(result.sourcePath) === String(source.sourcePath);
+    return ownershipMatches(result, source);
   }
 
   function jobMatches(job, source) {
-    if (!job || !source) return false;
-    if (!job.sourcePath) return true;
-    return String(job.sourcePath) === String(source.sourcePath);
+    return ownershipMatches(job, source);
   }
 
   function latestRenderJob(saved, source) {
     const jobs = Array.isArray(saved?.jobs) ? saved.jobs : [];
-    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+    // Render jobs are also newest-first. Never let an orphan/older render job
+    // unlock controls for another source video.
+    for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
       if (!job?.isRenderOutput) continue;
-      if (source?.sourcePath && job.sourcePath && String(job.sourcePath) !== String(source.sourcePath)) continue;
+      if (source && !ownershipMatches(job, source)) continue;
       return job;
     }
     return null;
@@ -152,5 +174,15 @@
     };
   }
 
-  return { derive, jobState, latestSourceJob, latestRenderJob, latestRenderOutput, renderFileUnavailable };
+  return {
+    derive,
+    jobState,
+    latestSourceJob,
+    latestRenderJob,
+    latestRenderOutput,
+    renderFileUnavailable,
+    resultMatches,
+    jobMatches,
+    sameSourcePath
+  };
 });
