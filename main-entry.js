@@ -11,6 +11,11 @@ const {
   cancelAllAutomationStockOperations
 } = require('./services/automation/stock-desktop-ipc');
 const {
+  installAutomationMetaMuseIpc,
+  cancelAllAutomationMetaMuse,
+  closeAutomationMetaMuseBrowser
+} = require('./services/automation/meta-muse-ipc');
+const {
   installAutomationVoiceIpc,
   cancelAllAutomationVoice
 } = require('./services/automation/voice-desktop-ipc');
@@ -167,12 +172,15 @@ installWindowsFirstPaintStabilizer();
 installAutomationCompositionCloseGuard();
 installAutomationScriptIpc();
 installAutomationStockIpc();
+installAutomationMetaMuseIpc();
 installAutomationVoiceIpc();
 installAutomationCompositionPreviewIpc();
 installAutomationCompositionExportIpc();
 app.on('before-quit', () => {
   cancelAllAutomationScripts().catch(() => {});
   cancelAllAutomationStockOperations();
+  cancelAllAutomationMetaMuse();
+  closeAutomationMetaMuseBrowser().catch(() => {});
   cancelAllAutomationVoice();
   cancelAllAutomationCompositionPreviews();
   cancelAllAutomationCompositionExports();
