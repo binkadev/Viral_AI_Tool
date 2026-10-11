@@ -2,6 +2,7 @@
   "use strict";
 
   let lastProgress = null;
+  let lastCurrentStage = "";
   let queued = false;
   let firstFrame = 0;
   let secondFrame = 0;
@@ -29,18 +30,39 @@
     animationPending = false;
   }
 
+  function currentStage(rail) {
+    return rail.querySelector(".core-workflow-stage.is-current, .core-workflow-stage.is-processing, .core-workflow-stage.is-active:not(.is-completed)");
+  }
+
+  function syncStageViewport(rail) {
+    const stage = currentStage(rail);
+    if (!(stage instanceof HTMLElement)) return;
+    const id = String(stage.dataset.coreStage || "");
+    rail.dataset.currentStage = id;
+    rail.dataset.live = stage.classList.contains("is-processing") ? "true" : "false";
+    if (!id || id === lastCurrentStage) return;
+    lastCurrentStage = id;
+
+    const scroller = rail.closest(".core-workflow-scroll");
+    if (!(scroller instanceof HTMLElement) || scroller.scrollWidth <= scroller.clientWidth + 2) return;
+    requestAnimationFrame(() => {
+      try { stage.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "nearest", inline: "center" }); } catch {}
+    });
+  }
+
   function syncProgress() {
     queued = false;
     const rail = document.querySelector(".core-workflow-rail");
     if (!(rail instanceof HTMLElement)) return;
 
-    // A workflow refresh can enqueue another mutation after we intentionally set
-    // the previous visual position. Ignore that duplicate callback so the rail
-    // never oscillates backward while interpolating to the real next state.
+    syncStageViewport(rail);
+
     if (animationPending && rail === animatingRail) return;
     if (animationPending && rail !== animatingRail) cancelPendingAnimation();
 
     const next = clampProgress(rail.style.getPropertyValue("--workflow-progress"));
+    rail.dataset.progress = next.toFixed(4);
+
     if (lastProgress === null || reducedMotion()) {
       cancelPendingAnimation();
       lastProgress = next;
@@ -60,9 +82,7 @@
     firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => {
         const currentRail = document.querySelector(".core-workflow-rail");
-        if (currentRail === rail) {
-          rail.style.setProperty("--workflow-progress", next.toFixed(4));
-        }
+        if (currentRail === rail) rail.style.setProperty("--workflow-progress", next.toFixed(4));
         firstFrame = 0;
         secondFrame = 0;
         animatingRail = null;
@@ -82,8 +102,10 @@
     if (!(page instanceof HTMLElement)) return;
 
     const observer = new MutationObserver(queueSync);
-    observer.observe(page, { childList: true, subtree: true });
+    observer.observe(page, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "data-stage-state"] });
     window.addEventListener("viral-ai:core-state-changed", queueSync);
+    window.addEventListener("viral-ai:navigation-committed", queueSync);
+    window.addEventListener("resize", queueSync, { passive: true });
     queueSync();
   }
 
