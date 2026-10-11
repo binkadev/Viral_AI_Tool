@@ -52,6 +52,7 @@
     "test:core-adaptive-experience-v4": "node tests/core-adaptive-experience-v4.test.js",
     "test:core-automation-asset-router": "node tests/core-automation-asset-router.test.js",
     "test:core-automation-stock-assets": "node tests/core-automation-stock-assets.test.js",
+    "test:core-automation-meta-muse": "node tests/core-automation-meta-muse.test.js",
     "test:core-automation-composition": "node tests/core-automation-composition.test.js",
     "test:core-automation-voice-track": "node tests/core-automation-voice-track.test.js",
     "test:core-automation-studio-projection": "node tests/core-automation-studio-projection.test.js",
@@ -86,7 +87,7 @@
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-renderer-interaction-stability && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-automation-foundation && npm run test:core-automation-script-engine && npm run test:core-automation-script-provider && npm run test:core-automation-creator && npm run test:core-automation-scene-planner && npm run test:core-automation-workspace && npm run test:core-automation-motion && npm run test:core-automation-mvp-controller && npm run test:core-automation-recovery && npm run test:core-automation-mvp-acceptance && npm run test:core-automation-mpt-ux && npm run test:core-commercial-ui-system-v2 && npm run test:core-adaptive-experience-v4 && npm run test:core-automation-asset-router && npm run test:core-automation-stock-assets && npm run test:core-automation-composition && npm run test:core-automation-voice-track && npm run test:core-automation-studio-projection && npm run test:core-automation-composition-export && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
+    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-renderer-interaction-stability && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-automation-foundation && npm run test:core-automation-script-engine && npm run test:core-automation-script-provider && npm run test:core-automation-creator && npm run test:core-automation-scene-planner && npm run test:core-automation-workspace && npm run test:core-automation-motion && npm run test:core-automation-mvp-controller && npm run test:core-automation-recovery && npm run test:core-automation-mvp-acceptance && npm run test:core-automation-mpt-ux && npm run test:core-commercial-ui-system-v2 && npm run test:core-adaptive-experience-v4 && npm run test:core-automation-asset-router && npm run test:core-automation-stock-assets && npm run test:core-automation-meta-muse && npm run test:core-automation-composition && npm run test:core-automation-voice-track && npm run test:core-automation-studio-projection && npm run test:core-automation-composition-export && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
   },
   "devDependencies": {
     "electron": "38.2.0",
@@ -125,6 +126,7 @@
   },
   "dependencies": {
     "ffmpeg-static": "5.3.0",
+    "playwright-core": "1.64.0",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"
   }
