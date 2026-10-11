@@ -110,14 +110,20 @@ for (const required of [
 ]) assert(projection.includes(required), "Studio projection runtime missing: " + required);
 
 for (const required of [
-  'closest("[data-automation-back]")',
-  "event.stopImmediatePropagation()",
+  "backControlFromEvent(event)",
+  "event.composedPath()",
+  "document.elementsFromPoint(event.clientX, event.clientY)",
+  "window.addEventListener(\"pointerdown\", routeToAutomation, true)",
+  "window.addEventListener(\"click\", routeToAutomation, true)",
+  "#nav .nav-item[data-page=\"automation\"]",
+  "navButton.click()",
   'current.page = "automation"',
   "removeDerivedPreviewJobs()",
   'classList.remove("automation-studio-projection")',
   'flush?.("automation-studio-back")'
-]) assert(audioOverlay.includes(required), "Studio return navigation guard missing: " + required);
+]) assert(audioOverlay.includes(required), "Studio canonical return navigation guard missing: " + required);
 
+assert(!audioOverlay.includes('document.addEventListener("click", returnToAutomation, true)'), "Studio return must not depend on the old competing document click handler");
 assert(projection.includes("operationId !== localOperationId"), "cancelled preview builds must not reopen Studio after cancellation");
 assert(!projection.includes("setInterval("), "Studio projection must not create a second playback clock");
 assert(projectionCss.includes("#page.automation-studio-projection"));
@@ -134,4 +140,4 @@ assert(pkg.scripts["test:core-automation-studio-projection"], "package.json must
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-studio-projection"), "commercial regression must gate Automation Studio projection");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
-console.log("Automation Composition derived preview, deterministic return navigation, one-clock Studio projection, timeline overlays and project-source isolation tests passed.");
+console.log("Automation Composition derived preview, canonical app-routed return navigation, one-clock Studio projection, timeline overlays and project-source isolation tests passed.");
