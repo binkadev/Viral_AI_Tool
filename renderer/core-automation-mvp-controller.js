@@ -4,6 +4,7 @@
   let queued = false;
   let running = false;
   let runningKind = null;
+  let runningLabel = "";
   let assetAbort = null;
   let assetProgress = null;
   let voiceStatusRefreshing = false;
@@ -170,13 +171,13 @@
     const progressText = assetProgress && runningKind === "assets-resolve"
       ? `${c.assetsProgress} ${Number(assetProgress.completed || 0)}/${Number(assetProgress.total || view.assets.completion?.total || 0)}`
       : running
-        ? `${c.working}: ${view.next.label}`
+        ? `${c.working}: ${runningLabel || view.next.label}`
         : view.compositionReady
           ? c.completeBody
           : `${c.next}: ${view.next.label}`;
 
     const title = running
-      ? `${c.working}: ${view.next.label}`
+      ? `${c.working}: ${runningLabel || view.next.label}`
       : view.compositionReady
         ? c.complete
         : `${view.completed}/5 ${c.ready}`;
@@ -254,15 +255,26 @@
 
   async function runNext() {
     if (running) return;
-    const before = inspect();
-    const action = before.next;
     running = true;
+    let before = inspect();
+    let action = before.next;
     runningKind = action.kind;
+    runningLabel = action.label;
     goStage(action.stage);
     render();
 
     let result = null;
     try {
+      if (before.assetsReady && !before.voice.providerStatus) {
+        try { await window.ViralAutomationVoiceState?.refreshStatus?.(); } catch {}
+        before = inspect();
+        action = before.next;
+        runningKind = action.kind;
+        runningLabel = action.label;
+        goStage(action.stage);
+        render();
+      }
+
       if (action.kind === "script") {
         await window.ViralAutomationCreator?.generateScript?.();
         result = inspect().scriptReady ? { ok: true } : { ok: false };
@@ -285,6 +297,7 @@
     } finally {
       running = false;
       runningKind = null;
+      runningLabel = "";
       assetAbort = null;
       assetProgress = null;
       if (appState()?.page === "automation") {
