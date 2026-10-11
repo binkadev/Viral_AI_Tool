@@ -150,10 +150,16 @@
       hero.insertAdjacentElement("afterend", strip);
     }
 
+    const script = providerReady();
+    const stock = stockReady();
+    const voice = voiceReady();
+    const signature = [locale(), script, stock, voice].join("|");
+    if (strip.dataset.signature === signature) return;
+    strip.dataset.signature = signature;
     strip.replaceChildren(
-      statusChip(text().provider, providerReady(), text().waiting),
-      statusChip(text().stock, stockReady(), text().waiting),
-      statusChip(text().voice, voiceReady(), text().waiting)
+      statusChip(text().provider, script, text().waiting),
+      statusChip(text().stock, stock, text().waiting),
+      statusChip(text().voice, voice, text().waiting)
     );
   }
 
@@ -194,7 +200,8 @@
     } else {
       const currentBrief = appState()?.automation?.brief || null;
       const rows = setup.querySelectorAll(".automation-setup-video .automation-setup-info-row strong");
-      if (rows[0]) rows[0].textContent = String(currentBrief?.aspectRatio || "9:16");
+      const nextAspect = String(currentBrief?.aspectRatio || "9:16");
+      if (rows[0] && rows[0].textContent !== nextAspect) rows[0].textContent = nextAspect;
     }
 
     const head = card.querySelector(":scope > .automation-card-head");
@@ -213,7 +220,15 @@
       runbar.appendChild(runCopy);
     }
     const hasScript = Boolean(appState()?.automation?.script);
-    runCopy.innerHTML = `<span>${text().task}</span><strong>${hasScript ? text().generatedHint : text().runHint}</strong>`;
+    const copySignature = [locale(), hasScript].join("|");
+    if (runCopy.dataset.signature !== copySignature) {
+      runCopy.dataset.signature = copySignature;
+      const label = document.createElement("span");
+      label.textContent = text().task;
+      const body = document.createElement("strong");
+      body.textContent = hasScript ? text().generatedHint : text().runHint;
+      runCopy.replaceChildren(label, body);
+    }
 
     if (actionButton instanceof HTMLButtonElement && actionButton.parentElement !== runbar) runbar.appendChild(actionButton);
     const job = card.querySelector(":scope > .automation-job");
