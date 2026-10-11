@@ -1,0 +1,60 @@
+.automation-mvp-controller{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:18px;
+  width:100%;
+  padding:11px 13px;
+  border:1px solid rgba(118,137,255,.15);
+  border-radius:12px;
+  background:linear-gradient(180deg,rgba(116,137,255,.045),rgba(15,20,29,.96));
+}
+
+.automation-mvp-copy{min-width:0;display:flex;align-items:center;gap:12px}
+.automation-mvp-mark{
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border:1px solid rgba(132,150,255,.22);
+  border-radius:9px;
+  background:rgba(116,137,255,.08);
+  color:#aebaff;
+  font-size:12px;
+  font-weight:900;
+}
+.automation-mvp-copy>div{min-width:0}
+.automation-mvp-copy span{display:block;margin-bottom:2px;color:var(--text-faint);font-size:8px;font-weight:900;letter-spacing:.07em;text-transform:uppercase}
+.automation-mvp-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:11px}
+.automation-mvp-copy p{margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-faint);font-size:8.5px}
+
+.automation-mvp-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.automation-mvp-progress{display:flex;align-items:center;gap:3px;width:112px}
+.automation-mvp-progress i{display:block;height:4px;flex:1;border-radius:999px;background:rgba(255,255,255,.065);transition:background-color 160ms ease,transform 160ms ease}
+.automation-mvp-progress i.is-ready{background:rgba(87,214,161,.62)}
+.automation-mvp-progress i.is-current{background:rgba(126,145,255,.82);transform:scaleY(1.35)}
+.automation-mvp-controller .button{min-height:32px;padding:0 12px;font-size:9px;white-space:nowrap}
+.automation-mvp-controller.is-running{border-color:rgba(126,145,255,.28)}
+.automation-mvp-controller.is-complete{border-color:rgba(87,214,161,.18);background:linear-gradient(180deg,rgba(87,214,161,.035),rgba(15,20,29,.96))}
+.automation-mvp-controller.is-complete .automation-mvp-mark{border-color:rgba(87,214,161,.22);background:rgba(87,214,161,.07);color:var(--success,#57d6a1)}
+
+.automation-mvp-running-dot{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#93a4ff;vertical-align:1px}
+
+@media(max-width:900px){
+  .automation-mvp-controller{grid-template-columns:1fr;align-items:stretch}
+  .automation-mvp-actions{justify-content:space-between}
+  .automation-mvp-progress{flex:1;max-width:220px}
+}
+
+@media(max-width:620px){
+  .automation-mvp-copy p{white-space:normal}
+  .automation-mvp-actions{align-items:stretch;flex-direction:column}
+  .automation-mvp-progress{width:100%;max-width:none}
+  .automation-mvp-controller .button{width:100%}
+}
+
+html[data-motion="reduced"] .automation-mvp-progress i,
+@media(prefers-reduced-motion:reduce){
+  .automation-mvp-progress i{transition:none!important}
+}
