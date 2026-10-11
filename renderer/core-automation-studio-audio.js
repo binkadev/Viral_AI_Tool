@@ -4,14 +4,58 @@
   let queued = false;
   const wiredVideos = new WeakSet();
 
+  function appState() {
+    try { return typeof state !== "undefined" ? state : null; }
+    catch { return null; }
+  }
+
   function composition() {
     try { return window.ViralAutomationStudioProjection?.currentComposition?.() || null; }
     catch { return null; }
   }
 
   function currentPage() {
-    try { return typeof state !== "undefined" ? state?.page : null; }
-    catch { return null; }
+    return appState()?.page || null;
+  }
+
+  function removeDerivedPreviewJobs() {
+    const current = appState();
+    if (!current || !Array.isArray(current.jobs)) return;
+    current.jobs = current.jobs.filter(job => job?.isAutomationCompositionPreview !== true);
+  }
+
+  function returnToAutomation(event) {
+    const target = event?.target instanceof Element ? event.target.closest("[data-automation-back]") : null;
+    if (!(target instanceof Element)) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const current = appState();
+    if (!current) return false;
+
+    removeDerivedPreviewJobs();
+    const page = document.getElementById("page");
+    page?.classList.remove("automation-studio-projection");
+    current.page = "automation";
+
+    try { if (typeof save === "function") save(); } catch {}
+    try { if (typeof render === "function") render(); } catch {}
+    try { window.ViralCoreProjectPersistence?.flush?.("automation-studio-back"); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+        detail: { reason: "automation-composition-returned-from-studio" }
+      }));
+    } catch {}
+
+    requestAnimationFrame(() => {
+      if (appState()?.page !== "automation") return;
+      const staleStudio = document.querySelector("#page .automation-studio-banner");
+      if (!staleStudio) return;
+      try { if (typeof render === "function") render(); } catch {}
+    });
+    return true;
   }
 
   function syncActive(video, lane) {
@@ -80,6 +124,7 @@
     requestAnimationFrame(render);
   }
 
+  document.addEventListener("click", returnToAutomation, true);
   window.addEventListener("viral-ai:core-state-changed", queue);
   window.addEventListener("viral-ai:editor-preview-preserved", queue);
 
@@ -91,4 +136,9 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
+
+  window.ViralAutomationStudioAudio = {
+    refresh: queue,
+    returnToAutomation
+  };
 })();
