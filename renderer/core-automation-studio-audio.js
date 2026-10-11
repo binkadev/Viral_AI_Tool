@@ -24,24 +24,50 @@
     current.jobs = current.jobs.filter(job => job?.isAutomationCompositionPreview !== true);
   }
 
-  function returnToAutomation(event) {
-    const target = event?.target instanceof Element ? event.target.closest("[data-automation-back]") : null;
-    if (!(target instanceof Element)) return false;
+  function backControlFromEvent(event) {
+    try {
+      const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+      const direct = path.find(node => node instanceof Element && node.matches?.("[data-automation-back]"));
+      if (direct instanceof Element) return direct;
+    } catch {}
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    try {
+      if (Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) {
+        const hit = document.elementsFromPoint(event.clientX, event.clientY)
+          .find(node => node instanceof Element && node.matches?.("[data-automation-back]"));
+        if (hit instanceof Element) return hit;
+      }
+    } catch {}
+
+    const target = event?.target instanceof Element ? event.target.closest("[data-automation-back]") : null;
+    return target instanceof Element ? target : null;
+  }
+
+  function routeToAutomation(event) {
+    if (currentPage() !== "ai-video") return false;
+    if (!backControlFromEvent(event)) return false;
+
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    event?.stopImmediatePropagation?.();
 
     const current = appState();
     if (!current) return false;
 
     removeDerivedPreviewJobs();
-    const page = document.getElementById("page");
-    page?.classList.remove("automation-studio-projection");
-    current.page = "automation";
+    document.getElementById("page")?.classList.remove("automation-studio-projection");
+
+    const navButton = document.querySelector('#nav .nav-item[data-page="automation"]');
+    if (navButton instanceof HTMLButtonElement) {
+      try { navButton.click(); } catch {}
+    }
+
+    if (appState()?.page !== "automation") {
+      current.page = "automation";
+      try { if (typeof render === "function") render(); } catch {}
+    }
 
     try { if (typeof save === "function") save(); } catch {}
-    try { if (typeof render === "function") render(); } catch {}
     try { window.ViralCoreProjectPersistence?.flush?.("automation-studio-back"); } catch {}
     try {
       window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
@@ -124,7 +150,8 @@
     requestAnimationFrame(render);
   }
 
-  document.addEventListener("click", returnToAutomation, true);
+  window.addEventListener("pointerdown", routeToAutomation, true);
+  window.addEventListener("click", routeToAutomation, true);
   window.addEventListener("viral-ai:core-state-changed", queue);
   window.addEventListener("viral-ai:editor-preview-preserved", queue);
 
@@ -139,6 +166,6 @@
 
   window.ViralAutomationStudioAudio = {
     refresh: queue,
-    returnToAutomation
+    routeToAutomation
   };
 })();
