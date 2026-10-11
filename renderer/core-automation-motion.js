@@ -37,7 +37,7 @@
       assets: assets.map(asset => [asset?.id, asset?.requestSignature, asset?.localPath].map(value => String(value || "")).join(":"))
         .sort()
         .join("|"),
-      voice: String(current?.voice?.outputSignature || current?.voice?.signature || current?.voice?.result?.outputSignature || ""),
+      voice: String(current?.voiceResult?.id || current?.voiceResult?.inputSignature || ""),
       composition: String(current?.composition?.outputSignature || "")
     };
   }
@@ -79,11 +79,12 @@
 
   function animateEntry(creator) {
     animate(creator.querySelector(":scope > .automation-hero"), "automation-motion-enter", 0);
-    animate(creator.querySelector(":scope > .automation-stage-rail"), "automation-motion-enter", 55);
+    animate(creator.querySelector(":scope > .automation-mvp-controller"), "automation-motion-enter", 45);
+    animate(creator.querySelector(":scope > .automation-stage-rail"), "automation-motion-enter", 80);
     const stages = Array.from(creator.querySelectorAll(":scope > .automation-stage-rail .automation-stage"));
-    stages.forEach((stage, index) => animate(stage, "automation-motion-enter", 95 + index * 42));
-    animate(creator.querySelector(":scope > .automation-step-context"), "automation-motion-enter", 150);
-    animate(visibleStageSurface(activeStage()), "automation-motion-enter", 190);
+    stages.forEach((stage, index) => animate(stage, "automation-motion-enter", 110 + index * 42));
+    animate(creator.querySelector(":scope > .automation-step-context"), "automation-motion-enter", 165);
+    animate(visibleStageSurface(activeStage()), "automation-motion-enter", 205);
   }
 
   function animateStageChange(stage) {
