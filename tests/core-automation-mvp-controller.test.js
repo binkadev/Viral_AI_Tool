@@ -26,7 +26,16 @@ for (const required of [
   "data-automation-mvp-action",
   "ViralAutomationMvpController",
   "viral-ai:core-state-changed",
-  "MutationObserver(queue)"
+  "MutationObserver(queue)",
+  "lastFailure",
+  "failureCode",
+  "failureMessage",
+  "NETWORK_ERROR",
+  "PROVIDER_NOT_CONFIGURED",
+  "RATE_LIMITED",
+  "NO_RESULTS",
+  "Thử lại",
+  "Retry"
 ]) assert(runtime.includes(required), "Automation MVP controller missing: " + required);
 
 assert(!runtime.includes("setInterval("), "Automation MVP controller must not poll");
@@ -45,7 +54,8 @@ for (const required of [
   ".automation-mvp-controller",
   ".automation-mvp-progress",
   ".automation-mvp-controller.is-running",
-  ".automation-mvp-controller.is-complete"
+  ".automation-mvp-controller.is-complete",
+  ".automation-mvp-controller.is-failed"
 ]) assert(css.includes(required), "Automation MVP controller CSS missing: " + required);
 
 assert(index.includes('href="core-automation-mvp-controller.css"'), "Automation MVP controller stylesheet must be loaded");
@@ -54,4 +64,4 @@ assert(index.indexOf('src="core-automation-workspace.js"') < index.indexOf('src=
 assert(pkg.scripts["test:core-automation-mvp-controller"], "package.json must expose Automation MVP controller regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-mvp-controller"), "commercial regression must gate Automation MVP controller");
 
-console.log("Automation MVP resumable checkpoint orchestration, cancellation and existing-pipeline ownership tests passed.");
+console.log("Automation MVP resumable checkpoints, cancellation, friendly retry states and existing-pipeline ownership tests passed.");
