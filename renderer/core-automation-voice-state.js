@@ -6,6 +6,7 @@
   let operationId = null;
   let progress = 0;
   let phase = null;
+  let missingSceneIds = new Set();
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -36,11 +37,17 @@
     }) || "";
   }
 
+  function persistedMissingSceneIds() {
+    const list = automation()?.voiceResult?.fileHealth?.missingSceneIds;
+    return Array.isArray(list) ? list.map(String).filter(Boolean) : [];
+  }
+
   function currentResult() {
     const current = automation();
     if (!current?.scenePlan || current?.stale?.scenes === true) return null;
     const result = model?.normalizeResult?.(current?.voiceResult);
     if (!result) return null;
+    if (missingSceneIds.size || persistedMissingSceneIds().length) return null;
     return result.inputSignature && result.inputSignature === currentSignature() ? result : null;
   }
 
@@ -48,6 +55,8 @@
     const current = automation();
     const result = model?.normalizeResult?.(current?.voiceResult);
     const currentResultValue = currentResult();
+    const persistedMissing = persistedMissingSceneIds();
+    const missing = [...new Set([...persistedMissing, ...missingSceneIds])];
     return {
       providerStatus: clone(providerStatus, null),
       operationId,
@@ -57,7 +66,9 @@
       inputSignature: currentSignature(),
       result: clone(result, null),
       current: Boolean(currentResultValue),
-      stale: Boolean(result && !currentResultValue)
+      stale: Boolean(result && !currentResultValue),
+      missingSceneIds: missing,
+      fileHealth: clone(current?.voiceResult?.fileHealth, null)
     };
   }
 
@@ -80,6 +91,52 @@
     const current = automation();
     const scenes = Array.isArray(current?.scenePlan?.scenes) ? current.scenePlan.scenes : [];
     return Boolean(current?.scenePlan && current?.stale?.scenes !== true && scenes.length);
+  }
+
+  async function validateLocalAudio({ forceEmit = false } = {}) {
+    const current = automation();
+    const raw = current?.voiceResult;
+    const result = model?.normalizeResult?.(raw);
+    if (!result || !Array.isArray(result.segments) || !result.segments.length || !window.desktopAPI?.fileStatus) {
+      missingSceneIds = new Set();
+      return { ok: true, checked: 0, missingSceneIds: [], availableSceneIds: [] };
+    }
+
+    const missing = [];
+    const available = [];
+    for (const segment of result.segments) {
+      const sceneId = String(segment?.sceneId || "");
+      const audioPath = String(segment?.audioPath || "");
+      if (!sceneId || !audioPath) continue;
+      try {
+        const status = await window.desktopAPI.fileStatus(audioPath);
+        if (status?.exists === true) available.push(sceneId);
+        else missing.push(sceneId);
+      } catch {
+        // Unknown file health must not invalidate accepted project data.
+      }
+    }
+
+    missingSceneIds = new Set(missing);
+    const nextHealth = {
+      checkedAt: new Date().toISOString(),
+      checked: result.segments.length,
+      missingSceneIds: missing,
+      availableSceneIds: available
+    };
+    const before = JSON.stringify(raw?.fileHealth || null);
+    const after = JSON.stringify(nextHealth);
+    if (raw && typeof raw === "object") raw.fileHealth = nextHealth;
+
+    if (missing.length && current?.composition) current.stale.composition = true;
+    if (before !== after || forceEmit) emit(missing.length ? "automation-voice-file-missing" : "automation-voice-file-health");
+
+    return {
+      ok: true,
+      checked: result.segments.length,
+      missingSceneIds: missing,
+      availableSceneIds: available
+    };
   }
 
   async function generate() {
@@ -132,6 +189,7 @@
       return { ok: false, code: "STALE_INPUT" };
     }
 
+    missingSceneIds = new Set();
     current.voiceResult = result;
     current.voiceSettings = {
       voiceId: current.voiceSettings?.voiceId || "default",
@@ -177,6 +235,7 @@
     canGenerate,
     currentSignature,
     currentResult,
+    validateLocalAudio,
     snapshot
   };
 })();
