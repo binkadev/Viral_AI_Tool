@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
 const ui = read("renderer/core-commercial-ui-system-v2.css");
+const pages = read("renderer/core-commercial-pages-v2.css");
 const automation = read("renderer/core-automation-mpt-ux.css");
 const index = read("renderer/index.html");
 const agents = read("AGENTS.md");
@@ -39,6 +40,28 @@ assert(!ui.includes("@keyframes"), "Commercial UI system must not add decorative
 assert(!ui.includes("Inter,"), "Commercial UI system must use the approved Windows system typography stack");
 
 for (const required of [
+  ".creator-home-hero",
+  ".creator-start-grid",
+  ".core-real-dashboard-hero",
+  ".core-real-stats",
+  ".setting-row",
+  ".settings-select-row",
+  ".voice-meta b",
+  ".toast",
+  ".modal-backdrop",
+  ".modal h3",
+  ".dragging::after",
+  "font-size:var(--type-caption)",
+  "font-size:var(--type-meta)",
+  "font-size:var(--type-body)",
+  "@media(max-width:1280px)",
+  "@media(max-width:700px)",
+  "@media(prefers-reduced-motion:reduce)"
+]) assert(pages.includes(required), "Commercial page polish missing: " + required);
+
+assert(pages.includes("animation:none!important"), "Commercial page polish must disable decorative drag-overlay animation");
+
+for (const required of [
   "font-size:var(--type-caption)",
   "font-size:var(--type-meta)",
   "font-size:var(--type-body)",
@@ -66,12 +89,17 @@ assert(agents.includes("secondary/meta copy should normally be 12px or larger"),
 assert(agents.includes("tiny helper text should not fall below 11px"), "Project helper readability floor must remain documented");
 
 const uiLink = 'href="core-commercial-ui-system-v2.css"';
+const pagesLink = 'href="core-commercial-pages-v2.css"';
 const motionLink = 'href="core-motion-policy.css"';
 assert(index.includes(uiLink), "Commercial UI system stylesheet must be loaded");
+assert(index.includes(pagesLink), "Commercial page polish stylesheet must be loaded");
 assert(index.indexOf(motionLink) < index.indexOf(uiLink), "Commercial UI system must load after previous visual layers so it owns final hierarchy");
+assert(index.indexOf(uiLink) < index.indexOf(pagesLink), "Page polish must load after the shared commercial UI system");
 
 assert(pkg.scripts.pack.includes("signAndEditExecutable=false"), "Local unpacked smoke build must keep the Windows symlink-safe path");
 assert(pkg.scripts["pack:full"] === "electron-builder --dir", "Full Windows resource-editing pack path must remain available");
 assert(pkg.scripts.dist === "electron-builder --win nsis --publish never", "Production installer command must remain unchanged");
+assert(pkg.scripts["test:core-commercial-ui-system-v2"], "package.json must expose the commercial UI system regression");
+assert(pkg.scripts["test:core-commercial"].includes("test:core-commercial-ui-system-v2"), "commercial regression suite must gate the final UI system");
 
-console.log("Commercial UI system typography, readability, shell, Automation, Studio, accessibility and smoke-pack contracts passed.");
+console.log("Commercial UI system typography, readability, shell, Automation, Studio, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
