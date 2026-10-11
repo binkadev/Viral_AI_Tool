@@ -1,0 +1,265 @@
+/* Automation Stability V5
+ * Focused corrective layer after runtime review.
+ * No business logic changes: only layout, scroll and responsive behavior.
+ */
+
+/* Never trap the active form inside an inner fixed-height scroller. */
+html[data-automation-workspace="guided"] .automation-brief-card,
+html[data-automation-workspace="guided"] .automation-script-card{
+  height:auto!important;
+  max-height:none!important;
+  min-height:0!important;
+  overflow:visible!important;
+  scrollbar-gutter:auto!important;
+}
+html[data-automation-workspace="guided"] .automation-script-editor{
+  min-height:0!important;
+}
+html[data-automation-workspace="guided"] .automation-script-actions{
+  position:static!important;
+  inset:auto!important;
+  z-index:auto!important;
+  margin-top:12px!important;
+  padding:14px 0 0!important;
+  border-top:1px solid var(--auto-line,rgba(255,255,255,.075))!important;
+  background:transparent!important;
+}
+html[data-automation-workspace="guided"] .automation-script-actions .button{
+  min-height:40px!important;
+}
+
+/* Hero must grow with Vietnamese text instead of clipping at compact widths. */
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
+  min-height:0!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero p{
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:normal!important;
+}
+
+/* Keep all active surfaces inside the real work area. */
+html[data-automation-workspace="guided"] .automation-workspace-v2,
+html[data-automation-workspace="guided"] .automation-grid,
+html[data-automation-workspace="guided"] .automation-scenes-host,
+html[data-automation-workspace="guided"] .automation-assets-host,
+html[data-automation-workspace="guided"] .automation-composition-host,
+html[data-automation-workspace="guided"] .automation-script-card,
+html[data-automation-workspace="guided"] .automation-brief-card,
+html[data-automation-workspace="guided"] .automation-composition-panel{
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+html[data-automation-workspace="guided"] .main,
+html[data-automation-workspace="guided"] #page{
+  min-height:0!important;
+  overflow:visible!important;
+}
+
+/* Medium desktop/laptop: stop sacrificing the canvas to the vertical step rail. */
+@media(max-width:1500px){
+  html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    width:100%!important;
+    max-height:none!important;
+    padding:5px!important;
+    overflow:visible!important;
+    border-radius:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage{
+    grid-template-columns:28px minmax(0,1fr)!important;
+    min-height:50px!important;
+    padding:7px 8px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage::before{display:none!important}
+  html[data-automation-workspace="guided"] .automation-mvp-controller,
+  html[data-automation-workspace="guided"] .automation-step-context,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-grid,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-scenes-host,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-assets-host,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-composition-host{
+    width:100%!important;
+    max-width:none!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"]>.automation-composition-host{
+    grid-template-columns:1fr!important;
+    grid-template-areas:"voice" "composition"!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-voice-host{
+    position:static!important;
+  }
+}
+
+/* Real work-surface breakpoint, independent of Windows DPI scaling. */
+@container viral-workpage (max-width:1320px){
+  html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    width:100%!important;
+    max-height:none!important;
+    padding:5px!important;
+    overflow:visible!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage{
+    min-width:0!important;
+    min-height:50px!important;
+    padding:7px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage b,
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage small{
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"]>.automation-composition-host{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    grid-template-areas:"voice" "composition"!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-voice-host{
+    position:static!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-workbench,
+  html[data-automation-workspace="guided"] .automation-scenes-workbench,
+  html[data-automation-workspace="guided"] .automation-assets-workbench{
+    grid-template-columns:minmax(190px,24%) minmax(0,1fr)!important;
+  }
+}
+
+/* Compact work surface: one canvas, horizontal local navigator. */
+@container viral-workpage (max-width:980px){
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
+    grid-template-columns:1fr!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+  }
+  html[data-automation-workspace="guided"] .automation-engine-strip{
+    display:flex!important;
+    gap:12px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    white-space:nowrap!important;
+    scrollbar-width:thin!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+    display:flex!important;
+    gap:5px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x proximity!important;
+    scrollbar-width:thin!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage{
+    flex:0 0 168px!important;
+    scroll-snap-align:start!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-workbench,
+  html[data-automation-workspace="guided"] .automation-scenes-workbench,
+  html[data-automation-workspace="guided"] .automation-assets-workbench{
+    display:block!important;
+    overflow:visible!important;
+  }
+  html[data-automation-workspace="guided"] .automation-scenes-nav,
+  html[data-automation-workspace="guided"] .automation-assets-nav,
+  html[data-automation-workspace="guided"] .automation-composition-sequence{
+    display:flex!important;
+    gap:6px!important;
+    width:100%!important;
+    max-height:none!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    border-right:0!important;
+    border-bottom:1px solid var(--auto-line,rgba(255,255,255,.075))!important;
+    scroll-snap-type:x proximity!important;
+    scrollbar-width:thin!important;
+  }
+  html[data-automation-workspace="guided"] .automation-scene-nav-item,
+  html[data-automation-workspace="guided"] .automation-asset-nav-item,
+  html[data-automation-workspace="guided"] .automation-composition-clip{
+    flex:0 0 220px!important;
+    margin:0!important;
+    scroll-snap-align:start!important;
+  }
+  html[data-automation-workspace="guided"] .automation-scene-inspector,
+  html[data-automation-workspace="guided"] .automation-asset-inspector,
+  html[data-automation-workspace="guided"] .automation-composition-inspector{
+    width:100%!important;
+    overflow:visible!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-summary{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-preview{
+    grid-template-columns:1fr!important;
+  }
+}
+
+/* Small window: allow genuine page scrolling; nothing may float over editable content. */
+@media(max-width:1180px), (max-height:820px){
+  .main{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    scrollbar-gutter:stable!important;
+  }
+  .page{
+    min-height:max-content!important;
+    overflow:visible!important;
+    padding-bottom:32px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-script-actions,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail,
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-voice-host{
+    position:static!important;
+  }
+}
+
+@container viral-workpage (max-width:720px){
+  html[data-automation-workspace="guided"] .automation-step-context,
+  html[data-automation-workspace="guided"] .automation-composition-head,
+  html[data-automation-workspace="guided"] .automation-scenes-head,
+  html[data-automation-workspace="guided"] .automation-assets-head{
+    align-items:stretch!important;
+    flex-direction:column!important;
+  }
+  html[data-automation-workspace="guided"] .automation-step-actions,
+  html[data-automation-workspace="guided"] .automation-composition-actions{
+    width:100%!important;
+    justify-content:flex-start!important;
+    flex-wrap:wrap!important;
+  }
+  html[data-automation-workspace="guided"] .automation-step-actions .button,
+  html[data-automation-workspace="guided"] .automation-composition-actions .button{
+    flex:1 1 145px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-summary{
+    grid-template-columns:1fr!important;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail,
+  html[data-automation-workspace="guided"] .automation-scenes-nav,
+  html[data-automation-workspace="guided"] .automation-assets-nav,
+  html[data-automation-workspace="guided"] .automation-composition-sequence{scroll-behavior:auto!important}
+}
