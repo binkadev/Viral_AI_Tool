@@ -58,9 +58,16 @@ function modelInfo(modelId) {
 function clampDuration(value, model) {
   const wanted = Number(value || model.minDuration || 5);
   if (Array.isArray(model.allowedDurations) && model.allowedDurations.length) {
-    return model.allowedDurations.reduce((best, candidate) =>
-      Math.abs(candidate - wanted) < Math.abs(best - wanted) ? candidate : best,
-    model.allowedDurations[0]);
+    return model.allowedDurations.reduce((best, candidate) => {
+      const bestDistance = Math.abs(best - wanted);
+      const candidateDistance = Math.abs(candidate - wanted);
+      if (candidateDistance < bestDistance) return candidate;
+      // If two discrete durations are equally close, prefer the longer result.
+      // Composition can trim surplus frames, while a shorter generated clip can
+      // leave the scene without enough source duration.
+      if (candidateDistance === bestDistance && candidate > best) return candidate;
+      return best;
+    }, model.allowedDurations[0]);
   }
   return Math.max(model.minDuration, Math.min(model.maxDuration, Math.round(wanted)));
 }
