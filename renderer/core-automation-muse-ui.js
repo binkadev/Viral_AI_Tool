@@ -33,7 +33,7 @@
           apiEnv: "API key is supplied by the app environment.",
           model: "Video model",
           resolution: "Resolution",
-          audio: "Generate model audio when supported",
+          audio: "Generate model audio (advanced; A1 narration remains the final mix)",
           save: "Save Muse settings",
           saved: "Muse Video settings saved.",
           secureUnavailable: "Secure OS storage is unavailable. Use MUSE_VIDEO_API_KEY for this machine.",
@@ -74,7 +74,7 @@
           apiEnv: "API key đang được cấp từ biến môi trường của ứng dụng.",
           model: "Model video",
           resolution: "Độ phân giải",
-          audio: "Tạo audio của model khi model hỗ trợ",
+          audio: "Tạo audio của model (nâng cao; bản mix cuối vẫn dùng giọng đọc A1)",
           save: "Lưu cấu hình Muse",
           saved: "Đã lưu cấu hình Muse Video.",
           secureUnavailable: "Windows Secure Storage chưa sẵn sàng. Hãy dùng MUSE_VIDEO_API_KEY trên máy này.",
@@ -242,8 +242,9 @@
     }
     const status = museStatus();
     const ready = status?.ready === true;
+    const nextHtml = '<i></i><div><strong>Muse Video</strong><small>' + esc(ready ? (locale() === 'vi' ? 'Đã cấu hình' : 'Configured') : (locale() === 'vi' ? 'Chưa kết nối' : 'Not connected')) + '</small></div>';
     chip.classList.toggle('is-ready', ready);
-    chip.innerHTML = '<i></i><div><strong>Muse Video</strong><small>' + esc(ready ? (locale() === 'vi' ? 'Đã cấu hình' : 'Configured') : (locale() === 'vi' ? 'Chưa kết nối' : 'Not connected')) + '</small></div>';
+    if (chip.innerHTML !== nextHtml) chip.innerHTML = nextHtml;
   }
 
   function render() {
