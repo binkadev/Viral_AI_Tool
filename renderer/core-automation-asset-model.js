@@ -8,7 +8,7 @@
   const VERSION = 1;
   const ALLOWED_ASPECTS = new Set(["16:9", "9:16", "1:1"]);
   const ALLOWED_MEDIA_TYPES = new Set(["video", "image"]);
-  const ALLOWED_STRATEGIES = new Set(["stock"]);
+  const ALLOWED_STRATEGIES = new Set(["stock", "generated"]);
 
   function text(value, maxLength = 2000) {
     return String(value == null ? "" : value).trim().slice(0, maxLength);
