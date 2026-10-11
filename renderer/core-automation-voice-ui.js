@@ -16,41 +16,41 @@
     return locale() === "en"
       ? {
           eyebrow: "A1 · Voice",
-          title: "Narration voice",
-          intro: "Create one narration audio clip per scene, then attach it to the A1 track without changing scene timing.",
+          title: "Scene narration",
+          intro: "Create one narration clip per scene and place it on A1 while keeping the approved scene timing unchanged.",
           generate: "Create voice track",
           regenerate: "Regenerate voice",
           cancel: "Stop",
           ready: "Voice track ready",
-          stale: "Narration changed. Regenerate voice to update A1.",
-          providerReady: "Voice provider ready",
-          providerMissing: "Voice provider is not configured",
-          dev: "Offline development audio",
-          devBody: "This produces technical test audio only. It verifies timing, persistence, Studio playback and export without using a paid API.",
-          scenes: "scenes have audio",
-          generating: "Creating narration audio",
+          stale: "Narration changed. Regenerate the voice track to update A1.",
+          providerReady: "Voice source ready",
+          providerMissing: "Voice source is not configured",
+          dev: "Preview mode",
+          devBody: "Sample audio is being used to verify timing, project persistence, Studio playback and export without using a paid API.",
+          scenes: "scenes have narration",
+          generating: "Creating narration",
           completed: "Voice track created and timeline updated.",
           failed: "Could not create the voice track.",
-          unavailable: "Enable a voice provider before generating narration."
+          unavailable: "Enable a voice source before creating narration."
         }
       : {
           eyebrow: "A1 · Giọng đọc",
-          title: "Giọng đọc narration",
-          intro: "Tạo audio riêng cho từng cảnh rồi gắn vào track A1 mà không thay đổi timing của cảnh.",
+          title: "Giọng đọc theo cảnh",
+          intro: "Tạo một đoạn giọng đọc cho từng cảnh và đưa vào A1, đồng thời giữ nguyên thời lượng cảnh đã chốt.",
           generate: "Tạo giọng đọc",
           regenerate: "Tạo lại giọng đọc",
           cancel: "Dừng",
-          ready: "Track giọng đọc đã sẵn sàng",
+          ready: "Giọng đọc đã sẵn sàng",
           stale: "Lời đọc đã thay đổi. Hãy tạo lại giọng để cập nhật A1.",
           providerReady: "Nguồn giọng đọc đã sẵn sàng",
           providerMissing: "Chưa cấu hình nguồn giọng đọc",
-          dev: "Âm thanh kiểm thử offline",
-          devBody: "Đây chỉ là audio kỹ thuật để kiểm tra timing, lưu project, phát trong Studio và export mà không cần API trả phí.",
-          scenes: "cảnh đã có audio",
-          generating: "Đang tạo audio narration",
+          dev: "Chế độ thử nghiệm",
+          devBody: "Ứng dụng đang dùng âm thanh mẫu để kiểm tra thời lượng, lưu dự án, phát trong Studio và xuất video mà không dùng API trả phí.",
+          scenes: "cảnh có giọng đọc",
+          generating: "Đang tạo giọng đọc",
           completed: "Đã tạo giọng đọc và cập nhật timeline.",
-          failed: "Không thể tạo track giọng đọc.",
-          unavailable: "Cần bật nguồn giọng đọc trước khi tạo narration."
+          failed: "Chưa thể tạo giọng đọc.",
+          unavailable: "Cần bật nguồn giọng đọc trước khi tạo."
         };
   }
 
