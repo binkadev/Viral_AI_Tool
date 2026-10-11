@@ -5,6 +5,7 @@
   let installed = false;
   let lastLocale = "";
   let lastEditorSignature = "";
+  let transitionSerial = 0;
 
   function currentLocale() {
     try { return typeof state !== "undefined" && state?.locale === "en" ? "en" : "vi"; }
@@ -14,6 +15,12 @@
   function currentPage() {
     try { return typeof state !== "undefined" ? String(state?.page || "") : ""; }
     catch { return ""; }
+  }
+
+  function reducedMotion() {
+    if (root.dataset.motion === "reduced") return true;
+    try { return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true; }
+    catch { return false; }
   }
 
   function expectedPageIds() {
@@ -57,6 +64,51 @@
     } catch { return ""; }
   }
 
+  function syncPageEnhancers() {
+    const page = currentPage();
+    if (page === "automation") {
+      try { window.ViralAutomationWorkspace?.syncNow?.(); } catch {}
+      try { window.ViralAutomationMptUx?.syncNow?.(); } catch {}
+      try { window.ViralAutomationWorkspace?.syncNow?.(); } catch {}
+      return;
+    }
+    delete root.dataset.automationWorkspace;
+    delete root.dataset.automationConsole;
+  }
+
+  function navigateToPage(nextPage, { source = "navigation" } = {}) {
+    const next = String(nextPage || "");
+    if (!next || next === currentPage()) return false;
+    const serial = ++transitionSerial;
+
+    const commit = () => {
+      try {
+        state.page = next;
+        if (typeof render === "function") render();
+        syncPageEnhancers();
+        root.dataset.routePage = next;
+      } catch {}
+    };
+
+    if (!reducedMotion() && typeof document.startViewTransition === "function") {
+      root.dataset.routeTransition = "running";
+      try {
+        const transition = document.startViewTransition(commit);
+        transition.finished.finally(() => {
+          if (serial === transitionSerial) delete root.dataset.routeTransition;
+        });
+      } catch {
+        commit();
+        if (serial === transitionSerial) delete root.dataset.routeTransition;
+      }
+    } else {
+      commit();
+    }
+
+    window.dispatchEvent(new CustomEvent("viral-ai:navigation-committed", { detail: { page: next, source } }));
+    return true;
+  }
+
   function installStableRender() {
     try {
       if (typeof render !== "function" || render.__coreStableRender === true) return;
@@ -65,15 +117,15 @@
         const page = currentPage();
         if (page !== "ai-video") {
           lastEditorSignature = "";
-          return legacyRender(...args);
+          const result = legacyRender(...args);
+          syncPageEnhancers();
+          return result;
         }
 
         const nextSignature = editorSignature();
         const pageNode = document.getElementById("page");
         const editorMounted = pageNode?.classList?.contains("core-editor-docked-page") || Boolean(pageNode?.querySelector?.(".preview-video, .core-editor-focus-section"));
         if (editorMounted && nextSignature && nextSignature === lastEditorSignature) {
-          // Keep the existing video/timeline/inspector DOM alive. State-specific
-          // production modules update progress, gating and selection in place.
           try { if (typeof applyChromeLocale === "function") applyChromeLocale(); } catch {}
           try { if (typeof navRender === "function") navRender(); } catch {}
           window.dispatchEvent(new CustomEvent("viral-ai:editor-render-preserved", { detail: { reason: "structural-signature-unchanged" } }));
@@ -124,19 +176,28 @@
       nav.addEventListener("click", event => {
         const target = event.target instanceof Element ? event.target.closest(".nav-item[data-page]") : null;
         if (!(target instanceof HTMLButtonElement)) return;
-        if (String(target.dataset.page || "") !== currentPage()) return;
+        const next = String(target.dataset.page || "");
+        if (!next) return;
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (next !== currentPage()) navigateToPage(next, { source: "sidebar" });
       }, true);
     }
 
     installStableRender();
+    syncPageEnhancers();
     if (currentPage() === "ai-video") lastEditorSignature = editorSignature();
     lastLocale = currentLocale();
     root.dataset.stableNavigation = "enabled";
     root.dataset.stableEditorRender = "enabled";
+    root.dataset.routePage = currentPage();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => requestAnimationFrame(install), { once: true });
   else requestAnimationFrame(install);
+
+  window.ViralNavigationStability = {
+    navigateToPage,
+    syncPageEnhancers
+  };
 })();
