@@ -1,0 +1,159 @@
+/* Commercial, state-driven motion for the Automation workspace.
+   Motion is intentionally short, non-looping and disabled for reduced-motion users. */
+
+html[data-automation-motion="enabled"] .automation-workspace-v2 .automation-stage,
+html[data-automation-motion="enabled"] .automation-workspace-v2 .button,
+html[data-automation-motion="enabled"] .automation-scene-nav-item,
+html[data-automation-motion="enabled"] .automation-asset-nav-item,
+html[data-automation-motion="enabled"] .automation-composition-timeline-clip,
+html[data-automation-motion="enabled"] .automation-composition-subtitle-clip {
+  transition:
+    transform 150ms cubic-bezier(.22,1,.36,1),
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease !important;
+}
+
+html[data-automation-motion="enabled"] .automation-workspace-v2 .automation-stage:hover:not(.workspace-locked),
+html[data-automation-motion="enabled"] .automation-scene-nav-item:hover,
+html[data-automation-motion="enabled"] .automation-asset-nav-item:hover {
+  transform:translateY(-1px);
+}
+
+html[data-automation-motion="enabled"] .automation-workspace-v2 .button:not(:disabled):hover {
+  transform:translateY(-1px);
+}
+
+html[data-automation-motion="enabled"] .automation-workspace-v2 .button:not(:disabled):active,
+html[data-automation-motion="enabled"] .automation-scene-nav-item:active,
+html[data-automation-motion="enabled"] .automation-asset-nav-item:active {
+  transform:translateY(0) scale(.985);
+}
+
+.automation-motion-enter {
+  animation:automationMotionEnter 380ms cubic-bezier(.22,1,.36,1) both;
+  animation-delay:var(--automation-motion-delay,0ms);
+}
+
+.automation-motion-context {
+  animation:automationMotionContext 300ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.automation-motion-surface {
+  animation:automationMotionSurface 340ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.automation-motion-active {
+  position:relative;
+  animation:automationMotionActive 420ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.automation-motion-active::after {
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border:1px solid rgba(128,150,255,.42);
+  border-radius:inherit;
+  pointer-events:none;
+  animation:automationMotionRing 520ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.automation-motion-artifact {
+  animation:automationMotionArtifact 560ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.automation-motion-artifact .automation-scenes-summary,
+.automation-motion-artifact .automation-assets-summary,
+.automation-motion-artifact .automation-voice-status,
+.automation-motion-artifact .automation-composition-summary,
+.automation-motion-artifact .automation-script-meta {
+  animation:automationMotionArtifactDetail 520ms 70ms cubic-bezier(.22,1,.36,1) both;
+}
+
+html[data-motion="expressive"] .automation-motion-enter {
+  animation-duration:460ms;
+}
+html[data-motion="expressive"] .automation-motion-context,
+html[data-motion="expressive"] .automation-motion-surface {
+  animation-duration:390ms;
+}
+
+@keyframes automationMotionEnter {
+  0% { opacity:0; transform:translateY(9px); }
+  100% { opacity:1; transform:translateY(0); }
+}
+
+@keyframes automationMotionContext {
+  0% { opacity:.15; transform:translateY(-5px); }
+  100% { opacity:1; transform:translateY(0); }
+}
+
+@keyframes automationMotionSurface {
+  0% { opacity:.22; transform:translateY(7px) scale(.995); }
+  100% { opacity:1; transform:translateY(0) scale(1); }
+}
+
+@keyframes automationMotionActive {
+  0% { transform:scale(.985); filter:brightness(.94); }
+  55% { transform:scale(1.012); filter:brightness(1.06); }
+  100% { transform:scale(1); filter:brightness(1); }
+}
+
+@keyframes automationMotionRing {
+  0% { opacity:.72; transform:scale(.97); }
+  100% { opacity:0; transform:scale(1.045); }
+}
+
+@keyframes automationMotionArtifact {
+  0% {
+    box-shadow:0 0 0 1px rgba(87,214,161,0),0 0 0 rgba(87,214,161,0);
+    filter:brightness(.97);
+  }
+  35% {
+    box-shadow:0 0 0 1px rgba(87,214,161,.24),0 9px 26px rgba(24,76,61,.13);
+    filter:brightness(1.04);
+  }
+  100% {
+    box-shadow:0 0 0 1px rgba(87,214,161,0),0 0 0 rgba(87,214,161,0);
+    filter:brightness(1);
+  }
+}
+
+@keyframes automationMotionArtifactDetail {
+  0% { opacity:.35; transform:translateY(4px); }
+  100% { opacity:1; transform:translateY(0); }
+}
+
+html[data-motion="reduced"] .automation-motion-enter,
+html[data-motion="reduced"] .automation-motion-context,
+html[data-motion="reduced"] .automation-motion-surface,
+html[data-motion="reduced"] .automation-motion-active,
+html[data-motion="reduced"] .automation-motion-active::after,
+html[data-motion="reduced"] .automation-motion-artifact,
+html[data-motion="reduced"] .automation-motion-artifact * {
+  animation:none!important;
+  transform:none!important;
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .automation-motion-enter,
+  .automation-motion-context,
+  .automation-motion-surface,
+  .automation-motion-active,
+  .automation-motion-active::after,
+  .automation-motion-artifact,
+  .automation-motion-artifact * {
+    animation:none!important;
+    transform:none!important;
+  }
+
+  html[data-automation-motion="enabled"] .automation-workspace-v2 .automation-stage,
+  html[data-automation-motion="enabled"] .automation-workspace-v2 .button,
+  html[data-automation-motion="enabled"] .automation-scene-nav-item,
+  html[data-automation-motion="enabled"] .automation-asset-nav-item,
+  html[data-automation-motion="enabled"] .automation-composition-timeline-clip,
+  html[data-automation-motion="enabled"] .automation-composition-subtitle-clip {
+    transition:none!important;
+  }
+}
