@@ -39,8 +39,6 @@
 .automation-mvp-controller.is-complete{border-color:rgba(87,214,161,.18);background:linear-gradient(180deg,rgba(87,214,161,.035),rgba(15,20,29,.96))}
 .automation-mvp-controller.is-complete .automation-mvp-mark{border-color:rgba(87,214,161,.22);background:rgba(87,214,161,.07);color:var(--success,#57d6a1)}
 
-.automation-mvp-running-dot{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#93a4ff;vertical-align:1px}
-
 @media(max-width:900px){
   .automation-mvp-controller{grid-template-columns:1fr;align-items:stretch}
   .automation-mvp-actions{justify-content:space-between}
@@ -54,7 +52,8 @@
   .automation-mvp-controller .button{width:100%}
 }
 
-html[data-motion="reduced"] .automation-mvp-progress i,
+html[data-motion="reduced"] .automation-mvp-progress i{transition:none!important}
+
 @media(prefers-reduced-motion:reduce){
   .automation-mvp-progress i{transition:none!important}
 }
