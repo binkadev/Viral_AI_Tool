@@ -1,0 +1,266 @@
+html[data-automation-console="mpt-inspired"] .automation-creator.automation-mpt-inspired{
+  gap:10px;
+  max-width:1480px;
+  margin:0 auto;
+}
+
+.automation-mpt-inspired .automation-hero{
+  min-height:auto;
+  padding:12px 14px;
+  border-radius:11px;
+  background:rgba(255,255,255,.016);
+}
+.automation-mpt-inspired .automation-hero h2{font-size:17px;margin:1px 0 4px}
+.automation-mpt-inspired .automation-hero p{font-size:10.5px;line-height:1.45;max-width:850px}
+.automation-mpt-inspired .automation-hero .eyebrow{font-size:8px;letter-spacing:.08em}
+.automation-mpt-inspired .automation-provider{
+  min-width:190px;
+  max-width:250px;
+  padding:8px 10px;
+  border-radius:9px;
+  background:rgba(255,255,255,.014);
+}
+.automation-mpt-inspired .automation-provider b{font-size:10px}
+.automation-mpt-inspired .automation-provider small{font-size:8.5px}
+
+.automation-engine-strip{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+}
+.automation-engine-chip{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+  min-height:42px;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:rgba(255,255,255,.012);
+}
+.automation-engine-chip>i{
+  width:7px;
+  height:7px;
+  flex:0 0 7px;
+  border-radius:50%;
+  background:#788198;
+  box-shadow:0 0 0 3px rgba(120,129,152,.08);
+}
+.automation-engine-chip>div{display:flex;min-width:0;flex-direction:column;gap:1px}
+.automation-engine-chip strong{font-size:9.5px;color:var(--text)}
+.automation-engine-chip small{font-size:8px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.automation-engine-chip.is-ready>i{background:#56d6a9;box-shadow:0 0 0 3px rgba(86,214,169,.08)}
+.automation-engine-chip.is-ready small{color:#67cdae}
+
+.automation-mpt-inspired .automation-stage-rail{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:0;
+  padding:3px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:rgba(255,255,255,.012);
+}
+.automation-mpt-inspired .automation-stage{
+  min-height:42px;
+  padding:7px 9px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  box-shadow:none;
+}
+.automation-mpt-inspired .automation-stage+.automation-stage{border-left:1px solid rgba(255,255,255,.045)}
+.automation-mpt-inspired .automation-stage>span{
+  width:22px;
+  height:22px;
+  flex-basis:22px;
+  border-radius:6px;
+  font-size:8.5px;
+}
+.automation-mpt-inspired .automation-stage b{font-size:9.5px}
+.automation-mpt-inspired .automation-stage small{font-size:7.5px}
+.automation-mpt-inspired .automation-stage.workspace-active{
+  background:rgba(112,132,255,.08);
+  box-shadow:inset 0 0 0 1px rgba(120,140,255,.18);
+}
+.automation-mpt-inspired .automation-stage.workspace-completed{background:rgba(86,214,169,.025)}
+.automation-mpt-inspired .automation-stage.workspace-locked{opacity:.42}
+
+.automation-mpt-inspired .automation-step-context{
+  min-height:auto;
+  padding:9px 12px;
+  border-radius:10px;
+}
+.automation-mpt-inspired .automation-step-copy span{font-size:7.5px}
+.automation-mpt-inspired .automation-step-copy h3{font-size:12px;margin:1px 0 2px}
+.automation-mpt-inspired .automation-step-copy p{font-size:8.5px;line-height:1.4}
+.automation-mpt-inspired .automation-step-actions .button{min-height:31px;font-size:8.5px;padding:0 10px}
+
+.automation-mpt-inspired .automation-grid{
+  grid-template-columns:1fr;
+  gap:10px;
+}
+.automation-mpt-inspired .automation-brief-card,
+.automation-mpt-inspired .automation-script-card{
+  width:100%;
+  height:auto;
+  min-height:0;
+  max-height:none;
+  overflow:visible;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.automation-mpt-inspired .automation-card-head{
+  margin:0 0 8px;
+  padding:0 2px;
+}
+.automation-mpt-inspired .automation-card-head .eyebrow{font-size:8px}
+.automation-mpt-inspired .automation-card-head h3{font-size:13px;margin-top:2px}
+.automation-mpt-inspired .automation-card-head>#automationGenerateScript,
+.automation-mpt-inspired .automation-card-head>#automationStopScript{display:none}
+
+.automation-mpt-inspired .automation-brief-fields{
+  display:block;
+}
+.automation-setup-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.22fr) minmax(260px,.82fr) minmax(260px,.82fr);
+  gap:10px;
+  align-items:start;
+}
+.automation-setup-section{
+  min-width:0;
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:11px;
+  background:rgba(255,255,255,.014);
+}
+.automation-setup-section-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  min-height:50px;
+  padding:11px 12px 9px;
+  border-bottom:1px solid rgba(255,255,255,.055);
+  background:rgba(255,255,255,.012);
+}
+.automation-setup-section-head>div{display:flex;min-width:0;flex-direction:column;gap:2px}
+.automation-setup-section-head strong{font-size:10.5px;color:var(--text)}
+.automation-setup-section-head small{font-size:8px;color:var(--text-faint);line-height:1.35}
+.automation-setup-section-body{
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  padding:11px 12px 12px;
+}
+.automation-setup-section .automation-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.automation-setup-section .automation-field.span-2{grid-column:auto}
+.automation-setup-section .automation-field>.label{font-size:8.5px;color:var(--text-muted)}
+.automation-setup-section .input,
+.automation-setup-section .select,
+.automation-setup-section .textarea{
+  min-height:34px;
+  border-radius:7px;
+  font-size:10px;
+}
+.automation-setup-section .textarea{resize:vertical}
+.automation-setup-content #automationObjective{min-height:66px}
+.automation-setup-info-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:34px;
+  padding:8px 9px;
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:7px;
+  background:rgba(255,255,255,.012);
+}
+.automation-setup-info-row span{font-size:8px;color:var(--text-faint)}
+.automation-setup-info-row strong{max-width:64%;font-size:8.5px;color:var(--text-muted);text-align:right}
+
+.automation-runbar{
+  position:sticky;
+  bottom:8px;
+  z-index:4;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  margin-top:10px;
+  padding:10px 11px;
+  border:1px solid rgba(120,140,255,.16);
+  border-radius:10px;
+  background:rgba(13,18,28,.94);
+  box-shadow:0 10px 28px rgba(0,0,0,.22);
+  backdrop-filter:blur(14px);
+}
+.automation-runbar-copy{display:flex;min-width:0;flex-direction:column;gap:2px}
+.automation-runbar-copy span{font-size:7.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
+.automation-runbar-copy strong{font-size:9px;font-weight:500;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.automation-runbar>.button{min-width:132px;min-height:34px;font-size:9px}
+.automation-runbar>.automation-job{
+  grid-column:1/-1;
+  grid-row:2;
+  margin:0;
+  padding:8px 9px;
+}
+
+.automation-mpt-inspired .automation-mpt-script-card{
+  padding:14px 15px;
+  border:1px solid var(--border);
+  border-radius:11px;
+  background:rgba(255,255,255,.014);
+}
+.automation-mpt-inspired .automation-script-head{margin-bottom:10px}
+.automation-mpt-inspired .automation-script-head h3{font-size:13px}
+.automation-mpt-inspired .automation-script-head p{font-size:8.5px}
+.automation-mpt-inspired .automation-script-editor>.label{font-size:8.5px}
+.automation-mpt-inspired .automation-script-card .input,
+.automation-mpt-inspired .automation-script-card .textarea{font-size:10px;border-radius:7px}
+.automation-mpt-inspired .automation-script-body{min-height:150px}
+.automation-mpt-inspired .automation-narration{min-height:150px}
+
+.automation-mpt-inspired .automation-next-card{display:none!important}
+
+html[data-motion="reduced"] .automation-mpt-inspired *,
+html[data-motion="reduced"] .automation-mpt-inspired *::before,
+html[data-motion="reduced"] .automation-mpt-inspired *::after{scroll-behavior:auto!important}
+
+@media(max-width:1280px){
+  .automation-setup-grid{grid-template-columns:1fr 1fr}
+  .automation-setup-content{grid-column:1/-1}
+}
+
+@media(max-width:900px){
+  .automation-engine-strip{grid-template-columns:1fr}
+  .automation-setup-grid{grid-template-columns:1fr}
+  .automation-setup-content{grid-column:auto}
+  .automation-mpt-inspired .automation-stage-rail{grid-template-columns:1fr 1fr 1fr}
+  .automation-mpt-inspired .automation-stage+.automation-stage{border-left:0}
+  .automation-runbar{grid-template-columns:1fr}
+  .automation-runbar>.button{width:100%}
+}
+
+@media(max-width:620px){
+  .automation-mpt-inspired .automation-stage-rail{grid-template-columns:1fr 1fr}
+  .automation-mpt-inspired .automation-hero{flex-direction:column}
+  .automation-mpt-inspired .automation-provider{width:100%;max-width:none}
+  .automation-runbar-copy strong{white-space:normal}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .automation-mpt-inspired *,
+  .automation-mpt-inspired *::before,
+  .automation-mpt-inspired *::after{scroll-behavior:auto!important}
+}
