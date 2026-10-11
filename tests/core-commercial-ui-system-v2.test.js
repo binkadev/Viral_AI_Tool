@@ -10,6 +10,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const ui = read("renderer/core-commercial-ui-system-v2.css");
 const pages = read("renderer/core-commercial-pages-v2.css");
 const automation = read("renderer/core-automation-mpt-ux.css");
+const automationWorkstation = read("renderer/core-automation-commercial-v2.css");
 const index = read("renderer/index.html");
 const agents = read("AGENTS.md");
 const pkg = JSON.parse(read("package.json"));
@@ -82,6 +83,25 @@ for (const tooSmall of [
   "font-size:10.5px"
 ]) assert(!automation.includes(tooSmall), "Automation production UI reintroduced unreadable fixed type: " + tooSmall);
 
+for (const required of [
+  ".automation-scenes-workbench",
+  ".automation-assets-workbench",
+  ".automation-composition-workbench",
+  ".automation-scene-nav-copy b",
+  ".automation-asset-nav-copy b",
+  ".automation-composition-clip-copy b",
+  ".automation-voice-panel",
+  ".automation-composition-export-status",
+  ".automation-scenes-empty",
+  "font-size:var(--type-caption)",
+  "font-size:var(--type-meta)",
+  "font-size:var(--type-body)",
+  "font-size:var(--type-control)",
+  "font-size:var(--type-card-title)",
+  "@media(max-width:900px)",
+  "@media(prefers-reduced-motion:reduce)"
+]) assert(automationWorkstation.includes(required), "Automation workstation polish missing: " + required);
+
 assert(agents.includes('"Segoe UI Variable Text"'), "Project typography contract must keep Segoe UI Variable Text");
 assert(agents.includes('"Segoe UI Variable Display"'), "Project typography contract must keep Segoe UI Variable Display");
 assert(agents.includes("body/control copy should normally be 13px or larger"), "Project readability floor must remain documented");
@@ -90,11 +110,14 @@ assert(agents.includes("tiny helper text should not fall below 11px"), "Project 
 
 const uiLink = 'href="core-commercial-ui-system-v2.css"';
 const pagesLink = 'href="core-commercial-pages-v2.css"';
+const automationLink = 'href="core-automation-commercial-v2.css"';
 const motionLink = 'href="core-motion-policy.css"';
 assert(index.includes(uiLink), "Commercial UI system stylesheet must be loaded");
 assert(index.includes(pagesLink), "Commercial page polish stylesheet must be loaded");
+assert(index.includes(automationLink), "Automation workstation stylesheet must be loaded");
 assert(index.indexOf(motionLink) < index.indexOf(uiLink), "Commercial UI system must load after previous visual layers so it owns final hierarchy");
 assert(index.indexOf(uiLink) < index.indexOf(pagesLink), "Page polish must load after the shared commercial UI system");
+assert(index.indexOf(pagesLink) < index.indexOf(automationLink), "Automation workstation layer must load last among commercial visual overrides");
 
 assert(pkg.scripts.pack.includes("signAndEditExecutable=false"), "Local unpacked smoke build must keep the Windows symlink-safe path");
 assert(pkg.scripts["pack:full"] === "electron-builder --dir", "Full Windows resource-editing pack path must remain available");
@@ -102,4 +125,4 @@ assert(pkg.scripts.dist === "electron-builder --win nsis --publish never", "Prod
 assert(pkg.scripts["test:core-commercial-ui-system-v2"], "package.json must expose the commercial UI system regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-commercial-ui-system-v2"), "commercial regression suite must gate the final UI system");
 
-console.log("Commercial UI system typography, readability, shell, Automation, Studio, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
+console.log("Commercial UI system typography, shell, Automation workstation, Studio, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
