@@ -8,6 +8,7 @@
   let assetAbort = null;
   let assetProgress = null;
   let voiceStatusRefreshing = false;
+  let lastFailure = null;
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -30,6 +31,7 @@
           next: "Next",
           working: "Working",
           cancel: "Stop",
+          retry: "Retry",
           script: "Create the editable script",
           scenes: "Build the scene plan",
           assetsPrepare: "Prepare media requests",
@@ -42,6 +44,11 @@
           complete: "Editable composition ready",
           completeBody: "The Automation result is ready for Studio review and manual editing.",
           failed: "This step could not be completed. Your accepted work was kept.",
+          failureNetwork: "The provider could not be reached. Check the connection and retry this step.",
+          failureProvider: "The required provider is not configured or needs authentication.",
+          failureQuota: "The provider is temporarily unavailable because of a usage or rate limit.",
+          failureNoResults: "No suitable media was found. Adjust the scene search terms or retry.",
+          failureInterrupted: "The previous run was interrupted. Nothing accepted was deleted; retry from this checkpoint.",
           cancelled: "Automation step stopped. You can continue from the same checkpoint.",
           assetsProgress: "Resolving media",
           recovered: "Previous session recovered",
@@ -56,6 +63,7 @@
           next: "Tiếp theo",
           working: "Đang xử lý",
           cancel: "Dừng",
+          retry: "Thử lại",
           script: "Tạo kịch bản có thể chỉnh sửa",
           scenes: "Tạo kế hoạch phân cảnh",
           assetsPrepare: "Chuẩn bị yêu cầu tư liệu",
@@ -68,6 +76,11 @@
           complete: "Composition có thể chỉnh sửa đã sẵn sàng",
           completeBody: "Kết quả Automation đã sẵn sàng để kiểm tra và chỉnh tay trong Studio.",
           failed: "Bước này chưa hoàn tất. Các phần đã chấp nhận vẫn được giữ nguyên.",
+          failureNetwork: "Không kết nối được nguồn xử lý. Hãy kiểm tra mạng rồi thử lại đúng bước này.",
+          failureProvider: "Nguồn xử lý cần thiết chưa được cấu hình hoặc cần xác thực lại.",
+          failureQuota: "Nguồn xử lý đang tạm giới hạn lượt dùng. Bạn có thể thử lại sau mà không mất dữ liệu.",
+          failureNoResults: "Chưa tìm được tư liệu phù hợp. Hãy chỉnh từ khóa của cảnh hoặc thử lại.",
+          failureInterrupted: "Lần chạy trước bị gián đoạn. Phần đã chấp nhận vẫn được giữ và có thể tiếp tục từ checkpoint này.",
           cancelled: "Đã dừng bước Automation. Bạn có thể tiếp tục từ đúng checkpoint hiện tại.",
           assetsProgress: "Đang tìm tư liệu",
           recovered: "Đã khôi phục phiên trước",
@@ -165,6 +178,25 @@
     };
   }
 
+  function failureCode(result, action) {
+    if (result?.code) return String(result.code);
+    const failure = Array.isArray(result?.failures) ? result.failures.find(item => item?.code) : null;
+    if (failure?.code) return String(failure.code);
+    if (action?.kind === "script") return String(automation()?.jobs?.script?.failureCode || "AUTOMATION_SCRIPT_FAILED");
+    return "AUTOMATION_STEP_FAILED";
+  }
+
+  function failureMessage(result, action) {
+    const c = copy();
+    const code = failureCode(result, action);
+    if (["NETWORK_ERROR", "PROVIDER_TIMEOUT", "AUTOMATION_SCRIPT_NETWORK"].includes(code)) return c.failureNetwork;
+    if (["PROVIDER_NOT_CONFIGURED", "AUTH_REQUIRED", "AUTOMATION_VOICE_NOT_CONFIGURED", "AUTOMATION_VOICE_UNAVAILABLE"].includes(code)) return c.failureProvider;
+    if (["RATE_LIMITED", "QUOTA_EXCEEDED"].includes(code)) return c.failureQuota;
+    if (code === "NO_RESULTS") return c.failureNoResults;
+    if (["INTERRUPTED", "AUTOMATION_VOICE_INTERRUPTED"].includes(code)) return c.failureInterrupted;
+    return c.failed;
+  }
+
   function ensureVoiceStatus(view) {
     if (!view.scenesReady || view.voice.providerStatus || voiceStatusRefreshing) return;
     voiceStatusRefreshing = true;
@@ -200,22 +232,27 @@
 
     host.classList.toggle("is-running", running);
     host.classList.toggle("is-complete", view.compositionReady && !running);
+    host.classList.toggle("is-failed", Boolean(lastFailure) && !running);
 
     const baseProgressText = assetProgress && runningKind === "assets-resolve"
       ? `${c.assetsProgress} ${Number(assetProgress.completed || 0)}/${Number(assetProgress.total || view.assets.completion?.total || 0)}`
       : running
         ? `${c.working}: ${runningLabel || view.next.label}`
-        : view.compositionReady
-          ? c.completeBody
-          : `${c.next}: ${view.next.label}`;
+        : lastFailure
+          ? lastFailure.message
+          : view.compositionReady
+            ? c.completeBody
+            : `${c.next}: ${view.next.label}`;
     const recoveredText = recoveryMessage(c);
-    const progressText = recoveredText && !running ? `${baseProgressText} · ${recoveredText}` : baseProgressText;
+    const progressText = recoveredText && !running && !lastFailure ? `${baseProgressText} · ${recoveredText}` : baseProgressText;
 
     const title = running
       ? `${c.working}: ${runningLabel || view.next.label}`
-      : view.compositionReady
-        ? c.complete
-        : `${view.completed}/5 ${c.ready}`;
+      : lastFailure
+        ? `${c.retry}: ${lastFailure.label}`
+        : view.compositionReady
+          ? c.complete
+          : `${view.completed}/5 ${c.ready}`;
 
     host.replaceChildren();
 
@@ -223,7 +260,7 @@
     copyWrap.className = "automation-mvp-copy";
     const mark = document.createElement("div");
     mark.className = "automation-mvp-mark";
-    mark.textContent = view.compositionReady ? "✓" : "✦";
+    mark.textContent = view.compositionReady ? "✓" : lastFailure ? "!" : "✦";
     const copyBody = document.createElement("div");
     const eyebrow = document.createElement("span");
     eyebrow.textContent = c.eyebrow;
@@ -250,7 +287,12 @@
     button.type = "button";
     button.className = "button " + (running ? "ghost" : "primary");
     button.setAttribute("data-automation-mvp-action", running ? "cancel" : "continue");
-    button.textContent = running ? c.cancel : (view.next.kind === "studio" ? c.openStudio : c.continue + ": " + view.next.label);
+    const retryingSameStep = lastFailure && lastFailure.kind === view.next.kind;
+    button.textContent = running
+      ? c.cancel
+      : view.next.kind === "studio"
+        ? c.openStudio
+        : `${retryingSameStep ? c.retry : c.continue}: ${view.next.label}`;
     actions.append(progress, button);
     host.append(copyWrap, actions);
   }
@@ -290,6 +332,7 @@
 
   async function runNext() {
     if (running) return;
+    lastFailure = null;
     running = true;
     let before = inspect();
     let action = before.next;
@@ -312,7 +355,9 @@
 
       if (action.kind === "script") {
         await window.ViralAutomationCreator?.generateScript?.();
-        result = inspect().scriptReady ? { ok: true } : { ok: false };
+        result = inspect().scriptReady
+          ? { ok: true }
+          : { ok: false, code: automation()?.jobs?.script?.failureCode || "AUTOMATION_SCRIPT_FAILED" };
       } else if (action.kind === "scenes") {
         result = window.ViralAutomationSceneState?.generatePlan?.() || { ok: false };
       } else if (action.kind === "assets-sync") {
@@ -327,8 +372,8 @@
         await window.ViralAutomationStudioProjection?.openStudio?.();
         result = { ok: appState()?.page === "ai-video" };
       }
-    } catch {
-      result = { ok: false };
+    } catch (error) {
+      result = { ok: false, code: String(error?.code || "AUTOMATION_STEP_FAILED") };
     } finally {
       running = false;
       runningKind = null;
@@ -336,8 +381,20 @@
       assetAbort = null;
       assetProgress = null;
       if (appState()?.page === "automation") {
-        if (result?.code === "CANCELLED" || result?.cancelled === true) notify(copy().cancelled);
-        else if (result && result.ok === false) notify(copy().failed);
+        if (result?.code === "CANCELLED" || result?.cancelled === true) {
+          lastFailure = null;
+          notify(copy().cancelled);
+        } else if (result && result.ok === false) {
+          lastFailure = {
+            kind: action.kind,
+            label: action.label,
+            code: failureCode(result, action),
+            message: failureMessage(result, action)
+          };
+          notify(lastFailure.message);
+        } else {
+          lastFailure = null;
+        }
         queue();
       }
     }
