@@ -2,8 +2,12 @@
  * Final responsive + motion layer for route handoff, workflow progress and small desktop windows.
  */
 
-/* Route handoff: keep shell static and animate only the work surface. */
-#page{view-transition-name:none}
+/* Use the real work-surface width, not only the outer window width. */
+#page{
+  view-transition-name:none;
+  container-type:inline-size;
+  container-name:viral-workpage;
+}
 html[data-route-transition="running"] #page{view-transition-name:viral-route-page}
 ::view-transition-old(root),
 ::view-transition-new(root){animation:none!important;mix-blend-mode:normal!important}
@@ -24,21 +28,67 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
 }
 @keyframes viralNavIndicatorIn{from{opacity:0;transform:scaleY(.35)}to{opacity:1;transform:scaleY(1)}}
 
-/* Core workflow rail: state-driven line + local processing motion. */
+/* Core workflow rail: completed work is solid; the next real segment carries motion. */
 .core-workflow-rail::after{
   transform:scaleX(var(--workflow-progress))!important;
   transform-origin:left center!important;
   transition:transform 480ms cubic-bezier(.22,1,.36,1)!important;
   box-shadow:0 0 12px color-mix(in srgb,var(--accent) 18%,transparent)!important;
 }
-.core-workflow-rail[data-live="true"]::after{
-  background:
-    linear-gradient(90deg,var(--success),var(--accent-2) 56%,var(--accent)),
-    linear-gradient(100deg,transparent 30%,rgba(255,255,255,.34) 50%,transparent 70%)!important;
-  background-size:100% 100%,120px 100%!important;
-  animation:viralWorkflowLive 1.45s linear infinite!important;
+.core-workflow-flow{
+  position:absolute;
+  z-index:1;
+  top:18px;
+  height:2px;
+  border-radius:999px;
+  pointer-events:none;
+  overflow:hidden;
+  opacity:0;
+  transition:left 260ms cubic-bezier(.22,1,.36,1),width 260ms cubic-bezier(.22,1,.36,1),opacity 160ms ease;
 }
-@keyframes viralWorkflowLive{to{background-position:0 0,220px 0}}
+.core-workflow-flow::after{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 -46px;
+  width:46px;
+  border-radius:inherit;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.78),transparent);
+  opacity:.82;
+}
+.core-workflow-rail[data-mode="ready"] .core-workflow-flow{
+  background:linear-gradient(90deg,color-mix(in srgb,var(--success) 32%,transparent),color-mix(in srgb,var(--accent) 48%,transparent));
+  box-shadow:0 0 10px color-mix(in srgb,var(--accent) 13%,transparent);
+}
+.core-workflow-rail[data-mode="ready"] .core-workflow-flow::after{
+  animation:viralWorkflowReady 1.75s cubic-bezier(.4,0,.2,1) infinite;
+}
+.core-workflow-rail[data-mode="processing"] .core-workflow-flow{
+  height:3px;
+  margin-top:-.5px;
+  background:linear-gradient(90deg,var(--accent-2),var(--accent));
+  box-shadow:0 0 14px color-mix(in srgb,var(--accent) 26%,transparent);
+}
+.core-workflow-rail[data-mode="processing"] .core-workflow-flow::after{
+  width:62px;
+  animation:viralWorkflowProcessing 1.05s linear infinite;
+}
+.core-workflow-rail[data-mode="failed"] .core-workflow-flow{
+  background:linear-gradient(90deg,color-mix(in srgb,var(--danger) 22%,transparent),var(--danger));
+}
+.core-workflow-rail[data-mode="failed"] .core-workflow-flow::after,
+.core-workflow-rail[data-mode="cancelled"] .core-workflow-flow::after{animation:none!important;opacity:0}
+@keyframes viralWorkflowReady{0%{transform:translateX(0);opacity:0}18%{opacity:.82}78%{opacity:.82}100%{transform:translateX(calc(100% + 92px));opacity:0}}
+@keyframes viralWorkflowProcessing{0%{transform:translateX(0)}100%{transform:translateX(calc(100% + 108px))}}
+
+.core-workflow-rail.is-completing::after{
+  animation:viralWorkflowComplete 880ms cubic-bezier(.16,1,.3,1) both!important;
+}
+.core-workflow-rail.is-completing .core-stage-index{
+  animation:viralWorkflowCompleteNode 520ms cubic-bezier(.16,1,.3,1) both!important;
+}
+@keyframes viralWorkflowComplete{0%{filter:brightness(1);box-shadow:0 0 8px color-mix(in srgb,var(--success) 12%,transparent)}45%{filter:brightness(1.65);box-shadow:0 0 22px color-mix(in srgb,var(--success) 42%,transparent)}100%{filter:brightness(1);box-shadow:0 0 12px color-mix(in srgb,var(--success) 18%,transparent)}}
+@keyframes viralWorkflowCompleteNode{0%{transform:scale(.92)}54%{transform:scale(1.08)}100%{transform:scale(1)}}
+
 .core-workflow-stage.is-current .core-stage-index,
 .core-workflow-stage.is-processing .core-stage-index{
   animation:viralWorkflowNodeIn 240ms cubic-bezier(.16,1,.3,1) both!important;
@@ -57,6 +107,7 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
   scroll-snap-type:x proximity;
   scroll-behavior:smooth;
   overscroll-behavior-inline:contain;
+  touch-action:pan-x pan-y;
 }
 .core-workflow-stage{scroll-snap-align:center}
 
@@ -175,6 +226,152 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
   }
 }
 
+/* Container-driven adaptation fixes DPI/zoom cases where the viewport breakpoint lies. */
+@container viral-workpage (max-width:1180px){
+  html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(164px,1fr))!important;
+    width:100%!important;
+    max-height:none!important;
+    padding:6px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x proximity!important;
+    scrollbar-width:thin!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage{
+    min-height:54px!important;
+    scroll-snap-align:start!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage::before{display:none!important}
+  html[data-automation-workspace="guided"] .automation-mvp-controller,
+  html[data-automation-workspace="guided"] .automation-step-context,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-grid,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-scenes-host,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-assets-host,
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-composition-host{
+    width:100%!important;
+    max-width:none!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"]>.automation-composition-host{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    grid-template-areas:"voice" "composition"!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-voice-host{
+    position:static!important;
+  }
+  html[data-automation-workspace="guided"] .automation-voice-panel{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(250px,.55fr)!important;
+    gap:10px 14px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-workbench,
+  html[data-automation-workspace="guided"] .automation-scenes-workbench,
+  html[data-automation-workspace="guided"] .automation-assets-workbench{
+    grid-template-columns:minmax(205px,24%) minmax(0,1fr)!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-preview{grid-template-columns:1fr!important}
+
+  .core-workflow-shell{padding-inline:12px!important}
+  .core-workflow-rail{
+    min-width:650px!important;
+    grid-template-columns:repeat(6,minmax(98px,1fr))!important;
+  }
+  .core-workflow-stage{padding-inline:6px!important}
+}
+
+@container viral-workpage (max-width:960px){
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
+    grid-template-columns:1fr!important;
+    gap:10px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider{
+    width:100%!important;
+    max-width:none!important;
+  }
+  html[data-automation-workspace="guided"] .automation-engine-strip{
+    overflow-x:auto!important;
+    white-space:nowrap!important;
+    padding-bottom:3px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-setup-grid{
+    grid-template-columns:1fr!important;
+    grid-template-areas:"content" "video" "audio"!important;
+  }
+  html[data-automation-workspace="guided"] .automation-setup-content{
+    border-right:0!important;
+    border-bottom:1px solid var(--auto-line)!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-workbench,
+  html[data-automation-workspace="guided"] .automation-scenes-workbench,
+  html[data-automation-workspace="guided"] .automation-assets-workbench{
+    grid-template-columns:1fr!important;
+    overflow:visible!important;
+  }
+  html[data-automation-workspace="guided"] .automation-scenes-nav,
+  html[data-automation-workspace="guided"] .automation-assets-nav,
+  html[data-automation-workspace="guided"] .automation-composition-sequence{
+    display:flex!important;
+    gap:6px!important;
+    max-height:none!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    border-inline-end:0!important;
+    border-bottom:1px solid var(--auto-line)!important;
+    scroll-snap-type:x proximity!important;
+    scrollbar-width:thin!important;
+  }
+  html[data-automation-workspace="guided"] .automation-scene-nav-item,
+  html[data-automation-workspace="guided"] .automation-asset-nav-item,
+  html[data-automation-workspace="guided"] .automation-composition-clip{
+    flex:0 0 min(230px,72vw)!important;
+    scroll-snap-align:start!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-inspector,
+  html[data-automation-workspace="guided"] .automation-scenes-inspector,
+  html[data-automation-workspace="guided"] .automation-assets-inspector{
+    overflow:visible!important;
+  }
+  html[data-automation-workspace="guided"] .automation-voice-panel{display:block!important}
+  html[data-automation-workspace="guided"] .automation-voice-head{
+    display:flex!important;
+    align-items:stretch!important;
+    flex-direction:column!important;
+  }
+  html[data-automation-workspace="guided"] .automation-voice-head .button{width:100%!important}
+  .core-workflow-rail{min-width:600px!important}
+}
+
+@container viral-workpage (max-width:720px){
+  html[data-automation-workspace="guided"] .automation-step-context{
+    align-items:stretch!important;
+    flex-direction:column!important;
+  }
+  html[data-automation-workspace="guided"] .automation-step-actions{
+    width:100%!important;
+    flex-wrap:wrap!important;
+  }
+  html[data-automation-workspace="guided"] .automation-step-actions .button{flex:1 1 150px!important}
+  html[data-automation-workspace="guided"] .automation-composition-head,
+  html[data-automation-workspace="guided"] .automation-scenes-head,
+  html[data-automation-workspace="guided"] .automation-assets-head{
+    align-items:stretch!important;
+    flex-direction:column!important;
+  }
+  html[data-automation-workspace="guided"] .automation-composition-actions{justify-content:flex-start!important}
+  html[data-automation-workspace="guided"] .automation-composition-actions .button{flex:1 1 140px!important}
+  html[data-automation-workspace="guided"] .automation-composition-summary{grid-template-columns:1fr!important}
+  .core-workflow-rail{min-width:560px!important;grid-template-columns:repeat(6,minmax(86px,1fr))!important}
+}
+
 /* Small laptop window: compact shell, but keep labels discoverable through tooltips/title. */
 @media(max-width:1120px){
   :root{--sidebar:82px!important;--ui-sidebar:82px!important}
@@ -202,60 +399,6 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
   .command-copy,.command-palette kbd{display:none!important}
   .language-trigger{min-width:126px!important}
   .page{padding:14px 14px 28px!important}
-
-  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
-    grid-template-columns:1fr!important;
-    gap:10px!important;
-  }
-  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider{
-    width:100%!important;
-    max-width:none!important;
-  }
-  html[data-automation-workspace="guided"] .automation-engine-strip{
-    overflow-x:auto!important;
-    white-space:nowrap!important;
-    padding-bottom:3px!important;
-  }
-  html[data-automation-workspace="guided"] .automation-setup-grid{
-    grid-template-columns:1fr!important;
-    grid-template-areas:"content" "video" "audio"!important;
-  }
-  html[data-automation-workspace="guided"] .automation-setup-content{
-    border-right:0!important;
-    border-bottom:1px solid var(--auto-line)!important;
-  }
-  html[data-automation-workspace="guided"] .automation-composition-workbench,
-  html[data-automation-workspace="guided"] .automation-scenes-workbench,
-  html[data-automation-workspace="guided"] .automation-assets-workbench{
-    grid-template-columns:1fr!important;
-  }
-  html[data-automation-workspace="guided"] .automation-scenes-nav,
-  html[data-automation-workspace="guided"] .automation-assets-nav,
-  html[data-automation-workspace="guided"] .automation-composition-sequence{
-    display:flex!important;
-    gap:6px!important;
-    max-height:none!important;
-    overflow-x:auto!important;
-    overflow-y:hidden!important;
-    border-inline-end:0!important;
-    border-bottom:1px solid var(--auto-line)!important;
-    scroll-snap-type:x proximity!important;
-  }
-  html[data-automation-workspace="guided"] .automation-scene-nav-item,
-  html[data-automation-workspace="guided"] .automation-asset-nav-item,
-  html[data-automation-workspace="guided"] .automation-composition-clip{
-    flex:0 0 220px!important;
-    scroll-snap-align:start!important;
-  }
-  html[data-automation-workspace="guided"] .automation-voice-panel{
-    display:block!important;
-  }
-  html[data-automation-workspace="guided"] .automation-voice-head{
-    display:flex!important;
-    align-items:stretch!important;
-    flex-direction:column!important;
-  }
-  html[data-automation-workspace="guided"] .automation-voice-head .button{width:100%!important}
 }
 
 /* Very narrow desktop/web preview. Keep functionality via horizontal scroll instead of clipping. */
@@ -265,15 +408,6 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
   .select-value,.select-chevron{display:none!important}
   #quickProject{padding-inline:10px!important}
   #newProjectLabel{display:none!important}
-  .automation-step-context{align-items:stretch!important;flex-direction:column!important}
-  .automation-step-actions{width:100%!important;flex-wrap:wrap!important}
-  .automation-step-actions .button{flex:1 1 150px!important}
-  .automation-composition-head,
-  .automation-scenes-head,
-  .automation-assets-head{align-items:stretch!important;flex-direction:column!important}
-  .automation-composition-actions{justify-content:flex-start!important}
-  .automation-composition-actions .button{flex:1 1 140px!important}
-  .automation-composition-summary{grid-template-columns:1fr!important}
 }
 
 /* Short-height windows must scroll instead of trapping sticky inner panels. */
@@ -285,24 +419,33 @@ html[data-route-transition="running"] .titlebar{pointer-events:auto}
     position:static!important;
     max-height:none!important;
   }
+  html[data-automation-workspace="guided"] .automation-composition-workbench,
+  html[data-automation-workspace="guided"] .automation-scenes-workbench,
+  html[data-automation-workspace="guided"] .automation-assets-workbench{min-height:0!important}
 }
 
 @media(prefers-reduced-motion:reduce){
   ::view-transition-old(viral-route-page),
   ::view-transition-new(viral-route-page),
   .nav-item.active::before,
-  .core-workflow-rail[data-live="true"]::after,
+  .core-workflow-flow::after,
+  .core-workflow-rail.is-completing::after,
+  .core-workflow-rail.is-completing .core-stage-index,
   .core-workflow-stage.is-current .core-stage-index,
   .core-workflow-stage.is-processing .core-stage-index,
   .core-workflow-stage.is-processing .core-stage-spinner{animation:none!important}
-  .core-workflow-rail::after{transition:none!important}
+  .core-workflow-rail::after,
+  .core-workflow-flow{transition:none!important}
   .core-workflow-scroll{scroll-behavior:auto!important}
 }
 html[data-motion="reduced"] ::view-transition-old(viral-route-page),
 html[data-motion="reduced"] ::view-transition-new(viral-route-page),
 html[data-motion="reduced"] .nav-item.active::before,
-html[data-motion="reduced"] .core-workflow-rail[data-live="true"]::after,
+html[data-motion="reduced"] .core-workflow-flow::after,
+html[data-motion="reduced"] .core-workflow-rail.is-completing::after,
+html[data-motion="reduced"] .core-workflow-rail.is-completing .core-stage-index,
 html[data-motion="reduced"] .core-workflow-stage.is-current .core-stage-index,
 html[data-motion="reduced"] .core-workflow-stage.is-processing .core-stage-index,
 html[data-motion="reduced"] .core-workflow-stage.is-processing .core-stage-spinner{animation:none!important}
-html[data-motion="reduced"] .core-workflow-rail::after{transition:none!important}
+html[data-motion="reduced"] .core-workflow-rail::after,
+html[data-motion="reduced"] .core-workflow-flow{transition:none!important}
