@@ -46,20 +46,38 @@ for (const token of [
 assert(mpt.includes("syncNow: enhance"), "Automation MPT layout must expose synchronous enhancement");
 
 for (const token of [
-  "function syncStageViewport(rail)",
-  'rail.dataset.progress = next.toFixed(4)',
-  'rail.dataset.live = stage.classList.contains("is-processing") ? "true" : "false"',
+  "function sourceKey()",
+  "function contiguousCompleted(stages)",
+  "function workflowMode(stage, completed, total)",
+  "function ensureFlow(rail)",
+  "function syncFlowGeometry(rail, stages, stage, completed, mode)",
+  "function syncStageViewport(rail, stage)",
+  "function celebrateCompletion(rail, mode, completed)",
+  "function resetForSource(rail, nextSourceKey)",
+  'rail.dataset.mode = mode',
+  'rail.dataset.live = mode === "processing" ? "true" : "false"',
+  'rail.dataset.progress = completedProgress.toFixed(4)',
   "scrollIntoView",
   "viral-ai:navigation-committed",
   'window.addEventListener("resize"'
 ]) assert(workflowMotion.includes(token), "Workflow motion logic missing: " + token);
 
 for (const token of [
+  "container-name:viral-workpage",
   "view-transition-name:viral-route-page",
   "::view-transition-old(viral-route-page)",
   ".core-workflow-rail::after",
+  ".core-workflow-flow",
+  '.core-workflow-rail[data-mode="ready"] .core-workflow-flow',
+  '.core-workflow-rail[data-mode="processing"] .core-workflow-flow',
+  ".core-workflow-rail.is-completing::after",
+  "@keyframes viralWorkflowReady",
+  "@keyframes viralWorkflowProcessing",
+  "@keyframes viralWorkflowComplete",
   "transition:transform 480ms",
-  '.core-workflow-rail[data-live="true"]::after',
+  "@container viral-workpage (max-width:1180px)",
+  "@container viral-workpage (max-width:960px)",
+  "@container viral-workpage (max-width:720px)",
   "@media(max-width:1540px)",
   "@media(max-width:1380px)",
   "@media(max-width:1120px)",
@@ -70,6 +88,10 @@ for (const token of [
   "scroll-snap-type:x proximity"
 ]) assert(css.includes(token), "Adaptive experience CSS missing: " + token);
 
+assert(css.includes("grid-template-columns:1fr!important"), "Narrow Automation workbenches must collapse to one column");
+assert(css.includes("overflow:visible!important"), "Narrow workbenches must not trap vertical content");
+assert(css.includes("touch-action:pan-x pan-y"), "Scrollable workflow rail must remain pointer/touch navigable");
+
 const adaptiveLink = 'href="core-adaptive-experience-v4.css"';
 const v3Link = 'href="core-automation-experience-v3.css"';
 assert(index.includes(adaptiveLink), "Adaptive experience stylesheet must be loaded");
@@ -78,4 +100,4 @@ assert(index.indexOf(v3Link) < index.indexOf(adaptiveLink), "Adaptive experience
 assert(pkg.scripts["test:core-adaptive-experience-v4"], "package.json must expose adaptive experience regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-adaptive-experience-v4"), "commercial suite must gate adaptive experience v4");
 
-console.log("Route flicker handoff, workflow progress motion, Automation synchronous hydration and compact-window fit tests passed.");
+console.log("Route flicker handoff, stateful workflow motion, project reset behavior and container-driven compact layout tests passed.");
