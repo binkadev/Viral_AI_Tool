@@ -4,6 +4,7 @@
   let queued = false;
   let configOpen = false;
   let busySceneId = null;
+  let sceneController = null;
   let batchController = null;
   let batchProgress = null;
   let lastMuseProgress = null;
@@ -253,19 +254,18 @@
       ensureEngineChip();
       return;
     }
-    let card = panel.querySelector(':scope > .automation-muse-card');
+    let mount = panel.querySelector(':scope > .automation-muse-card-mount');
     const html = cardMarkup();
-    if (!(card instanceof HTMLElement)) {
+    if (!(mount instanceof HTMLElement)) {
       const summary = panel.querySelector(':scope > .automation-assets-summary');
       const header = panel.querySelector(':scope > .automation-assets-head');
-      card = document.createElement('div');
-      card.className = 'automation-muse-card-mount';
-      if (summary) summary.insertAdjacentElement('afterend', card);
-      else if (header) header.insertAdjacentElement('afterend', card);
-      else panel.prepend(card);
+      mount = document.createElement('div');
+      mount.className = 'automation-muse-card-mount';
+      if (summary) summary.insertAdjacentElement('afterend', mount);
+      else if (header) header.insertAdjacentElement('afterend', mount);
+      else panel.prepend(mount);
     }
-    if (card.classList.contains('automation-muse-card-mount')) card.innerHTML = html;
-    else card.outerHTML = html;
+    if (mount.innerHTML !== html) mount.innerHTML = html;
     ensureEngineChip();
   }
 
@@ -301,6 +301,7 @@
     busySceneId = null;
     batchProgress = null;
     lastMuseProgress = null;
+    sceneController = null;
     batchController = null;
     queueRender();
   }
@@ -308,12 +309,13 @@
   async function generateScene(sceneId) {
     if (!sceneId || busySceneId || batchController) return;
     busySceneId = sceneId;
+    sceneController = new AbortController();
     lastMuseProgress = { phase: 'submitting', progress: 1 };
     queueRender();
     try {
       const switched = window.ViralAutomationAssetState?.setSceneStrategy?.(sceneId, 'generated');
       if (!switched?.ok) throw Object.assign(new Error(switched?.code || 'ASSET_STRATEGY_UNSUPPORTED'), { code: switched?.code });
-      const result = await window.ViralAutomationAssetState?.resolveScene?.(sceneId);
+      const result = await window.ViralAutomationAssetState?.resolveScene?.(sceneId, { signal: sceneController.signal });
       if (!result?.ok) throw Object.assign(new Error(result?.message || result?.code || 'PROVIDER_REJECTED'), { code: result?.code });
       notify(copy().done);
       try { window.ViralAutomationAssetsUi?.refresh?.(); } catch {}
@@ -369,6 +371,11 @@
     queueRender();
   }
 
+  function cancelActive() {
+    if (sceneController) sceneController.abort();
+    if (batchController) batchController.abort();
+  }
+
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
@@ -400,12 +407,7 @@
     }
     if (target.closest('[data-muse-cancel]')) {
       event.preventDefault();
-      if (batchController) batchController.abort();
-      else if (busySceneId) {
-        // The provider bridge binds the router AbortSignal. Single-scene generation is
-        // intentionally not killed through a second mutable global controller here.
-        notify(locale() === 'vi' ? 'Hãy chờ tác vụ hiện tại hoàn tất hoặc dùng Dừng khi tạo hàng loạt.' : 'Wait for the current scene or use Stop during batch generation.');
-      }
+      cancelActive();
     }
   }, true);
 
@@ -428,5 +430,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
 
-  window.ViralAutomationMuseUi = { refresh: queueRender, refreshStatus, generateScene, generateAll };
+  window.ViralAutomationMuseUi = { refresh: queueRender, refreshStatus, generateScene, generateAll, cancelActive };
 })();
