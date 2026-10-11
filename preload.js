@@ -76,6 +76,19 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   materializeAutomationStock: payload => ipcRenderer.invoke('automation:stock-materialize', payload),
   cancelAutomationStock: operationId => ipcRenderer.invoke('automation:stock-cancel', operationId),
 
+  getAutomationMetaMuseStatus: () => ipcRenderer.invoke('automation:meta-muse-status'),
+  openAutomationMetaMuse: () => ipcRenderer.invoke('automation:meta-muse-open'),
+  startAutomationMetaMuseVideo: payload => ipcRenderer.invoke('automation:meta-muse-generate', payload),
+  materializeAutomationMetaMuse: payload => ipcRenderer.invoke('automation:meta-muse-materialize', payload),
+  cancelAutomationMetaMuse: operationId => ipcRenderer.invoke('automation:meta-muse-cancel', operationId),
+  closeAutomationMetaMuse: () => ipcRenderer.invoke('automation:meta-muse-close'),
+  onAutomationMetaMuseProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('automation:meta-muse-progress', listener);
+    return () => ipcRenderer.removeListener('automation:meta-muse-progress', listener);
+  },
+
   getAutomationVoiceStatus: () => ipcRenderer.invoke('automation:voice-status'),
   getAutomationVoiceActiveCount: () => ipcRenderer.invoke('automation:voice-active-count'),
   startAutomationVoice: payload => ipcRenderer.invoke('automation:voice-start', payload),
