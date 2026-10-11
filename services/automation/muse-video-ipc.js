@@ -62,7 +62,9 @@ function publicCandidate(candidate) {
     width: Number(candidate?.width || 0),
     height: Number(candidate?.height || 0),
     durationSec: Number(candidate?.durationSec || 0),
-    previewUrl: String(candidate?.previewUrl || ''),
+    // Result/download URLs can be signed and short-lived. Keep them in the main
+    // process token vault and expose only a candidate token to the renderer.
+    previewUrl: '',
     sourcePage: String(candidate?.sourcePage || ''),
     license: String(candidate?.license || ''),
     attribution: String(candidate?.attribution || ''),
