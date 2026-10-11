@@ -40,6 +40,17 @@ assert.strictEqual(derived.stages[2].status, "active");
 assert.strictEqual(derived.controls.speech.enabled, true);
 assert.strictEqual(derived.controls.translate.enabled, false);
 
+// App history is newest-first. The workflow must agree with app.js and the
+// project snapshot instead of accidentally deriving state from the oldest video.
+const olderSource = {
+  ...source,
+  id: "src-old",
+  sourcePath: "C:/older-video.mp4",
+  name: "older-video.mp4"
+};
+assert.strictEqual(model.latestSourceJob({ jobs: [source, olderSource] }).id, "src-1");
+assert(model.sameSourcePath("C:\\VIDEO.mp4", "c:/video.mp4"), "Windows source ownership should be path-case tolerant");
+
 const transcript = {
   sourcePath: source.sourcePath,
   segments: [{ id: "s1", start: 0, end: 2, text: "hello" }]
@@ -84,7 +95,7 @@ const rendering = {
   status: "processing"
 };
 derived = model.derive({
-  jobs: [source, rendering],
+  jobs: [rendering, source],
   speech: { result: transcript },
   translation: { result: translated },
   voice: { result: voiced }
@@ -105,7 +116,7 @@ const output = {
   status: "completed"
 };
 derived = model.derive({
-  jobs: [source, output],
+  jobs: [output, source],
   speech: { result: transcript },
   translation: { result: translated },
   voice: { result: voiced }
@@ -115,7 +126,7 @@ assert.strictEqual(derived.controls.export.enabled, true);
 
 const failedRender = { ...output, id: "render-failed", status: "failed" };
 derived = model.derive({
-  jobs: [source, failedRender],
+  jobs: [failedRender, source],
   speech: { result: transcript },
   translation: { result: translated },
   voice: { result: voiced }
@@ -134,6 +145,54 @@ derived = model.derive({
 assert.strictEqual(derived.stages[0].status, "failed");
 assert.strictEqual(derived.controls.speech.enabled, false);
 assert.strictEqual(derived.controls.render.enabled, false);
+
+// Unowned legacy state must never leak into a different/new source project.
+const orphanTranscript = { segments: [{ id: "old", start: 0, end: 1, text: "old" }] };
+const orphanTranslation = { segments: [{ id: "old", start: 0, end: 1, text: "cu" }] };
+const orphanVoice = { segments: [{ id: "old", start: 0, end: 1, audioPath: "C:/voice/old.wav" }] };
+const orphanOutput = {
+  id: "orphan-render",
+  isRenderOutput: true,
+  outputPath: "C:/orphan.mp4",
+  status: "completed"
+};
+derived = model.derive({
+  jobs: [orphanOutput, source],
+  speech: { result: orphanTranscript },
+  translation: { result: orphanTranslation },
+  voice: { result: orphanVoice }
+});
+assert.strictEqual(derived.speechResult, null);
+assert.strictEqual(derived.translationResult, null);
+assert.strictEqual(derived.voiceResult, null);
+assert.strictEqual(derived.renderJob, null);
+assert.strictEqual(derived.stages[2].status, "active");
+assert.strictEqual(derived.stages[5].status, "blocked");
+assert.strictEqual(derived.controls.translate.enabled, false);
+assert.strictEqual(derived.controls.render.enabled, false);
+assert.strictEqual(derived.controls.export.enabled, false);
+
+// A completed pipeline for an older source must not unlock a freshly imported source.
+const oldTranscript = { ...transcript, sourcePath: olderSource.sourcePath };
+const oldTranslation = { ...translated, sourcePath: olderSource.sourcePath };
+const oldVoice = { ...voiced, sourcePath: olderSource.sourcePath };
+const oldOutput = { ...output, id: "old-output", sourcePath: olderSource.sourcePath };
+derived = model.derive({
+  jobs: [source, oldOutput, olderSource],
+  speech: { result: oldTranscript },
+  translation: { result: oldTranslation },
+  voice: { result: oldVoice }
+});
+assert.strictEqual(derived.source.id, source.id);
+assert.strictEqual(derived.speechResult, null);
+assert.strictEqual(derived.renderOutput, null);
+assert.strictEqual(derived.stages[2].status, "active");
+assert.strictEqual(derived.stages[5].status, "blocked");
+assert.strictEqual(derived.controls.export.enabled, false);
+
+// When several outputs exist for the same source, newest-first history wins.
+const olderOutputSameSource = { ...output, id: "older-output", outputPath: "C:/older-output.mp4" };
+assert.strictEqual(model.latestRenderJob({ jobs: [output, olderOutputSameSource, source] }, source).id, output.id);
 
 assert.doesNotThrow(() => new Function(workflow), "Core workflow UI script must parse.");
 assert.doesNotThrow(() => new Function(workflowMotion), "Core workflow motion script must parse.");
@@ -187,4 +246,4 @@ assert(index.includes('src="core-workflow.js"'));
 assert(index.includes('src="core-workflow-motion.js"'));
 assert(index.indexOf('src="core-workflow-motion.js"') > index.indexOf('src="core-workflow.js"'), "Workflow motion must load after workflow rendering.");
 
-console.log("Core workflow and premium interaction tests passed.");
+console.log("Core workflow ownership, state isolation and premium interaction tests passed.");
