@@ -332,6 +332,27 @@
     persistStage();
   }
 
+  function ensureStructuralPlaceholders(creator) {
+    const hero = creator.querySelector(":scope > .automation-hero");
+    if (!(hero instanceof HTMLElement)) return;
+
+    let strip = creator.querySelector(":scope > .automation-engine-strip");
+    if (!(strip instanceof HTMLElement)) {
+      strip = document.createElement("section");
+      strip.className = "automation-engine-strip";
+      strip.setAttribute("aria-label", locale() === "en" ? "Automation providers" : "Trạng thái nguồn xử lý");
+      hero.insertAdjacentElement("afterend", strip);
+    }
+
+    let controller = creator.querySelector(":scope > .automation-mvp-controller");
+    if (!(controller instanceof HTMLElement)) {
+      controller = document.createElement("section");
+      controller.className = "automation-mvp-controller automation-mvp-placeholder";
+      controller.setAttribute("aria-live", "polite");
+      strip.insertAdjacentElement("afterend", controller);
+    }
+  }
+
   function scan() {
     queued = false;
     if (appState()?.page !== "automation") {
@@ -353,6 +374,7 @@
     maybeAdvanceFromState();
 
     creator.classList.add("automation-workspace-v2");
+    ensureStructuralPlaceholders(creator);
     decorateStages(rail);
     ensureStepContext(creator, rail);
     applyPanelVisibility(creator);
@@ -407,6 +429,7 @@
   window.ViralAutomationWorkspace = {
     setStage,
     refresh: queueScan,
+    syncNow: scan,
     syncToProgress: () => setStage(highestRelevantStage(), { scroll: false, manual: false }),
     getActiveStage: () => activeStage,
     getProgressStage: highestRelevantStage
