@@ -2,7 +2,6 @@
   "use strict";
 
   const planner = window.ViralAutomationScenePlanner;
-  const ALLOWED_ASSET_STRATEGIES = new Set(["stock", "generated"]);
 
   function currentState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -68,13 +67,6 @@
     if (index < 0) return { ok: false, code: "AUTOMATION_SCENE_NOT_FOUND" };
 
     const before = existing.scenes[index];
-    const requestedStrategy = patch.assetStrategy == null
-      ? String(before.assetStrategy || "stock")
-      : String(patch.assetStrategy || "").trim().toLowerCase();
-    if (!ALLOWED_ASSET_STRATEGIES.has(requestedStrategy)) {
-      return { ok: false, code: "AUTOMATION_ASSET_STRATEGY_UNSUPPORTED" };
-    }
-
     const nextScene = {
       ...before,
       narration: patch.narration == null ? before.narration : String(patch.narration).trim(),
@@ -85,25 +77,12 @@
             .map(item => String(item).trim())
             .filter(Boolean)
             .slice(0, 12),
-      subtitleText: patch.subtitleText == null ? before.subtitleText : String(patch.subtitleText).trim(),
-      assetStrategy: requestedStrategy
+      subtitleText: patch.subtitleText == null ? before.subtitleText : String(patch.subtitleText).trim()
     };
     if (!nextScene.narration) return { ok: false, code: "AUTOMATION_SCENE_NARRATION_REQUIRED" };
 
-    const semanticBefore = JSON.stringify({
-      narration: before.narration,
-      visualIntent: before.visualIntent,
-      searchTerms: before.searchTerms,
-      subtitleText: before.subtitleText,
-      assetStrategy: before.assetStrategy || "stock"
-    });
-    const semanticAfter = JSON.stringify({
-      narration: nextScene.narration,
-      visualIntent: nextScene.visualIntent,
-      searchTerms: nextScene.searchTerms,
-      subtitleText: nextScene.subtitleText,
-      assetStrategy: nextScene.assetStrategy
-    });
+    const semanticBefore = JSON.stringify({ narration: before.narration, visualIntent: before.visualIntent, searchTerms: before.searchTerms, subtitleText: before.subtitleText });
+    const semanticAfter = JSON.stringify({ narration: nextScene.narration, visualIntent: nextScene.visualIntent, searchTerms: nextScene.searchTerms, subtitleText: nextScene.subtitleText });
     if (semanticBefore === semanticAfter) return { ok: true, changed: false, scene: clone(before, before) };
 
     existing.scenes[index] = nextScene;
@@ -119,10 +98,6 @@
     return { ok: true, changed: true, scene: clone(nextScene, nextScene) };
   }
 
-  function setAssetStrategy(sceneId, assetStrategy) {
-    return editScene(sceneId, { assetStrategy });
-  }
-
   function snapshot() {
     const current = currentState();
     return {
@@ -135,7 +110,6 @@
     acceptPlan,
     generatePlan,
     editScene,
-    setAssetStrategy,
     snapshot
   };
 })();
