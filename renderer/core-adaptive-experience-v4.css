@@ -3,7 +3,8 @@
  */
 
 /* Route handoff: keep shell static and animate only the work surface. */
-#page{view-transition-name:viral-route-page}
+#page{view-transition-name:none}
+html[data-route-transition="running"] #page{view-transition-name:viral-route-page}
 ::view-transition-old(root),
 ::view-transition-new(root){animation:none!important;mix-blend-mode:normal!important}
 ::view-transition-group(viral-route-page){animation-duration:170ms!important;animation-timing-function:cubic-bezier(.16,1,.3,1)!important}
