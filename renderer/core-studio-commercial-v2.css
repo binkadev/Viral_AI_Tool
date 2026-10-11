@@ -1,0 +1,277 @@
+/* Final Studio workstation polish.
+ * Presentation only: player remains the single playback clock and existing editor DOM owns behavior.
+ */
+
+html.core-editor-premium .core-editor-bottom-dock{
+  border-color:var(--ui-line)!important;
+  border-radius:10px!important;
+  background:var(--ui-panel)!important;
+  box-shadow:none!important;
+}
+html.core-editor-premium .core-bottom-dock-head{
+  min-height:44px!important;
+  flex-basis:44px!important;
+  padding:6px 7px!important;
+  border-color:var(--ui-line)!important;
+  background:var(--ui-panel-soft)!important;
+}
+html.core-editor-premium .core-bottom-tab{
+  min-height:32px!important;
+  padding:6px 10px!important;
+  border-radius:7px!important;
+  color:var(--ui-muted)!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-meta)!important;
+  font-weight:620!important;
+}
+html.core-editor-premium .core-bottom-tab:hover:not(.is-active){
+  background:var(--ui-hover)!important;
+  color:var(--ui-text)!important;
+}
+html.core-editor-premium .core-bottom-tab.is-active{
+  background:var(--ui-accent-soft)!important;
+  color:var(--ui-text)!important;
+  box-shadow:inset 0 -2px var(--ui-accent)!important;
+}
+html.core-editor-premium .core-bottom-collapse{
+  border-color:var(--ui-line)!important;
+  background:var(--ui-panel-raised)!important;
+  color:var(--ui-muted)!important;
+}
+html.core-editor-premium .core-bottom-time{
+  min-width:98px!important;
+  padding:5px 8px!important;
+  border-color:var(--ui-line)!important;
+  border-radius:7px!important;
+  background:var(--ui-panel-raised)!important;
+  color:var(--ui-muted)!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+}
+html.core-editor-premium .core-bottom-zoom{color:var(--ui-faint)!important;font-size:var(--type-caption)!important}
+
+html.core-editor-premium .core-bottom-timeline-pane{gap:7px!important;padding:8px!important}
+html.core-editor-premium .core-timeline-workspace{
+  grid-template-columns:118px minmax(0,1fr)!important;
+  border-color:var(--ui-line)!important;
+  border-radius:8px!important;
+  background:#0a0f17!important;
+  box-shadow:none!important;
+}
+html.core-editor-premium .core-track-labels{
+  border-color:var(--ui-line)!important;
+  background:#0e151f!important;
+}
+html.core-editor-premium .core-track-label{
+  gap:7px!important;
+  padding-inline:8px!important;
+  border-color:var(--ui-line)!important;
+  color:var(--ui-muted)!important;
+}
+html.core-editor-premium .core-track-label b{
+  min-width:32px!important;
+  min-height:22px!important;
+  padding-inline:6px!important;
+  border-color:var(--ui-line-strong)!important;
+  border-radius:5px!important;
+  background:rgba(255,255,255,.04)!important;
+  color:var(--ui-text)!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-caption)!important;
+  line-height:20px!important;
+  font-weight:700!important;
+}
+html.core-editor-premium .core-track-label span{
+  color:var(--ui-muted)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+}
+html.core-editor-premium .core-time-ruler{
+  border-color:var(--ui-line)!important;
+  background:#0d141e!important;
+}
+html.core-editor-premium .core-ruler-tick time{
+  color:var(--ui-faint)!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.3!important;
+}
+html.core-editor-premium .core-track-lane{border-color:var(--ui-line)!important}
+
+html.core-editor-premium .core-source-clip,
+html.core-editor-premium .core-bottom-segment{
+  top:5px!important;
+  height:26px!important;
+  border-radius:5px!important;
+}
+html.core-editor-premium .core-source-clip span{
+  color:#b9cfff!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.3!important;
+  font-weight:700!important;
+}
+html.core-editor-premium .core-source-clip b{
+  font-size:var(--type-caption)!important;
+  line-height:1.3!important;
+  font-weight:620!important;
+}
+html.core-editor-premium .core-bottom-segment span{
+  font-size:var(--type-caption)!important;
+  line-height:24px!important;
+}
+html.core-editor-premium .core-bottom-empty{
+  color:var(--ui-faint)!important;
+  font-size:var(--type-meta)!important;
+}
+
+/* Transcript */
+html.core-editor-premium .core-transcript-workstation-head{
+  grid-template-columns:126px minmax(0,1fr) minmax(0,1fr) auto!important;
+  min-height:42px!important;
+  gap:12px!important;
+  margin-top:10px!important;
+  padding:0 12px!important;
+  border-color:var(--ui-line)!important;
+  border-radius:10px 10px 0 0!important;
+  background:var(--ui-panel-soft)!important;
+  color:var(--ui-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+  font-weight:700!important;
+}
+html.core-editor-premium .core-transcript-count{
+  color:var(--ui-muted)!important;
+  font-size:var(--type-caption)!important;
+}
+html.core-editor-premium .speech-result .transcript-list[data-core-transcript-workstation="ready"]{
+  padding:6px!important;
+  border-color:var(--ui-line)!important;
+  border-radius:0 0 10px 10px!important;
+  background:#0b111a!important;
+}
+html.core-editor-premium .core-transcript-row{
+  grid-template-columns:112px minmax(0,1fr) minmax(0,1fr)!important;
+  gap:12px!important;
+  min-height:72px!important;
+  padding:10px 12px!important;
+  border-radius:8px!important;
+}
+html.core-editor-premium .core-transcript-row:hover{
+  border-color:var(--ui-line)!important;
+  background:var(--ui-hover)!important;
+}
+html.core-editor-premium .core-transcript-row.is-active{
+  border-color:var(--ui-accent-line)!important;
+  background:color-mix(in srgb,var(--ui-accent) 7%,transparent)!important;
+  box-shadow:inset 2px 0 0 var(--ui-accent)!important;
+}
+html.core-editor-premium .core-transcript-time{
+  min-height:28px!important;
+  padding:5px 7px!important;
+  border-color:var(--ui-line)!important;
+  border-radius:6px!important;
+  background:var(--ui-panel-raised)!important;
+  color:var(--ui-muted)!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+  font-weight:620!important;
+}
+html.core-editor-premium .core-transcript-cell-label{
+  margin-bottom:5px!important;
+  color:var(--ui-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+  font-weight:700!important;
+}
+html.core-editor-premium .core-transcript-source p,
+html.core-editor-premium .core-transcript-translation-text{
+  min-height:28px!important;
+  padding:5px 7px!important;
+  border-radius:6px!important;
+  font-size:var(--type-body)!important;
+  line-height:1.52!important;
+}
+html.core-editor-premium .core-transcript-source p{color:var(--ui-text)!important}
+html.core-editor-premium .core-transcript-translation-text{color:var(--ui-muted)!important}
+html.core-editor-premium .core-transcript-translation-text.is-empty{color:var(--ui-faint)!important}
+
+/* Inspector hierarchy */
+html.core-editor-premium .core-editor-inspector{
+  border-color:var(--ui-line)!important;
+  border-radius:10px!important;
+  background:var(--ui-panel)!important;
+  box-shadow:none!important;
+}
+html.core-editor-premium .core-inspector-tabs{
+  min-height:44px!important;
+  padding:5px!important;
+  border-bottom-color:var(--ui-line)!important;
+  background:var(--ui-panel-soft)!important;
+}
+html.core-editor-premium .core-inspector-tab{
+  min-height:34px!important;
+  padding:7px 6px!important;
+  border-radius:7px!important;
+  color:var(--ui-muted)!important;
+  font-size:var(--type-meta)!important;
+  font-weight:620!important;
+}
+html.core-editor-premium .core-inspector-tab.is-active{
+  background:var(--ui-panel-raised)!important;
+  color:var(--ui-text)!important;
+  box-shadow:inset 0 0 0 1px var(--ui-line-strong)!important;
+}
+html.core-editor-premium .core-inspector-card,
+html.core-editor-premium .core-inspector-static{
+  font-size:var(--type-body)!important;
+}
+html.core-editor-premium .core-inspector-card label,
+html.core-editor-premium .core-inspector-card small,
+html.core-editor-premium .core-inspector-static small{
+  font-size:var(--type-meta)!important;
+  line-height:1.45!important;
+}
+
+/* Player information chrome. Geometry remains owned by core-player-workstation. */
+html.core-editor-premium .core-player-time{
+  min-width:98px!important;
+  color:#b7c0ce!important;
+  font-family:var(--font)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+}
+html.core-editor-premium .core-player-button{
+  font-family:var(--font)!important;
+}
+
+@media(max-width:1180px){
+  html.core-editor-premium .core-timeline-workspace{grid-template-columns:96px minmax(0,1fr)!important}
+  html.core-editor-premium .core-transcript-workstation-head{grid-template-columns:104px minmax(0,1fr) minmax(0,1fr) auto!important}
+  html.core-editor-premium .core-transcript-row{grid-template-columns:94px minmax(0,1fr) minmax(0,1fr)!important}
+}
+
+@media(max-width:880px){
+  html.core-editor-premium .core-transcript-workstation-head{grid-template-columns:1fr auto!important}
+  html.core-editor-premium .core-transcript-row{grid-template-columns:88px minmax(0,1fr)!important}
+  html.core-editor-premium .core-transcript-translation{grid-column:2!important}
+}
+
+@media(max-width:760px){
+  html.core-editor-premium .core-timeline-workspace{grid-template-columns:56px minmax(0,1fr)!important}
+  html.core-editor-premium .core-track-label span{display:none!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html.core-editor-premium .core-bottom-tab,
+  html.core-editor-premium .core-source-clip,
+  html.core-editor-premium .core-bottom-segment,
+  html.core-editor-premium .core-transcript-row,
+  html.core-editor-premium .core-inspector-tab{transition:none!important}
+}
+html[data-motion="reduced"].core-editor-premium .core-bottom-tab,
+html[data-motion="reduced"].core-editor-premium .core-source-clip,
+html[data-motion="reduced"].core-editor-premium .core-bottom-segment,
+html[data-motion="reduced"].core-editor-premium .core-transcript-row,
+html[data-motion="reduced"].core-editor-premium .core-inspector-tab{transition:none!important}
