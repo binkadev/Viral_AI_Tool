@@ -10,6 +10,20 @@ Viral AI Tool is a Windows-first creator workstation, not a generic SaaS dashboa
 
 MoneyPrinterTurbo is used only as a workflow-density reference: configuration is visible, generation state is obvious, and users retain control of Script → Media → Audio/Subtitles → Output. Viral AI Tool keeps its own Project, Editor, Job, Playback and provider-neutral architecture.
 
+### Vietnamese design-system reference
+
+For the second commercial pass, use CyberSkill Global Design System (`cyberskill-official/design`) as a Vietnamese product-design reference, not as vendored code or a brand to copy. Useful principles:
+
+- Vietnamese-first copy and line-height are first-class requirements;
+- enterprise-grade surfaces favour hierarchy, contrast and direct wording over decorative effects;
+- body copy must remain clearly readable on dark surfaces;
+- focus state must stay visible;
+- primary targets should be comfortably clickable;
+- status must be communicated with words as well as colour;
+- dark mode should use restrained elevation, borders and semantic colour instead of glow-heavy decoration.
+
+Adapt these principles to Viral AI Tool's existing typography and brand colours. Do not copy CyberSkill's Umber/Ochre identity or mascot system.
+
 ## 2. Architecture invariants
 
 Visual work must not change these owners:
@@ -64,6 +78,14 @@ Commercial default is dense-but-readable, comparable to a desktop production con
 - no excessive nested cards;
 - keep primary actions visually obvious and secondary actions quiet.
 
+For wide Windows desktops:
+
+- do not center a 1200px workstation inside a ~1800px content area and leave large dead gutters;
+- Automation should consume the available work area after page padding;
+- use a persistent workflow rail on the left and one active working surface on the right at wide breakpoints;
+- Timeline may use a narrow Voice inspector beside the main Composition workspace when enough width is available;
+- collapse back to a horizontal stage rail on narrower windows.
+
 ## 5. Premium Dark direction
 
 Midnight remains the default commercial appearance:
@@ -91,7 +113,8 @@ Automation is a production console rather than an internal engineering wizard.
 
 ### Scene Planner
 
-- left navigator + right inspector;
+- persistent workflow rail at wide desktop width;
+- scene navigator + right inspector inside the active stage;
 - scene list uses readable 11–13px hierarchy;
 - narration, visual intent and search terms remain directly editable;
 - previous/next/save actions remain visible.
@@ -107,6 +130,7 @@ Automation is a production console rather than an internal engineering wizard.
 
 - V1 / SUB / A1 state remains visible;
 - Voice provider status and scene coverage are readable;
+- on wide desktops, Voice becomes a dedicated side inspector rather than another full-width banner;
 - export progress/result is commercial-facing and does not expose internal engine names;
 - existing `Mở trong Studio` / `Quay lại Automation` navigation ownership is preserved.
 
@@ -145,8 +169,9 @@ Loaded after legacy/project CSS so they own the final presentation without rewri
 
 1. `core-commercial-ui-system-v2.css` — global shell, typography, controls, shared surfaces;
 2. `core-commercial-pages-v2.css` — Home, Dashboard, Settings, cards, modal/toast/drop feedback;
-3. `core-automation-commercial-v2.css` — Scene/Asset/Voice/Composition/Export workstation;
-4. `core-studio-commercial-v2.css` — Studio timeline, transcript, inspector and player information chrome.
+3. `core-management-commercial-v2.css` — management/workflow legacy surfaces;
+4. `core-automation-commercial-v2.css` — Automation wide workstation, Scene/Asset/Voice/Composition/Export;
+5. `core-studio-commercial-v2.css` — Studio timeline, transcript, inspector and player information chrome.
 
 ## 11. Acceptance checkpoint
 
