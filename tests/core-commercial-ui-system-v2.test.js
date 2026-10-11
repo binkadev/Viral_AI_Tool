@@ -9,6 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
 const ui = read("renderer/core-commercial-ui-system-v2.css");
 const pages = read("renderer/core-commercial-pages-v2.css");
+const management = read("renderer/core-management-commercial-v2.css");
 const automation = read("renderer/core-automation-mpt-ux.css");
 const automationWorkstation = read("renderer/core-automation-commercial-v2.css");
 const studio = read("renderer/core-studio-commercial-v2.css");
@@ -62,6 +63,26 @@ for (const required of [
 ]) assert(pages.includes(required), "Commercial page polish missing: " + required);
 
 assert(pages.includes("animation:none!important"), "Commercial page polish must disable decorative drag-overlay animation");
+
+for (const required of [
+  ".hero",
+  ".stat-card",
+  ".tool-card",
+  ".dropzone",
+  ".data-table th",
+  ".workflow",
+  ".wf-step",
+  "font-size:var(--type-caption)",
+  "font-size:var(--type-meta)",
+  "font-size:var(--type-body)",
+  "animation:none!important",
+  "@media(max-width:1180px)",
+  "@media(prefers-reduced-motion:reduce)"
+]) assert(management.includes(required), "Commercial management/workflow polish missing: " + required);
+
+assert(!management.includes("heroGlow"), "Final management layer must not reintroduce hero glow loops");
+assert(!management.includes("workflowSweep"), "Final management layer must not reintroduce workflow sweep loops");
+assert(!management.includes("uploadFloat"), "Final management layer must not reintroduce upload float loops");
 
 for (const required of [
   "font-size:var(--type-caption)",
@@ -131,16 +152,19 @@ assert(agents.includes("tiny helper text should not fall below 11px"), "Project 
 
 const uiLink = 'href="core-commercial-ui-system-v2.css"';
 const pagesLink = 'href="core-commercial-pages-v2.css"';
+const managementLink = 'href="core-management-commercial-v2.css"';
 const automationLink = 'href="core-automation-commercial-v2.css"';
 const studioLink = 'href="core-studio-commercial-v2.css"';
 const motionLink = 'href="core-motion-policy.css"';
 assert(index.includes(uiLink), "Commercial UI system stylesheet must be loaded");
 assert(index.includes(pagesLink), "Commercial page polish stylesheet must be loaded");
+assert(index.includes(managementLink), "Commercial management/workflow stylesheet must be loaded");
 assert(index.includes(automationLink), "Automation workstation stylesheet must be loaded");
 assert(index.includes(studioLink), "Studio workstation stylesheet must be loaded");
 assert(index.indexOf(motionLink) < index.indexOf(uiLink), "Commercial UI system must load after previous visual layers so it owns final hierarchy");
 assert(index.indexOf(uiLink) < index.indexOf(pagesLink), "Page polish must load after the shared commercial UI system");
-assert(index.indexOf(pagesLink) < index.indexOf(automationLink), "Automation workstation layer must load after general commercial page polish");
+assert(index.indexOf(pagesLink) < index.indexOf(managementLink), "Management/workflow polish must load after general page polish");
+assert(index.indexOf(managementLink) < index.indexOf(automationLink), "Automation workstation layer must load after generic management/workflow polish");
 assert(index.indexOf(automationLink) < index.indexOf(studioLink), "Studio workstation layer must load last among final visual overrides");
 
 assert(pkg.scripts.pack.includes("signAndEditExecutable=false"), "Local unpacked smoke build must keep the Windows symlink-safe path");
@@ -149,4 +173,4 @@ assert(pkg.scripts.dist === "electron-builder --win nsis --publish never", "Prod
 assert(pkg.scripts["test:core-commercial-ui-system-v2"], "package.json must expose the commercial UI system regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-commercial-ui-system-v2"), "commercial regression suite must gate the final UI system");
 
-console.log("Commercial UI system typography, Automation workstation, Studio timeline/transcript/inspector, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
+console.log("Commercial UI system typography, management/workflow pages, Automation workstation, Studio timeline/transcript/inspector, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
