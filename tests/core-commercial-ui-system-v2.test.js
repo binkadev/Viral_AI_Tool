@@ -12,10 +12,14 @@ const pages = read("renderer/core-commercial-pages-v2.css");
 const management = read("renderer/core-management-commercial-v2.css");
 const automation = read("renderer/core-automation-mpt-ux.css");
 const automationWorkstation = read("renderer/core-automation-commercial-v2.css");
+const automationExperience = read("renderer/core-automation-experience-v3.css");
+const workspaceJs = read("renderer/core-automation-workspace.js");
 const studio = read("renderer/core-studio-commercial-v2.css");
 const index = read("renderer/index.html");
 const agents = read("AGENTS.md");
 const pkg = JSON.parse(read("package.json"));
+
+assert.doesNotThrow(() => new Function(workspaceJs), "Automation workspace v3 state/navigation logic must parse.");
 
 for (const required of [
   "font-family:var(--font)",
@@ -125,6 +129,39 @@ for (const required of [
 ]) assert(automationWorkstation.includes(required), "Automation workstation polish missing: " + required);
 
 for (const required of [
+  "grid-template-columns:218px minmax(0,1fr)",
+  "grid-template-areas:",
+  "automation-stage-panel",
+  "::view-transition-old(automation-stage-panel)",
+  "::view-transition-new(automation-stage-panel)",
+  "@keyframes automation-stage-in",
+  ".automation-setup-grid",
+  "grid-template-columns:minmax(0,1.45fr) minmax(300px,.72fr)",
+  ".automation-creator[data-active-stage=\"5\"]>.automation-composition-host",
+  "grid-template-columns:290px minmax(0,1fr)",
+  "font-size:var(--type-caption)",
+  "font-size:var(--type-meta)",
+  "font-size:var(--type-body)",
+  "font-size:var(--type-control)",
+  "@media(prefers-reduced-motion:reduce)"
+]) assert(automationExperience.includes(required), "Automation experience v3 missing: " + required);
+
+for (const required of [
+  'STAGE_KEY = "viral-ai-automation-workspace-stage-v2"',
+  "function highestRelevantStage()",
+  "function stageCompletion(stage)",
+  "function reducedMotion()",
+  "document.startViewTransition",
+  "data-automation-stage-panel",
+  "creator.dataset.activeStage",
+  "creator.dataset.progressStage",
+  "syncToProgress"
+]) assert(workspaceJs.includes(required), "Automation stage synchronization/motion logic missing: " + required);
+
+assert(!workspaceJs.includes("setInterval("), "Automation workspace must remain event-driven");
+assert(!workspaceJs.includes("fetch("), "Automation workspace must remain provider-neutral");
+
+for (const required of [
   ".core-editor-bottom-dock",
   ".core-bottom-time",
   ".core-timeline-workspace",
@@ -155,17 +192,20 @@ const pagesLink = 'href="core-commercial-pages-v2.css"';
 const managementLink = 'href="core-management-commercial-v2.css"';
 const automationLink = 'href="core-automation-commercial-v2.css"';
 const studioLink = 'href="core-studio-commercial-v2.css"';
+const experienceLink = 'href="core-automation-experience-v3.css"';
 const motionLink = 'href="core-motion-policy.css"';
 assert(index.includes(uiLink), "Commercial UI system stylesheet must be loaded");
 assert(index.includes(pagesLink), "Commercial page polish stylesheet must be loaded");
 assert(index.includes(managementLink), "Commercial management/workflow stylesheet must be loaded");
 assert(index.includes(automationLink), "Automation workstation stylesheet must be loaded");
 assert(index.includes(studioLink), "Studio workstation stylesheet must be loaded");
+assert(index.includes(experienceLink), "Automation experience v3 stylesheet must be loaded");
 assert(index.indexOf(motionLink) < index.indexOf(uiLink), "Commercial UI system must load after previous visual layers so it owns final hierarchy");
 assert(index.indexOf(uiLink) < index.indexOf(pagesLink), "Page polish must load after the shared commercial UI system");
 assert(index.indexOf(pagesLink) < index.indexOf(managementLink), "Management/workflow polish must load after general page polish");
 assert(index.indexOf(managementLink) < index.indexOf(automationLink), "Automation workstation layer must load after generic management/workflow polish");
-assert(index.indexOf(automationLink) < index.indexOf(studioLink), "Studio workstation layer must load last among final visual overrides");
+assert(index.indexOf(automationLink) < index.indexOf(studioLink), "Studio workstation layer must load after Automation commercial v2");
+assert(index.indexOf(studioLink) < index.indexOf(experienceLink), "Automation experience v3 must be the final visual authority for Automation");
 
 assert(pkg.scripts.pack.includes("signAndEditExecutable=false"), "Local unpacked smoke build must keep the Windows symlink-safe path");
 assert(pkg.scripts["pack:full"] === "electron-builder --dir", "Full Windows resource-editing pack path must remain available");
@@ -173,4 +213,4 @@ assert(pkg.scripts.dist === "electron-builder --win nsis --publish never", "Prod
 assert(pkg.scripts["test:core-commercial-ui-system-v2"], "package.json must expose the commercial UI system regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-commercial-ui-system-v2"), "commercial regression suite must gate the final UI system");
 
-console.log("Commercial UI system typography, management/workflow pages, Automation workstation, Studio timeline/transcript/inspector, creator home, dashboard, settings, dialogs and smoke-pack contracts passed.");
+console.log("Commercial UI system, Automation experience v3 stage synchronization/motion, Studio, management pages and smoke-pack contracts passed.");
