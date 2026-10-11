@@ -38,6 +38,9 @@
 .automation-mvp-controller.is-running{border-color:rgba(126,145,255,.28)}
 .automation-mvp-controller.is-complete{border-color:rgba(87,214,161,.18);background:linear-gradient(180deg,rgba(87,214,161,.035),rgba(15,20,29,.96))}
 .automation-mvp-controller.is-complete .automation-mvp-mark{border-color:rgba(87,214,161,.22);background:rgba(87,214,161,.07);color:var(--success,#57d6a1)}
+.automation-mvp-controller.is-failed{border-color:rgba(255,181,92,.23);background:linear-gradient(180deg,rgba(255,181,92,.045),rgba(15,20,29,.96))}
+.automation-mvp-controller.is-failed .automation-mvp-mark{border-color:rgba(255,181,92,.28);background:rgba(255,181,92,.08);color:#ffbd72}
+.automation-mvp-controller.is-failed .automation-mvp-copy p{color:#d7b47f}
 
 @media(max-width:900px){
   .automation-mvp-controller{grid-template-columns:1fr;align-items:stretch}
