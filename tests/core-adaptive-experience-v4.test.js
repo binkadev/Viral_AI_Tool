@@ -51,7 +51,7 @@ for (const token of [
   'rail.dataset.live = stage.classList.contains("is-processing") ? "true" : "false"',
   "scrollIntoView",
   "viral-ai:navigation-committed",
-  "window.addEventListener(\"resize\""
+  'window.addEventListener("resize"'
 ]) assert(workflowMotion.includes(token), "Workflow motion logic missing: " + token);
 
 for (const token of [
