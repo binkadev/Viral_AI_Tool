@@ -1,0 +1,751 @@
+/* Automation Experience V3
+ * Final workstation layer for the commercial desktop product.
+ * The goal is clarity + craft: one progress rail, one active work surface, one primary action.
+ */
+
+html[data-automation-workspace="guided"] #page{
+  --auto-bg:#0a0f16;
+  --auto-panel:#101720;
+  --auto-panel-2:#141c27;
+  --auto-panel-3:#182231;
+  --auto-line:rgba(255,255,255,.075);
+  --auto-line-strong:rgba(255,255,255,.13);
+  --auto-text:#f1f4f8;
+  --auto-muted:#9ba7b8;
+  --auto-faint:#6e7b90;
+  --auto-accent:#7b88ff;
+  --auto-accent-2:#9b8cff;
+  --auto-accent-soft:rgba(123,136,255,.10);
+  --auto-success:#4fd2a4;
+  --auto-warning:#f2bd66;
+}
+
+html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+  display:grid!important;
+  grid-template-columns:218px minmax(0,1fr)!important;
+  grid-template-areas:
+    "hero hero"
+    "engines engines"
+    "rail status"
+    "rail context"
+    "rail main"!important;
+  align-items:start!important;
+  gap:12px 14px!important;
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  padding:0 0 36px!important;
+}
+
+html[data-automation-workspace="guided"] .automation-creator>.automation-hero{grid-area:hero!important}
+html[data-automation-workspace="guided"] .automation-creator>.automation-engine-strip{grid-area:engines!important}
+html[data-automation-workspace="guided"] .automation-creator>.automation-mvp-controller{grid-area:status!important}
+html[data-automation-workspace="guided"] .automation-creator>.automation-stage-rail{grid-area:rail!important}
+html[data-automation-workspace="guided"] .automation-creator>.automation-step-context{grid-area:context!important}
+html[data-automation-workspace="guided"] .automation-creator>.automation-grid,
+html[data-automation-workspace="guided"] .automation-creator>.automation-scenes-host,
+html[data-automation-workspace="guided"] .automation-creator>.automation-assets-host,
+html[data-automation-workspace="guided"] .automation-creator>.automation-composition-host{grid-area:main!important}
+
+/* Compact product header --------------------------------------------------- */
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
+  position:relative!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:20px!important;
+  min-height:72px!important;
+  padding:16px 18px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:14px!important;
+  background:
+    radial-gradient(520px 150px at 0% 0%,rgba(123,136,255,.085),transparent 68%),
+    linear-gradient(180deg,#111823,#0f151e)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+  overflow:hidden!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero::after{
+  content:"";
+  position:absolute;
+  inset:auto 0 0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(123,136,255,.24),transparent);
+  pointer-events:none;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero .eyebrow{
+  margin-bottom:4px!important;
+  color:color-mix(in srgb,var(--auto-accent) 76%,white)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+  font-weight:760!important;
+  letter-spacing:.065em!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero h2{
+  margin:0!important;
+  color:var(--auto-text)!important;
+  font-family:var(--font-display)!important;
+  font-size:var(--type-section)!important;
+  line-height:1.25!important;
+  font-weight:680!important;
+  letter-spacing:-.014em!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero p{
+  max-width:900px!important;
+  margin:5px 0 0!important;
+  color:var(--auto-muted)!important;
+  font-size:var(--type-body)!important;
+  line-height:1.5!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider{
+  min-width:210px!important;
+  max-width:310px!important;
+  padding:9px 11px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.025)!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider.ready{
+  border-color:color-mix(in srgb,var(--auto-success) 22%,var(--auto-line))!important;
+  background:color-mix(in srgb,var(--auto-success) 5%,rgba(255,255,255,.02))!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider i{
+  width:7px!important;
+  height:7px!important;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--auto-success) 9%,transparent)!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider b{
+  color:var(--auto-text)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.35!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider small{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.4!important;
+}
+
+/* Provider health becomes one light status ribbon, not three hero cards. */
+html[data-automation-workspace="guided"] .automation-engine-strip{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:18px!important;
+  min-height:38px!important;
+  padding:0 4px!important;
+  border:0!important;
+  background:transparent!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  min-height:30px!important;
+  padding:4px 0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip>i{
+  width:6px!important;
+  height:6px!important;
+  flex-basis:6px!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip>div{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:baseline!important;
+  gap:6px!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip strong{
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.35!important;
+  font-weight:650!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip small{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+}
+html[data-automation-workspace="guided"] .automation-engine-chip.is-ready small{color:color-mix(in srgb,var(--auto-success) 76%,var(--auto-muted))!important}
+
+/* Workflow rail ----------------------------------------------------------- */
+html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+  position:sticky!important;
+  top:14px!important;
+  z-index:3!important;
+  display:flex!important;
+  flex-direction:column!important;
+  gap:4px!important;
+  width:218px!important;
+  min-height:0!important;
+  max-height:calc(100vh - 120px)!important;
+  padding:6px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:12px!important;
+  background:linear-gradient(180deg,#101720,#0d131c)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02)!important;
+  overflow:auto!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage{
+  position:relative!important;
+  display:grid!important;
+  grid-template-columns:30px minmax(0,1fr)!important;
+  align-items:center!important;
+  gap:9px!important;
+  min-height:58px!important;
+  padding:8px 9px!important;
+  border:1px solid transparent!important;
+  border-radius:9px!important;
+  background:transparent!important;
+  color:var(--auto-muted)!important;
+  box-shadow:none!important;
+  transform:none!important;
+  transition:background-color 140ms cubic-bezier(.2,.75,.2,1),border-color 140ms cubic-bezier(.2,.75,.2,1),color 140ms cubic-bezier(.2,.75,.2,1)!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage::before{
+  content:"";
+  position:absolute;
+  inset:10px auto 10px -6px;
+  width:2px;
+  border-radius:999px;
+  background:linear-gradient(180deg,var(--auto-accent),var(--auto-accent-2));
+  opacity:0;
+  transform:scaleY(.35);
+  transition:opacity 150ms ease,transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage:hover:not(.workspace-locked){
+  border-color:rgba(255,255,255,.07)!important;
+  background:rgba(255,255,255,.025)!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage.workspace-active{
+  border-color:rgba(123,136,255,.23)!important;
+  background:linear-gradient(90deg,rgba(123,136,255,.12),rgba(123,136,255,.055))!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage.workspace-active::before{
+  opacity:1;
+  transform:scaleY(1);
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage>span{
+  display:grid!important;
+  place-items:center!important;
+  width:30px!important;
+  height:30px!important;
+  flex-basis:30px!important;
+  border:1px solid var(--auto-line-strong)!important;
+  border-radius:8px!important;
+  background:#151e2a!important;
+  color:var(--auto-faint)!important;
+  font-size:var(--type-meta)!important;
+  font-weight:760!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage.workspace-completed>span{
+  border-color:color-mix(in srgb,var(--auto-success) 24%,var(--auto-line))!important;
+  background:color-mix(in srgb,var(--auto-success) 8%,#151e2a)!important;
+  color:var(--auto-success)!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage.workspace-active>span{
+  border-color:rgba(123,136,255,.35)!important;
+  background:rgba(123,136,255,.13)!important;
+  color:#c8ceff!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage>div{min-width:0!important}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage b{
+  color:var(--auto-text)!important;
+  font-size:var(--type-body)!important;
+  line-height:1.35!important;
+  font-weight:620!important;
+  letter-spacing:0!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage small{
+  margin-top:2px!important;
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.35!important;
+}
+html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage.workspace-locked{opacity:.42!important}
+
+/* One project-state bar + one stage header -------------------------------- */
+html[data-automation-workspace="guided"] .automation-mvp-controller{
+  min-height:54px!important;
+  padding:9px 10px 9px 12px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:11px!important;
+  background:#0e151e!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-mark{
+  width:32px!important;
+  height:32px!important;
+  flex-basis:32px!important;
+  border-radius:8px!important;
+  background:rgba(123,136,255,.10)!important;
+  color:#bcc4ff!important;
+  font-size:var(--type-meta)!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-controller.is-complete .automation-mvp-mark{
+  background:color-mix(in srgb,var(--auto-success) 10%,transparent)!important;
+  color:var(--auto-success)!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-copy span{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.3!important;
+  letter-spacing:.055em!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-copy strong{
+  color:var(--auto-text)!important;
+  font-size:var(--type-body)!important;
+  line-height:1.35!important;
+  font-weight:650!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-copy p{
+  max-width:760px!important;
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.4!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-progress{
+  width:116px!important;
+  gap:4px!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-progress i{
+  height:3px!important;
+  border-radius:99px!important;
+  background:rgba(255,255,255,.06)!important;
+}
+html[data-automation-workspace="guided"] .automation-mvp-progress i.is-ready{background:var(--auto-success)!important}
+html[data-automation-workspace="guided"] .automation-mvp-progress i.is-current{background:var(--auto-accent)!important}
+html[data-automation-workspace="guided"] .automation-mvp-controller .button{
+  min-height:36px!important;
+  padding-inline:12px!important;
+  font-size:var(--type-control)!important;
+}
+
+html[data-automation-workspace="guided"] .automation-step-context{
+  width:100%!important;
+  max-width:none!important;
+  min-height:62px!important;
+  margin:0!important;
+  padding:10px 12px 10px 14px!important;
+  border:0!important;
+  border-left:2px solid rgba(123,136,255,.38)!important;
+  border-radius:0 9px 9px 0!important;
+  background:linear-gradient(90deg,rgba(123,136,255,.055),rgba(255,255,255,.018) 38%,transparent)!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-step-copy>span{
+  margin-bottom:2px!important;
+  color:#949fff!important;
+  font-size:var(--type-caption)!important;
+  line-height:1.3!important;
+  font-weight:760!important;
+  letter-spacing:.055em!important;
+}
+html[data-automation-workspace="guided"] .automation-step-copy h3{
+  margin:0!important;
+  color:var(--auto-text)!important;
+  font-size:var(--type-card-title)!important;
+  line-height:1.35!important;
+  font-weight:650!important;
+}
+html[data-automation-workspace="guided"] .automation-step-copy p{
+  margin:3px 0 0!important;
+  max-width:860px!important;
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.45!important;
+}
+html[data-automation-workspace="guided"] .automation-step-actions .button{
+  min-height:36px!important;
+  padding-inline:12px!important;
+  font-size:var(--type-control)!important;
+}
+
+/* Active stage canvas ------------------------------------------------------ */
+html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-grid,
+html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-scenes-host,
+html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-assets-host,
+html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-composition-host{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  min-width:0!important;
+}
+html[data-automation-workspace="guided"] [data-automation-stage-panel="active"]{
+  view-transition-name:automation-stage-panel;
+}
+
+/* Brief is one work surface. Content is primary; output configuration stacks right. */
+html[data-automation-workspace="guided"] .automation-brief-card{
+  padding:0!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:12px!important;
+  background:#0f161f!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.12)!important;
+  overflow:hidden!important;
+}
+html[data-automation-workspace="guided"] .automation-brief-card>.automation-card-head{
+  margin:0!important;
+  padding:14px 16px 11px!important;
+  border-bottom:1px solid var(--auto-line)!important;
+  background:linear-gradient(180deg,#121a25,#101720)!important;
+}
+html[data-automation-workspace="guided"] .automation-card-head .eyebrow{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+}
+html[data-automation-workspace="guided"] .automation-card-head h3{
+  margin:2px 0 0!important;
+  color:var(--auto-text)!important;
+  font-size:var(--type-card-title)!important;
+  line-height:1.35!important;
+  font-weight:650!important;
+}
+html[data-automation-workspace="guided"] .automation-brief-fields{
+  display:block!important;
+  padding:0!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-grid{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.45fr) minmax(300px,.72fr)!important;
+  grid-template-areas:
+    "content video"
+    "content audio"!important;
+  gap:0!important;
+  align-items:stretch!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-content{grid-area:content!important}
+html[data-automation-workspace="guided"] .automation-setup-video{grid-area:video!important}
+html[data-automation-workspace="guided"] .automation-setup-audio{grid-area:audio!important}
+html[data-automation-workspace="guided"] .automation-setup-section{
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-content{
+  border-right:1px solid var(--auto-line)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-video{
+  border-bottom:1px solid var(--auto-line)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section-head{
+  min-height:60px!important;
+  padding:13px 15px 10px!important;
+  border-bottom:1px solid rgba(255,255,255,.045)!important;
+  background:rgba(255,255,255,.012)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section-head strong{
+  color:var(--auto-text)!important;
+  font-size:var(--type-card-title)!important;
+  line-height:1.35!important;
+  font-weight:650!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section-head small{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.4!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section-body{
+  gap:12px!important;
+  padding:14px 15px 16px!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section .automation-field{
+  gap:6px!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section .automation-field>.label{
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.35!important;
+  font-weight:600!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section .input,
+html[data-automation-workspace="guided"] .automation-setup-section .select,
+html[data-automation-workspace="guided"] .automation-setup-section .textarea{
+  min-height:40px!important;
+  border:1px solid var(--auto-line-strong)!important;
+  border-radius:8px!important;
+  background:#0b1119!important;
+  color:var(--auto-text)!important;
+  font-size:var(--type-control)!important;
+  line-height:1.5!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.015)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-section .input:focus,
+html[data-automation-workspace="guided"] .automation-setup-section .select:focus,
+html[data-automation-workspace="guided"] .automation-setup-section .textarea:focus{
+  border-color:rgba(123,136,255,.50)!important;
+  box-shadow:0 0 0 3px rgba(123,136,255,.09)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-content #automationObjective{min-height:88px!important}
+html[data-automation-workspace="guided"] .automation-setup-info-row{
+  min-height:38px!important;
+  padding:8px 9px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:7px!important;
+  background:rgba(255,255,255,.018)!important;
+}
+html[data-automation-workspace="guided"] .automation-setup-info-row span,
+html[data-automation-workspace="guided"] .automation-setup-info-row strong{
+  font-size:var(--type-meta)!important;
+  line-height:1.35!important;
+}
+html[data-automation-workspace="guided"] .automation-runbar{
+  position:relative!important;
+  inset:auto!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  gap:12px!important;
+  margin:0!important;
+  padding:11px 12px 11px 15px!important;
+  border:0!important;
+  border-top:1px solid var(--auto-line)!important;
+  border-radius:0!important;
+  background:linear-gradient(180deg,#111924,#0e151e)!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-runbar-copy span{
+  color:var(--auto-faint)!important;
+  font-size:var(--type-caption)!important;
+}
+html[data-automation-workspace="guided"] .automation-runbar-copy strong{
+  color:var(--auto-muted)!important;
+  font-size:var(--type-body)!important;
+  line-height:1.4!important;
+  font-weight:520!important;
+}
+html[data-automation-workspace="guided"] .automation-runbar>.button{
+  min-width:142px!important;
+  min-height:40px!important;
+}
+
+/* Script */
+html[data-automation-workspace="guided"] .automation-script-card{
+  padding:16px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:12px!important;
+  background:#0f161f!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.10)!important;
+}
+html[data-automation-workspace="guided"] .automation-script-head{
+  padding-bottom:12px!important;
+  border-bottom:1px solid var(--auto-line)!important;
+}
+html[data-automation-workspace="guided"] .automation-script-head h3{
+  color:var(--auto-text)!important;
+  font-size:var(--type-card-title)!important;
+}
+html[data-automation-workspace="guided"] .automation-script-head p{
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.5!important;
+}
+html[data-automation-workspace="guided"] .automation-script-editor>.label{
+  margin-top:4px!important;
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  font-weight:600!important;
+}
+html[data-automation-workspace="guided"] .automation-script-card .input,
+html[data-automation-workspace="guided"] .automation-script-card .textarea{
+  border-color:var(--auto-line-strong)!important;
+  background:#0b1119!important;
+  font-size:var(--type-control)!important;
+}
+
+/* Scene / Asset / Timeline panels share one premium surface. */
+html[data-automation-workspace="guided"] .automation-scenes-panel,
+html[data-automation-workspace="guided"] .automation-assets-panel,
+html[data-automation-workspace="guided"] .automation-composition-panel{
+  padding:14px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:12px!important;
+  background:#0f161f!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.10)!important;
+}
+html[data-automation-workspace="guided"] .automation-scenes-workbench,
+html[data-automation-workspace="guided"] .automation-assets-workbench,
+html[data-automation-workspace="guided"] .automation-composition-workbench{
+  border:1px solid var(--auto-line)!important;
+  border-radius:10px!important;
+  background:#0b1119!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+}
+html[data-automation-workspace="guided"] .automation-scenes-nav,
+html[data-automation-workspace="guided"] .automation-assets-nav,
+html[data-automation-workspace="guided"] .automation-composition-sequence{
+  background:#0d141d!important;
+  border-color:var(--auto-line)!important;
+}
+html[data-automation-workspace="guided"] .automation-scene-nav-item,
+html[data-automation-workspace="guided"] .automation-asset-nav-item,
+html[data-automation-workspace="guided"] .automation-composition-clip{
+  border-radius:8px!important;
+  transition:background-color 130ms ease,border-color 130ms ease!important;
+}
+html[data-automation-workspace="guided"] .automation-scene-nav-item.is-selected,
+html[data-automation-workspace="guided"] .automation-asset-nav-item.is-selected,
+html[data-automation-workspace="guided"] .automation-composition-clip.is-selected{
+  border-color:rgba(123,136,255,.26)!important;
+  background:linear-gradient(90deg,rgba(123,136,255,.115),rgba(123,136,255,.045))!important;
+}
+html[data-automation-workspace="guided"] .automation-scene-inspector,
+html[data-automation-workspace="guided"] .automation-asset-inspector,
+html[data-automation-workspace="guided"] .automation-composition-inspector{
+  background:#0d141d!important;
+}
+
+/* Timeline: voice is an inspector, composition is the main canvas. */
+@media(min-width:1260px){
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"]>.automation-composition-host{
+    display:grid!important;
+    grid-template-columns:290px minmax(0,1fr)!important;
+    grid-template-areas:"voice composition"!important;
+    gap:12px!important;
+    align-items:start!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-voice-host{
+    grid-area:voice!important;
+    position:sticky!important;
+    top:14px!important;
+  }
+  html[data-automation-workspace="guided"] .automation-creator[data-active-stage="5"] .automation-composition-host>.automation-composition-panel{
+    grid-area:composition!important;
+    min-width:0!important;
+  }
+}
+html[data-automation-workspace="guided"] .automation-voice-panel{
+  padding:13px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:11px!important;
+  background:linear-gradient(180deg,#111923,#0e151e)!important;
+  box-shadow:none!important;
+}
+html[data-automation-workspace="guided"] .automation-voice-head{
+  align-items:flex-start!important;
+  flex-direction:column!important;
+  gap:10px!important;
+}
+html[data-automation-workspace="guided"] .automation-voice-head .button{width:100%!important}
+html[data-automation-workspace="guided"] .automation-voice-head h3{
+  color:var(--auto-text)!important;
+  font-size:var(--type-card-title)!important;
+}
+html[data-automation-workspace="guided"] .automation-voice-head p{
+  color:var(--auto-muted)!important;
+  font-size:var(--type-meta)!important;
+  line-height:1.48!important;
+}
+html[data-automation-workspace="guided"] .automation-voice-status{
+  margin-top:10px!important;
+  padding:9px!important;
+  border:1px solid var(--auto-line)!important;
+  border-radius:8px!important;
+  background:#0b1119!important;
+}
+html[data-automation-workspace="guided"] .automation-voice-dev{
+  margin-top:8px!important;
+  padding:9px!important;
+  border:0!important;
+  border-left:2px solid rgba(123,136,255,.28)!important;
+  border-radius:0 7px 7px 0!important;
+  background:rgba(123,136,255,.045)!important;
+}
+
+/* Core interaction feel --------------------------------------------------- */
+html[data-automation-workspace="guided"] .button,
+html[data-automation-workspace="guided"] .automation-stage,
+html[data-automation-workspace="guided"] .automation-scene-nav-item,
+html[data-automation-workspace="guided"] .automation-asset-nav-item,
+html[data-automation-workspace="guided"] .automation-composition-clip{
+  -webkit-tap-highlight-color:transparent;
+}
+html[data-automation-workspace="guided"] .button{
+  transition:transform 90ms cubic-bezier(.2,.8,.2,1),background-color 140ms ease,border-color 140ms ease,box-shadow 140ms ease!important;
+}
+html[data-automation-workspace="guided"] .button:hover:not(:disabled){transform:translateY(-1px)!important}
+html[data-automation-workspace="guided"] .button:active:not(:disabled){transform:translateY(0) scale(.985)!important}
+html[data-automation-workspace="guided"] .button.primary{
+  background:linear-gradient(180deg,#8793ff,#6f7df2)!important;
+  border-color:rgba(156,166,255,.55)!important;
+  box-shadow:0 7px 20px rgba(84,98,222,.18),inset 0 1px 0 rgba(255,255,255,.18)!important;
+}
+html[data-automation-workspace="guided"] .button.primary:hover:not(:disabled){
+  background:linear-gradient(180deg,#939eff,#7886f8)!important;
+  box-shadow:0 9px 24px rgba(84,98,222,.24),inset 0 1px 0 rgba(255,255,255,.20)!important;
+}
+
+/* View Transition gives stage changes a real spatial relationship without sliding the whole app. */
+::view-transition-old(automation-stage-panel){
+  animation:automation-stage-out 90ms cubic-bezier(.4,0,1,1) both;
+}
+::view-transition-new(automation-stage-panel){
+  animation:automation-stage-in 180ms cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes automation-stage-out{
+  from{opacity:1;transform:translateY(0) scale(1)}
+  to{opacity:0;transform:translateY(3px) scale(.996)}
+}
+@keyframes automation-stage-in{
+  from{opacity:0;transform:translateY(6px) scale(.997)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+/* Responsive desktop behavior ------------------------------------------- */
+@media(max-width:1259px){
+  html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+    grid-template-columns:190px minmax(0,1fr)!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{width:190px!important}
+  html[data-automation-workspace="guided"] .automation-setup-grid{
+    grid-template-columns:1fr!important;
+    grid-template-areas:"content" "video" "audio"!important;
+  }
+  html[data-automation-workspace="guided"] .automation-setup-content{border-right:0!important;border-bottom:1px solid var(--auto-line)!important}
+}
+
+@media(max-width:920px){
+  html[data-automation-workspace="guided"] .automation-creator.automation-workspace-v2{
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2>.automation-stage-rail{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(145px,1fr))!important;
+    width:100%!important;
+    max-height:none!important;
+    overflow-x:auto!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-stage::before{display:none!important}
+  html[data-automation-workspace="guided"] .automation-mvp-controller,
+  html[data-automation-workspace="guided"] .automation-step-context{width:100%!important}
+}
+
+@media(max-width:700px){
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-hero{
+    grid-template-columns:1fr!important;
+  }
+  html[data-automation-workspace="guided"] .automation-workspace-v2 .automation-provider{width:100%!important;max-width:none!important}
+  html[data-automation-workspace="guided"] .automation-engine-strip{align-items:flex-start!important;flex-direction:column!important;gap:2px!important}
+  html[data-automation-workspace="guided"] .automation-mvp-controller,
+  html[data-automation-workspace="guided"] .automation-step-context{align-items:stretch!important;flex-direction:column!important}
+  html[data-automation-workspace="guided"] .automation-mvp-actions,
+  html[data-automation-workspace="guided"] .automation-step-actions{width:100%!important}
+  html[data-automation-workspace="guided"] .automation-mvp-actions .button,
+  html[data-automation-workspace="guided"] .automation-step-actions .button{width:100%!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-old(automation-stage-panel),::view-transition-new(automation-stage-panel){animation:none!important}
+  html[data-automation-workspace="guided"] .button,
+  html[data-automation-workspace="guided"] .automation-stage,
+  html[data-automation-workspace="guided"] .automation-stage::before{transition:none!important}
+}
+html[data-motion="reduced"][data-automation-workspace="guided"] .button,
+html[data-motion="reduced"][data-automation-workspace="guided"] .automation-stage,
+html[data-motion="reduced"][data-automation-workspace="guided"] .automation-stage::before{transition:none!important}
