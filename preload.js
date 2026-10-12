@@ -64,6 +64,14 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getMediaSearchStatus: () => ipcRenderer.invoke('media:search-status'),
   searchMedia: payload => ipcRenderer.invoke('media:search', payload),
   cancelMediaSearch: requestId => ipcRenderer.invoke('media:search-cancel', requestId),
+  acquireMedia: payload => ipcRenderer.invoke('media:acquire', payload),
+  cancelMediaAcquisition: jobId => ipcRenderer.invoke('media:acquisition-cancel', jobId),
+  onMediaAcquisitionProgress: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('media:acquisition-progress', listener);
+    return () => ipcRenderer.removeListener('media:acquisition-progress', listener);
+  },
 
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),
