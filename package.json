@@ -98,7 +98,7 @@
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": { "output": "release" },
-    "files": ["main-entry.js", "main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "release-info.json"],
+    "files": ["main-entry.js", "main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "extensions/**/*", "release-info.json"],
     "win": {
       "icon": "assets/icon.ico",
       "target": [{ "target": "nsis", "arch": ["x64"] }],
