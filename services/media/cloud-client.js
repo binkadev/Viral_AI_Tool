@@ -49,6 +49,7 @@ function stableApiError(status, payload = {}) {
     MEDIA_PROVIDER_UNAVAILABLE: "MEDIA_PROVIDER_UNAVAILABLE",
     MEDIA_AUTH_REQUIRED: "MEDIA_AUTH_REQUIRED",
     MEDIA_QUOTA_EXCEEDED: "MEDIA_QUOTA_EXCEEDED",
+    MEDIA_SOURCE_UNAVAILABLE: "MEDIA_SOURCE_UNAVAILABLE",
     QUOTA_EXCEEDED: "MEDIA_QUOTA_EXCEEDED",
     PLAN_REQUIRED: "MEDIA_PLAN_REQUIRED",
     SUBSCRIPTION_INACTIVE: "MEDIA_SUBSCRIPTION_INACTIVE",
@@ -68,6 +69,19 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function safeRequestHeaders(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const output = {};
+  for (const [key, rawValue] of Object.entries(source)) {
+    const name = String(key || "").trim().toLowerCase();
+    if (!/^x-viral-ai-[a-z0-9-]{1,80}$/.test(name)) continue;
+    const headerValue = String(rawValue == null ? "" : rawValue).trim();
+    if (!headerValue || headerValue.length > 8192 || /[\r\n]/.test(headerValue)) continue;
+    output[name] = headerValue;
+  }
+  return output;
+}
+
 class CloudMediaClient {
   constructor({ backendUrl, getAccessToken, appVersion = "dev", timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = global.fetch }) {
     this.backendUrl = backendUrl;
@@ -85,7 +99,7 @@ class CloudMediaClient {
     return token.trim();
   }
 
-  async request(pathname, { searchParams, retries = 1, timeoutMs = this.timeoutMs, signal } = {}) {
+  async request(pathname, { searchParams, requestHeaders, retries = 1, timeoutMs = this.timeoutMs, signal } = {}) {
     if (typeof this.fetchImpl !== "function") {
       throw clientError("MEDIA_SEARCH_UNAVAILABLE", "Media network client is unavailable.");
     }
@@ -102,7 +116,8 @@ class CloudMediaClient {
       accept: "application/json",
       authorization: "Bearer " + this.accessToken(),
       "x-viral-ai-client": "desktop",
-      "x-viral-ai-version": this.appVersion
+      "x-viral-ai-version": this.appVersion,
+      ...safeRequestHeaders(requestHeaders)
     };
 
     const attempts = Math.max(1, Number(retries || 0) + 1);
@@ -167,11 +182,25 @@ class CloudMediaClient {
       searchParams: { query, kind, orientation, page, perPage, provider }
     });
   }
+
+  resolveAcquisition(ticket, { signal } = {}) {
+    const value = String(ticket || "").trim();
+    if (!value || value.length > 8192 || /[\r\n]/.test(value)) {
+      throw clientError("MEDIA_SOURCE_UNAVAILABLE", "Media acquisition ticket is invalid.");
+    }
+    return this.request("/v1/media/acquisition", {
+      retries: 0,
+      timeoutMs: 8000,
+      signal,
+      requestHeaders: { "x-viral-ai-media-ticket": value }
+    });
+  }
 }
 
 module.exports = {
   CloudMediaClient,
   MediaClientError,
   normalizeBaseUrl,
+  safeRequestHeaders,
   stableApiError
 };
