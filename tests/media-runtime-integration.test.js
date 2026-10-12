@@ -65,3 +65,4 @@ assert(
 );
 
 console.log("Media backend, desktop controller, preload bridge, cancellation and provider-secret boundaries are locked.");
+require("./media-browser-ui.test");
