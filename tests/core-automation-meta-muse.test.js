@@ -128,11 +128,18 @@ function run() {
     "data-meta-muse-stock",
     "data-meta-muse-cancel",
     "setSceneStrategy",
-    "AbortController"
+    "AbortController",
+    "wireMount",
+    "handleMountPointerDown",
+    "addEventListener('pointerdown'",
+    "addEventListener('click'"
   ]) assert(ui.includes(token), "Meta Muse UI missing: " + token);
-  assert(!ui.includes("API key"), "Meta Muse UI should use browser sign-in, not API key entry");
+  assert(!ui.includes("data-meta-muse-api-key"), "Meta Muse UI must not expose an API-key field");
+  assert(!ui.includes('type="password"'), "Meta Muse UI must not expose a password/API-key input");
   assert(css.includes(".automation-meta-muse-card"));
   assert(css.includes("@container viral-workpage"));
+  assert(css.includes("-webkit-app-region:no-drag"), "Meta Muse controls must stay clickable in Electron");
+  assert(css.includes("pointer-events:auto"), "Meta Muse controls must explicitly accept pointer input");
 
   assert(assetState.includes("function setSceneStrategy"));
   assert(assetState.includes("function setAllStrategies"));
@@ -151,7 +158,7 @@ function run() {
   assert(pkg.scripts["test:core-automation-meta-muse"], "package.json must expose Meta Muse regression");
   assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-meta-muse"), "commercial regression must gate Meta Muse integration");
 
-  console.log("Meta Muse direct Windows CDP launch, browser sign-in, generated asset routing, media download boundary and Automation UI contracts passed.");
+  console.log("Meta Muse direct Windows CDP launch, browser sign-in, generated asset routing, media download boundary and Automation UI interaction contracts passed.");
 }
 
 try {
