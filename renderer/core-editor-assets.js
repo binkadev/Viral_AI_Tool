@@ -121,8 +121,8 @@
         statRow("IMG", "images", "image") +
         statRow("AUD", "audio", "audio") +
         sectionLabel("discover") +
-        '<button type="button" class="core-asset-item core-discover-action" data-find-media>' +
-          '<span class="core-asset-icon">⌕</span>' +
+        '<button type="button" class="core-asset-item core-discover-action" data-find-media aria-label="' + t("findMedia") + '" title="' + t("findMedia") + '">' +
+          '<span class="core-asset-icon" aria-hidden="true">⌕</span>' +
           '<span class="core-asset-copy"><b>' + t("findMedia") + '</b><small>' + t("findMediaHint") + '</small></span>' +
         '</button>' +
         '<div class="core-asset-item core-asset-stat is-upcoming" aria-disabled="true">' +
