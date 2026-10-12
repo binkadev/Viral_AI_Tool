@@ -88,17 +88,119 @@ const {
     { code: "MEDIA_SEARCH_INVALID", details: { field: "query" } }
   );
   assert.deepStrictEqual(
+    publicDesktopMediaError(Object.assign(new Error("secret"), { code: "MEDIA_DESTINATION_UNAVAILABLE", details: { path: "C:/private/cache" } })),
+    { code: "MEDIA_DESTINATION_UNAVAILABLE", details: {} }
+  );
+  assert.deepStrictEqual(
     publicDesktopMediaError(Object.assign(new Error("secret"), { code: "ECONNRESET" })),
     { code: "MEDIA_SEARCH_UNAVAILABLE", details: {} }
   );
 
-  console.log("Media desktop controller auth, duplicate request, cancellation and public error isolation tests passed.");
+  token = "access-token";
+  const acquisitionCalls = [];
+  const managerState = { active: 0 };
+  const acquisitionManager = {
+    async acquire(payload) {
+      acquisitionCalls.push({ type: "acquire", payload });
+      managerState.active += 1;
+      managerState.active -= 1;
+      return {
+        duplicate: false,
+        asset: {
+          id: "stock:pexels:987",
+          origin: "stock",
+          provider: "pexels",
+          providerAssetId: "987",
+          localPath: "C:/app-cache/project/file.mp4",
+          status: "ready",
+          fileState: "available"
+        }
+      };
+    },
+    cancel(jobId) {
+      acquisitionCalls.push({ type: "cancel", jobId });
+      return { cancelled: false };
+    },
+    cancelAll() {
+      acquisitionCalls.push({ type: "cancelAll" });
+      return managerState.active;
+    },
+    activeCount() { return managerState.active; }
+  };
+
+  let resolveMode = "success";
+  const acquisitionController = createMediaDesktopController({
+    getBackendUrl: () => "https://api.example.test",
+    getAccessToken: () => token,
+    refreshSession: async () => Boolean(token),
+    acquisitionManager,
+    clientFactory: () => ({
+      async resolveAcquisition(ticket, { signal } = {}) {
+        acquisitionCalls.push({ type: "resolve", ticket, signal });
+        if (resolveMode === "pending") {
+          return new Promise((resolve, reject) => {
+            signal.addEventListener("abort", () => {
+              const error = new Error("cancelled");
+              error.code = "MEDIA_CANCELLED";
+              reject(error);
+            }, { once: true });
+          });
+        }
+        return {
+          provider: "pexels",
+          providerAssetId: "987",
+          kind: "video",
+          name: "Lion",
+          downloadUrl: "https://videos.pexels.com/video-files/987/hd.mp4",
+          mime: "video/mp4",
+          meta: { width: 1080, height: 1920, duration: 12, orientation: "portrait" },
+          attribution: { creatorName: "Jane" }
+        };
+      }
+    })
+  });
+
+  const acquired = await acquisitionController.acquire({
+    jobId: "media-acquire-0001",
+    projectId: "project-source-1",
+    ticket: "opaque.ticket"
+  });
+  assert.strictEqual(acquired.asset.id, "stock:pexels:987");
+  assert.strictEqual(acquisitionCalls[0].type, "resolve");
+  assert.strictEqual(acquisitionCalls[0].ticket, "opaque.ticket");
+  assert(acquisitionCalls[0].signal instanceof AbortSignal);
+  assert.strictEqual(acquisitionCalls[1].type, "acquire");
+  assert.strictEqual(acquisitionCalls[1].payload.projectId, "project-source-1");
+  assert.strictEqual(acquisitionCalls[1].payload.descriptor.downloadUrl, "https://videos.pexels.com/video-files/987/hd.mp4");
+
+  resolveMode = "pending";
+  const resolving = acquisitionController.acquire({
+    jobId: "media-acquire-0002",
+    projectId: "project-source-1",
+    ticket: "opaque.ticket.2"
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.strictEqual(acquisitionController.activeCount(), 1);
+  assert.deepStrictEqual(acquisitionController.cancelAcquisition("media-acquire-0002"), { cancelled: true });
+  await assert.rejects(() => resolving, error => error?.code === "MEDIA_CANCELLED");
+  assert.strictEqual(acquisitionController.activeCount(), 0);
+
+  await assert.rejects(
+    () => acquisitionController.acquire({ jobId: "media-acquire-0003", projectId: "", ticket: "opaque.ticket" }),
+    error => error?.code === "MEDIA_DESTINATION_UNAVAILABLE"
+  );
+  await assert.rejects(
+    () => acquisitionController.acquire({ jobId: "media-acquire-0004", projectId: "project-source-1", ticket: "bad\nticket" }),
+    error => error?.code === "MEDIA_SOURCE_UNAVAILABLE"
+  );
+
+  console.log("Media desktop controller search/auth plus acquisition redeem, cancellation and public error isolation tests passed.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
 });
 
-// This synchronous source-contract regression intentionally rides the same
-// package gate as the desktop controller so backend/main/preload wiring cannot
-// drift without breaking `test:media-engine`.
+// Source-contract regressions intentionally ride the same package gate as the
+// desktop controller so backend/main/preload/UI wiring cannot drift unnoticed.
 require("./media-runtime-integration.test");
+require("./media-acquisition-manager.test");
