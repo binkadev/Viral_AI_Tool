@@ -863,14 +863,14 @@
     const sourceButtonNode = document.createElement("button");
     sourceButtonNode.type = "button";
     sourceButtonNode.className = "core-asset-item core-source-asset";
-    sourceButtonNode.dataset.sourceAsset = "true";
+    sourceButtonNode.setAttribute("data-source-asset", "");
     sourceButtonNode.innerHTML = '<span class="core-asset-icon">▶</span><span class="core-asset-copy"><b data-source-label></b><small data-source-name>—</small><em data-source-meta>—</em></span>';
     sourceButtonNode.querySelector("[data-source-label]").textContent = t("source");
 
     const transcriptButton = document.createElement("button");
     transcriptButton.type = "button";
     transcriptButton.className = "core-asset-item core-transcript-asset";
-    transcriptButton.dataset.transcriptAsset = "true";
+    transcriptButton.setAttribute("data-transcript-asset", "");
     transcriptButton.innerHTML = '<span class="core-asset-icon">TXT</span><span class="core-asset-copy"><b data-transcript-label></b><small data-transcript-status></small></span>';
     transcriptButton.querySelector("[data-transcript-label]").textContent = t("transcript");
     transcriptButton.querySelector("[data-transcript-status]").textContent = t("noTranscript");
