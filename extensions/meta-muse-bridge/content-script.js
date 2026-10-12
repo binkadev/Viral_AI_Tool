@@ -26,10 +26,7 @@ function connectKeepAlive() {
 connectKeepAlive();
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
-function composer() {
-  return document.querySelector(SELECTORS.editor);
-}
+function composer() { return document.querySelector(SELECTORS.editor); }
 
 function status() {
   const editor = composer();
@@ -61,7 +58,6 @@ async function fillEditor(prompt) {
     setNativeValue(editor, prompt);
     return;
   }
-
   const selection = window.getSelection();
   const range = document.createRange();
   range.selectNodeContents(editor);
@@ -81,13 +77,8 @@ async function fillEditor(prompt) {
   await sleep(100);
 }
 
-function assistantNodes() {
-  return Array.from(document.querySelectorAll(SELECTORS.assistant));
-}
-
-function unique(values) {
-  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
-}
+function assistantNodes() { return Array.from(document.querySelectorAll(SELECTORS.assistant)); }
+function unique(values) { return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]; }
 
 function mediaFromNode(node) {
   if (!node) return { text: '', urls: [] };
@@ -110,7 +101,7 @@ function mediaFromNode(node) {
   return { text: String(node.innerText || '').trim().slice(0, 4000), urls: filtered };
 }
 
-function pageMediaFallback() {
+function pageMedia() {
   const urls = [];
   document.querySelectorAll('video').forEach(video => {
     if (video.currentSrc) urls.push(video.currentSrc);
@@ -131,7 +122,6 @@ async function sendPrompt(prompt) {
     editor.dispatchEvent(new KeyboardEvent('keydown', init));
     editor.dispatchEvent(new KeyboardEvent('keyup', init));
   }
-
   for (let i = 0; i < 15; i += 1) {
     await sleep(250);
     const currentText = String(composer()?.textContent || composer()?.value || '').trim();
@@ -147,6 +137,7 @@ function progress(commandId, payload) {
 
 async function generate(commandId, prompt, timeoutMs) {
   const before = assistantNodes().length;
+  const baselineUrls = new Set(pageMedia());
   cancelledCommands.delete(commandId);
   progress(commandId, { phase: 'preparing', progress: 2 });
   await sendPrompt(prompt);
@@ -175,8 +166,8 @@ async function generate(commandId, prompt, timeoutMs) {
 
     const newest = nodes.length > before ? nodes[nodes.length - 1] : null;
     const media = mediaFromNode(newest);
-    const fallbackUrls = pageMediaFallback();
-    const urls = unique([...media.urls, ...fallbackUrls]);
+    const freshPageUrls = pageMedia().filter(url => !baselineUrls.has(url));
+    const urls = unique([...media.urls, ...freshPageUrls]);
 
     if (urls.length && sawActivity && !stopVisible) {
       progress(commandId, { phase: 'generated', progress: 96 });
