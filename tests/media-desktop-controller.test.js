@@ -97,3 +97,8 @@ const {
   console.error(error);
   process.exitCode = 1;
 });
+
+// This synchronous source-contract regression intentionally rides the same
+// package gate as the desktop controller so backend/main/preload wiring cannot
+// drift without breaking `test:media-engine`.
+require("./media-runtime-integration.test");
