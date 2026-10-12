@@ -4,6 +4,8 @@ const assert = require("assert");
 const {
   statusForMediaError,
   searchInput,
+  acquisitionTicket,
+  enrichSearchResult,
   createMediaHttpHandler
 } = require("../dev-backend/media-routes");
 
@@ -21,10 +23,11 @@ function error(res, status, code) {
   res.payload = { error: { code } };
 }
 
-function request(url, { authenticated = true } = {}) {
+function request(url, { authenticated = true, headers = {} } = {}) {
   return {
     req: {
       authenticated,
+      headers,
       once() {},
       removeListener() {}
     },
@@ -38,6 +41,7 @@ function request(url, { authenticated = true } = {}) {
   assert.strictEqual(statusForMediaError("MEDIA_SEARCH_INVALID"), 400);
   assert.strictEqual(statusForMediaError("MEDIA_AUTH_REQUIRED"), 401);
   assert.strictEqual(statusForMediaError("MEDIA_QUOTA_EXCEEDED"), 429);
+  assert.strictEqual(statusForMediaError("MEDIA_SOURCE_UNAVAILABLE"), 410);
   assert.strictEqual(statusForMediaError("MEDIA_SEARCH_TIMEOUT"), 504);
   assert.strictEqual(statusForMediaError("MEDIA_PROVIDER_UNAVAILABLE"), 503);
 
@@ -51,6 +55,48 @@ function request(url, { authenticated = true } = {}) {
       page: "2",
       perPage: "12"
     }
+  );
+  assert.strictEqual(acquisitionTicket({ headers: { "x-viral-ai-media-ticket": " ticket-1 " } }), "ticket-1");
+  assert.strictEqual(acquisitionTicket({ headers: {} }), "");
+
+  const ticketCalls = [];
+  const ticketService = {
+    issue(result, { userId }) {
+      ticketCalls.push({ type: "issue", result, userId });
+      if (result.providerAssetId === "no-download") {
+        const err = new Error("unsafe source");
+        err.code = "MEDIA_SOURCE_UNAVAILABLE";
+        throw err;
+      }
+      return { ticket: "ticket-for-" + userId + "-" + result.providerAssetId, expiresAt: "2026-10-12T13:10:00.000Z" };
+    },
+    resolve(ticket, { userId }) {
+      ticketCalls.push({ type: "resolve", ticket, userId });
+      if (ticket !== "ticket-for-" + userId + "-1") {
+        const err = new Error("wrong owner or expired");
+        err.code = "MEDIA_SOURCE_UNAVAILABLE";
+        throw err;
+      }
+      return {
+        provider: "pexels",
+        providerAssetId: "1",
+        kind: "video",
+        name: "Lion",
+        downloadUrl: "https://videos.pexels.com/video-files/1/hd.mp4",
+        mime: "video/mp4",
+        meta: { width: 1080, height: 1920, duration: 12, orientation: "portrait" },
+        attribution: { creatorName: "Jane" }
+      };
+    }
+  };
+
+  assert.deepStrictEqual(
+    enrichSearchResult({ providerAssetId: "1", name: "Lion" }, ticketService, "user-1").acquisition,
+    { ticket: "ticket-for-user-1-1", expiresAt: "2026-10-12T13:10:00.000Z" }
+  );
+  assert.strictEqual(
+    enrichSearchResult({ providerAssetId: "no-download" }, ticketService, "user-1").acquisition,
+    null
   );
 
   const audits = [];
@@ -68,9 +114,12 @@ function request(url, { authenticated = true } = {}) {
         provider: "pexels",
         page: 1,
         perPage: 18,
-        totalResults: 1,
+        totalResults: 2,
         nextPage: null,
-        results: [{ provider: "pexels", providerAssetId: "1", kind: "video", name: "Lion" }]
+        results: [
+          { provider: "pexels", providerAssetId: "1", kind: "video", name: "Lion" },
+          { provider: "pexels", providerAssetId: "no-download", kind: "video", name: "Preview only" }
+        ]
       };
     },
     publicError(raw) {
@@ -80,6 +129,7 @@ function request(url, { authenticated = true } = {}) {
 
   const handler = createMediaHttpHandler({
     service,
+    ticketService,
     authenticate: req => req.authenticated ? { id: "user-1" } : null,
     json,
     error,
@@ -114,9 +164,42 @@ function request(url, { authenticated = true } = {}) {
   assert.strictEqual(calls[0].input.query, "lion river");
   assert.strictEqual(calls[0].input.orientation, "portrait");
   assert(calls[0].signal instanceof AbortSignal);
+  assert.deepStrictEqual(searchReq.res.payload.results[0].acquisition, {
+    ticket: "ticket-for-user-1-1",
+    expiresAt: "2026-10-12T13:10:00.000Z"
+  });
+  assert.strictEqual(searchReq.res.payload.results[1].acquisition, null, "preview-only results must stay visible without gaining an unsafe acquisition path");
   assert.strictEqual(audits.at(-1).event, "media.search.succeeded");
   assert.strictEqual(audits.at(-1).details.userId, "user-1");
-  assert.strictEqual(audits.at(-1).details.resultCount, 1);
+  assert.strictEqual(audits.at(-1).details.resultCount, 2);
+  assert.strictEqual(audits.at(-1).details.acquirableCount, 1);
+
+  const missingTicketReq = request("/v1/media/acquisition");
+  assert.strictEqual(await handler(missingTicketReq), true);
+  assert.deepStrictEqual(missingTicketReq.res, {
+    status: 400,
+    payload: { error: { code: "MEDIA_SOURCE_UNAVAILABLE" } }
+  });
+
+  const redeemReq = request("/v1/media/acquisition", {
+    headers: { "x-viral-ai-media-ticket": "ticket-for-user-1-1" }
+  });
+  assert.strictEqual(await handler(redeemReq), true);
+  assert.strictEqual(redeemReq.res.status, 200);
+  assert.strictEqual(redeemReq.res.payload.downloadUrl, "https://videos.pexels.com/video-files/1/hd.mp4");
+  assert.strictEqual(audits.at(-1).event, "media.acquisition.resolved");
+  assert.strictEqual(audits.at(-1).details.providerAssetId, "1");
+
+  const rejectedReq = request("/v1/media/acquisition", {
+    headers: { "x-viral-ai-media-ticket": "ticket-for-other-user-1" }
+  });
+  assert.strictEqual(await handler(rejectedReq), true);
+  assert.deepStrictEqual(rejectedReq.res, {
+    status: 410,
+    payload: { error: { code: "MEDIA_SOURCE_UNAVAILABLE" } }
+  });
+  assert.strictEqual(JSON.stringify(rejectedReq.res.payload).includes("wrong owner"), false);
+  assert.strictEqual(audits.at(-1).event, "media.acquisition.rejected");
 
   const failingHandler = createMediaHttpHandler({
     service: {
@@ -128,6 +211,7 @@ function request(url, { authenticated = true } = {}) {
       },
       publicError: service.publicError
     },
+    ticketService,
     authenticate: () => ({ id: "user-2" }),
     json,
     error,
@@ -150,7 +234,8 @@ function request(url, { authenticated = true } = {}) {
     payload: { error: { code: "NOT_FOUND" } }
   });
 
-  console.log("Authenticated media HTTP routes, provider status isolation and public search error mapping tests passed.");
+  console.log("Authenticated media search, signed acquisition routes, provider status isolation and public error mapping tests passed.");
+  require("./media-tickets.test");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
