@@ -1,0 +1,47 @@
+name: Finalize Media Workbench Wiring
+
+on:
+  push:
+    branches: [feat/media-engine-workbench]
+    paths:
+      - "scripts/finalize-media-search-workbench.js"
+      - ".github/workflows/media-workbench-wiring-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/media-engine-workbench
+          fetch-depth: 0
+
+      - name: Apply guarded wiring patch
+        run: node scripts/finalize-media-search-workbench.js
+
+      - name: Verify syntax and focused contracts
+        run: |
+          node --check main.js
+          node --check dev-backend/server.js
+          node --check renderer/i18n.js
+          node --check renderer/core-media-discovery.js
+          node tests/media-routes.test.js
+          node tests/media-cloud-client.test.js
+          node tests/core-media-workbench.test.js
+          node tests/media-workbench-wiring.test.js
+          git diff --check
+
+      - name: Commit implementation and remove patch scaffolding
+        shell: bash
+        run: |
+          rm -f scripts/finalize-media-search-workbench.js .github/workflows/media-workbench-wiring-patch.yml
+          git config user.name "Viral AI Tool Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat: wire commercial media discovery end to end"
+          git push origin HEAD:feat/media-engine-workbench
