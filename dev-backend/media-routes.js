@@ -57,7 +57,6 @@ function createMediaHttpHandler({ service, authenticate, json, error, audit } = 
       const controller = new AbortController();
       const abort = () => controller.abort();
       req?.once?.("aborted", abort);
-      req?.once?.("close", abort);
 
       try {
         const result = await service.search(searchInput(url), { signal: controller.signal });
@@ -76,7 +75,6 @@ function createMediaHttpHandler({ service, authenticate, json, error, audit } = 
         error(res, statusForMediaError(publicError.code), publicError.code);
       } finally {
         req?.removeListener?.("aborted", abort);
-        req?.removeListener?.("close", abort);
       }
       return true;
     }
