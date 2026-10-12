@@ -3,8 +3,19 @@
 
   const DRAWER_ID = "core-media-discovery";
   const SEARCH_PAGE_SIZE = 18;
+  const FOCUSABLE_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(",");
   let activeRequest = 0;
   let lastResults = [];
+  let currentView = "closed";
+  let opener = null;
+  let inertSnapshot = [];
 
   function locale() {
     try {
@@ -86,13 +97,76 @@
     const model = window.ViralCoreMediaLibraryModel;
     const current = appState();
     const candidate = toProjectAsset(result);
-    if (!model || !current || !candidate) return false;
+    if (!model || !current || !candidate) return { status: "invalid" };
+    if (existingIdentity(result)) return { status: "duplicate" };
+    const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
+    if (count >= Number(model.MAX_PROJECT_ASSETS || 500)) return { status: "capacity" };
+
     const next = model.addAssets(current.media, [candidate]);
+    if (!next.added.length) {
+      const atCapacity = next.library?.assets?.length >= Number(model.MAX_PROJECT_ASSETS || 500);
+      return { status: atCapacity ? "capacity" : "duplicate" };
+    }
+
     current.media = next.library;
     window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
       detail: { reason: "media-library", addedAssetIds: next.added.map(item => item.id) }
     }));
-    return next.added.length > 0;
+    return { status: "added", asset: next.added[0] };
+  }
+
+  function focusableElements(drawer) {
+    return Array.from(drawer.querySelectorAll(FOCUSABLE_SELECTOR)).filter(element => {
+      if (!(element instanceof HTMLElement)) return false;
+      if (element.hasAttribute("disabled") || element.getAttribute("aria-hidden") === "true") return false;
+      return element.getClientRects().length > 0;
+    });
+  }
+
+  function makeBackgroundInert(drawer) {
+    inertSnapshot = [];
+    for (const element of Array.from(document.body.children)) {
+      if (!(element instanceof HTMLElement) || element === drawer) continue;
+      inertSnapshot.push({ element, inert: Boolean(element.inert), ariaHidden: element.getAttribute("aria-hidden") });
+      element.inert = true;
+      element.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function restoreBackground() {
+    for (const snapshot of inertSnapshot) {
+      if (!snapshot?.element?.isConnected) continue;
+      snapshot.element.inert = snapshot.inert;
+      if (snapshot.ariaHidden == null) snapshot.element.removeAttribute("aria-hidden");
+      else snapshot.element.setAttribute("aria-hidden", snapshot.ariaHidden);
+    }
+    inertSnapshot = [];
+  }
+
+  function trapFocus(event) {
+    if (event.key !== "Tab") return false;
+    const drawer = document.getElementById(DRAWER_ID);
+    if (!(drawer instanceof HTMLElement) || drawer.classList.contains("hidden")) return false;
+    const focusable = focusableElements(drawer);
+    if (!focusable.length) {
+      event.preventDefault();
+      drawer.querySelector(".core-media-discovery-panel")?.focus?.();
+      return true;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !drawer.contains(active))) {
+      event.preventDefault();
+      last.focus();
+      return true;
+    }
+    if (!event.shiftKey && (active === last || !drawer.contains(active))) {
+      event.preventDefault();
+      first.focus();
+      return true;
+    }
+    return false;
   }
 
   function ensureDrawer() {
@@ -105,7 +179,7 @@
     drawer.setAttribute("aria-hidden", "true");
     drawer.innerHTML =
       '<div class="core-media-discovery-backdrop" data-media-close></div>' +
-      '<aside class="core-media-discovery-panel" role="dialog" aria-modal="true" aria-labelledby="core-media-discovery-title">' +
+      '<aside class="core-media-discovery-panel" role="dialog" aria-modal="true" aria-labelledby="core-media-discovery-title" tabindex="-1">' +
         '<header class="core-media-discovery-head">' +
           '<div><span class="core-media-kicker">MEDIA</span><h2 id="core-media-discovery-title"></h2><p data-media-desc></p></div>' +
           '<button type="button" class="core-media-close" data-media-close aria-label=""></button>' +
@@ -140,7 +214,11 @@
         return;
       }
       if (target.dataset.mediaAction === "add") {
-        addToProject(result);
+        const outcome = addToProject(result);
+        if (outcome.status === "capacity") {
+          renderState("capacity", "libraryFullTitle", "libraryFullBody");
+          return;
+        }
         renderResults(lastResults);
       }
     });
@@ -183,6 +261,8 @@
     const drawer = ensureDrawer();
     const root = drawer.querySelector("[data-media-results]");
     const count = drawer.querySelector("[data-media-result-count]");
+    currentView = kind;
+    lastResults = [];
     if (count) count.textContent = "";
     if (!root) return;
     root.innerHTML =
@@ -197,13 +277,15 @@
     const drawer = ensureDrawer();
     const root = drawer.querySelector("[data-media-results]");
     const count = drawer.querySelector("[data-media-result-count]");
-    lastResults = Array.isArray(results) ? results : [];
-    if (count) count.textContent = lastResults.length ? t("items", { count: lastResults.length }) : "";
-    if (!root) return;
-    if (!lastResults.length) {
+    const normalized = Array.isArray(results) ? results : [];
+    if (!normalized.length) {
       renderState("empty", "noResultsTitle", "noResultsBody");
       return;
     }
+    currentView = "results";
+    lastResults = normalized;
+    if (count) count.textContent = t("items", { count: lastResults.length });
+    if (!root) return;
 
     root.innerHTML = lastResults.map((result, index) => {
       const added = existingIdentity(result);
@@ -234,6 +316,10 @@
     const kindEl = drawer.querySelector("[data-media-kind]");
     const orientationEl = drawer.querySelector("[data-media-orientation]");
     const query = queryEl instanceof HTMLInputElement ? queryEl.value.trim() : "";
+    const requestId = ++activeRequest;
+    lastResults = [];
+    currentView = "validating";
+
     if (query.length < 2) {
       renderState("empty", "emptyTitle", "emptyBody");
       queryEl?.focus?.();
@@ -245,7 +331,6 @@
       return;
     }
 
-    const requestId = ++activeRequest;
     renderState("loading", "searching", "emptyBody");
     try {
       const payload = await window.desktopAPI.searchMedia({
@@ -275,9 +360,12 @@
 
   function open(detail = {}) {
     const drawer = ensureDrawer();
+    if (!drawer.classList.contains("hidden")) return;
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     updateCopy(drawer);
     drawer.classList.remove("hidden");
     drawer.setAttribute("aria-hidden", "false");
+    makeBackgroundInert(drawer);
     document.documentElement.classList.add("core-media-discovery-open");
     const kind = drawer.querySelector("[data-media-kind]");
     if (kind instanceof HTMLSelectElement && ["video", "image"].includes(detail.kind)) kind.value = detail.kind;
@@ -287,18 +375,34 @@
 
   function close() {
     const drawer = document.getElementById(DRAWER_ID);
-    if (!(drawer instanceof HTMLElement)) return;
+    if (!(drawer instanceof HTMLElement) || drawer.classList.contains("hidden")) return;
     activeRequest += 1;
+    currentView = "closed";
+    lastResults = [];
     drawer.classList.add("hidden");
     drawer.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("core-media-discovery-open");
+    restoreBackground();
+    const target = opener;
+    opener = null;
+    requestAnimationFrame(() => {
+      if (target?.isConnected && typeof target.focus === "function") target.focus();
+    });
   }
 
   window.addEventListener("viral-ai:media-discovery-open", event => open(event?.detail || {}));
   window.addEventListener("keydown", event => {
-    if (event.key === "Escape" && document.documentElement.classList.contains("core-media-discovery-open")) close();
+    if (!document.documentElement.classList.contains("core-media-discovery-open")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    trapFocus(event);
   });
   window.addEventListener("viral-ai:core-state-changed", () => {
-    if (document.documentElement.classList.contains("core-media-discovery-open") && lastResults.length) renderResults(lastResults);
+    if (document.documentElement.classList.contains("core-media-discovery-open") && currentView === "results" && lastResults.length) {
+      renderResults(lastResults);
+    }
   });
 })();
