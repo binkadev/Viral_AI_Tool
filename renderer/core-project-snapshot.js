@@ -1,11 +1,15 @@
 (function attachCoreProjectSnapshot(root, factory) {
-  const api = factory();
+  let mediaModel = root?.ViralCoreMediaLibraryModel || null;
+  if (!mediaModel && typeof module !== "undefined" && module.exports && typeof require === "function") {
+    try { mediaModel = require("./core-media-library-model"); } catch {}
+  }
+  const api = factory(mediaModel);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreProjectSnapshot = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot() {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel) {
   "use strict";
 
-  const CURRENT_SCHEMA_VERSION = 1;
+  const CURRENT_SCHEMA_VERSION = 2;
   const SNAPSHOT_KEY = "viral-ai-core-project-snapshot";
   const LEGACY_STATE_KEY = "viral-ai-tool-state";
   const LEGACY_UI_KEYS = Object.freeze({
@@ -40,6 +44,22 @@
     if (value === "true") return true;
     if (value === "false") return false;
     return fallback;
+  }
+
+  function emptyMedia() {
+    return { schemaVersion: 1, assets: [], selectedAssetId: null };
+  }
+
+  function mediaFromState(state, options = {}) {
+    if (mediaModel?.normalizeLibrary) {
+      return mediaModel.normalizeLibrary(state?.media, options);
+    }
+    const raw = state?.media && typeof state.media === "object" ? state.media : {};
+    return {
+      schemaVersion: 1,
+      assets: Array.isArray(raw.assets) ? clone(raw.assets, []).slice(0, 500) : [],
+      selectedAssetId: raw.selectedAssetId ? String(raw.selectedAssetId) : null
+    };
   }
 
   function safeJob(job) {
@@ -152,18 +172,21 @@
     };
   }
 
-  function normalizeV1(snapshot) {
+  function normalizeSource(source) {
+    if (!source || !source.path) return null;
+    return {
+      identity: String(source.identity || source.jobId || source.path),
+      jobId: source.jobId ? String(source.jobId) : null,
+      path: String(source.path),
+      name: String(source.name || String(source.path).split(/[\\/]/).pop() || ""),
+      fileState: String(source.fileState || "unknown"),
+      meta: clone(source.meta, null)
+    };
+  }
+
+  function normalizeV2(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return null;
-    const source = snapshot.source && snapshot.source.path
-      ? {
-          identity: String(snapshot.source.identity || snapshot.source.jobId || snapshot.source.path),
-          jobId: snapshot.source.jobId ? String(snapshot.source.jobId) : null,
-          path: String(snapshot.source.path),
-          name: String(snapshot.source.name || String(snapshot.source.path).split(/[\\/]/).pop() || ""),
-          fileState: String(snapshot.source.fileState || "unknown"),
-          meta: clone(snapshot.source.meta, null)
-        }
-      : null;
+    const source = normalizeSource(snapshot.source);
     if (!source) return null;
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
@@ -179,6 +202,7 @@
       projectName: String(snapshot.projectName || source.name || source.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
+      media: mediaFromState({ media: snapshot.media || emptyMedia() }),
       workflow,
       editor: normalizeEditor(snapshot.editor, source)
     };
@@ -191,13 +215,23 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV1(input);
-      const migrated = Boolean(snapshot && String(input.projectName || "") !== snapshot.projectName);
+      const snapshot = normalizeV2(input);
+      const migrated = Boolean(
+        snapshot &&
+        (String(input.projectName || "") !== snapshot.projectName || !input.media || Number(input.media?.schemaVersion || 0) !== 1)
+      );
       return { snapshot, migrated, unsupportedVersion: null };
+    }
+    if (version === 1 && input.source && input.workflow) {
+      return {
+        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }),
+        migrated: true,
+        unsupportedVersion: null
+      };
     }
     if (version === 0 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV1({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION }),
+        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }),
         migrated: true,
         unsupportedVersion: null
       };
@@ -235,6 +269,7 @@
       projectName: String(legacyState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
       source,
+      media: mediaFromState(legacyState, { restartSafe: true }),
       workflow: workflowFromState(legacyState),
       editor: editorFromLegacy(legacyUi, source)
     };
@@ -256,6 +291,7 @@
         : String(appState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
       source,
+      media: mediaFromState(appState),
       workflow: workflowFromState(appState),
       editor: normalizeEditor(editorState, source)
     };
@@ -269,6 +305,7 @@
       ...clone(existing, {}),
       page: "ai-video",
       output: workflow.output,
+      media: clone(migrated.media, emptyMedia()),
       renderOptions: clone(workflow.renderOptions, {}),
       speech: clone(workflow.speech, {}),
       translation: clone(workflow.translation, {}),
@@ -310,6 +347,7 @@
     clone,
     latestSourceJob,
     sourceFromState,
+    mediaFromState,
     workflowFromState,
     normalizeEditor,
     migrateSnapshot,
