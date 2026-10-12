@@ -45,7 +45,7 @@ function run() {
     desiredDurationSec: 5,
     strategy: "generated"
   });
-  assert.strictEqual(generatedRequest.ok, true, "Asset model must allow generated scenes");
+  assert.strictEqual(generatedRequest.ok, true);
   assert(assetModel.ALLOWED_STRATEGIES.has("stock"));
   assert(assetModel.ALLOWED_STRATEGIES.has("generated"));
 
@@ -59,64 +59,38 @@ function run() {
   const assetState = read("renderer/core-automation-asset-state.js");
   const index = read("renderer/index.html");
   const docs = read("docs/META_MUSE_BROWSER_BRIDGE.md");
-  const manifestText = read("extensions/meta-muse-bridge/manifest.json");
+  const manifest = JSON.parse(read("extensions/meta-muse-bridge/manifest.json"));
   const serviceWorker = read("extensions/meta-muse-bridge/service-worker.js");
   const contentScript = read("extensions/meta-muse-bridge/content-script.js");
   const popup = read("extensions/meta-muse-bridge/popup.js");
   const pkg = JSON.parse(read("package.json"));
-  const manifest = JSON.parse(manifestText);
 
-  assert.doesNotThrow(() => new Function(serviceWorker), "Meta Muse service worker must parse");
-  assert.doesNotThrow(() => new Function(contentScript), "Meta Muse content script must parse");
-  assert.doesNotThrow(() => new Function(popup), "Meta Muse popup script must parse");
-  assert.doesNotThrow(() => new Function(ui), "Meta Muse renderer UI must parse");
+  assert.doesNotThrow(() => new Function(serviceWorker));
+  assert.doesNotThrow(() => new Function(contentScript));
+  assert.doesNotThrow(() => new Function(popup));
+  assert.doesNotThrow(() => new Function(ui));
 
   for (const token of [
-    "127.0.0.1",
-    "32147",
-    "32157",
-    "/v1/register",
-    "/v1/heartbeat",
-    "/v1/poll",
-    "/v1/result",
-    "chrome-extension://",
-    "selectedInstanceId",
-    "requiresSelection",
-    "selectSession",
-    "generateVideo",
-    "downloadMedia",
-    "extensionInstallDir"
+    "127.0.0.1", "32147", "32157", "/v1/register", "/v1/heartbeat", "/v1/poll", "/v1/result",
+    "chrome-extension://", "selectedInstanceId", "requiresSelection", "selectSession", "generateVideo", "downloadMedia", "extensionInstallDir"
   ]) assert(bridge.includes(token), "Meta Muse extension bridge missing: " + token);
 
-  assert(!ipc.includes("createMetaMuseBrowser"), "Meta Muse IPC must not launch a dedicated browser profile anymore");
+  assert(!ipc.includes("createMetaMuseBrowser"));
   assert(ipc.includes("createMetaMuseExtensionBridge"));
   for (const token of [
-    "automation:meta-muse-status",
-    "automation:meta-muse-open",
-    "automation:meta-muse-extension-reveal",
-    "automation:meta-muse-select-session",
-    "automation:meta-muse-generate",
-    "automation:meta-muse-materialize",
-    "automation:meta-muse-cancel",
-    "candidateToken",
-    "probeVideo",
-    "cache().adopt"
+    "automation:meta-muse-status", "automation:meta-muse-open", "automation:meta-muse-extension-reveal",
+    "automation:meta-muse-select-session", "automation:meta-muse-generate", "automation:meta-muse-materialize",
+    "automation:meta-muse-cancel", "candidateToken", "probeVideo", "cache().adopt"
   ]) assert(ipc.includes(token), "Meta Muse IPC missing: " + token);
 
   for (const token of [
-    "getAutomationMetaMuseStatus",
-    "openAutomationMetaMuse",
-    "revealAutomationMetaMuseExtension",
-    "selectAutomationMetaMuseSession",
-    "startAutomationMetaMuseVideo",
-    "materializeAutomationMetaMuse",
-    "cancelAutomationMetaMuse",
-    "onAutomationMetaMuseProgress"
+    "getAutomationMetaMuseStatus", "openAutomationMetaMuse", "revealAutomationMetaMuseExtension",
+    "selectAutomationMetaMuseSession", "startAutomationMetaMuseVideo", "materializeAutomationMetaMuse",
+    "cancelAutomationMetaMuse", "onAutomationMetaMuseProgress"
   ]) assert(preload.includes(token), "Meta Muse preload bridge missing: " + token);
 
   assert(mainEntry.includes("installAutomationMetaMuseIpc();"));
   assert(mainEntry.includes("cancelAllAutomationMetaMuse();"));
-
   assert(rendererProvider.includes("id: 'meta-muse'"));
   assert(rendererProvider.includes("strategies: ['generated']"));
   assert(rendererProvider.includes("router.register(provider)"));
@@ -126,57 +100,37 @@ function run() {
   assert(!rendererProvider.includes("cookie"));
 
   for (const token of [
-    "data-meta-muse-install",
-    "data-meta-muse-session",
-    "data-meta-muse-open",
-    "data-meta-muse-refresh",
-    "data-meta-muse-generate",
-    "data-meta-muse-stock",
-    "data-meta-muse-cancel",
-    "setSceneStrategy",
-    "AbortController",
-    "selectSession"
+    "data-meta-muse-install", "data-meta-muse-session", "data-meta-muse-open", "data-meta-muse-refresh",
+    "data-meta-muse-generate", "data-meta-muse-stock", "data-meta-muse-cancel", "setSceneStrategy", "AbortController", "selectSession"
   ]) assert(ui.includes(token), "Meta Muse UI missing: " + token);
-  assert(!ui.includes("data-meta-muse-api-key"), "Meta Muse UI must not expose an API-key field");
-  assert(!ui.includes('type=\"password\"'), "Meta Muse UI must not expose a password/API-key input");
+  assert(!ui.includes("data-meta-muse-api-key"));
+  assert(!ui.includes('type=\"password\"'));
   assert(css.includes(".automation-meta-muse-card"));
   assert(css.includes(".automation-meta-muse-session"));
-  assert(css.includes("-webkit-app-region:no-drag"), "Meta Muse controls must stay clickable in Electron");
-  assert(css.includes("pointer-events:auto"), "Meta Muse controls must explicitly accept pointer input");
+  assert(css.includes("-webkit-app-region:no-drag"));
+  assert(css.includes("pointer-events:auto"));
 
   assert.strictEqual(manifest.manifest_version, 3);
   assert(manifest.permissions.includes("storage"));
   assert(manifest.permissions.includes("tabs"));
   assert(manifest.permissions.includes("downloads"));
+  assert(manifest.permissions.includes("alarms"));
   assert(manifest.host_permissions.includes("https://muse.ai/*"));
   assert(manifest.host_permissions.includes("http://127.0.0.1/*"));
   assert(manifest.content_scripts.some(item => item.matches.includes("https://muse.ai/*") && item.js.includes("content-script.js")));
 
   for (const token of [
-    "instanceId",
-    "profileLabel",
-    "bridgePort",
-    "bridgeToken",
-    "viral-ai:muse-tab",
-    "chrome.tabs.query",
-    "chrome.tabs.sendMessage",
-    "chrome.downloads.download",
-    "viral-ai:set-profile-label",
-    "viral-ai:bridge-state"
-  ]) assert(serviceWorker.includes(token), "Meta Muse extension service worker missing: " + token);
-  assert(!serviceWorker.includes("document.cookie"), "Extension must not read Muse cookies");
+    "instanceId", "profileLabel", "bridgePort", "bridgeToken", "viral-ai-muse-tab",
+    "chrome.tabs.query", "chrome.tabs.sendMessage", "chrome.downloads.download",
+    "viral-ai:set-profile-label", "viral-ai:bridge-state"
+  ]) assert(serviceWorker.includes(token), "Meta Muse service worker missing: " + token);
+  assert(!serviceWorker.includes("document.cookie"));
 
   for (const token of [
-    "data-hatch-composer-root",
-    "data-lexical-editor",
-    "hatch-composer-stop-button",
-    "data-message-role=\"assistant\"",
-    "viral-ai:muse-generate",
-    "viral-ai:muse-cancel",
-    "mediaFromNode",
-    "Generate"
+    "data-hatch-composer-root", "data-lexical-editor", "hatch-composer-stop-button",
+    "data-message-role=\"assistant\"", "viral-ai:muse-generate", "viral-ai:muse-cancel", "mediaFromNode", "baselineUrls"
   ]) assert(contentScript.includes(token), "Meta Muse content script missing: " + token);
-  assert(!contentScript.includes("document.cookie"), "Muse content script must not extract cookies");
+  assert(!contentScript.includes("document.cookie"));
 
   assert(assetState.includes("function setSceneStrategy"));
   assert(assetState.includes("function setAllStrategies"));
@@ -190,17 +144,12 @@ function run() {
   assert(docs.includes("does not export cookies, passwords or Meta tokens"));
   assert(docs.includes("multiple profiles"));
   assert(docs.includes("Load unpacked"));
-
-  assert(pkg.build.files.includes("extensions/**/*"), "Packaged builds must include the Chrome extension source");
-  assert(pkg.scripts["test:core-automation-meta-muse"], "package.json must expose Meta Muse regression");
-  assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-meta-muse"), "commercial regression must gate Meta Muse integration");
+  assert(pkg.build.files.includes("extensions/**/*"));
+  assert(pkg.scripts["test:core-automation-meta-muse"]);
+  assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-meta-muse"));
 
   console.log("Meta Muse current-profile Chrome extension bridge, multi-profile selection, generation, download boundary and Automation UI contracts passed.");
 }
 
-try {
-  run();
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
-}
+try { run(); }
+catch (error) { console.error(error); process.exitCode = 1; }
