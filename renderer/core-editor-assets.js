@@ -81,7 +81,7 @@
       resultsCount: "{count} kết quả",
       noResultsTitle: "Chưa tìm thấy tư liệu phù hợp",
       noResultsBody: "Thử mô tả ngắn hơn, đổi chủ thể hoặc chọn một khung hình khác.",
-      source: "Nguồn",
+      sourceProvider: "Nguồn",
       creator: "Tác giả",
       duration: "Thời lượng",
       resolution: "Độ phân giải",
@@ -166,7 +166,7 @@
       resultsCount: "{count} results",
       noResultsTitle: "No matching media found",
       noResultsBody: "Try a shorter description, another subject, or a different frame.",
-      source: "Source",
+      sourceProvider: "Source",
       creator: "Creator",
       duration: "Duration",
       resolution: "Resolution",
@@ -326,6 +326,9 @@
     const generatedImages = countAssets(asset => asset?.origin === "generated" && asset?.kind === "image");
     const generatedAudio = countAssets(asset => asset?.origin === "generated" && asset?.kind === "audio");
     const favoriteCount = countAssets(asset => asset?.favorite === true);
+    const signature = [locale(), videoCount, imageCount, audioCount, generatedVideo, generatedImages, generatedAudio, favoriteCount].join("|");
+    if (body.dataset.dynamicAssetsSignature === signature) return;
+    body.dataset.dynamicAssetsSignature = signature;
 
     body.querySelectorAll("[data-dynamic-assets-section]").forEach(node => node.remove());
     const dynamic = document.createElement("div");
@@ -557,7 +560,7 @@
       [t("duration"), Number(result?.meta?.duration || 0) > 0 ? formatDuration(result.meta.duration) : "—"],
       [t("resolution"), result?.meta?.width && result?.meta?.height ? result.meta.width + "×" + result.meta.height : "—"],
       [t("creator"), safeText(result?.attribution?.creatorName)],
-      [t("source"), safeText(result?.provider)]
+      [t("sourceProvider"), safeText(result?.provider)]
     ];
     for (const [label, value] of pairs) {
       const dt = document.createElement("dt");
@@ -713,7 +716,7 @@
       if (resultArea) renderNotice(resultArea, { title: t("networkTitle"), body: t("networkBody"), action: () => runSearch(drawer, state) });
     } finally {
       if (activeSearchRequestId === id) activeSearchRequestId = null;
-      if (submit instanceof HTMLButtonElement) {
+      if (submit instanceof HTMLButtonElement && !activeSearchRequestId) {
         submit.disabled = false;
         submit.textContent = t("search");
       }
