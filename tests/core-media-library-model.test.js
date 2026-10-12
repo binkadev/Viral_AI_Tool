@@ -1,7 +1,10 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const model = require("../renderer/core-media-library-model");
+const snapshotModel = require("../renderer/core-project-snapshot");
 
 assert.strictEqual(model.LIBRARY_SCHEMA_VERSION, 1);
 assert.strictEqual(model.MAX_PROJECT_ASSETS, 500);
@@ -133,4 +136,46 @@ assert.strictEqual(restartedLibrary.assets[0].status, "interrupted");
 assert.strictEqual(restartedLibrary.assets[1].status, "ready");
 assert.strictEqual(restartedLibrary.selectedAssetId, "job-1");
 
-console.log("Core media library normalization, dedupe, attribution, URL safety and restart-state tests passed.");
+const activeSnapshot = {
+  schemaVersion: 2,
+  projectId: "source-1",
+  projectName: "Source.mp4",
+  source: {
+    identity: "source-1",
+    jobId: "source-1",
+    path: "C:/media/Source.mp4",
+    name: "Source.mp4",
+    fileState: "available"
+  },
+  media: {
+    schemaVersion: 1,
+    selectedAssetId: "download-2",
+    assets: [
+      {
+        id: "download-2",
+        kind: "video",
+        origin: "stock",
+        provider: "pexels",
+        providerAssetId: "200",
+        status: "downloading",
+        progress: 45
+      }
+    ]
+  },
+  workflow: { jobs: [] },
+  editor: {}
+};
+const liveSnapshot = snapshotModel.migrateSnapshot(activeSnapshot);
+assert.strictEqual(liveSnapshot.snapshot.media.assets[0].status, "downloading", "normal in-session normalization must not interrupt live work");
+assert.strictEqual(liveSnapshot.migrated, false);
+const bootSnapshot = snapshotModel.migrateSnapshot(activeSnapshot, { restartSafeMedia: true });
+assert.strictEqual(bootSnapshot.snapshot.media.assets[0].status, "interrupted", "bootstrap normalization must not resurrect stale work");
+assert.strictEqual(bootSnapshot.migrated, true, "restart-safe transition must be backfilled durably");
+
+const persistence = fs.readFileSync(path.join(__dirname, "..", "renderer", "core-project-persistence.js"), "utf8");
+assert(
+  persistence.includes('model.migrateSnapshot(raw, { restartSafeMedia: true })'),
+  "project persistence bootstrap must explicitly request restart-safe media normalization"
+);
+
+console.log("Core media library normalization, dedupe, attribution, URL safety, project ownership and restart-state tests passed.");
