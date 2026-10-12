@@ -140,7 +140,10 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
     }
 
     const normalize = request.kind === "video" ? normalizeVideo : normalizeImage;
-    const results = (Array.isArray(payload?.hits) ? payload.hits : []).map(normalize).filter(Boolean);
+    let results = (Array.isArray(payload?.hits) ? payload.hits : []).map(normalize).filter(Boolean);
+    if (request.kind === "video" && request.orientation !== "any") {
+      results = results.filter(item => item.meta?.orientation === request.orientation);
+    }
 
     return {
       provider: "pixabay",
@@ -150,7 +153,7 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
       page: request.page,
       perPage: Math.max(3, request.perPage),
       totalResults: Math.max(0, Number(payload?.totalHits ?? payload?.total ?? 0) || 0),
-      nextPage: results.length >= Math.max(3, request.perPage) ? request.page + 1 : null,
+      nextPage: (Array.isArray(payload?.hits) ? payload.hits.length : 0) >= Math.max(3, request.perPage) ? request.page + 1 : null,
       results
     };
   }
