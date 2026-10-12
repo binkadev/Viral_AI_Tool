@@ -3,10 +3,12 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const { spawn } = require('child_process');
 const { chromium } = require('playwright-core');
 
 const DEFAULT_APP_URL = 'https://muse.ai/';
 const DEFAULT_TIMEOUT_MS = 12 * 60 * 1000;
+const DEFAULT_LAUNCH_TIMEOUT_MS = 30000;
 const SELECTORS = Object.freeze({
   composerRoot: '[data-hatch-composer-root]',
   editor: '[data-lexical-editor="true"], [data-hatch-composer-root] textarea, [data-hatch-composer-prehydration-input], [data-hatch-composer-root] [contenteditable="true"]',
@@ -92,38 +94,75 @@ function browserExecutableCandidates(env = process.env, platform = process.platf
   const result = [];
   const add = (label, executablePath) => {
     const value = String(executablePath || '').trim();
-    if (!value || !fs.existsSync(value)) return;
+    if (!value) return;
+    try {
+      if (!fs.existsSync(value) || !fs.statSync(value).isFile()) return;
+    } catch { return; }
     const resolved = path.resolve(value);
     if (result.some(item => item.executablePath.toLowerCase() === resolved.toLowerCase())) return;
     result.push({ label, executablePath: resolved });
   };
 
-  add('custom', env.VIRAL_AI_MUSE_BROWSER_PATH);
+  add('custom', env.VIRAL_AI_MUSE_BROWSER_PATH || env.MUSE_BROWSER_PATH);
   if (platform === 'win32') {
     const local = env.LOCALAPPDATA || '';
     const program = env.ProgramFiles || env.PROGRAMFILES || '';
-    const programX86 = env['ProgramFiles(x86)'] || env.PROGRAMFILES_X86 || '';
+    const programX86 = env['ProgramFiles(x86)'] || env['PROGRAMFILES(X86)'] || env.PROGRAMFILES_X86 || '';
     add('chrome', local && path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'));
     add('chrome', program && path.join(program, 'Google', 'Chrome', 'Application', 'chrome.exe'));
     add('chrome', programX86 && path.join(programX86, 'Google', 'Chrome', 'Application', 'chrome.exe'));
     add('msedge', local && path.join(local, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
     add('msedge', program && path.join(program, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
     add('msedge', programX86 && path.join(programX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+    add('brave', local && path.join(local, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'));
+    add('brave', program && path.join(program, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'));
   }
   return result;
 }
 
+async function waitForDevToolsPort(profileDir, child, timeoutMs = DEFAULT_LAUNCH_TIMEOUT_MS) {
+  const portFile = path.join(profileDir, 'DevToolsActivePort');
+  const deadline = Date.now() + timeoutMs;
+  let lastError = '';
+  while (Date.now() < deadline) {
+    if (child && child.exitCode != null) {
+      throw museError('BROWSER_EXITED', 'Chrome/Edge exited before the Muse bridge connected.', {
+        exitCode: child.exitCode,
+        signalCode: child.signalCode || null
+      });
+    }
+    try {
+      const raw = await fsp.readFile(portFile, 'utf8');
+      const port = Number(String(raw || '').split(/\r?\n/)[0]);
+      if (Number.isInteger(port) && port > 0) return port;
+    } catch (error) {
+      lastError = String(error?.message || error || '');
+    }
+    await sleep(180);
+  }
+  throw museError('CDP_TIMEOUT', 'Chrome/Edge opened but its debugging bridge did not become ready.', {
+    profileDir,
+    portFile,
+    lastError
+  });
+}
+
 class MetaMuseBrowser {
-  constructor({ profileDir, appUrl = DEFAULT_APP_URL, headless = false, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  constructor({ profileDir, appUrl = DEFAULT_APP_URL, headless = false, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
     if (!profileDir) throw new Error('Meta Muse browser profile directory is required.');
     this.profileDir = path.resolve(profileDir);
     this.appUrl = appUrl;
     this.headless = headless === true;
     this.timeoutMs = Math.max(60000, Number(timeoutMs || DEFAULT_TIMEOUT_MS));
+    this.launchTimeoutMs = Math.max(10000, Number(env?.VIRAL_AI_MUSE_LAUNCH_TIMEOUT_MS || DEFAULT_LAUNCH_TIMEOUT_MS));
+    this.env = env || process.env;
     this.context = null;
     this.page = null;
+    this.browser = null;
+    this.browserProcess = null;
     this.channel = null;
     this.executablePath = null;
+    this.launchMode = null;
     this.lastLaunchErrors = [];
     this.queue = Promise.resolve();
   }
@@ -136,6 +175,87 @@ class MetaMuseBrowser {
 
   isRunning() {
     return Boolean(this.context && this.page && !this.page.isClosed());
+  }
+
+  clearRuntime() {
+    this.context = null;
+    this.page = null;
+    this.browser = null;
+    this.channel = null;
+    this.executablePath = null;
+    this.launchMode = null;
+  }
+
+  async attachCdp(endpoint, meta = {}) {
+    const browser = await chromium.connectOverCDP(String(endpoint), { timeout: this.launchTimeoutMs });
+    const context = browser.contexts()[0];
+    if (!context) {
+      await browser.close().catch(() => {});
+      throw museError('CDP_CONTEXT_MISSING', 'Chrome debugging connection did not expose a browser context.');
+    }
+    this.browser = browser;
+    this.context = context;
+    this.channel = meta.channel || 'cdp';
+    this.executablePath = meta.executablePath || null;
+    this.launchMode = meta.launchMode || 'cdp';
+    browser.on('disconnected', () => this.clearRuntime());
+    return context;
+  }
+
+  async launchDirect(candidate) {
+    const executablePath = candidate.executablePath;
+    await fsp.mkdir(this.profileDir, { recursive: true });
+    await fsp.rm(path.join(this.profileDir, 'DevToolsActivePort'), { force: true }).catch(() => {});
+
+    const args = [
+      '--remote-debugging-port=0',
+      '--remote-allow-origins=*',
+      '--user-data-dir=' + this.profileDir,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-mode',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=Translate,OptimizationGuideModelDownloading',
+      '--new-window',
+      this.appUrl
+    ];
+    if (this.headless) args.splice(args.length - 2, 0, '--headless=new');
+
+    let child;
+    try {
+      child = spawn(executablePath, args, {
+        windowsHide: false,
+        detached: false,
+        stdio: 'ignore',
+        env: { ...process.env, ...this.env }
+      });
+    } catch (error) {
+      throw museError('BROWSER_SPAWN_FAILED', 'Windows could not start Chrome/Edge for Muse.', {
+        executablePath,
+        message: String(error?.message || error)
+      });
+    }
+
+    this.browserProcess = child;
+    child.once('error', error => {
+      this.lastLaunchErrors.push({
+        mode: 'spawn-cdp',
+        executablePath,
+        code: 'BROWSER_SPAWN_FAILED',
+        message: String(error?.message || error).slice(0, 1200)
+      });
+    });
+    child.once('exit', () => {
+      if (this.browserProcess === child) this.browserProcess = null;
+      if (!this.context) this.clearRuntime();
+    });
+
+    const port = await waitForDevToolsPort(this.profileDir, child, this.launchTimeoutMs);
+    await this.attachCdp('http://127.0.0.1:' + port, {
+      launchMode: 'spawn-cdp',
+      executablePath,
+      channel: candidate.label
+    });
   }
 
   launchOptions(extra = {}) {
@@ -154,14 +274,17 @@ class MetaMuseBrowser {
     };
   }
 
-  async tryLaunch(label, options) {
+  async tryPersistent(label, options) {
     try {
       this.context = await chromium.launchPersistentContext(this.profileDir, this.launchOptions(options));
       this.channel = label;
       this.executablePath = options?.executablePath || null;
+      this.launchMode = 'playwright-persistent';
+      this.context.on('close', () => this.clearRuntime());
       return true;
     } catch (error) {
       this.lastLaunchErrors.push({
+        mode: 'playwright-persistent',
         label,
         executablePath: options?.executablePath || null,
         message: String(error?.message || error).slice(0, 1600)
@@ -176,43 +299,73 @@ class MetaMuseBrowser {
     await fsp.mkdir(this.profileDir, { recursive: true });
     this.lastLaunchErrors = [];
 
-    const explicit = browserExecutableCandidates();
-    for (const candidate of explicit) {
-      if (await this.tryLaunch(candidate.label, { executablePath: candidate.executablePath })) break;
+    const cdpOverride = String(this.env.VIRAL_AI_MUSE_CDP || this.env.MUSE_CDP || '').trim();
+    if (cdpOverride) {
+      try {
+        await this.attachCdp(cdpOverride, { launchMode: 'external-cdp', channel: 'external' });
+      } catch (error) {
+        this.lastLaunchErrors.push({
+          mode: 'external-cdp',
+          endpoint: cdpOverride,
+          message: String(error?.message || error).slice(0, 1600)
+        });
+        this.clearRuntime();
+      }
     }
 
-    // Keep Playwright's channel resolution as a final fallback. Explicit Windows
-    // paths above avoid the common case where channel discovery fails although
-    // Chrome/Edge is installed and works normally for the user.
+    const explicit = browserExecutableCandidates(this.env);
     if (!this.context) {
-      for (const channel of ['chrome', 'msedge']) {
-        if (await this.tryLaunch(channel, { channel })) break;
+      for (const candidate of explicit) {
+        try {
+          await this.launchDirect(candidate);
+          break;
+        } catch (error) {
+          this.lastLaunchErrors.push({
+            mode: 'spawn-cdp',
+            label: candidate.label,
+            executablePath: candidate.executablePath,
+            code: error?.code || '',
+            message: String(error?.message || error).slice(0, 1600),
+            details: error?.details || {}
+          });
+          try { if (this.browserProcess && !this.browserProcess.killed) this.browserProcess.kill(); } catch {}
+          this.browserProcess = null;
+          this.clearRuntime();
+        }
       }
     }
 
     if (!this.context) {
-      throw museError('BROWSER_UNAVAILABLE', 'Chrome or Edge could not be opened for Muse.', {
+      for (const candidate of explicit) {
+        if (await this.tryPersistent(candidate.label, { executablePath: candidate.executablePath })) break;
+      }
+    }
+
+    if (!this.context) {
+      for (const channel of ['chrome', 'msedge']) {
+        if (await this.tryPersistent(channel, { channel })) break;
+      }
+    }
+
+    if (!this.context) {
+      throw museError('BROWSER_UNAVAILABLE', 'Viral AI Tool could not start a controllable Chrome/Edge window for Muse.', {
         profileDir: this.profileDir,
         candidates: explicit.map(item => item.executablePath),
         errors: this.lastLaunchErrors
       });
     }
 
-    this.context.on('close', () => {
-      this.context = null;
-      this.page = null;
-      this.channel = null;
-      this.executablePath = null;
-    });
     const pages = this.context.pages();
     this.page = pages.find(page => page.url().startsWith('https://muse.ai')) || pages[0] || await this.context.newPage();
     this.page.setDefaultTimeout(60000);
     try {
       await this.gotoMuse();
+      await this.page.bringToFront().catch(() => {});
     } catch (error) {
-      throw museError('MUSE_NAVIGATION_FAILED', 'Muse opened, but muse.ai could not be loaded.', {
+      throw museError('MUSE_NAVIGATION_FAILED', 'Chrome/Edge opened but muse.ai could not be loaded.', {
         channel: this.channel,
         executablePath: this.executablePath,
+        launchMode: this.launchMode,
         message: String(error?.message || error).slice(0, 1200)
       });
     }
@@ -277,19 +430,25 @@ class MetaMuseBrowser {
         profileDir: this.profileDir,
         channel: null,
         executablePath: null,
-        launchErrors: this.lastLaunchErrors.slice(-4)
+        launchMode: null,
+        candidates: browserExecutableCandidates(this.env).map(item => item.executablePath),
+        launchErrors: this.lastLaunchErrors.slice(-8)
       };
     }
     const auth = await this.authStatus();
+    const composerReady = await this.composerReady();
     return {
       browserRunning: true,
       loggedIn: auth.ok === true,
-      composerReady: await this.composerReady(),
+      composerReady,
       profileDir: this.profileDir,
       channel: this.channel,
       executablePath: this.executablePath,
+      launchMode: this.launchMode,
       url: this.page.url(),
       viewerId: auth.viewerId || null,
+      authStatus: auth.status || 0,
+      candidates: browserExecutableCandidates(this.env).map(item => item.executablePath),
       launchErrors: []
     };
   }
@@ -360,7 +519,6 @@ class MetaMuseBrowser {
       throwIfAborted(signal);
       await this.ensureReady();
       const page = this.page;
-      // A fresh home chat keeps one scene's generation from contaminating another scene.
       await page.goto(this.appUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await this.ensureReady();
       const before = await page.locator(SELECTORS.assistant).count();
@@ -467,12 +625,16 @@ class MetaMuseBrowser {
   }
 
   async close() {
+    const browser = this.browser;
     const context = this.context;
-    this.context = null;
-    this.page = null;
-    this.channel = null;
-    this.executablePath = null;
-    if (context) await context.close().catch(() => {});
+    const child = this.browserProcess;
+    this.browserProcess = null;
+    this.clearRuntime();
+    if (browser) await browser.close().catch(() => {});
+    else if (context) await context.close().catch(() => {});
+    if (child && !child.killed) {
+      try { child.kill(); } catch {}
+    }
   }
 }
 
@@ -486,6 +648,7 @@ module.exports = {
   buildScenePrompt,
   mediaExtension,
   browserExecutableCandidates,
+  waitForDevToolsPort,
   createMetaMuseBrowser,
   museError
 };
