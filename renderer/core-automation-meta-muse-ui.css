@@ -13,12 +13,15 @@
 .automation-meta-muse-card.is-ready .automation-meta-muse-state i{background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 10%,transparent)}
 .automation-meta-muse-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid var(--ui-line)}
 .automation-meta-muse-actions .button{min-height:36px!important}
+.automation-meta-muse-error{display:flex;flex-direction:column;gap:3px;margin-top:10px;padding:9px 10px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--ui-line));border-radius:8px;background:color-mix(in srgb,var(--danger) 7%,var(--ui-panel));color:var(--ui-text)}
+.automation-meta-muse-error strong{font-size:var(--type-meta);line-height:1.4;font-weight:650}
+.automation-meta-muse-error small{color:var(--ui-muted);font-size:var(--type-caption);line-height:1.45;overflow-wrap:anywhere}
 .automation-meta-muse-progress{margin-top:10px;padding:9px 10px;border:1px solid color-mix(in srgb,var(--ui-accent) 20%,var(--ui-line));border-radius:8px;background:var(--ui-accent-soft)}
 .automation-meta-muse-progress>div{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
 .automation-meta-muse-progress span,.automation-meta-muse-progress b{color:var(--ui-muted);font-size:var(--type-caption);line-height:1.35}
 .automation-meta-muse-progress>i{display:block;height:4px;overflow:hidden;border-radius:999px;background:var(--ui-line)}
 .automation-meta-muse-progress>i>b{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--ui-accent),color-mix(in srgb,var(--ui-accent) 72%,white));transition:width .22s ease}
-.automation-meta-muse-foot{display:block;margin-top:8px;color:var(--ui-faint);font-size:var(--type-caption);line-height:1.35;text-align:right}
+.automation-meta-muse-foot{display:block;margin-top:8px;color:var(--ui-faint);font-size:var(--type-caption);line-height:1.35;text-align:right;overflow-wrap:anywhere}
 @container viral-workpage (max-width:860px){.automation-meta-muse-head{flex-direction:column}.automation-meta-muse-state{white-space:normal}.automation-meta-muse-actions{justify-content:flex-start}}
 @container viral-workpage (max-width:620px){.automation-meta-muse-actions{display:grid;grid-template-columns:1fr}.automation-meta-muse-actions .button{width:100%}.automation-meta-muse-foot{text-align:left}}
 @media(prefers-reduced-motion:reduce){.automation-meta-muse-progress>i>b{transition:none}}
