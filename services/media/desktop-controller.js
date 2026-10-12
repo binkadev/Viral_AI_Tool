@@ -178,6 +178,10 @@ function createMediaDesktopController({
     return { cancelled };
   }
 
+  function acquisitionCount() {
+    return acquisitionResolvers.size + Number(downloads?.activeCount?.() || 0);
+  }
+
   function cancelAll() {
     let count = activeSearches.size + acquisitionResolvers.size;
     for (const controller of activeSearches.values()) {
@@ -199,7 +203,9 @@ function createMediaDesktopController({
     acquire,
     cancelAcquisition,
     cancelAll,
-    activeCount: () => activeSearches.size + acquisitionResolvers.size + Number(downloads?.activeCount?.() || 0),
+    activeSearchCount: () => activeSearches.size,
+    activeAcquisitionCount: acquisitionCount,
+    activeCount: () => activeSearches.size + acquisitionCount(),
     publicError: publicDesktopMediaError
   };
 }
