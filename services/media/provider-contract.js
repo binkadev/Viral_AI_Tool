@@ -145,6 +145,7 @@ module.exports = {
   DEFAULT_PER_PAGE,
   MAX_PER_PAGE,
   mediaProviderError,
+  safeHttpUrl,
   normalizeSearchRequest,
   normalizeOrientation,
   normalizeVariant,
