@@ -5,6 +5,7 @@ const {
   CloudMediaClient,
   MediaClientError,
   normalizeBaseUrl,
+  safeRequestHeaders,
   stableApiError
 } = require("../services/media/cloud-client");
 
@@ -20,6 +21,15 @@ function response(status, payload) {
   assert.strictEqual(normalizeBaseUrl("https://api.example.test/").toString(), "https://api.example.test/");
   assert.strictEqual(normalizeBaseUrl("http://127.0.0.1:3000").hostname, "127.0.0.1");
   assert.throws(() => normalizeBaseUrl("http://api.example.test"), error => error?.code === "MEDIA_HTTPS_REQUIRED");
+  assert.deepStrictEqual(
+    safeRequestHeaders({
+      "x-viral-ai-media-ticket": "opaque-ticket",
+      authorization: "must-not-override",
+      "x-viral-ai-bad\nheader": "ignored",
+      "x-viral-ai-empty": ""
+    }),
+    { "x-viral-ai-media-ticket": "opaque-ticket" }
+  );
 
   const requests = [];
   const client = new CloudMediaClient({
@@ -28,6 +38,14 @@ function response(status, payload) {
     appVersion: "0.14.0",
     fetchImpl: async (url, options) => {
       requests.push({ url: String(url), options });
+      if (String(url).includes("/v1/media/acquisition")) {
+        return response(200, {
+          provider: "pexels",
+          providerAssetId: "987",
+          kind: "video",
+          downloadUrl: "https://videos.pexels.com/video-files/987/hd.mp4"
+        });
+      }
       return response(200, {
         provider: "pexels",
         page: 1,
@@ -52,6 +70,30 @@ function response(status, payload) {
   assert(requests[0].url.includes("orientation=portrait"));
   assert.strictEqual(requests[0].options.headers.authorization, "Bearer access-token");
   assert.strictEqual(requests[0].options.headers["x-viral-ai-version"], "0.14.0");
+
+  const ticket = "opaque.ticket.value";
+  const descriptor = await client.resolveAcquisition(ticket);
+  assert.strictEqual(descriptor.providerAssetId, "987");
+  assert.strictEqual(requests.length, 2);
+  assert(requests[1].url.includes("/base/v1/media/acquisition"));
+  assert.strictEqual(requests[1].url.includes(ticket), false, "acquisition ticket must never enter the request URL");
+  assert.strictEqual(requests[1].options.headers["x-viral-ai-media-ticket"], ticket);
+  assert.strictEqual(requests[1].options.headers.authorization, "Bearer access-token");
+
+  assert.throws(
+    () => client.resolveAcquisition("bad\nticket"),
+    error => error?.code === "MEDIA_SOURCE_UNAVAILABLE"
+  );
+
+  const expiredClient = new CloudMediaClient({
+    backendUrl: "https://api.example.test",
+    getAccessToken: () => "token",
+    fetchImpl: async () => response(410, { error: { code: "MEDIA_SOURCE_UNAVAILABLE" } })
+  });
+  await assert.rejects(
+    () => expiredClient.resolveAcquisition("expired.ticket"),
+    error => error?.code === "MEDIA_SOURCE_UNAVAILABLE" && error?.details?.backendCode === "MEDIA_SOURCE_UNAVAILABLE"
+  );
 
   const missingToken = new CloudMediaClient({
     backendUrl: "https://api.example.test",
@@ -86,8 +128,9 @@ function response(status, payload) {
   assert.strictEqual(stableApiError(503, {}).code, "MEDIA_SEARCH_UNAVAILABLE");
   assert.strictEqual(stableApiError(429, { error: { code: "MEDIA_QUOTA_EXCEEDED" } }).code, "MEDIA_QUOTA_EXCEEDED");
   assert.strictEqual(stableApiError(400, { error: { code: "MEDIA_SEARCH_INVALID" } }).code, "MEDIA_SEARCH_INVALID");
+  assert.strictEqual(stableApiError(410, { error: { code: "MEDIA_SOURCE_UNAVAILABLE" } }).code, "MEDIA_SOURCE_UNAVAILABLE");
 
-  console.log("Media cloud client auth, URL safety, query serialization and stable error mapping tests passed.");
+  console.log("Media cloud client auth, URL safety, header-only acquisition tickets and stable error mapping tests passed.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
