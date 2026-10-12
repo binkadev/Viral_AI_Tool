@@ -1,6 +1,7 @@
 "use strict";
 
 const { createPexelsMediaProvider } = require("./providers/pexels-media");
+const { createPixabayMediaProvider } = require("./providers/pixabay-media");
 const {
   mediaProviderError,
   normalizeSearchRequest,
@@ -10,7 +11,10 @@ const {
 function createMediaSearchService({ providers, fetchImpl } = {}) {
   const providerList = Array.isArray(providers)
     ? providers.filter(Boolean)
-    : [createPexelsMediaProvider({ fetchImpl })];
+    : [
+        createPexelsMediaProvider({ fetchImpl }),
+        createPixabayMediaProvider({ fetchImpl })
+      ];
 
   function status() {
     return {
@@ -37,17 +41,29 @@ function createMediaSearchService({ providers, fetchImpl } = {}) {
       });
     }
 
-    const provider = eligible[0];
-    const response = await provider.search(request, { signal });
-    return {
-      request,
-      provider: response.provider,
-      page: response.page,
-      perPage: response.perPage,
-      totalResults: response.totalResults,
-      nextPage: response.nextPage,
-      results: response.results
-    };
+    let lastError = null;
+    for (const provider of eligible) {
+      try {
+        const response = await provider.search(request, { signal });
+        return {
+          request,
+          provider: response.provider,
+          page: response.page,
+          perPage: response.perPage,
+          totalResults: response.totalResults,
+          nextPage: response.nextPage,
+          results: response.results
+        };
+      } catch (error) {
+        lastError = error;
+        if (requestedProvider !== "auto") throw error;
+        if (!["MEDIA_PROVIDER_UNAVAILABLE", "MEDIA_SEARCH_UNAVAILABLE", "MEDIA_QUOTA_EXCEEDED"].includes(error?.code)) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError || mediaProviderError("MEDIA_SEARCH_UNAVAILABLE", "Media search is unavailable.");
   }
 
   return {
