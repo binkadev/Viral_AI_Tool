@@ -8,6 +8,8 @@ const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
+const { createMediaSearchService } = require("./media-search");
+const { createMediaHttpHandler } = require("./media-routes");
 const billing = require("./billing");
 const { createDurableStateStore } = require("./state-store");
 const { createSqliteStateStore } = require("./state-store-sqlite");
@@ -1831,6 +1833,15 @@ voiceJobs.configureQuotaHooks({
   }
 });
 
+const mediaSearchService = createMediaSearchService();
+const handleMediaHttp = createMediaHttpHandler({
+  service: mediaSearchService,
+  authenticate,
+  json,
+  error,
+  audit
+});
+
 restoreSpeechJobs();
 for (const job of jobs.values()) {
   if (job.state === "uploaded" && fs.existsSync(jobFilePath(job.id))) {
@@ -1849,6 +1860,7 @@ async function handle(req, res) {
       speechProviderConfigured: speechProvider.isConfigured(),
       translationProviderConfigured: translationProvider.isConfigured(),
       voiceProviderConfigured: voiceProvider.isConfigured(),
+      mediaProviderConfigured: mediaSearchService.status().ready,
       adminProvisioningConfigured: adminConfigured(),
       durableState: true,
       stateDriver: STATE_DRIVER,
@@ -1897,6 +1909,8 @@ async function handle(req, res) {
     return error(res, 429, "RATE_LIMITED");
   }
 
+  if (await handleMediaHttp({ req, res, url, method })) return;
+
   if (method === "GET" && url.pathname === "/v1/internal/ops/status") {
     if (!operationsConfigured()) {
       return error(res, 503, "OPERATIONS_NOT_CONFIGURED");
@@ -1932,7 +1946,8 @@ async function handle(req, res) {
       providers: {
         speechConfigured: speechProvider.isConfigured(),
         translationConfigured: translationProvider.isConfigured(),
-        voiceConfigured: voiceProvider.isConfigured()
+        voiceConfigured: voiceProvider.isConfigured(),
+        mediaConfigured: mediaSearchService.status().ready
       },
       billing: billingReadiness(),
       backups: latestBackupSummary()

@@ -39,6 +39,7 @@ const {
   cancelAllVoice,
   serializeVoiceError
 } = require('./services/voice');
+const { createMediaDesktopController } = require('./services/media/desktop-controller');
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
@@ -56,6 +57,7 @@ const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
 let mainWindow;
 let sessionStore;
 let cloudConfigStore;
+let mediaDesktopController;
 let forceClose = false;
 let closePromptOpen = false;
 let uiLocale = 'vi';
@@ -483,6 +485,12 @@ app.whenReady().then(() => {
     releaseBackendUrl: release.cloudBackendUrl || '',
     releaseEnvironment: release.cloudEnvironment || (release.channel === 'stable' ? 'production' : 'development')
   });
+  mediaDesktopController = createMediaDesktopController({
+    getBackendUrl: () => cloudConfigStore?.read()?.backendUrl || process.env.VIRAL_AI_CLOUD_URL || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    refreshSession: () => refreshSessionIfNeeded(),
+    appVersion: app.getVersion()
+  });
   createWindow();
 
   app.on('activate', () => {
@@ -495,6 +503,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  try { mediaDesktopController?.cancelAll(); } catch {}
   try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
   try { removeDiagnosticProcessHandlers?.(); } catch {}
   try { removeDiagnosticConsoleCapture?.(); } catch {}
@@ -1081,6 +1090,8 @@ ipcMain.handle('cloud:config-save', async (_event, payload) => {
     (before?.backendUrl || '') !== (previewValidation.backendUrl || '') ||
     (before?.environment || 'development') !== nextEnvironment;
 
+  if (endpointWillChange) mediaDesktopController?.cancelAll();
+
   let previousSessionRemotePending = false;
 
   if (endpointWillChange && before?.backendUrl) {
@@ -1129,6 +1140,32 @@ ipcMain.handle('cloud:test-connection', async (_event, backendUrl) => {
     ? backendUrl.trim()
     : configured?.backendUrl || '';
   return testCloudConnection(target);
+});
+
+ipcMain.handle('media:search-status', async () => {
+  try {
+    if (!mediaDesktopController) throw Object.assign(new Error('Media discovery is unavailable.'), { code: 'MEDIA_SEARCH_UNAVAILABLE' });
+    const data = await mediaDesktopController.status();
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: mediaDesktopController?.publicError(error) || { code: 'MEDIA_SEARCH_UNAVAILABLE', details: {} } };
+  }
+});
+
+ipcMain.handle('media:search', async (_event, payload) => {
+  try {
+    if (!mediaDesktopController) throw Object.assign(new Error('Media discovery is unavailable.'), { code: 'MEDIA_SEARCH_UNAVAILABLE' });
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const data = await mediaDesktopController.search(safePayload);
+    return { ok: true, data };
+  } catch (error) {
+    diagnosticLogger?.info('media.search_failed', { code: error?.code || 'MEDIA_SEARCH_UNAVAILABLE' });
+    return { ok: false, error: mediaDesktopController?.publicError(error) || { code: 'MEDIA_SEARCH_UNAVAILABLE', details: {} } };
+  }
+});
+
+ipcMain.handle('media:search-cancel', async (_event, requestId) => {
+  return { ok: true, data: mediaDesktopController?.cancel(requestId) || { cancelled: false } };
 });
 
 ipcMain.handle('files:select-videos', async () => {
