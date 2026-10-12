@@ -101,14 +101,18 @@ function run() {
 
   for (const token of [
     "data-meta-muse-install", "data-meta-muse-session", "data-meta-muse-open", "data-meta-muse-refresh",
-    "data-meta-muse-generate", "data-meta-muse-stock", "data-meta-muse-cancel", "setSceneStrategy", "AbortController", "selectSession"
+    "data-meta-muse-generate", "data-meta-muse-stock", "data-meta-muse-cancel", "setSceneStrategy", "AbortController", "selectSession",
+    "window.addEventListener('pointerdown'", "window.addEventListener('click'", "window.addEventListener('change'",
+    "document.elementsFromPoint", "controlFromEvent", "dispatchAction", "actionBusy", "withControlBusy", "providerApi"
   ]) assert(ui.includes(token), "Meta Muse UI missing: " + token);
   assert(!ui.includes("data-meta-muse-api-key"));
   assert(!ui.includes('type=\"password\"'));
   assert(css.includes(".automation-meta-muse-card"));
   assert(css.includes(".automation-meta-muse-session"));
-  assert(css.includes("-webkit-app-region:no-drag"));
-  assert(css.includes("pointer-events:auto"));
+  assert(css.includes("isolation:isolate"));
+  assert(css.includes("z-index:50"));
+  assert(css.includes("-webkit-app-region:no-drag!important"));
+  assert(css.includes("pointer-events:auto!important"));
 
   assert.strictEqual(manifest.manifest_version, 3);
   assert(manifest.permissions.includes("storage"));
@@ -148,7 +152,7 @@ function run() {
   assert(pkg.scripts["test:core-automation-meta-muse"]);
   assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-meta-muse"));
 
-  console.log("Meta Muse current-profile Chrome extension bridge, multi-profile selection, generation, download boundary and Automation UI contracts passed.");
+  console.log("Meta Muse current-profile Chrome extension bridge, resilient controls, multi-profile selection, generation and download contracts passed.");
 }
 
 try { run(); }
