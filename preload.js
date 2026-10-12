@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
 
   getAutomationMetaMuseStatus: () => ipcRenderer.invoke('automation:meta-muse-status'),
   openAutomationMetaMuse: () => ipcRenderer.invoke('automation:meta-muse-open'),
+  revealAutomationMetaMuseExtension: () => ipcRenderer.invoke('automation:meta-muse-extension-reveal'),
+  selectAutomationMetaMuseSession: payload => ipcRenderer.invoke('automation:meta-muse-select-session', payload),
   startAutomationMetaMuseVideo: payload => ipcRenderer.invoke('automation:meta-muse-generate', payload),
   materializeAutomationMetaMuse: payload => ipcRenderer.invoke('automation:meta-muse-materialize', payload),
   cancelAutomationMetaMuse: operationId => ipcRenderer.invoke('automation:meta-muse-cancel', operationId),
