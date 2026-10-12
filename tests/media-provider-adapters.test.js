@@ -66,6 +66,45 @@ function response(payload, status = 200) {
           }]
         });
       }
+      if (parsed.searchParams.get("q") === "square") {
+        return response({
+          totalHits: 2,
+          hits: [
+            {
+              id: 9,
+              tags: "square, texture",
+              pageURL: "https://pixabay.com/photos/id-9/",
+              user: "SquareAuthor",
+              user_id: 457,
+              previewURL: "https://cdn.example.test/square-preview.jpg",
+              previewWidth: 150,
+              previewHeight: 150,
+              webformatURL: "https://cdn.example.test/square-web.jpg",
+              webformatWidth: 960,
+              webformatHeight: 940,
+              largeImageURL: "https://cdn.example.test/square-large.jpg",
+              imageWidth: 3000,
+              imageHeight: 2950
+            },
+            {
+              id: 10,
+              tags: "wide, landscape",
+              pageURL: "https://pixabay.com/photos/id-10/",
+              user: "WideAuthor",
+              user_id: 458,
+              previewURL: "https://cdn.example.test/wide-preview.jpg",
+              previewWidth: 150,
+              previewHeight: 90,
+              webformatURL: "https://cdn.example.test/wide-web.jpg",
+              webformatWidth: 960,
+              webformatHeight: 540,
+              largeImageURL: "https://cdn.example.test/wide-large.jpg",
+              imageWidth: 3000,
+              imageHeight: 1688
+            }
+          ]
+        });
+      }
       return response({
         totalHits: 1,
         hits: [{
@@ -98,8 +137,14 @@ function response(payload, status = 200) {
   const image = await pixabay.search({ query: "forest", kind: "image", orientation: "portrait", perPage: 3 });
   assert.strictEqual(calls[1].pathname, "/api/");
   assert.strictEqual(calls[1].searchParams.get("orientation"), "vertical");
-  assert.strictEqual(image.results[0].kind, "image");
-  assert.strictEqual(image.results[0].variants.length, 3);
+  assert.strictEqual(image.results.length, 0, "provider results that do not match the requested image orientation must be removed");
+
+  const square = await pixabay.search({ query: "square", kind: "image", orientation: "square", perPage: 3 });
+  assert.strictEqual(calls[2].searchParams.get("orientation"), "all", "Pixabay has no square API filter, so square is enforced after normalization");
+  assert.strictEqual(square.results.length, 1);
+  assert.strictEqual(square.results[0].providerAssetId, "9");
+  assert.strictEqual(square.results[0].meta.orientation, "square");
+  assert.strictEqual(square.results[0].variants.length, 3);
 
   let fallbackCalls = 0;
   const unavailable = {
