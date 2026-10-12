@@ -7,6 +7,8 @@
   let activeSearchRequestId = null;
   let drawerMode = null;
   let selectedRemoteResult = null;
+  const acquisitionStates = new Map();
+  let acquisitionProgressUnsubscribe = null;
 
   function installLocaleMessages() {
     const messages = window.I18N?.messages;
@@ -89,7 +91,23 @@
       preview: "Xem trước",
       previewHint: "Chọn một kết quả để xem video trước khi dùng.",
       attribution: "Thông tin nguồn",
-      projectAddLocked: "Tải vào dự án sẽ được bật sau khi bộ tải và cache an toàn hoàn tất.",
+      addToProject: "Thêm vào dự án",
+      addingToProject: "Đang thêm...",
+      cancelAdd: "Hủy",
+      addedToProject: "Đã có trong dự án",
+      acquisitionUnavailable: "Tư liệu này hiện chỉ có thể xem trước.",
+      acquisitionValidating: "Đang kiểm tra nguồn tư liệu...",
+      acquisitionQueued: "Đang chuẩn bị tải...",
+      acquisitionDownloading: "Đang tải {progress}%",
+      acquisitionVerifying: "Đang kiểm tra file...",
+      acquisitionCancelling: "Đang hủy...",
+      acquisitionCancelled: "Đã hủy. Dự án chưa thay đổi.",
+      acquisitionSourceUnavailable: "Nguồn tư liệu đã hết hạn hoặc không còn sẵn sàng. Hãy tìm lại.",
+      acquisitionDestinationUnavailable: "Không thể lưu tư liệu vào bộ nhớ dự án.",
+      acquisitionDiskLow: "Không đủ dung lượng trống để thêm tư liệu này.",
+      acquisitionDuplicate: "Tư liệu này đang được thêm vào dự án.",
+      acquisitionVerifyFailed: "File tải về không vượt qua kiểm tra. Hãy thử lại.",
+      acquisitionFailed: "Chưa thể thêm tư liệu vào dự án. Hãy thử lại.",
       previous: "Trang trước",
       next: "Trang sau",
       page: "Trang {page}",
@@ -174,7 +192,23 @@
       preview: "Preview",
       previewHint: "Select a result to preview the video before using it.",
       attribution: "Source information",
-      projectAddLocked: "Download to project will be enabled after the safe download and cache lifecycle is complete.",
+      addToProject: "Add to project",
+      addingToProject: "Adding...",
+      cancelAdd: "Cancel",
+      addedToProject: "Already in project",
+      acquisitionUnavailable: "This media is currently available for preview only.",
+      acquisitionValidating: "Checking media source...",
+      acquisitionQueued: "Preparing download...",
+      acquisitionDownloading: "Downloading {progress}%",
+      acquisitionVerifying: "Verifying file...",
+      acquisitionCancelling: "Cancelling...",
+      acquisitionCancelled: "Cancelled. Your project was not changed.",
+      acquisitionSourceUnavailable: "This media source expired or is no longer available. Search again to refresh it.",
+      acquisitionDestinationUnavailable: "The media could not be saved to the project cache.",
+      acquisitionDiskLow: "There is not enough free disk space to add this media.",
+      acquisitionDuplicate: "This media is already being added to the project.",
+      acquisitionVerifyFailed: "The downloaded file did not pass verification. Try again.",
+      acquisitionFailed: "The media could not be added to the project. Try again.",
       previous: "Previous",
       next: "Next",
       page: "Page {page}",
@@ -214,6 +248,173 @@
 
   function assets() {
     return Array.isArray(mediaLibrary()?.assets) ? mediaLibrary().assets : [];
+  }
+
+  function activeProjectId() {
+    return window.ViralCoreProjectPersistence?.snapshot?.()?.projectId || null;
+  }
+
+  function resultKey(result) {
+    const provider = String(result?.provider || "").trim().toLowerCase();
+    const providerAssetId = String(result?.providerAssetId || "").trim();
+    return provider && providerAssetId ? provider + ":" + providerAssetId : "";
+  }
+
+  function projectAssetForResult(result) {
+    const key = resultKey(result);
+    if (!key) return null;
+    return assets().find(asset => resultKey(asset) === key) || null;
+  }
+
+  function acquisitionErrorText(code) {
+    if (code === "MEDIA_SOURCE_UNAVAILABLE") return t("acquisitionSourceUnavailable");
+    if (code === "MEDIA_DESTINATION_UNAVAILABLE") return t("acquisitionDestinationUnavailable");
+    if (code === "MEDIA_DISK_SPACE_LOW") return t("acquisitionDiskLow");
+    if (code === "MEDIA_DOWNLOAD_DUPLICATE") return t("acquisitionDuplicate");
+    if (code === "MEDIA_VERIFY_FAILED") return t("acquisitionVerifyFailed");
+    if (code === "MEDIA_CANCELLED") return t("acquisitionCancelled");
+    return t("acquisitionFailed");
+  }
+
+  function acquisitionStatusText(state) {
+    const progress = Math.max(0, Math.min(100, Math.round(Number(state?.progress || 0))));
+    if (state?.state === "validating") return t("acquisitionValidating");
+    if (state?.state === "queued") return t("acquisitionQueued");
+    if (state?.state === "downloading") return t("acquisitionDownloading", { progress });
+    if (state?.state === "verifying") return t("acquisitionVerifying");
+    if (state?.state === "cancelling") return t("acquisitionCancelling");
+    if (state?.state === "cancelled") return t("acquisitionCancelled");
+    if (state?.state === "failed") return acquisitionErrorText(state.errorCode);
+    if (state?.state === "ready") return t("addedToProject");
+    return "";
+  }
+
+  function activeAcquisitionState(state) {
+    return ["validating", "queued", "downloading", "verifying", "cancelling"].includes(state?.state);
+  }
+
+  function updateAcquisitionControls(key) {
+    if (!key) return;
+    const state = acquisitionStates.get(key) || null;
+    const existing = assets().some(asset => resultKey(asset) === key);
+    document.querySelectorAll("[data-media-acquisition-key]").forEach(root => {
+      if (!(root instanceof HTMLElement) || root.dataset.mediaAcquisitionKey !== key) return;
+      const button = root.querySelector("[data-media-acquisition-button]");
+      const status = root.querySelector("[data-media-acquisition-status]");
+      const fill = root.querySelector("[data-media-acquisition-progress]");
+      const acquirable = root.dataset.mediaAcquirable === "true";
+      const progress = existing || state?.state === "ready" ? 100 : Math.max(0, Math.min(100, Number(state?.progress || 0)));
+      if (fill instanceof HTMLElement) fill.style.width = progress + "%";
+      if (status instanceof HTMLElement) {
+        status.textContent = existing ? t("addedToProject") : (state ? acquisitionStatusText(state) : (acquirable ? "" : t("acquisitionUnavailable")));
+      }
+      if (button instanceof HTMLButtonElement) {
+        if (existing || state?.state === "ready") {
+          button.disabled = true;
+          button.textContent = t("addedToProject");
+        } else if (!acquirable) {
+          button.disabled = true;
+          button.textContent = t("addToProject");
+        } else if (activeAcquisitionState(state)) {
+          button.disabled = state?.state === "cancelling";
+          button.textContent = state?.state === "cancelling" ? t("acquisitionCancelling") : t("cancelAdd");
+        } else {
+          button.disabled = state?.errorCode === "MEDIA_SOURCE_UNAVAILABLE";
+          button.textContent = t("addToProject");
+        }
+      }
+    });
+  }
+
+  function rememberAcquisitionProgress(payload) {
+    const key = resultKey(payload);
+    if (!key) return;
+    const previous = acquisitionStates.get(key);
+    if (previous?.jobId && payload?.jobId && previous.jobId !== payload.jobId) return;
+    acquisitionStates.set(key, {
+      ...(previous || {}),
+      jobId: payload?.jobId || previous?.jobId || null,
+      state: String(payload?.state || previous?.state || ""),
+      progress: Number(payload?.progress || 0),
+      errorCode: payload?.error?.code || previous?.errorCode || null
+    });
+    updateAcquisitionControls(key);
+  }
+
+  function ensureAcquisitionProgressSubscription() {
+    if (acquisitionProgressUnsubscribe || typeof window.desktopAPI?.onMediaAcquisitionProgress !== "function") return;
+    acquisitionProgressUnsubscribe = window.desktopAPI.onMediaAcquisitionProgress(rememberAcquisitionProgress);
+  }
+
+  function addAcquiredAsset(asset) {
+    const current = appState();
+    const model = window.ViralCoreMediaLibraryModel;
+    if (!current || !model?.addAssets || !asset) return { added: false, duplicate: false };
+    const result = model.addAssets(current.media || {}, [asset]);
+    current.media = result.library;
+    window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", { detail: { reason: "media-acquired" } }));
+    window.ViralCoreProjectPersistence?.schedule?.("media-acquired");
+    return { added: result.added.length > 0, duplicate: result.duplicates.length > 0 };
+  }
+
+  async function acquireResult(result) {
+    const key = resultKey(result);
+    if (!key) return;
+    const existing = projectAssetForResult(result);
+    if (existing) {
+      acquisitionStates.set(key, { state: "ready", progress: 100, jobId: null, errorCode: null });
+      updateAcquisitionControls(key);
+      return;
+    }
+
+    const currentState = acquisitionStates.get(key);
+    if (activeAcquisitionState(currentState)) {
+      if (currentState?.jobId) {
+        acquisitionStates.set(key, { ...currentState, state: "cancelling" });
+        updateAcquisitionControls(key);
+        await window.desktopAPI?.cancelMediaAcquisition?.(currentState.jobId);
+      }
+      return;
+    }
+
+    const projectId = activeProjectId();
+    const ticket = String(result?.acquisition?.ticket || "").trim();
+    if (!projectId) {
+      acquisitionStates.set(key, { state: "failed", progress: 0, errorCode: "MEDIA_DESTINATION_UNAVAILABLE" });
+      updateAcquisitionControls(key);
+      return;
+    }
+    if (!ticket) {
+      acquisitionStates.set(key, { state: "failed", progress: 0, errorCode: "MEDIA_SOURCE_UNAVAILABLE" });
+      updateAcquisitionControls(key);
+      return;
+    }
+
+    const jobId = "media-acquire-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    acquisitionStates.set(key, { jobId, state: "validating", progress: 0, errorCode: null });
+    updateAcquisitionControls(key);
+
+    try {
+      const response = await window.desktopAPI?.acquireMedia?.({ jobId, projectId, ticket });
+      if (!response?.ok) {
+        const code = response?.error?.code || "MEDIA_DOWNLOAD_FAILED";
+        acquisitionStates.set(key, { jobId, state: code === "MEDIA_CANCELLED" ? "cancelled" : "failed", progress: acquisitionStates.get(key)?.progress || 0, errorCode: code });
+        updateAcquisitionControls(key);
+        return;
+      }
+      const asset = response?.data?.asset;
+      if (!asset || asset?.status !== "ready" || asset?.fileState !== "available") {
+        acquisitionStates.set(key, { jobId, state: "failed", progress: acquisitionStates.get(key)?.progress || 0, errorCode: "MEDIA_VERIFY_FAILED" });
+        updateAcquisitionControls(key);
+        return;
+      }
+      addAcquiredAsset(asset);
+      acquisitionStates.set(key, { jobId, state: "ready", progress: 100, errorCode: null });
+      updateAcquisitionControls(key);
+    } catch {
+      acquisitionStates.set(key, { jobId, state: "failed", progress: acquisitionStates.get(key)?.progress || 0, errorCode: "MEDIA_DOWNLOAD_FAILED" });
+      updateAcquisitionControls(key);
+    }
   }
 
   function currentSource() {
@@ -572,10 +773,28 @@
     const actions = document.createElement("div");
     actions.className = "core-media-preview-actions";
     actions.append(sourceButton(result));
-    const locked = document.createElement("small");
-    locked.className = "core-media-project-lock-note";
-    locked.textContent = t("projectAddLocked");
-    info.append(title, facts, actions, locked);
+    const key = resultKey(result);
+    const acquisition = document.createElement("div");
+    acquisition.className = "core-media-acquisition";
+    acquisition.dataset.mediaAcquisitionKey = key;
+    acquisition.dataset.mediaAcquirable = result?.acquisition?.ticket ? "true" : "false";
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "core-media-primary-button";
+    addButton.dataset.mediaAcquisitionButton = "true";
+    addButton.textContent = t("addToProject");
+    addButton.addEventListener("click", () => acquireResult(result));
+    const progressTrack = document.createElement("div");
+    progressTrack.className = "core-media-acquisition-progress-track";
+    const progressFill = document.createElement("span");
+    progressFill.dataset.mediaAcquisitionProgress = "true";
+    progressTrack.append(progressFill);
+    const acquisitionStatus = document.createElement("small");
+    acquisitionStatus.className = "core-media-project-lock-note";
+    acquisitionStatus.dataset.mediaAcquisitionStatus = "true";
+    acquisition.append(addButton, progressTrack, acquisitionStatus);
+    info.append(title, facts, actions, acquisition);
+    updateAcquisitionControls(key);
     preview.append(media, info);
   }
 
@@ -963,6 +1182,7 @@
   }
 
   const start = () => {
+    ensureAcquisitionProgressSubscription();
     const page = document.getElementById("page");
     if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
