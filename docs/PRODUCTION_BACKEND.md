@@ -35,6 +35,8 @@ VIRAL_AI_BOOTSTRAP_PASSWORD=<long random password>
 
 After the first owner account has been created and login has been verified, remove `VIRAL_AI_BOOTSTRAP_PASSWORD` from the deployment environment. Existing accounts are loaded from SQLite on future boots and do not require bootstrap secrets.
 
+Online **Find media** requires at least one server-side stock provider credential: `PEXELS_API_KEY` or `PIXABAY_API_KEY`. Keep these keys only in the backend deployment environment; never place them in the Electron app or renderer. If neither is configured, editing/local media remains available but online discovery intentionally reports that media sources are unavailable.
+
 ## Networking
 
 The backend currently binds to `127.0.0.1` intentionally. Put a production reverse proxy / load balancer in front of it and terminate HTTPS there.
@@ -75,6 +77,8 @@ VIRAL_AI_BOOTSTRAP_PASSWORD=<long random first-boot password>
 VIRAL_AI_ADMIN_TOKEN=<different random token, at least 32 chars>
 VIRAL_AI_OPERATIONS_TOKEN=<different random token, at least 32 chars>
 OPENAI_API_KEY=<server-side API key>
+PEXELS_API_KEY=<server-side Pexels key, optional when Pixabay is configured>
+PIXABAY_API_KEY=<server-side Pixabay key, optional when Pexels is configured>
 ```
 
 Then start the stack from the repository root:
@@ -141,6 +145,8 @@ OPENAI_BASE_URL=https://api.openai.com
 VIRAL_AI_OPENAI_TRANSCRIBE_MODEL=whisper-1
 VIRAL_AI_OPENAI_TRANSLATION_MODEL=gpt-5-mini
 VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts
+PEXELS_API_KEY=<server-side Pexels key, optional when Pixabay is configured>
+PIXABAY_API_KEY=<server-side Pixabay key, optional when Pexels is configured>
 ```
 
 Generate a Railway public domain for the service. Railway terminates HTTPS for that domain, so Caddy is not required on Railway.

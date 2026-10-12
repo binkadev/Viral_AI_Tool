@@ -181,7 +181,7 @@
       '<div class="core-media-discovery-backdrop" data-media-close></div>' +
       '<aside class="core-media-discovery-panel" role="dialog" aria-modal="true" aria-labelledby="core-media-discovery-title" tabindex="-1">' +
         '<header class="core-media-discovery-head">' +
-          '<div><span class="core-media-kicker">MEDIA</span><h2 id="core-media-discovery-title"></h2><p data-media-desc></p></div>' +
+          '<div><span class="core-media-kicker" data-media-kicker></span><h2 id="core-media-discovery-title"></h2><p data-media-desc></p></div>' +
           '<button type="button" class="core-media-close" data-media-close aria-label=""></button>' +
         '</header>' +
         '<form class="core-media-searchbar" data-media-form>' +
@@ -229,6 +229,7 @@
   function updateCopy(drawer) {
     const title = drawer.querySelector("#core-media-discovery-title");
     const desc = drawer.querySelector("[data-media-desc]");
+    const kicker = drawer.querySelector("[data-media-kicker]");
     const closeButton = drawer.querySelector(".core-media-close");
     const query = drawer.querySelector("[data-media-query]");
     const search = drawer.querySelector("[data-media-search]");
@@ -239,6 +240,7 @@
     const resultsLabel = drawer.querySelector("[data-media-results-label]");
     if (title) title.textContent = t("discoveryTitle");
     if (desc) desc.textContent = t("discoveryDesc");
+    if (kicker) kicker.textContent = t("media");
     if (closeButton) { closeButton.textContent = "×"; closeButton.setAttribute("aria-label", t("close")); }
     if (query instanceof HTMLInputElement) query.placeholder = t("searchPlaceholder");
     if (search) search.textContent = t("search");
@@ -297,7 +299,7 @@
         duration > 0 ? t("duration", { seconds: Math.round(duration) }) : ""
       ].filter(Boolean).join(" · ");
       return '<article class="core-media-card" data-result-card="' + index + '">' +
-        '<div class="core-media-thumb">' + (preview ? '<img src="' + esc(preview) + '" alt="" loading="lazy" />' : '<span>MEDIA</span>') + '</div>' +
+        '<div class="core-media-thumb">' + (preview ? '<img src="' + esc(preview) + '" alt="" loading="lazy" />' : '<span>' + esc(t("media")) + '</span>') + '</div>' +
         '<div class="core-media-card-copy"><strong>' + esc(result.name || t(result.kind === "image" ? "images" : "video")) + '</strong>' +
           '<small>' + esc(meta || result?.meta?.orientation || "") + '</small>' +
           (creator ? '<em>' + esc(t("sourceBy", { name: creator })) + '</em>' : '') +
