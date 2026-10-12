@@ -1,0 +1,44 @@
+name: Apply Media Browser UI Hardening
+
+on:
+  push:
+    branches: [feat/media-engine-runtime]
+    paths:
+      - "scripts/harden-media-browser-ui.js"
+      - ".github/workflows/media-browser-ui-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/media-engine-runtime
+          fetch-depth: 0
+
+      - name: Apply guarded UI hardening
+        run: node scripts/harden-media-browser-ui.js
+
+      - name: Verify syntax and diff
+        run: |
+          node --check renderer/core-editor-assets.js
+          git diff --check
+          git diff -- renderer/core-editor-assets.js
+
+      - name: Commit UI hardening
+        shell: bash
+        run: |
+          if git diff --quiet -- renderer/core-editor-assets.js; then
+            echo "No UI hardening changes to commit."
+            exit 0
+          fi
+          git config user.name "Viral AI Tool Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add renderer/core-editor-assets.js
+          git commit -m "fix: harden media browser UI lifecycle [media-ui-applied]"
+          git push origin HEAD:feat/media-engine-runtime
