@@ -10,16 +10,16 @@ const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 const index = read("renderer/index.html");
 const assets = read("renderer/core-editor-assets.js");
 const discovery = read("renderer/core-media-discovery.js");
-const locale = read("renderer/core-media-i18n.js");
+const locale = read("renderer/i18n.js");
 const css = read("renderer/core-media-discovery.css");
 const assetCss = read("renderer/core-editor-assets.css");
 
 assert(index.includes('href="core-media-discovery.css"'), "media discovery stylesheet must be loaded");
-assert(index.includes('src="core-media-i18n.js"'), "media locale catalog must be loaded until consolidated into the central catalog");
+assert(!index.includes('src="core-media-i18n.js"'), "media workbench copy must not use a second locale catalog");
 assert(index.includes('src="core-media-discovery.js"'), "media discovery controller must be loaded");
 assert(
-  index.indexOf('src="core-media-i18n.js"') < index.indexOf('src="core-editor-assets.js"'),
-  "media locale must load before the assets rail"
+  index.indexOf('src="i18n.js"') < index.indexOf('src="core-editor-assets.js"'),
+  "central locale catalog must load before the assets rail"
 );
 assert(
   index.indexOf('src="core-media-discovery.js"') < index.indexOf('src="core-editor-assets.js"'),
@@ -59,9 +59,8 @@ assert(discovery.includes('if (event.key !== "Tab") return false;'), "Tab and Sh
 assert(discovery.includes("opener = document.activeElement"), "opening the drawer must capture the keyboard return target");
 assert(discovery.includes("target.focus()"), "closing the drawer must restore focus to the opener");
 
-for (const language of ["vi", "en"]) {
-  assert(locale.includes(`window.I18N.messages.${language}.mediaWorkbench`), `${language} media workbench copy must exist`);
-}
+assert.strictEqual((locale.match(/mediaWorkbench\s*:\s*\{/g) || []).length, 2, "central catalog must contain VI and EN media workbench copy");
+assert(locale.includes("Tìm tư liệu") && locale.includes("Find media"), "central catalog must include both media workbench languages");
 for (const key of ["discoveryTitle", "searchPlaceholder", "unavailableTitle", "signInTitle", "failedTitle", "libraryFullTitle", "libraryFullBody", "addProject"]) {
   assert(locale.includes(`${key}:`), `media locale must define ${key}`);
 }

@@ -42,6 +42,7 @@ const {
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
+const { CloudMediaClient } = require('./services/media/cloud-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
 const {
   checkForUpdate,
@@ -158,6 +159,84 @@ function billingClient() {
     backendUrl: cloudConfig.backendUrl || '',
     appVersion: app.getVersion()
   });
+}
+
+function mediaClient() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+  return new CloudMediaClient({
+    backendUrl: cloudConfig.backendUrl || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion()
+  });
+}
+
+function mediaSearchPayload(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const query = String(source.query || '').trim();
+  const kind = String(source.kind || 'video').trim().toLowerCase();
+  const orientation = String(source.orientation || 'any').trim().toLowerCase();
+  const provider = String(source.provider || 'auto').trim().toLowerCase();
+  const page = Number(source.page || 1);
+  const perPage = Number(source.perPage || 18);
+
+  if (query.length < 2 || query.length > 200) {
+    const error = new Error('Media search query is invalid.');
+    error.code = 'MEDIA_SEARCH_INVALID';
+    throw error;
+  }
+  if (!['video', 'image'].includes(kind) || !['any', 'portrait', 'landscape', 'square'].includes(orientation)) {
+    const error = new Error('Media search filters are invalid.');
+    error.code = 'MEDIA_SEARCH_INVALID';
+    throw error;
+  }
+  if (!['auto', 'pexels', 'pixabay'].includes(provider)) {
+    const error = new Error('Media provider selection is invalid.');
+    error.code = 'MEDIA_SEARCH_INVALID';
+    throw error;
+  }
+  if (!Number.isInteger(page) || page < 1 || page > 1000 || !Number.isInteger(perPage) || perPage < 1 || perPage > 50) {
+    const error = new Error('Media search paging is invalid.');
+    error.code = 'MEDIA_SEARCH_INVALID';
+    throw error;
+  }
+
+  return { query, kind, orientation, provider, page, perPage };
+}
+
+function publicMediaError(error) {
+  const aliases = {
+    AUTH_REQUIRED: 'MEDIA_AUTH_REQUIRED',
+    AUTH_EXPIRED: 'MEDIA_AUTH_REQUIRED',
+    MEDIA_NOT_CONFIGURED: 'MEDIA_SEARCH_UNAVAILABLE',
+    MEDIA_CONFIG_INVALID: 'MEDIA_SEARCH_UNAVAILABLE',
+    MEDIA_HTTPS_REQUIRED: 'MEDIA_SEARCH_UNAVAILABLE',
+    MEDIA_NETWORK: 'MEDIA_SEARCH_UNAVAILABLE',
+    MEDIA_REQUEST_FAILED: 'MEDIA_SEARCH_UNAVAILABLE'
+  };
+  const allowed = new Set([
+    'MEDIA_AUTH_REQUIRED',
+    'MEDIA_SEARCH_INVALID',
+    'MEDIA_PROVIDER_UNAVAILABLE',
+    'MEDIA_SEARCH_UNAVAILABLE',
+    'MEDIA_SEARCH_TIMEOUT',
+    'MEDIA_QUOTA_EXCEEDED',
+    'MEDIA_CANCELLED'
+  ]);
+  const raw = String(error?.code || 'MEDIA_SEARCH_UNAVAILABLE');
+  const code = aliases[raw] || (allowed.has(raw) ? raw : 'MEDIA_SEARCH_UNAVAILABLE');
+  return { code, details: {} };
+}
+
+async function withMediaSession(action) {
+  const ready = await refreshSessionIfNeeded();
+  if (!ready || !sessionStore?.getAccessToken()) {
+    const error = new Error('Authentication is required.');
+    error.code = 'MEDIA_AUTH_REQUIRED';
+    throw error;
+  }
+  return action(mediaClient());
 }
 
 async function withBillingSession(action) {
@@ -1129,6 +1208,27 @@ ipcMain.handle('cloud:test-connection', async (_event, backendUrl) => {
     ? backendUrl.trim()
     : configured?.backendUrl || '';
   return testCloudConnection(target);
+});
+
+ipcMain.handle('media:status', async () => {
+  try {
+    const data = await withMediaSession(client => client.status());
+    return { ok: true, data };
+  } catch (error) {
+    diagnosticLogger?.info('media.status_failed', { code: error?.code || 'MEDIA_SEARCH_UNAVAILABLE' });
+    return { ok: false, error: publicMediaError(error) };
+  }
+});
+
+ipcMain.handle('media:search', async (_event, payload) => {
+  try {
+    const safePayload = mediaSearchPayload(payload);
+    const data = await withMediaSession(client => client.search(safePayload));
+    return { ok: true, data };
+  } catch (error) {
+    diagnosticLogger?.info('media.search_failed', { code: error?.code || 'MEDIA_SEARCH_UNAVAILABLE' });
+    return { ok: false, error: publicMediaError(error) };
+  }
 });
 
 ipcMain.handle('files:select-videos', async () => {
