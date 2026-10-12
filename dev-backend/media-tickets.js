@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const contract = require("../services/media/provider-contract");
+const { providerDownloadAllowed } = require("../services/media/acquisition-policy");
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const VERSION = 1;
@@ -36,17 +37,6 @@ function preferredVariant(result) {
     const quality = item => String(item?.quality || "").toLowerCase() === "hd" ? 1 : 0;
     return quality(b) - quality(a) || area(b) - area(a);
   })[0];
-}
-
-function providerDownloadAllowed(provider, rawUrl) {
-  let url;
-  try { url = new URL(String(rawUrl || "")); }
-  catch { return false; }
-  if (url.protocol !== "https:") return false;
-  const host = url.hostname.toLowerCase();
-  if (provider === "pexels") return host === "pexels.com" || host.endsWith(".pexels.com");
-  if (provider === "pixabay") return host === "pixabay.com" || host.endsWith(".pixabay.com");
-  return false;
 }
 
 function publicAttribution(value) {
