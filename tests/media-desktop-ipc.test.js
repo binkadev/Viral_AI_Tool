@@ -62,6 +62,31 @@ assert.deepStrictEqual(
   assert.strictEqual(bad.error.code, "MEDIA_SEARCH_INVALID");
   assert.strictEqual(requests.length, 2, "invalid renderer payload must not reach the network");
 
+  let markStarted;
+  const started = new Promise(resolve => { markStarted = resolve; });
+  let networkAbortObserved = false;
+  const cancellable = createMediaDesktopService({
+    getCloudConfig: () => ({ backendUrl: "https://api.example.com" }),
+    getAccessToken: () => "access-token",
+    fetchImpl: async (_url, options) => new Promise((resolve, reject) => {
+      markStarted();
+      options.signal.addEventListener("abort", () => {
+        networkAbortObserved = true;
+        const abortError = new Error("aborted");
+        abortError.name = "AbortError";
+        reject(abortError);
+      }, { once: true });
+    })
+  });
+  const pendingSearch = cancellable.search({ query: "first query", kind: "video", provider: "auto" });
+  await started;
+  const cancellation = cancellable.cancelSearch();
+  const cancelledSearch = await pendingSearch;
+  assert.deepStrictEqual(cancellation, { ok: true, cancelled: true });
+  assert.strictEqual(networkAbortObserved, true, "cancelling search must abort the underlying fetch signal");
+  assert.strictEqual(cancelledSearch.ok, false);
+  assert.strictEqual(cancelledSearch.error.code, "MEDIA_CANCELLED", "cancelled network work must remain a stable public cancellation state");
+
   const handlers = new Map();
   registerMediaIpc({
     ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
@@ -81,7 +106,7 @@ assert.deepStrictEqual(
   assert(!preload.includes("PEXELS_API_KEY") && !preload.includes("PIXABAY_API_KEY"));
   assert(!preload.includes("access-token"), "preload must not contain session credentials");
 
-  console.log("Media desktop IPC validation, auth boundary, public errors and narrow preload bridge tests passed.");
+  console.log("Media desktop IPC validation, auth boundary, cancellation, public errors and narrow preload bridge tests passed.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
