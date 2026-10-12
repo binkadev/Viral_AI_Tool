@@ -55,3 +55,6 @@ jobs:
 
       - name: Run media engine search regression
         run: npm run test:media-engine-search
+
+      - name: Run media workbench regression
+        run: node tests/core-media-workbench.test.js
