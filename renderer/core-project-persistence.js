@@ -99,7 +99,7 @@
 
   function bootstrapSnapshot() {
     const raw = readJson(SNAPSHOT_KEY, null);
-    const migrated = model.migrateSnapshot(raw);
+    const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
     unsupportedSchemaVersion = migrated.unsupportedVersion;
     if (unsupportedSchemaVersion) return;
 
