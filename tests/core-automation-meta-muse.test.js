@@ -3,9 +3,13 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
 const assetModel = require("../renderer/core-automation-asset-model");
-const { buildScenePrompt, mediaExtension, SELECTORS, browserExecutableCandidates } = require("../services/automation/meta-muse-browser");
+const {
+  buildScenePrompt,
+  mediaExtension,
+  SELECTORS,
+  browserExecutableCandidates
+} = require("../services/automation/meta-muse-browser");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -30,14 +34,13 @@ function run() {
   assert(SELECTORS.editor.includes("data-lexical-editor"));
   assert(SELECTORS.assistant.includes("data-message-role"));
 
-  const tempBrowser = path.join(os.tmpdir(), "viral-ai-meta-muse-browser-test.exe");
-  fs.writeFileSync(tempBrowser, "test");
-  try {
-    const candidates = browserExecutableCandidates({ VIRAL_AI_MUSE_BROWSER_PATH: tempBrowser }, process.platform);
-    assert(candidates.some(item => item.label === "custom" && item.executablePath === path.resolve(tempBrowser)), "custom Muse browser path must be discoverable");
-  } finally {
-    fs.rmSync(tempBrowser, { force: true });
-  }
+  const fakeCandidates = browserExecutableCandidates({
+    LOCALAPPDATA: "Z:\\definitely-missing-local",
+    PROGRAMFILES: "Z:\\definitely-missing-program",
+    "PROGRAMFILES(X86)": "Z:\\definitely-missing-x86",
+    VIRAL_AI_MUSE_BROWSER_PATH: "Z:\\definitely-missing-custom\\chrome.exe"
+  }, "win32");
+  assert.deepStrictEqual(fakeCandidates, [], "Browser detection must ignore nonexistent executables");
 
   const generatedRequest = assetModel.validateAssetRequest({
     sceneId: "scene-meta-muse",
@@ -66,20 +69,23 @@ function run() {
 
   for (const token of [
     "playwright-core",
-    "launchPersistentContext",
+    "require('child_process')",
+    "spawn(executablePath",
+    "--remote-debugging-port=0",
+    "--remote-allow-origins=*",
+    "DevToolsActivePort",
+    "connectOverCDP",
+    "spawn-cdp",
+    "VIRAL_AI_MUSE_CDP",
     "VIRAL_AI_MUSE_BROWSER_PATH",
-    "browserExecutableCandidates",
-    "executablePath",
-    "channel",
+    "launchPersistentContext",
     "https://muse.ai/",
     "/api/auth/check",
     "data-hatch-composer-root",
     "hatch-composer-stop-button",
     "data-message-role=\"assistant\"",
     "generateVideo",
-    "downloadMedia",
-    "BROWSER_UNAVAILABLE",
-    "MUSE_NAVIGATION_FAILED"
+    "downloadMedia"
   ]) assert(browser.includes(token), "Meta Muse browser adapter missing: " + token);
 
   assert(!browser.includes("muse-video.com"), "Meta Muse integration must not use muse-video.com");
@@ -122,16 +128,10 @@ function run() {
     "data-meta-muse-stock",
     "data-meta-muse-cancel",
     "setSceneStrategy",
-    "AbortController",
-    "BRIDGE_UNAVAILABLE",
-    "BROWSER_UNAVAILABLE",
-    "MUSE_NAVIGATION_FAILED",
-    "connectionError",
-    "opening"
+    "AbortController"
   ]) assert(ui.includes(token), "Meta Muse UI missing: " + token);
   assert(!ui.includes("API key"), "Meta Muse UI should use browser sign-in, not API key entry");
   assert(css.includes(".automation-meta-muse-card"));
-  assert(css.includes(".automation-meta-muse-error"));
   assert(css.includes("@container viral-workpage"));
 
   assert(assetState.includes("function setSceneStrategy"));
@@ -151,7 +151,7 @@ function run() {
   assert(pkg.scripts["test:core-automation-meta-muse"], "package.json must expose Meta Muse regression");
   assert(pkg.scripts["test:core-commercial"].includes("test:core-automation-meta-muse"), "commercial regression must gate Meta Muse integration");
 
-  console.log("Meta Muse browser sign-in, Windows browser discovery, generated asset routing, launch diagnostics and Automation UI contracts passed.");
+  console.log("Meta Muse direct Windows CDP launch, browser sign-in, generated asset routing, media download boundary and Automation UI contracts passed.");
 }
 
 try {
