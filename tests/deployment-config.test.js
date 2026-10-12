@@ -10,6 +10,7 @@ const rootDockerfile = fs.readFileSync(path.join(root, "Dockerfile"), "utf8");
 const compose = fs.readFileSync(path.join(root, "deploy", "docker-compose.production.yml"), "utf8");
 const caddy = fs.readFileSync(path.join(root, "deploy", "Caddyfile"), "utf8");
 const envExample = fs.readFileSync(path.join(root, "deploy", ".env.production.example"), "utf8");
+const productionDocs = fs.readFileSync(path.join(root, "docs", "PRODUCTION_BACKEND.md"), "utf8");
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 const server = fs.readFileSync(path.join(root, "dev-backend", "server.js"), "utf8");
 const railway = JSON.parse(fs.readFileSync(path.join(root, "railway.json"), "utf8"));
@@ -56,10 +57,15 @@ for (const required of [
   "OPENAI_BASE_URL=https://api.openai.com",
   "VIRAL_AI_OPENAI_TRANSCRIBE_MODEL=whisper-1",
   "VIRAL_AI_OPENAI_TRANSLATION_MODEL=gpt-5-mini",
-  "VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts"
+  "VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts",
+  "PEXELS_API_KEY=",
+  "PIXABAY_API_KEY="
 ]) {
   assert(envExample.includes(required), "Production environment template is missing: " + required);
 }
+assert(productionDocs.includes("PEXELS_API_KEY=<server-side Pexels key"), "Production docs must explain server-side Pexels configuration.");
+assert(productionDocs.includes("PIXABAY_API_KEY=<server-side Pixabay key"), "Production docs must explain server-side Pixabay configuration.");
+assert(productionDocs.includes("Find media"), "Production docs must explain the online media discovery dependency.");
 
 assert(gitignore.includes(".env.*"), "Environment secret files must remain ignored.");
 assert(gitignore.includes("!deploy/.env.production.example"), "Production environment template must stay trackable.");
