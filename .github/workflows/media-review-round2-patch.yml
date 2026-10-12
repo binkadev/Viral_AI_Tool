@@ -1,0 +1,49 @@
+name: Apply Final Media Review Fixes
+
+on:
+  push:
+    branches: [feat/media-engine-workbench]
+    paths:
+      - "scripts/fix-media-review-round2.js"
+      - ".github/workflows/media-review-round2-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/media-engine-workbench
+          fetch-depth: 0
+
+      - name: Apply guarded final review fixes
+        run: node scripts/fix-media-review-round2.js
+
+      - name: Verify syntax and focused media contracts
+        shell: pwsh
+        run: |
+          node --check services/media/desktop-ipc.js
+          node --check dev-backend/media-routes.js
+          node --check renderer/core-media-discovery.js
+          node --check renderer/i18n.js
+          node tests/media-routes.test.js
+          node tests/media-desktop-ipc.test.js
+          node tests/core-media-workbench.test.js
+          node tests/media-workbench-wiring.test.js
+          git diff --check
+
+      - name: Commit verified fixes and remove patch scaffolding
+        shell: pwsh
+        run: |
+          Remove-Item scripts/fix-media-review-round2.js -Force
+          Remove-Item .github/workflows/media-review-round2-patch.yml -Force
+          git config user.name "Viral AI Tool Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if ((git diff --cached --quiet) -and $LASTEXITCODE -eq 0) { exit 0 }
+          git commit -m "fix: harden media discovery cancellation and responsive recovery"
+          git push origin HEAD:feat/media-engine-workbench
