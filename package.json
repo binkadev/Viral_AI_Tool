@@ -37,6 +37,13 @@
     "test:core-project-persistence": "node tests/core-project-persistence.test.js",
     "test:core-media-library": "node tests/core-media-library-model.test.js",
     "test:media-local-files": "node tests/media-local-files.test.js",
+    "test:media-provider-contract": "node tests/media-provider-contract.test.js",
+    "test:media-pexels-provider": "node tests/media-pexels-provider.test.js",
+    "test:media-search-service": "node tests/media-search-service.test.js",
+    "test:media-cloud-client": "node tests/media-cloud-client.test.js",
+    "test:media-routes": "node tests/media-routes.test.js",
+    "test:media-desktop-controller": "node tests/media-desktop-controller.test.js",
+    "test:media-engine": "npm run test:core-media-library && npm run test:media-local-files && npm run test:media-provider-contract && npm run test:media-pexels-provider && npm run test:media-search-service && npm run test:media-cloud-client && npm run test:media-routes && npm run test:media-desktop-controller",
     "test:core-workflow": "node tests/core-workflow.test.js",
     "test:core-layout": "node tests/core-layout.test.js",
     "test:core-capabilities": "node tests/core-capabilities.test.js",
@@ -67,7 +74,7 @@
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:media-local-files && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
+    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:core-product-shell && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:media-engine && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy"
   },
   "devDependencies": {
     "electron": "38.2.0",

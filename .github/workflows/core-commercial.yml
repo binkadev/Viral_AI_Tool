@@ -5,18 +5,26 @@ on:
     branches: [master]
     paths:
       - "renderer/**"
+      - "services/media/**"
+      - "dev-backend/media-*.js"
+      - "dev-backend/providers/pexels-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
+      - "main.js"
       - "preload.js"
       - ".github/workflows/core-commercial.yml"
   pull_request:
     branches: [master]
     paths:
       - "renderer/**"
+      - "services/media/**"
+      - "dev-backend/media-*.js"
+      - "dev-backend/providers/pexels-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
+      - "main.js"
       - "preload.js"
       - ".github/workflows/core-commercial.yml"
 
