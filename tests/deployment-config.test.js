@@ -20,7 +20,8 @@ for (const required of [
   "VIRAL_AI_ENV=production",
   "VIRAL_AI_STATE_DRIVER=sqlite",
   "VIRAL_AI_BIND_HOST=0.0.0.0",
-  "HEALTHCHECK"
+  "HEALTHCHECK",
+  "COPY --chown=node:node services/media ./services/media"
 ]) {
   assert(dockerfile.includes(required), "Backend Dockerfile is missing: " + required);
 }
@@ -77,3 +78,4 @@ assert(server.includes("process.env.PORT"), "Backend must support platform-provi
 assert(rootDockerfile.includes("FROM node:22"), "Root Railway Dockerfile must use Node 22.");
 assert(rootDockerfile.includes("VIRAL_AI_DEV_DATA_DIR=/data"), "Root Railway Dockerfile must use the persistent /data path.");
 assert(rootDockerfile.includes('CMD ["node", "dev-backend/server.js"]'), "Root Railway Dockerfile start command is missing.");
+assert(rootDockerfile.includes("COPY --chown=node:node services/media ./services/media"), "Root Railway Dockerfile must package shared media contracts required by backend providers.");
