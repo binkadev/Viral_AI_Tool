@@ -4,6 +4,7 @@ const assert = require("assert");
 const { createPexelsMediaProvider } = require("../dev-backend/providers/pexels-media");
 const { createPixabayMediaProvider } = require("../dev-backend/providers/pixabay-media");
 const { createMediaSearchService } = require("../dev-backend/media-search");
+const { publicSearchError } = require("../services/media/provider-contract");
 
 function response(payload, status = 200) {
   return {
@@ -60,7 +61,7 @@ function response(payload, status = 200) {
             user: "Author",
             user_id: 123,
             videos: {
-              medium: { url: "https://cdn.example.test/pixabay.mp4", width: 1920, height: 1080, size: 1000, thumbnail: "https://cdn.example.test/pixabay.jpg" }
+              medium: { url: "https://cdn.example.test/pixabay.mp4", width: 1080, height: 1920, size: 1000, thumbnail: "https://cdn.example.test/pixabay.jpg" }
             }
           }]
         });
@@ -91,6 +92,7 @@ function response(payload, status = 200) {
   assert.strictEqual(calls[0].pathname, "/api/videos/");
   assert.strictEqual(calls[0].searchParams.get("safesearch"), "true");
   assert.strictEqual(video.results[0].provider, "pixabay");
+  assert.strictEqual(video.results[0].meta.orientation, "portrait");
   assert.strictEqual(video.results[0].attribution.licenseName, "Pixabay Content License");
 
   const image = await pixabay.search({ query: "forest", kind: "image", orientation: "portrait", perPage: 3 });
@@ -127,7 +129,13 @@ function response(payload, status = 200) {
     error => error.code === "MEDIA_SEARCH_UNAVAILABLE"
   );
 
-  console.log("Pexels, Pixabay normalization and provider fallback tests passed.");
+  const publicError = publicSearchError({
+    code: "MEDIA_PROVIDER_UNAVAILABLE",
+    details: { provider: "pexels", secret: "never-leak" }
+  });
+  assert.deepStrictEqual(publicError, { code: "MEDIA_PROVIDER_UNAVAILABLE", details: {} });
+
+  console.log("Pexels, Pixabay normalization, orientation, fallback and public error isolation tests passed.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
