@@ -13,28 +13,8 @@
     }
   }
 
-  function copy() {
-    return locale() === "en"
-      ? {
-          title: "Assets",
-          project: "Project",
-          source: "Source video",
-          transcript: "Transcript",
-          noTranscript: "Run Speech first",
-          segments: count => count + " segments",
-          collapse: "Collapse assets",
-          expand: "Expand assets"
-        }
-      : {
-          title: "Tài nguyên",
-          project: "Dự án",
-          source: "Video nguồn",
-          transcript: "Transcript",
-          noTranscript: "Cần nhận diện lời nói trước",
-          segments: count => count + " đoạn",
-          collapse: "Thu gọn tài nguyên",
-          expand: "Mở tài nguyên"
-        };
+  function t(key, vars = {}) {
+    return window.I18N?.t?.(locale(), "mediaWorkbench." + key, vars) || key;
   }
 
   function appState() {
@@ -46,6 +26,11 @@
     const current = appState();
     const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
     return jobs.find(job => job?.sourcePath && !job?.isRenderOutput) || null;
+  }
+
+  function mediaAssets() {
+    const current = appState();
+    return Array.isArray(current?.media?.assets) ? current.media.assets : [];
   }
 
   function basename(value) {
@@ -80,39 +65,76 @@
     return localStorage.getItem(COLLAPSED_KEY) === "true";
   }
 
+  function countAssets({ kind, origin, favorite } = {}) {
+    return mediaAssets().filter(asset => {
+      if (kind && asset?.kind !== kind) return false;
+      if (origin && asset?.origin !== origin) return false;
+      if (favorite === true && asset?.favorite !== true) return false;
+      return true;
+    }).length;
+  }
+
   function applyCollapsed(panel, value) {
-    const c = copy();
     panel.classList.toggle("is-collapsed", value);
     const button = panel.querySelector("[data-assets-collapse]");
     if (button instanceof HTMLButtonElement) {
       button.textContent = value ? "›" : "‹";
-      button.title = value ? c.expand : c.collapse;
+      button.title = value ? t("expand") : t("collapse");
       button.setAttribute("aria-label", button.title);
       button.setAttribute("aria-expanded", value ? "false" : "true");
     }
     localStorage.setItem(COLLAPSED_KEY, value ? "true" : "false");
   }
 
+  function sectionLabel(key) {
+    return '<div class="core-assets-section-label">' + t(key) + '</div>';
+  }
+
+  function statRow(icon, labelKey, dataKey) {
+    return '<div class="core-asset-item core-asset-stat" data-media-count="' + dataKey + '">' +
+      '<span class="core-asset-icon">' + icon + '</span>' +
+      '<span class="core-asset-copy"><b>' + t(labelKey) + '</b><small data-count-value>0</small></span>' +
+    '</div>';
+  }
+
   function ensurePanel(grid) {
     let panel = grid.querySelector(":scope > .core-editor-assets-panel");
     if (panel instanceof HTMLElement) return panel;
 
-    const c = copy();
     panel = document.createElement("aside");
     panel.className = "core-editor-assets-panel";
-    panel.setAttribute("aria-label", c.title);
+    panel.setAttribute("aria-label", t("assets"));
     panel.innerHTML =
-      '<div class="core-assets-head"><strong>' + c.title + '</strong><button type="button" data-assets-collapse>‹</button></div>' +
+      '<div class="core-assets-head"><strong>' + t("assets") + '</strong><button type="button" data-assets-collapse>‹</button></div>' +
       '<div class="core-assets-body">' +
-        '<div class="core-assets-section-label">' + c.project + '</div>' +
+        sectionLabel("project") +
         '<button type="button" class="core-asset-item core-source-asset" data-source-asset>' +
           '<span class="core-asset-icon">▶</span>' +
-          '<span class="core-asset-copy"><b>' + c.source + '</b><small data-source-name>—</small><em data-source-meta>—</em></span>' +
+          '<span class="core-asset-copy"><b>' + t("source") + '</b><small data-source-name>—</small><em data-source-meta>—</em></span>' +
         '</button>' +
         '<button type="button" class="core-asset-item core-transcript-asset" data-transcript-asset>' +
           '<span class="core-asset-icon">TXT</span>' +
-          '<span class="core-asset-copy"><b>' + c.transcript + '</b><small data-transcript-status>' + c.noTranscript + '</small></span>' +
+          '<span class="core-asset-copy"><b>' + t("transcript") + '</b><small data-transcript-status>' + t("noTranscript") + '</small></span>' +
         '</button>' +
+        sectionLabel("media") +
+        statRow("VID", "video", "video") +
+        statRow("IMG", "images", "image") +
+        statRow("AUD", "audio", "audio") +
+        sectionLabel("discover") +
+        '<button type="button" class="core-asset-item core-discover-action" data-find-media>' +
+          '<span class="core-asset-icon">⌕</span>' +
+          '<span class="core-asset-copy"><b>' + t("findMedia") + '</b><small>' + t("findMediaHint") + '</small></span>' +
+        '</button>' +
+        '<div class="core-asset-item core-asset-stat is-upcoming" aria-disabled="true">' +
+          '<span class="core-asset-icon">AI</span>' +
+          '<span class="core-asset-copy"><b>' + t("generateAi") + '</b><small>' + t("generateAiHint") + '</small></span>' +
+        '</div>' +
+        sectionLabel("generated") +
+        statRow("V", "aiVideo", "generated-video") +
+        statRow("I", "aiImages", "generated-image") +
+        statRow("A", "aiAudio", "generated-audio") +
+        sectionLabel("favorites") +
+        statRow("★", "saved", "favorites") +
       '</div>';
 
     grid.prepend(panel);
@@ -128,12 +150,21 @@
       if (!(button instanceof HTMLButtonElement) || button.disabled) return;
       window.dispatchEvent(new CustomEvent("viral-ai:bottom-dock-tab", { detail: { tab: "transcript" } }));
     });
+    panel.querySelector("[data-find-media]")?.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("viral-ai:media-discovery-open", { detail: { kind: "video" } }));
+    });
     applyCollapsed(panel, collapsed());
     return panel;
   }
 
+  function updateCount(panel, key, value) {
+    const row = panel.querySelector('[data-media-count="' + key + '"]');
+    const target = row?.querySelector("[data-count-value]");
+    if (target) target.textContent = t("items", { count: value });
+    row?.classList.toggle("has-items", value > 0);
+  }
+
   function updatePanel(panel, grid) {
-    const c = copy();
     const video = grid.querySelector("video.preview-video, video.core-player-media");
     const source = currentSource();
     const name = panel.querySelector("[data-source-name]");
@@ -156,13 +187,21 @@
       meta.textContent = dimensions + " · " + formatDuration(duration);
     }
 
-    const count = document.querySelectorAll(".transcript-list .transcript-row").length;
+    const transcriptCount = document.querySelectorAll(".transcript-list .transcript-row").length;
     if (transcript instanceof HTMLButtonElement) {
-      transcript.disabled = count === 0;
-      transcript.classList.toggle("is-disabled", count === 0);
-      transcript.title = count === 0 ? c.noTranscript : c.segments(count);
+      transcript.disabled = transcriptCount === 0;
+      transcript.classList.toggle("is-disabled", transcriptCount === 0);
+      transcript.title = transcriptCount === 0 ? t("noTranscript") : t("segments", { count: transcriptCount });
     }
-    if (transcriptStatus) transcriptStatus.textContent = count === 0 ? c.noTranscript : c.segments(count);
+    if (transcriptStatus) transcriptStatus.textContent = transcriptCount === 0 ? t("noTranscript") : t("segments", { count: transcriptCount });
+
+    updateCount(panel, "video", countAssets({ kind: "video" }));
+    updateCount(panel, "image", countAssets({ kind: "image" }));
+    updateCount(panel, "audio", countAssets({ kind: "audio" }));
+    updateCount(panel, "generated-video", countAssets({ kind: "video", origin: "generated" }));
+    updateCount(panel, "generated-image", countAssets({ kind: "image", origin: "generated" }));
+    updateCount(panel, "generated-audio", countAssets({ kind: "audio", origin: "generated" }));
+    updateCount(panel, "favorites", countAssets({ favorite: true }));
   }
 
   function enhance() {
