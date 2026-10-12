@@ -184,7 +184,7 @@
     };
   }
 
-  function normalizeV2(snapshot) {
+  function normalizeV2(snapshot, options = {}) {
     if (!snapshot || typeof snapshot !== "object") return null;
     const source = normalizeSource(snapshot.source);
     if (!source) return null;
@@ -202,36 +202,51 @@
       projectName: String(snapshot.projectName || source.name || source.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
-      media: mediaFromState({ media: snapshot.media || emptyMedia() }),
+      media: mediaFromState(
+        { media: snapshot.media || emptyMedia() },
+        { restartSafe: options.restartSafeMedia === true }
+      ),
       workflow,
       editor: normalizeEditor(snapshot.editor, source)
     };
   }
 
-  function migrateSnapshot(input) {
+  function mediaRestartChanged(input, normalized, options) {
+    if (!options.restartSafeMedia || !Array.isArray(input?.media?.assets)) return false;
+    const before = input.media.assets;
+    const after = normalized?.media?.assets || [];
+    return after.some((asset, index) => asset?.status !== before[index]?.status);
+  }
+
+  function migrateSnapshot(input, options = {}) {
     if (!input || typeof input !== "object") return { snapshot: null, migrated: false, unsupportedVersion: null };
     const version = Number(input.schemaVersion || 0);
     if (version > CURRENT_SCHEMA_VERSION) {
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV2(input);
+      const snapshot = normalizeV2(input, options);
       const migrated = Boolean(
         snapshot &&
-        (String(input.projectName || "") !== snapshot.projectName || !input.media || Number(input.media?.schemaVersion || 0) !== 1)
+        (
+          String(input.projectName || "") !== snapshot.projectName ||
+          !input.media ||
+          Number(input.media?.schemaVersion || 0) !== 1 ||
+          mediaRestartChanged(input, snapshot, options)
+        )
       );
       return { snapshot, migrated, unsupportedVersion: null };
     }
     if (version === 1 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }),
+        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
     }
     if (version === 0 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }),
+        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
