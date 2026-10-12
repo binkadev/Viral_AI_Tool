@@ -202,6 +202,9 @@
   function hydrateRetainedState() {
     const current = appState();
     if (!current || !currentSnapshot) return;
+    if (!current.media && currentSnapshot.media) {
+      current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
+    }
     ["translation", "voice"].forEach(section => {
       const persisted = currentSnapshot.workflow?.[section];
       const live = current?.[section];
