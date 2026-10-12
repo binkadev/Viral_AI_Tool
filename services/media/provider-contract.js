@@ -135,7 +135,6 @@ function publicSearchError(error) {
   const code = allowed.has(error?.code) ? error.code : "MEDIA_SEARCH_UNAVAILABLE";
   const details = {};
   if (error?.details?.field) details.field = text(error.details.field, 80);
-  if (error?.details?.provider) details.provider = text(error.details.provider, 80).toLowerCase();
   return { code, details };
 }
 

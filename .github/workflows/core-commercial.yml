@@ -5,6 +5,9 @@ on:
     branches: [master]
     paths:
       - "renderer/**"
+      - "services/media/**"
+      - "dev-backend/media-search.js"
+      - "dev-backend/providers/*-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
@@ -14,6 +17,9 @@ on:
     branches: [master]
     paths:
       - "renderer/**"
+      - "services/media/**"
+      - "dev-backend/media-search.js"
+      - "dev-backend/providers/*-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
@@ -46,3 +52,6 @@ jobs:
 
       - name: Run commercial regression suite
         run: npm run test:core-commercial
+
+      - name: Run media engine search regression
+        run: npm run test:media-engine-search
