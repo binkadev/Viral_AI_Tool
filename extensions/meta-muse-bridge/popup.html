@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+  <title>Viral AI · Muse Bridge</title>
+</head>
+<body>
+  <main>
+    <div class="brand"><span>M</span><div><strong>Viral AI · Muse Bridge</strong><small>Kết nối profile Chrome hiện tại với Viral AI Tool</small></div></div>
+    <div id="status" class="status">Đang kiểm tra…</div>
+    <label>Nhóm/Profile hiển thị
+      <input id="profileLabel" type="text" maxlength="120" placeholder="Ví dụ: Personal, Work, Muse A">
+    </label>
+    <div id="tabs" class="tabs"></div>
+    <div class="actions">
+      <button id="save">Lưu tên</button>
+      <button id="open" class="primary">Mở Muse</button>
+      <button id="reconnect">Kết nối lại</button>
+    </div>
+    <p class="note">Extension không đọc hoặc xuất cookie, mật khẩu hay token tài khoản Meta. Nó chỉ thao tác tab muse.ai trong profile này khi Viral AI Tool gửi lệnh.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
