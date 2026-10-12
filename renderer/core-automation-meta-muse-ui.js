@@ -7,6 +7,7 @@
   let lastProgress = null;
   let opening = false;
   let connectionError = null;
+  let pointerOpenGuardUntil = 0;
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -156,6 +157,7 @@
       if (summary) summary.insertAdjacentElement('afterend', mount);
       else panel.prepend(mount);
     }
+    wireMount(mount);
     const html = markup();
     if (mount.innerHTML !== html) mount.innerHTML = html;
   }
@@ -243,15 +245,35 @@
     queueRender();
   }
 
-  document.addEventListener('click', event => {
+  function handleMountClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
-    if (target.closest('[data-meta-muse-open]')) { event.preventDefault(); openMuse(); return; }
+    if (target.closest('[data-meta-muse-open]')) {
+      event.preventDefault();
+      if (Date.now() >= pointerOpenGuardUntil) openMuse();
+      return;
+    }
     if (target.closest('[data-meta-muse-refresh]')) { event.preventDefault(); refreshStatus(); return; }
     if (target.closest('[data-meta-muse-generate]')) { event.preventDefault(); generateScene(); return; }
     if (target.closest('[data-meta-muse-stock]')) { event.preventDefault(); useStock(); return; }
     if (target.closest('[data-meta-muse-cancel]')) { event.preventDefault(); controller?.abort(); }
-  }, true);
+  }
+
+  function handleMountPointerDown(event) {
+    if (event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest('[data-meta-muse-open]')) return;
+    event.preventDefault();
+    pointerOpenGuardUntil = Date.now() + 900;
+    openMuse();
+  }
+
+  function wireMount(mount) {
+    if (!(mount instanceof HTMLElement) || mount.dataset.metaMuseWired === '1') return;
+    mount.dataset.metaMuseWired = '1';
+    mount.addEventListener('pointerdown', handleMountPointerDown, true);
+    mount.addEventListener('click', handleMountClick, true);
+  }
 
   window.addEventListener('viral-ai:automation-meta-muse-status', event => {
     window.ViralAutomationMetaMuseStatus = event.detail || null;
