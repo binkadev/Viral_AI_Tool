@@ -17,10 +17,22 @@
     return 'meta-muse-' + String(phase || 'op') + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
   }
 
+  function emptyStatus() {
+    return {
+      bridgeRunning: false,
+      extensionConnected: false,
+      requiresSelection: false,
+      sessions: [],
+      selectedSession: null,
+      loggedIn: false,
+      composerReady: false
+    };
+  }
+
   async function status(force = false) {
-    if (!force && cachedStatus && Date.now() - statusAt < 2000) return cachedStatus;
+    if (!force && cachedStatus && Date.now() - statusAt < 1200) return cachedStatus;
     const response = await desktop.getAutomationMetaMuseStatus();
-    cachedStatus = response?.status || { browserRunning: false, loggedIn: false, composerReady: false };
+    cachedStatus = response?.status || emptyStatus();
     statusAt = Date.now();
     return cachedStatus;
   }
@@ -67,7 +79,7 @@
 
     async isConfigured() {
       const snapshot = await status();
-      return snapshot.loggedIn === true && snapshot.composerReady === true;
+      return snapshot.extensionConnected === true && snapshot.loggedIn === true && snapshot.composerReady === true;
     },
 
     async generate(request, { signal, onProgress } = {}) {
@@ -118,21 +130,34 @@
 
   try { router.register(provider); } catch {}
 
-  async function refreshStatus() {
-    const snapshot = await status(true);
-    window.ViralAutomationMetaMuseStatus = snapshot;
-    window.dispatchEvent(new CustomEvent('viral-ai:automation-meta-muse-status', { detail: snapshot }));
-    return snapshot;
-  }
-
-  async function openLogin() {
-    const response = await desktop.openAutomationMetaMuse();
-    if (!response?.ok) throw normalizedError(response?.error);
-    cachedStatus = response.status || cachedStatus;
+  function publish(snapshot) {
+    cachedStatus = snapshot || emptyStatus();
     statusAt = Date.now();
     window.ViralAutomationMetaMuseStatus = cachedStatus;
     window.dispatchEvent(new CustomEvent('viral-ai:automation-meta-muse-status', { detail: cachedStatus }));
     return cachedStatus;
+  }
+
+  async function refreshStatus() {
+    return publish(await status(true));
+  }
+
+  async function openMuse() {
+    const response = await desktop.openAutomationMetaMuse();
+    if (!response?.ok) throw normalizedError(response?.error);
+    return publish(response.status || await status(true));
+  }
+
+  async function revealExtension() {
+    const response = await desktop.revealAutomationMetaMuseExtension?.();
+    if (!response?.ok) throw normalizedError(response?.error || { code: 'EXTENSION_INSTALL_FAILED' });
+    return response;
+  }
+
+  async function selectSession(instanceId, tabId) {
+    const response = await desktop.selectAutomationMetaMuseSession?.({ instanceId, tabId });
+    if (!response?.ok) throw normalizedError(response?.error || { code: 'MUSE_SESSION_NOT_FOUND' });
+    return publish(response.status || await status(true));
   }
 
   refreshStatus().catch(() => {});
@@ -140,7 +165,10 @@
   window.ViralAutomationMetaMuseProvider = {
     provider,
     refreshStatus,
-    openLogin,
+    openLogin: openMuse,
+    openMuse,
+    revealExtension,
+    selectSession,
     getStatus: () => cachedStatus
   };
 })();
