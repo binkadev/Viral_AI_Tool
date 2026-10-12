@@ -3,13 +3,13 @@
 const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, shell } = require('electron');
 const { createAssetCache } = require('./asset-cache');
-const { createMetaMuseBrowser } = require('./meta-muse-browser');
+const { createMetaMuseExtensionBridge } = require('./meta-muse-extension-bridge');
 const { probeVideo } = require('../ffmpeg');
 
 let installed = false;
-let browserInstance = null;
+let bridgeInstance = null;
 let cacheInstance = null;
 const operations = new Map();
 const candidates = new Map();
@@ -23,20 +23,21 @@ function cache() {
   return cacheInstance;
 }
 
-function browser() {
-  if (!browserInstance) {
-    browserInstance = createMetaMuseBrowser({
-      profileDir: path.join(app.getPath('userData'), 'meta-muse-profile'),
-      headless: false
+function bridge() {
+  if (!bridgeInstance) {
+    bridgeInstance = createMetaMuseExtensionBridge({
+      userDataPath: app.getPath('userData'),
+      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'),
+      shell
     });
   }
-  return browserInstance;
+  return bridgeInstance;
 }
 
 function publicError(error) {
   return {
     code: String(error?.code || 'META_MUSE_FAILED'),
-    message: String(error?.message || 'Meta Muse operation failed.').slice(0, 500),
+    message: String(error?.message || 'Meta Muse operation failed.').slice(0, 600),
     details: error?.details && typeof error.details === 'object' ? error.details : {}
   };
 }
@@ -80,7 +81,7 @@ function publicCandidate(token, item) {
     previewUrl: '',
     sourcePage: String(item?.result?.threadUrl || ''),
     license: 'Generated with the user\'s Meta Muse account',
-    attribution: 'Meta Muse',
+    attribution: 'Meta Muse · muse.ai',
     score: 100,
     raw: { candidateToken: token }
   };
@@ -97,7 +98,11 @@ async function materializeCandidate(item, { signal, onProgress } = {}) {
   await fs.mkdir(tempRoot, { recursive: true });
   const tempPath = path.join(tempRoot, 'muse-' + crypto.randomUUID() + '.mp4');
   try {
-    const downloaded = await browser().downloadMedia(url, tempPath, { signal, onProgress });
+    const downloaded = await bridge().downloadMedia(url, tempPath, {
+      signal,
+      onProgress,
+      instanceId: item?.result?.instanceId || ''
+    });
     const meta = await probeVideo(downloaded.path);
     const cacheKey = 'meta-muse:' + crypto.createHash('sha256')
       .update([item.result.threadUrl, url, meta.sizeBytes].join('|'))
@@ -115,7 +120,7 @@ async function materializeCandidate(item, { signal, onProgress } = {}) {
         durationSec: Number(meta.duration || 0),
         sourcePage: String(item.result.threadUrl || ''),
         license: 'Generated with the user\'s Meta Muse account',
-        attribution: 'Meta Muse'
+        attribution: 'Meta Muse · muse.ai'
       }
     });
     return {
@@ -129,7 +134,7 @@ async function materializeCandidate(item, { signal, onProgress } = {}) {
       height: Number(meta.height || 0),
       durationSec: Number(meta.duration || 0),
       license: 'Generated with the user\'s Meta Muse account',
-      attribution: 'Meta Muse',
+      attribution: 'Meta Muse · muse.ai',
       checksum: adopted.record.checksum,
       cacheKey,
       cacheHit: adopted.cacheHit
@@ -145,15 +150,35 @@ function installAutomationMetaMuseIpc() {
 
   ipcMain.handle('automation:meta-muse-status', async () => {
     try {
-      return { ok: true, status: await browser().status() };
+      return { ok: true, status: await bridge().status() };
     } catch (error) {
-      return { ok: false, error: publicError(error), status: { browserRunning: false, loggedIn: false, composerReady: false } };
+      return {
+        ok: false,
+        error: publicError(error),
+        status: { bridgeRunning: false, extensionConnected: false, loggedIn: false, composerReady: false, sessions: [] }
+      };
     }
   });
 
   ipcMain.handle('automation:meta-muse-open', async () => {
     try {
-      return { ok: true, status: await browser().openForLogin() };
+      return { ok: true, status: await bridge().openMuse() };
+    } catch (error) {
+      return { ok: false, error: publicError(error) };
+    }
+  });
+
+  ipcMain.handle('automation:meta-muse-extension-reveal', async () => {
+    try {
+      return await bridge().revealExtension();
+    } catch (error) {
+      return { ok: false, error: publicError(error) };
+    }
+  });
+
+  ipcMain.handle('automation:meta-muse-select-session', async (_event, payload) => {
+    try {
+      return { ok: true, status: await bridge().selectSession(payload || {}) };
     } catch (error) {
       return { ok: false, error: publicError(error) };
     }
@@ -165,7 +190,7 @@ function installAutomationMetaMuseIpc() {
     let op;
     try {
       op = createOperation(safe.operationId);
-      const result = await browser().generateVideo(safe.request || {}, {
+      const result = await bridge().generateVideo(safe.request || {}, {
         signal: op.controller.signal,
         onProgress: progress => {
           if (!event.sender.isDestroyed()) {
@@ -225,7 +250,7 @@ function installAutomationMetaMuseIpc() {
 
   ipcMain.handle('automation:meta-muse-close', async () => {
     try {
-      await browser().close();
+      cancelAllAutomationMetaMuse();
       return { ok: true };
     } catch (error) {
       return { ok: false, error: publicError(error) };
@@ -240,13 +265,14 @@ function cancelAllAutomationMetaMuse() {
   operations.clear();
 }
 
-async function closeAutomationMetaMuseBrowser() {
+async function closeAutomationMetaMuseBridge() {
   cancelAllAutomationMetaMuse();
-  if (browserInstance) await browserInstance.close().catch(() => {});
+  if (bridgeInstance) await bridgeInstance.close().catch(() => {});
 }
 
 module.exports = {
   installAutomationMetaMuseIpc,
   cancelAllAutomationMetaMuse,
-  closeAutomationMetaMuseBrowser
+  closeAutomationMetaMuseBridge,
+  closeAutomationMetaMuseBrowser: closeAutomationMetaMuseBridge
 };
