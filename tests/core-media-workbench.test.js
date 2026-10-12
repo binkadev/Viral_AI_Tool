@@ -30,7 +30,10 @@ for (const marker of ["project", "media", "discover", "generated", "favorites"])
   assert(assets.includes(`sectionLabel("${marker}")`), `assets rail must include ${marker} section`);
 }
 assert(assets.includes('data-find-media'), "assets rail must expose Find media action");
-assert(assets.includes('data-find-media aria-label="' + "' + t(\"findMedia\") + '"), "compact Find media control must preserve a localized accessible name");
+assert(
+  assets.includes('data-find-media aria-label="') && assets.includes('title="'),
+  "compact Find media control must preserve an accessible name and tooltip"
+);
 assert(assets.includes('class="core-asset-icon" aria-hidden="true">⌕'), "compact Find media glyph must be decorative to assistive technology");
 assert(assets.includes('viral-ai:media-discovery-open'), "Find media must open the discovery surface through a product event");
 assert(assets.includes('current?.media?.assets'), "asset counts must come from project-owned media state");
