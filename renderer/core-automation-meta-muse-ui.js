@@ -13,7 +13,7 @@
 
   function appState() { try { return typeof state !== "undefined" ? state : null; } catch { return null; } }
   function locale() { return appState()?.locale === 'en' ? 'en' : 'vi'; }
-  function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c])); }
+  function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
   function status() { return window.ViralAutomationMetaMuseStatus || window.ViralAutomationMetaMuseProvider?.getStatus?.() || null; }
   function notify(message) { try { if (typeof toast === 'function') toast(message); } catch {} }
 
