@@ -1,5 +1,5 @@
-.automation-meta-muse-mount{margin:10px 0 12px}
-.automation-meta-muse-card{padding:13px;border:1px solid var(--ui-line);border-radius:10px;background:linear-gradient(180deg,color-mix(in srgb,var(--ui-panel-soft) 92%,transparent),var(--ui-panel));box-shadow:inset 0 1px 0 rgba(255,255,255,.015)}
+.automation-meta-muse-mount{position:relative;z-index:5;margin:10px 0 12px;pointer-events:auto;-webkit-app-region:no-drag}
+.automation-meta-muse-card{position:relative;z-index:1;padding:13px;border:1px solid var(--ui-line);border-radius:10px;background:linear-gradient(180deg,color-mix(in srgb,var(--ui-panel-soft) 92%,transparent),var(--ui-panel));box-shadow:inset 0 1px 0 rgba(255,255,255,.015);pointer-events:auto;-webkit-app-region:no-drag}
 .automation-meta-muse-card.is-ready{border-color:color-mix(in srgb,var(--ui-accent) 24%,var(--ui-line))}
 .automation-meta-muse-card.is-running{border-color:color-mix(in srgb,var(--ui-accent) 38%,var(--ui-line))}
 .automation-meta-muse-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
@@ -11,8 +11,9 @@
 .automation-meta-muse-state{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:5px 8px;border:1px solid var(--ui-line);border-radius:7px;background:var(--ui-panel-raised);color:var(--ui-muted);font-size:var(--type-caption);line-height:1.35;white-space:nowrap}
 .automation-meta-muse-state i{width:6px;height:6px;border-radius:50%;background:var(--ui-faint)}
 .automation-meta-muse-card.is-ready .automation-meta-muse-state i{background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 10%,transparent)}
-.automation-meta-muse-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid var(--ui-line)}
-.automation-meta-muse-actions .button{min-height:36px!important}
+.automation-meta-muse-actions{position:relative;z-index:2;display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid var(--ui-line);pointer-events:auto;-webkit-app-region:no-drag}
+.automation-meta-muse-actions .button{position:relative;z-index:3;min-height:36px!important;pointer-events:auto!important;-webkit-app-region:no-drag!important;cursor:pointer}
+.automation-meta-muse-actions .button[disabled]{cursor:not-allowed}
 .automation-meta-muse-error{display:flex;flex-direction:column;gap:3px;margin-top:10px;padding:9px 10px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--ui-line));border-radius:8px;background:color-mix(in srgb,var(--danger) 7%,var(--ui-panel));color:var(--ui-text)}
 .automation-meta-muse-error strong{font-size:var(--type-meta);line-height:1.4;font-weight:650}
 .automation-meta-muse-error small{color:var(--ui-muted);font-size:var(--type-caption);line-height:1.45;overflow-wrap:anywhere}
