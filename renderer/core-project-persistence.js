@@ -99,7 +99,7 @@
 
   function bootstrapSnapshot() {
     const raw = readJson(SNAPSHOT_KEY, null);
-    const migrated = model.migrateSnapshot(raw);
+    const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
     unsupportedSchemaVersion = migrated.unsupportedVersion;
     if (unsupportedSchemaVersion) return;
 
@@ -202,6 +202,9 @@
   function hydrateRetainedState() {
     const current = appState();
     if (!current || !currentSnapshot) return;
+    if (!current.media && currentSnapshot.media) {
+      current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
+    }
     ["translation", "voice"].forEach(section => {
       const persisted = currentSnapshot.workflow?.[section];
       const live = current?.[section];
