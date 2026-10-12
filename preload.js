@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
 
   getMediaStatus: () => ipcRenderer.invoke('media:status'),
   searchMedia: payload => ipcRenderer.invoke('media:search', payload),
+  cancelMediaSearch: () => ipcRenderer.invoke('media:search-cancel'),
 
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),

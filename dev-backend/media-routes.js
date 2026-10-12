@@ -41,6 +41,11 @@ function createMediaRouteHandler({ mediaSearchService, authenticate, json, error
       return true;
     }
 
+    const controller = new AbortController();
+    const abortSearch = () => controller.abort();
+    const abortOnResponseClose = () => { if (!res.writableEnded) abortSearch(); };
+    req.once?.("aborted", abortSearch);
+    res.once?.("close", abortOnResponseClose);
     try {
       const payload = await mediaSearchService.search({
         query: url.searchParams.get("query") || "",
@@ -49,16 +54,20 @@ function createMediaRouteHandler({ mediaSearchService, authenticate, json, error
         page: url.searchParams.get("page") || 1,
         perPage: url.searchParams.get("perPage") || 18,
         provider: url.searchParams.get("provider") || "auto"
-      });
-      json(res, 200, payload);
+      }, { signal: controller.signal });
+      if (!controller.signal.aborted && !res.writableEnded) json(res, 200, payload);
       return true;
     } catch (searchError) {
+      if (controller.signal.aborted || res.writableEnded) return true;
       const publicValue = typeof mediaSearchService.publicError === "function"
         ? mediaSearchService.publicError(searchError)
         : { code: searchError?.code || "MEDIA_SEARCH_UNAVAILABLE", details: {} };
       const mapped = mediaRouteError(publicValue);
       error(res, mapped.status, mapped.code, publicValue.details || {});
       return true;
+    } finally {
+      req.removeListener?.("aborted", abortSearch);
+      res.removeListener?.("close", abortOnResponseClose);
     }
   };
 }

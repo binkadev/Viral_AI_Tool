@@ -42,6 +42,9 @@ assert(discovery.includes('fileState: "remote"'), "selected remote stock must re
 assert(discovery.includes('origin: "stock"'), "selected search media must retain stock origin");
 assert(discovery.includes('attribution: result.attribution || {}'), "selected media must retain attribution/license metadata");
 assert(discovery.includes('typeof window.desktopAPI?.searchMedia !== "function"'), "missing bridge must produce an unavailable state rather than fake results");
+assert(discovery.includes("cancelActiveSearch();"), "superseded and closed searches must cancel the active desktop request");
+assert(discovery.includes('renderState("unavailable", "providerUnavailableTitle", "providerUnavailableBody")'), "provider configuration failures need a specific recovery state");
+assert(discovery.includes('renderState("quota", "quotaTitle", "quotaBody")'), "quota failures need a specific recovery state");
 assert(!/mock|fixture|sampleResults|fakeResults/i.test(discovery), "production discovery controller must not contain fake stock result fixtures");
 assert(!discovery.includes("PEXELS_API_KEY") && !discovery.includes("PIXABAY_API_KEY"), "provider credentials must never appear in renderer code");
 
@@ -61,7 +64,7 @@ assert(discovery.includes("target.focus()"), "closing the drawer must restore fo
 
 assert.strictEqual((locale.match(/mediaWorkbench\s*:\s*\{/g) || []).length, 2, "central catalog must contain VI and EN media workbench copy");
 assert(locale.includes("Tìm tư liệu") && locale.includes("Find media"), "central catalog must include both media workbench languages");
-for (const key of ["discoveryTitle", "searchPlaceholder", "unavailableTitle", "signInTitle", "failedTitle", "libraryFullTitle", "libraryFullBody", "addProject"]) {
+for (const key of ["discoveryTitle", "searchPlaceholder", "unavailableTitle", "signInTitle", "failedTitle", "providerUnavailableTitle", "providerUnavailableBody", "quotaTitle", "quotaBody", "libraryFullTitle", "libraryFullBody", "addProject"]) {
   assert(locale.includes(`${key}:`), `media locale must define ${key}`);
 }
 
@@ -74,5 +77,7 @@ assert(!/font-size:(?:8|9|10)px/.test(css), "media discovery must not introduce 
 assert(!/font-size:(?:8|9|10)px/.test(assetCss), "media asset rail must not introduce sub-11px text");
 assert(assetCss.includes("core-discover-action"), "Find media must have a deliberate rail treatment");
 assert(assetCss.includes("core-asset-stat.has-items"), "real project media counts must have a visible populated state");
+assert(!assetCss.includes("@media(max-width:1320px){.core-editor-assets-panel{display:none!important}"), "responsive layout must not remove the only Find media entry");
+assert(assetCss.includes("grid-template-columns:54px minmax(0,1fr) 340px"), "responsive layout must retain a compact media rail below 1320px");
 
 console.log("Commercial media workbench hierarchy, recovery, accessibility, readability, bridge boundary and no-fake-data contracts passed.");

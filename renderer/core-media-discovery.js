@@ -310,12 +310,19 @@
     }).join("");
   }
 
+  function cancelActiveSearch() {
+    if (typeof window.desktopAPI?.cancelMediaSearch === "function") {
+      Promise.resolve(window.desktopAPI.cancelMediaSearch()).catch(() => {});
+    }
+  }
+
   async function runSearch() {
     const drawer = ensureDrawer();
     const queryEl = drawer.querySelector("[data-media-query]");
     const kindEl = drawer.querySelector("[data-media-kind]");
     const orientationEl = drawer.querySelector("[data-media-orientation]");
     const query = queryEl instanceof HTMLInputElement ? queryEl.value.trim() : "";
+    cancelActiveSearch();
     const requestId = ++activeRequest;
     lastResults = [];
     currentView = "validating";
@@ -344,8 +351,14 @@
       if (requestId !== activeRequest) return;
       if (payload?.ok === false) {
         const code = payload?.error?.code || payload?.code;
-        if (code === "MEDIA_AUTH_REQUIRED" || code === "AUTH_REQUIRED") {
+        if (code === "MEDIA_CANCELLED") {
+          return;
+        } else if (code === "MEDIA_AUTH_REQUIRED" || code === "AUTH_REQUIRED") {
           renderState("auth", "signInTitle", "signInBody");
+        } else if (["MEDIA_PROVIDER_UNAVAILABLE", "MEDIA_NOT_CONFIGURED", "MEDIA_CONFIG_INVALID", "MEDIA_HTTPS_REQUIRED"].includes(code)) {
+          renderState("unavailable", "providerUnavailableTitle", "providerUnavailableBody");
+        } else if (code === "MEDIA_QUOTA_EXCEEDED") {
+          renderState("quota", "quotaTitle", "quotaBody");
         } else {
           renderState("error", "failedTitle", "failedBody");
         }
@@ -377,6 +390,7 @@
     const drawer = document.getElementById(DRAWER_ID);
     if (!(drawer instanceof HTMLElement) || drawer.classList.contains("hidden")) return;
     activeRequest += 1;
+    cancelActiveSearch();
     currentView = "closed";
     lastResults = [];
     drawer.classList.add("hidden");

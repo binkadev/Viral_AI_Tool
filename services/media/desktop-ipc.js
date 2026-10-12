@@ -67,6 +67,15 @@ function createMediaDesktopService({
     });
   }
 
+  let activeSearchController = null;
+
+  function cancelSearch() {
+    if (!activeSearchController) return { ok: true, cancelled: false };
+    activeSearchController.abort();
+    activeSearchController = null;
+    return { ok: true, cancelled: true };
+  }
+
   async function status() {
     try {
       const client = await refreshedClient();
@@ -85,16 +94,21 @@ function createMediaDesktopService({
       return { ok: false, error: publicMediaClientError(error) };
     }
 
+    cancelSearch();
+    const controller = new AbortController();
+    activeSearchController = controller;
     try {
       const client = await refreshedClient();
-      const data = await client.search(input);
+      const data = await client.search({ ...input, signal: controller.signal });
       return { ok: true, ...data };
     } catch (error) {
       return { ok: false, error: publicMediaClientError(error) };
+    } finally {
+      if (activeSearchController === controller) activeSearchController = null;
     }
   }
 
-  return { status, search };
+  return { status, search, cancelSearch };
 }
 
 function registerMediaIpc({ ipcMain, ...dependencies } = {}) {
@@ -102,6 +116,7 @@ function registerMediaIpc({ ipcMain, ...dependencies } = {}) {
   const service = createMediaDesktopService(dependencies);
   ipcMain.handle("media:status", () => service.status());
   ipcMain.handle("media:search", (_event, payload) => service.search(payload));
+  ipcMain.handle("media:search-cancel", () => service.cancelSearch());
   return service;
 }
 

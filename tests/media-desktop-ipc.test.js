@@ -71,11 +71,13 @@ assert.deepStrictEqual(
   });
   assert(handlers.has("media:status"));
   assert(handlers.has("media:search"));
-  assert.strictEqual(handlers.size, 2, "media IPC surface should stay narrow");
+  assert(handlers.has("media:search-cancel"));
+  assert.strictEqual(handlers.size, 3, "media IPC surface should stay narrow");
 
   const preload = fs.readFileSync(path.join(__dirname, "..", "preload.js"), "utf8");
   assert(preload.includes("getMediaStatus: () => ipcRenderer.invoke('media:status')"));
   assert(preload.includes("searchMedia: payload => ipcRenderer.invoke('media:search', payload)"));
+  assert(preload.includes("cancelMediaSearch: () => ipcRenderer.invoke('media:search-cancel')"));
   assert(!preload.includes("PEXELS_API_KEY") && !preload.includes("PIXABAY_API_KEY"));
   assert(!preload.includes("access-token"), "preload must not contain session credentials");
 

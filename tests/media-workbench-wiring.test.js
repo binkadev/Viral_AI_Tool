@@ -18,6 +18,8 @@ assert(main.includes("getAccessToken: () => sessionStore?.getAccessToken()"), "m
 assert(main.includes("refreshSession: () => refreshSessionIfNeeded()"), "media IPC must share authenticated session refresh semantics");
 assert(preload.includes("getMediaStatus: () => ipcRenderer.invoke('media:status')"), "preload must expose only the narrow media status method");
 assert(preload.includes("searchMedia: payload => ipcRenderer.invoke('media:search', payload)"), "preload must expose only the narrow media search method");
+assert(preload.includes("cancelMediaSearch: () => ipcRenderer.invoke('media:search-cancel')"), "preload must expose narrow media search cancellation");
+assert(server.includes("new AbortController()"), "backend media route must propagate client disconnect cancellation");
 assert(server.includes('require("./media-search")'), "backend must mount the media search service");
 assert(server.includes('require("./media-routes")'), "backend must mount the authenticated media route module");
 assert(server.includes("const handleMediaRoute = createMediaRouteHandler"), "backend must configure the media route handler once");
