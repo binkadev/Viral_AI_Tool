@@ -141,7 +141,7 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
 
     const normalize = request.kind === "video" ? normalizeVideo : normalizeImage;
     let results = (Array.isArray(payload?.hits) ? payload.hits : []).map(normalize).filter(Boolean);
-    if (request.kind === "video" && request.orientation !== "any") {
+    if (request.orientation !== "any") {
       results = results.filter(item => item.meta?.orientation === request.orientation);
     }
 
