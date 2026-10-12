@@ -88,6 +88,31 @@ function mediaExtension(url, contentType = '') {
   return '.mp4';
 }
 
+function browserExecutableCandidates(env = process.env, platform = process.platform) {
+  const result = [];
+  const add = (label, executablePath) => {
+    const value = String(executablePath || '').trim();
+    if (!value || !fs.existsSync(value)) return;
+    const resolved = path.resolve(value);
+    if (result.some(item => item.executablePath.toLowerCase() === resolved.toLowerCase())) return;
+    result.push({ label, executablePath: resolved });
+  };
+
+  add('custom', env.VIRAL_AI_MUSE_BROWSER_PATH);
+  if (platform === 'win32') {
+    const local = env.LOCALAPPDATA || '';
+    const program = env.ProgramFiles || env.PROGRAMFILES || '';
+    const programX86 = env['ProgramFiles(x86)'] || env.PROGRAMFILES_X86 || '';
+    add('chrome', local && path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    add('chrome', program && path.join(program, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    add('chrome', programX86 && path.join(programX86, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    add('msedge', local && path.join(local, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+    add('msedge', program && path.join(program, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+    add('msedge', programX86 && path.join(programX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  return result;
+}
+
 class MetaMuseBrowser {
   constructor({ profileDir, appUrl = DEFAULT_APP_URL, headless = false, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     if (!profileDir) throw new Error('Meta Muse browser profile directory is required.');
@@ -98,6 +123,8 @@ class MetaMuseBrowser {
     this.context = null;
     this.page = null;
     this.channel = null;
+    this.executablePath = null;
+    this.lastLaunchErrors = [];
     this.queue = Promise.resolve();
   }
 
@@ -111,44 +138,84 @@ class MetaMuseBrowser {
     return Boolean(this.context && this.page && !this.page.isClosed());
   }
 
+  launchOptions(extra = {}) {
+    return {
+      headless: this.headless,
+      viewport: { width: 1366, height: 900 },
+      acceptDownloads: false,
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: [
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=Translate,OptimizationGuideModelDownloading'
+      ],
+      ...extra
+    };
+  }
+
+  async tryLaunch(label, options) {
+    try {
+      this.context = await chromium.launchPersistentContext(this.profileDir, this.launchOptions(options));
+      this.channel = label;
+      this.executablePath = options?.executablePath || null;
+      return true;
+    } catch (error) {
+      this.lastLaunchErrors.push({
+        label,
+        executablePath: options?.executablePath || null,
+        message: String(error?.message || error).slice(0, 1600)
+      });
+      this.context = null;
+      return false;
+    }
+  }
+
   async launch() {
     if (this.isRunning()) return this.page;
     await fsp.mkdir(this.profileDir, { recursive: true });
-    const errors = [];
-    for (const channel of ['chrome', 'msedge']) {
-      try {
-        this.context = await chromium.launchPersistentContext(this.profileDir, {
-          channel,
-          headless: this.headless,
-          viewport: { width: 1366, height: 900 },
-          acceptDownloads: false,
-          ignoreDefaultArgs: ['--enable-automation'],
-          args: [
-            '--no-first-run',
-            '--no-default-browser-check',
-            '--disable-blink-features=AutomationControlled',
-            '--disable-features=Translate,OptimizationGuideModelDownloading'
-          ]
-        });
-        this.channel = channel;
-        break;
-      } catch (error) {
-        errors.push(String(error?.message || error));
-        this.context = null;
+    this.lastLaunchErrors = [];
+
+    const explicit = browserExecutableCandidates();
+    for (const candidate of explicit) {
+      if (await this.tryLaunch(candidate.label, { executablePath: candidate.executablePath })) break;
+    }
+
+    // Keep Playwright's channel resolution as a final fallback. Explicit Windows
+    // paths above avoid the common case where channel discovery fails although
+    // Chrome/Edge is installed and works normally for the user.
+    if (!this.context) {
+      for (const channel of ['chrome', 'msedge']) {
+        if (await this.tryLaunch(channel, { channel })) break;
       }
     }
+
     if (!this.context) {
-      throw museError('BROWSER_UNAVAILABLE', 'Chrome or Edge could not be opened for Muse.', { errors });
+      throw museError('BROWSER_UNAVAILABLE', 'Chrome or Edge could not be opened for Muse.', {
+        profileDir: this.profileDir,
+        candidates: explicit.map(item => item.executablePath),
+        errors: this.lastLaunchErrors
+      });
     }
+
     this.context.on('close', () => {
       this.context = null;
       this.page = null;
       this.channel = null;
+      this.executablePath = null;
     });
     const pages = this.context.pages();
     this.page = pages.find(page => page.url().startsWith('https://muse.ai')) || pages[0] || await this.context.newPage();
     this.page.setDefaultTimeout(60000);
-    await this.gotoMuse();
+    try {
+      await this.gotoMuse();
+    } catch (error) {
+      throw museError('MUSE_NAVIGATION_FAILED', 'Muse opened, but muse.ai could not be loaded.', {
+        channel: this.channel,
+        executablePath: this.executablePath,
+        message: String(error?.message || error).slice(0, 1200)
+      });
+    }
     return this.page;
   }
 
@@ -208,7 +275,9 @@ class MetaMuseBrowser {
         loggedIn: false,
         composerReady: false,
         profileDir: this.profileDir,
-        channel: null
+        channel: null,
+        executablePath: null,
+        launchErrors: this.lastLaunchErrors.slice(-4)
       };
     }
     const auth = await this.authStatus();
@@ -218,8 +287,10 @@ class MetaMuseBrowser {
       composerReady: await this.composerReady(),
       profileDir: this.profileDir,
       channel: this.channel,
+      executablePath: this.executablePath,
       url: this.page.url(),
-      viewerId: auth.viewerId || null
+      viewerId: auth.viewerId || null,
+      launchErrors: []
     };
   }
 
@@ -400,6 +471,7 @@ class MetaMuseBrowser {
     this.context = null;
     this.page = null;
     this.channel = null;
+    this.executablePath = null;
     if (context) await context.close().catch(() => {});
   }
 }
@@ -413,6 +485,7 @@ module.exports = {
   SELECTORS,
   buildScenePrompt,
   mediaExtension,
+  browserExecutableCandidates,
   createMetaMuseBrowser,
   museError
 };
