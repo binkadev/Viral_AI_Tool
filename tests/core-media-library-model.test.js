@@ -177,5 +177,13 @@ assert(
   persistence.includes('model.migrateSnapshot(raw, { restartSafeMedia: true })'),
   "project persistence bootstrap must explicitly request restart-safe media normalization"
 );
+assert(
+  persistence.includes("if (!current.media && currentSnapshot.media)"),
+  "project media must hydrate into legacy runtime state before autosave can project it back"
+);
+assert(
+  persistence.indexOf("hydrateRetainedState();") < persistence.indexOf("const next = model.buildSnapshot(current, editorState(current), currentSnapshot)"),
+  "media hydration must happen before snapshot rebuild"
+);
 
 console.log("Core media library normalization, dedupe, attribution, URL safety, project ownership and restart-state tests passed.");
