@@ -143,7 +143,8 @@ function getActiveWorkCount() {
     activeSpeechCount() +
     activeTranslationCount() +
     activeVoiceCount() +
-    speechModelManager.activeDownloadCount();
+    speechModelManager.activeDownloadCount() +
+    Number(mediaDesktopController?.activeAcquisitionCount?.() || 0);
 }
 
 function authClient() {
@@ -489,7 +490,15 @@ app.whenReady().then(() => {
     getBackendUrl: () => cloudConfigStore?.read()?.backendUrl || process.env.VIRAL_AI_CLOUD_URL || '',
     getAccessToken: () => sessionStore?.getAccessToken() || null,
     refreshSession: () => refreshSessionIfNeeded(),
-    appVersion: app.getVersion()
+    appVersion: app.getVersion(),
+    cacheRoot: path.join(app.getPath('userData'), 'media-cache'),
+    onAcquisitionProgress: payload => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('media:acquisition-progress', payload);
+        }
+      } catch {}
+    }
   });
   createWindow();
 
@@ -1166,6 +1175,22 @@ ipcMain.handle('media:search', async (_event, payload) => {
 
 ipcMain.handle('media:search-cancel', async (_event, requestId) => {
   return { ok: true, data: mediaDesktopController?.cancel(requestId) || { cancelled: false } };
+});
+
+ipcMain.handle('media:acquire', async (_event, payload) => {
+  try {
+    if (!mediaDesktopController) throw Object.assign(new Error('Media acquisition is unavailable.'), { code: 'MEDIA_DESTINATION_UNAVAILABLE' });
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const data = await mediaDesktopController.acquire(safePayload);
+    return { ok: true, data };
+  } catch (error) {
+    diagnosticLogger?.info('media.acquisition_failed', { code: error?.code || 'MEDIA_DOWNLOAD_FAILED' });
+    return { ok: false, error: mediaDesktopController?.publicError(error) || { code: 'MEDIA_DOWNLOAD_FAILED', details: {} } };
+  }
+});
+
+ipcMain.handle('media:acquisition-cancel', async (_event, jobId) => {
+  return { ok: true, data: mediaDesktopController?.cancelAcquisition(jobId) || { cancelled: false } };
 });
 
 ipcMain.handle('files:select-videos', async () => {
