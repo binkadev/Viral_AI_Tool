@@ -30,6 +30,8 @@ for (const marker of ["project", "media", "discover", "generated", "favorites"])
   assert(assets.includes(`sectionLabel("${marker}")`), `assets rail must include ${marker} section`);
 }
 assert(assets.includes('data-find-media'), "assets rail must expose Find media action");
+assert(assets.includes('data-find-media aria-label="' + "' + t(\"findMedia\") + '"), "compact Find media control must preserve a localized accessible name");
+assert(assets.includes('class="core-asset-icon" aria-hidden="true">⌕'), "compact Find media glyph must be decorative to assistive technology");
 assert(assets.includes('viral-ai:media-discovery-open'), "Find media must open the discovery surface through a product event");
 assert(assets.includes('current?.media?.assets'), "asset counts must come from project-owned media state");
 
@@ -47,6 +49,10 @@ assert(discovery.includes('renderState("unavailable", "providerUnavailableTitle"
 assert(discovery.includes('renderState("quota", "quotaTitle", "quotaBody")'), "quota failures need a specific recovery state");
 assert(!/mock|fixture|sampleResults|fakeResults/i.test(discovery), "production discovery controller must not contain fake stock result fixtures");
 assert(!discovery.includes("PEXELS_API_KEY") && !discovery.includes("PIXABAY_API_KEY"), "provider credentials must never appear in renderer code");
+assert(discovery.includes('data-media-kicker'), "discovery kicker must be populated from the locale catalog");
+assert(discovery.includes('kicker.textContent = t("media")'), "discovery kicker must use localized media copy");
+assert(discovery.includes('esc(t("media"))'), "no-preview media cards must use localized media copy");
+assert(!discovery.includes('>MEDIA<') && !discovery.includes('<span>MEDIA</span>'), "visible MEDIA labels must not bypass i18n");
 
 const requestIncrement = discovery.indexOf("const requestId = ++activeRequest;");
 const queryValidation = discovery.indexOf("if (query.length < 2)");
