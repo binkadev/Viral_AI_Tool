@@ -299,36 +299,31 @@
     const now = finite(options.now, Date.now());
     const groups = [];
     let current = [];
-
-    function currentMaxEnd() {
-      return current.reduce((maxEnd, segment) => Math.max(maxEnd, segment.end), current[0]?.end || 0);
-    }
-
-    function durationWith(segment) {
-      if (!current.length) return Math.max(0, segment.end - segment.start);
-      return Math.max(0, Math.max(currentMaxEnd(), segment.end) - current[0].start);
-    }
+    let currentMaxEnd = 0;
 
     function flush() {
       if (!current.length) return;
       groups.push(current);
       current = [];
+      currentMaxEnd = 0;
     }
 
     for (const segment of segments) {
       if (!current.length) {
         current.push(segment);
+        currentMaxEnd = segment.end;
         continue;
       }
-      const previousEnd = currentMaxEnd();
+      const previousEnd = currentMaxEnd;
       const gap = Math.max(0, segment.start - previousEnd);
       const currentDuration = Math.max(0, previousEnd - current[0].start);
-      const combinedDuration = durationWith(segment);
+      const combinedDuration = Math.max(0, Math.max(previousEnd, segment.end) - current[0].start);
       const shouldSplitForGap = gap > maxGap;
       const shouldSplitForMax = combinedDuration > maxDuration && currentDuration >= minDuration;
       const shouldSplitAtTarget = currentDuration >= targetDuration && combinedDuration > targetDuration * 1.35;
       if (shouldSplitForGap || shouldSplitForMax || shouldSplitAtTarget) flush();
       current.push(segment);
+      currentMaxEnd = Math.max(currentMaxEnd, segment.end);
     }
     flush();
 
