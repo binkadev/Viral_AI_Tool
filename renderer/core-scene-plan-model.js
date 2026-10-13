@@ -232,6 +232,7 @@
     scenes.forEach((scene, index) => { scene.order = index; });
     const selectedSceneId = text(source.selectedSceneId, 512) || null;
     const nowIso = new Date().toISOString();
+    const hasDurableContent = scenes.length > 0 || Boolean(text(source.sourceSignature, 120)) || Boolean(text(source.sourceIdentity, 512));
     return {
       schemaVersion: SCENE_PLAN_SCHEMA_VERSION,
       sourceType: text(source.sourceType, 20).toLowerCase() === "script" ? "script" : "transcript",
@@ -243,8 +244,8 @@
       selectedSceneId: selectedSceneId && scenes.some(scene => scene.id === selectedSceneId)
         ? selectedSceneId
         : (scenes[0]?.id || null),
-      createdAt: iso(source.createdAt, nowIso),
-      updatedAt: iso(source.updatedAt, nowIso)
+      createdAt: iso(source.createdAt, hasDurableContent ? nowIso : null),
+      updatedAt: iso(source.updatedAt, hasDurableContent ? nowIso : null)
     };
   }
 
