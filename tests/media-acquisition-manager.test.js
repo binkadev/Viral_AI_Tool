@@ -137,6 +137,7 @@ const descriptor = {
       projectId: "project-source-2",
       descriptor
     });
+    const pendingCancellation = assert.rejects(pending, error => error?.code === "MEDIA_CANCELLED");
     await new Promise(resolve => setImmediate(resolve));
     assert.strictEqual(slowManager.activeCount(), 1);
     await assert.rejects(
@@ -149,7 +150,7 @@ const descriptor = {
     );
     assert.deepStrictEqual(slowManager.cancel("media-acquire-1001"), { cancelled: true });
     releaseSlow();
-    await assert.rejects(() => pending, error => error?.code === "MEDIA_CANCELLED");
+    await pendingCancellation;
     assert.strictEqual(slowManager.activeCount(), 0);
     assert.strictEqual(fs.existsSync(paths.partialPath), false, "cancelled download must remove partial output");
     assert.strictEqual(fs.existsSync(paths.finalPath), false, "cancelled download must never create a ready output");
