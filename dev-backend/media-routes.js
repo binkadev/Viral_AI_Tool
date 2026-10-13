@@ -1,5 +1,7 @@
 "use strict";
 
+const { createMediaTicketService } = require("./media-tickets");
+
 const DEFAULT_MEDIA_SEARCH_TIMEOUT_MS = 12000;
 
 function mediaRouteError(errorValue) {
@@ -7,10 +9,31 @@ function mediaRouteError(errorValue) {
   if (code === "MEDIA_SEARCH_INVALID") return { status: 400, code };
   if (code === "MEDIA_AUTH_REQUIRED") return { status: 401, code };
   if (code === "MEDIA_QUOTA_EXCEEDED") return { status: 429, code };
+  if (code === "MEDIA_SOURCE_UNAVAILABLE") return { status: 410, code };
   if (["MEDIA_PROVIDER_UNAVAILABLE", "MEDIA_SEARCH_TIMEOUT", "MEDIA_SEARCH_UNAVAILABLE"].includes(code)) {
     return { status: 503, code };
   }
   return { status: 500, code: "MEDIA_SEARCH_UNAVAILABLE" };
+}
+
+function acquisitionTicket(req) {
+  const raw = req?.headers?.["x-viral-ai-media-ticket"];
+  return Array.isArray(raw) ? String(raw[0] || "").trim() : String(raw || "").trim();
+}
+
+function enrichSearchResult(result, ticketService, userId) {
+  if (!result || typeof result !== "object") return result;
+  try {
+    return {
+      ...result,
+      acquisition: ticketService.issue(result, { userId })
+    };
+  } catch {
+    return {
+      ...result,
+      acquisition: null
+    };
+  }
 }
 
 function createMediaRouteHandler({
@@ -19,10 +42,15 @@ function createMediaRouteHandler({
   json,
   error,
   requestRateLimited,
+  audit,
+  ticketService = createMediaTicketService(),
   searchTimeoutMs = DEFAULT_MEDIA_SEARCH_TIMEOUT_MS
 } = {}) {
   if (!mediaSearchService || typeof mediaSearchService.search !== "function" || typeof mediaSearchService.status !== "function") {
     throw new Error("mediaSearchService is required");
+  }
+  if (!ticketService || typeof ticketService.issue !== "function" || typeof ticketService.resolve !== "function") {
+    throw new Error("media acquisition ticket service is required");
   }
   if (typeof authenticate !== "function" || typeof json !== "function" || typeof error !== "function") {
     throw new Error("media route response helpers are required");
@@ -34,9 +62,10 @@ function createMediaRouteHandler({
     if (!url || typeof url.pathname !== "string") return false;
     const isStatus = method === "GET" && url.pathname === "/v1/media/status";
     const isSearch = method === "GET" && url.pathname === "/v1/media/search";
-    if (!isStatus && !isSearch) return false;
+    const isAcquisition = method === "GET" && url.pathname === "/v1/media/acquisition";
+    if (!isStatus && !isSearch && !isAcquisition) return false;
 
-    if (typeof requestRateLimited === "function" && requestRateLimited(req, "media-search")) {
+    if (typeof requestRateLimited === "function" && requestRateLimited(req, isAcquisition ? "media-acquisition" : "media-search")) {
       error(res, 429, "RATE_LIMITED");
       return true;
     }
@@ -49,6 +78,31 @@ function createMediaRouteHandler({
 
     if (isStatus) {
       json(res, 200, mediaSearchService.status());
+      return true;
+    }
+
+    if (isAcquisition) {
+      const ticket = acquisitionTicket(req);
+      if (!ticket) {
+        error(res, 400, "MEDIA_SOURCE_UNAVAILABLE");
+        return true;
+      }
+
+      try {
+        const descriptor = ticketService.resolve(ticket, { userId: user.id });
+        audit?.("media.acquisition.resolved", req, {
+          userId: user.id || null,
+          provider: descriptor.provider || null,
+          providerAssetId: descriptor.providerAssetId || null
+        });
+        json(res, 200, descriptor);
+      } catch {
+        audit?.("media.acquisition.rejected", req, {
+          userId: user.id || null,
+          code: "MEDIA_SOURCE_UNAVAILABLE"
+        });
+        error(res, 410, "MEDIA_SOURCE_UNAVAILABLE");
+      }
       return true;
     }
 
@@ -72,7 +126,19 @@ function createMediaRouteHandler({
         perPage: url.searchParams.get("perPage") || 18,
         provider: url.searchParams.get("provider") || "auto"
       }, { signal: controller.signal });
-      if (!controller.signal.aborted && !res.writableEnded) json(res, 200, payload);
+
+      if (!controller.signal.aborted && !res.writableEnded) {
+        const results = Array.isArray(payload?.results)
+          ? payload.results.map(item => enrichSearchResult(item, ticketService, user.id))
+          : [];
+        audit?.("media.search.succeeded", req, {
+          userId: user.id || null,
+          provider: payload?.provider || null,
+          resultCount: results.length,
+          acquirableCount: results.filter(item => item?.acquisition?.ticket).length
+        });
+        json(res, 200, { ...payload, results });
+      }
       return true;
     } catch (searchError) {
       if (res.writableEnded) return true;
@@ -84,6 +150,10 @@ function createMediaRouteHandler({
       const publicValue = typeof mediaSearchService.publicError === "function"
         ? mediaSearchService.publicError(searchError)
         : { code: searchError?.code || "MEDIA_SEARCH_UNAVAILABLE", details: {} };
+      audit?.("media.search.failed", req, {
+        userId: user.id || null,
+        code: publicValue.code || "MEDIA_SEARCH_UNAVAILABLE"
+      });
       const mapped = mediaRouteError(publicValue);
       error(res, mapped.status, mapped.code, publicValue.details || {});
       return true;
@@ -97,6 +167,8 @@ function createMediaRouteHandler({
 
 module.exports = {
   DEFAULT_MEDIA_SEARCH_TIMEOUT_MS,
+  acquisitionTicket,
+  enrichSearchResult,
   createMediaRouteHandler,
   mediaRouteError
 };
