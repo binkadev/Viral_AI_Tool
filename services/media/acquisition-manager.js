@@ -197,8 +197,10 @@ function createMediaAcquisitionManager({
   async function ensureDestination(paths, expectedBytes = 0) {
     try {
       await fsp.mkdir(paths.directory, { recursive: true });
-    } catch {
-      throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Media cache directory could not be prepared.");
+    } catch (systemError) {
+      throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Media cache directory could not be prepared.", {
+        systemCode: systemError?.code || null
+      });
     }
     const free = await availableBytes(paths.directory);
     if (free != null && free < freeFloor + Math.max(0, Number(expectedBytes || 0))) {
@@ -216,7 +218,7 @@ function createMediaAcquisitionManager({
       providerAssetId: descriptor.providerAssetId,
       name: descriptor.name,
       localPath: finalPath,
-      previewUrl: descriptor.previewUrl,
+      previewUrl: null,
       remoteUrl: null,
       status: "ready",
       fileState: "available",
@@ -246,11 +248,6 @@ function createMediaAcquisitionManager({
     }
 
     const paths = cachePaths(root, projectId, descriptor);
-    const existingSize = await regularFileSize(paths.finalPath);
-    if (existingSize > 0) {
-      return { duplicate: true, asset: mediaAsset(descriptor, paths.finalPath, existingSize) };
-    }
-
     const record = {
       jobId,
       projectId,
@@ -261,6 +258,9 @@ function createMediaAcquisitionManager({
       progress: 0,
       partialPath: paths.partialPath
     };
+
+    // Reserve both identifiers synchronously before the first await. The native
+    // service, not renderer button state, owns duplicate protection.
     jobs.set(jobId, record);
     identities.set(identity, jobId);
     emit(record, "validating", 0);
@@ -270,9 +270,20 @@ function createMediaAcquisitionManager({
     let expectedBytes = 0;
 
     try {
+      const existingSize = await regularFileSize(paths.finalPath);
+      if (existingSize > 0) {
+        const asset = mediaAsset(descriptor, paths.finalPath, existingSize);
+        emit(record, "ready", 100, { assetId: asset.id, duplicate: true });
+        return { duplicate: true, asset };
+      }
+
       await ensureDestination(paths);
       try { await fsp.rm(paths.partialPath, { force: true }); }
-      catch { throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "A partial media file could not be cleared."); }
+      catch (systemError) {
+        throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "A partial media file could not be cleared.", {
+          systemCode: systemError?.code || null
+        });
+      }
 
       emit(record, "queued", 3);
       let response;
@@ -315,11 +326,14 @@ function createMediaAcquisitionManager({
       if (!response.body || typeof response.body[Symbol.asyncIterator] !== "function") {
         throw acquisitionError("MEDIA_DOWNLOAD_FAILED", "Media response did not include a downloadable body.");
       }
+      if (record.controller.signal.aborted) throw acquisitionError("MEDIA_CANCELLED", "Media download was cancelled.");
 
       try {
         fileHandle = await fsp.open(paths.partialPath, "wx");
-      } catch {
-        throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Media cache file could not be created.");
+      } catch (systemError) {
+        throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Media cache file could not be created.", {
+          systemCode: systemError?.code || null
+        });
       }
 
       emit(record, "downloading", expectedBytes > 0 ? 5 : 10);
@@ -349,8 +363,10 @@ function createMediaAcquisitionManager({
 
       try {
         await fsp.rename(paths.partialPath, paths.finalPath);
-      } catch {
-        throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Downloaded media could not be finalized.");
+      } catch (systemError) {
+        throw acquisitionError("MEDIA_DESTINATION_UNAVAILABLE", "Downloaded media could not be finalized.", {
+          systemCode: systemError?.code || null
+        });
       }
 
       const asset = mediaAsset(descriptor, paths.finalPath, partialSize);
