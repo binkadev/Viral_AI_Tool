@@ -38,9 +38,11 @@ Do not reduce the product to a generic video editor, a translation tool, or a co
 
 ## Current completed foundation
 
-At the start of Block 5, the repository already contains commercial shell, creator home, player/timeline synchronization, long-form transcript workstation, source recovery, output recovery, translation/voice flows, auth/billing/cloud foundations, update flow, and project persistence.
+The repository now contains the commercial shell, creator home, player/timeline synchronization, long-form transcript workstation, source recovery, output recovery, translation/voice flows, auth/billing/cloud foundations, update flow, project persistence, and the V1 commercial Media Engine.
 
-The project snapshot currently owns the active source and workflow/editor state. Block 5 extends that ownership to project media assets instead of keeping assets as decorative UI-only records.
+The Media Engine owns project media as durable state instead of decorative UI-only records. It includes local media foundations, provider-neutral stock discovery, Pexels/Pixabay backend adapters, signed user-bound acquisition tickets, secure native cache/download, duplicate protection, cancellation, verification, attribution, pagination, project-safe completion, restart/recovery contracts, VI/EN workbench UX, and permanent regression coverage.
+
+Generated-media entries remain part of the shared media model, but provider-specific AI image/video generation is intentionally implemented through later generation/script-to-video blocks rather than reopening the stock discovery/acquisition boundary.
 
 ## Roadmap and order
 
@@ -51,8 +53,8 @@ Block 1 — Commercial Shell                 DONE
 Block 2 — Player + Timeline                 DONE
 Block 3 — Transcript Workstation            DONE
 Block 4 — Project Persistence               DONE
-Block 5 — Content / Media Engine            IN PROGRESS
-Block 6 — AI Scene Planner
+Block 5 — Content / Media Engine            DONE
+Block 6 — AI Scene Planner                  CURRENT
 Block 7 — Automated Media Matching
 Block 8 — Script -> Full Video
 Block 9 — Publish Hub
@@ -72,20 +74,20 @@ Later / V1.5+
 
 Telegram is an integration layer, not a core workflow owner. It should call the same Notification, Approval, Job, and Publishing services used by the desktop app.
 
-## Block 5 — Media Engine scope
+## Block 5 — Media Engine scope (completed V1 commercial foundation)
 
-The Media Engine must eventually support:
+The Media Engine contract supports:
 
 - project source media;
 - local video/image/audio imports;
 - stock search adapters;
-- generated image/video/audio assets;
+- generated image/video/audio asset records for later generation providers;
 - download/cache lifecycle;
 - attribution/license metadata;
-- favorites;
+- favorites and project library organization;
 - duplicate protection;
-- missing-file recovery/relink;
-- cancellation/retry;
+- missing-file recovery/relink contracts;
+- cancellation/retry/recovery;
 - persistence/restart behavior;
 - project ownership;
 - VI/EN commercial UX.
@@ -166,7 +168,7 @@ Do not rely on UI-disabled buttons for duplicate prevention.
 
 ## Block 5 implementation slices
 
-### 5A — Domain + persistence foundation
+### 5A — Domain + persistence foundation — DONE
 
 - pure media library model;
 - normalization and duplicate rules;
@@ -175,7 +177,7 @@ Do not rely on UI-disabled buttons for duplicate prevention.
 - project snapshot schema migration;
 - regression tests.
 
-### 5B — Native local-media bridge
+### 5B — Native local-media bridge — DONE
 
 - secure file picker for video/image/audio;
 - native validation of selected files;
@@ -183,44 +185,21 @@ Do not rely on UI-disabled buttons for duplicate prevention.
 - no renderer Node access;
 - no arbitrary path execution.
 
-### 5C — Commercial Media Library UI
+### 5C — Commercial Media Library UI — DONE for V1 discovery/acquisition workflow
 
-Assets panel evolves from source/transcript-only to a real project library with:
+Assets panel is a real project library/workbench and can surface project media plus discovery/acquisition states. Generated-provider screens can extend this surface later without changing project ownership rules.
 
-```text
-Project
-- Source video
-- Transcript
-
-Media
-- Video
-- Images
-- Audio
-
-Discover
-- Find media
-- Generate with AI
-
-Generated
-- AI video
-- AI images
-- AI voice/audio
-
-Favorites
-```
-
-Do not expose internal provider/engine jargon as the primary navigation model.
-
-### 5D — Stock provider architecture
+### 5D — Stock provider architecture — DONE
 
 - provider-neutral search contract;
-- Pexels/Pixabay adapters or backend proxy;
-- secrets stay out of renderer and distributable client when commercially sensitive;
+- Pexels/Pixabay backend adapters;
+- secrets stay backend-only;
 - license/attribution retained with selected assets;
 - normalized search results;
-- pagination/cancellation/rate-limit handling.
+- pagination/cancellation/rate-limit handling;
+- signed short-lived user-bound acquisition descriptors.
 
-### 5E — Download/cache lifecycle
+### 5E — Download/cache lifecycle — DONE
 
 State machine:
 
@@ -230,13 +209,26 @@ idle -> validating -> queued -> downloading -> verifying -> ready
                               -> failed
 ```
 
-Check source availability, writable destination, disk/resources where practical, duplicate active work, and partial-output cleanup.
+The native layer validates source/provider identity, destination, allowed host/content type, file size/disk constraints, duplicate active work, partial-output cleanup, verification, project binding, and safe shutdown cancellation.
 
-## Blocks after Media Engine
+## Block 6 — AI Scene Planner (CURRENT)
 
-### Scene Planner
+Scene Planner turns a script or transcript into a durable, editable visual plan before any automatic stock matching or generation occurs.
 
-Script/transcript -> semantic scenes with timing, visual intent, search/generation prompts, shot/motion preference, and confidence.
+The planner must not be an opaque one-click generator. It should produce reviewable scenes with timing, source-text ownership, visual intent, search/generation prompts, shot/motion preference, and confidence. Manual edits must be preserved and distinguishable from AI suggestions where relevant.
+
+The initial implementation order is:
+
+1. define scene-plan schema, ownership and migration;
+2. deterministic transcript/script segmentation foundation;
+3. AI planner provider contract and backend boundary;
+4. validation/recovery/cancellation/restart behavior;
+5. planner workbench UI in the editor;
+6. persistence and edit semantics;
+7. regression tests;
+8. only then connect Block 7 automatic media matching.
+
+## Blocks after Scene Planner
 
 ### Automated Media Matching
 
@@ -301,5 +293,7 @@ The assistant should then:
 3. identify the active branch and exact incomplete slice;
 4. run/read relevant regression tests and review comments;
 5. continue implementation without asking the user to reconstruct old chat context unless an actual product decision is missing from the repository.
+
+As of the Block 5 merge, the first unfinished roadmap slice is Block 6 — AI Scene Planner. PR #38 is historical context for the completed Media Engine and should not be reopened unless a real regression is found.
 
 This file is the canonical continuity summary. Update it whenever product architecture, roadmap ordering, state contracts, or major workflow decisions change.
