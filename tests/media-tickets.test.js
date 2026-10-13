@@ -4,6 +4,7 @@ const assert = require("assert");
 const {
   preferredVariant,
   providerDownloadAllowed,
+  resolveTicketSecret,
   createMediaTicketService
 } = require("../dev-backend/media-tickets");
 
@@ -81,5 +82,18 @@ assert.throws(
   () => createMediaTicketService({ secret: "too-short" }),
   error => error instanceof TypeError
 );
+assert.throws(
+  () => resolveTicketSecret("", "production"),
+  error => error instanceof TypeError && /required in production/i.test(error.message)
+);
+assert.throws(
+  () => resolveTicketSecret("replace-with-a-long-random-media-ticket-secret", "production"),
+  error => error instanceof TypeError && /placeholder/i.test(error.message)
+);
+assert.strictEqual(
+  resolveTicketSecret("0123456789abcdef0123456789abcdef", "production"),
+  "0123456789abcdef0123456789abcdef"
+);
+assert.strictEqual(typeof resolveTicketSecret("", "development"), "string", "development may use one process-local ephemeral ticket secret");
 
-console.log("Signed media acquisition ticket ownership, expiry, tamper detection and provider-host restrictions passed.");
+console.log("Signed media acquisition ticket ownership, expiry, tamper detection, provider-host and production-secret restrictions passed.");
