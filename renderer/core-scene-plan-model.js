@@ -105,24 +105,57 @@
 
   function normalizeTranscriptSegments(input) {
     const source = Array.isArray(input) ? input : input?.segments;
-    return (Array.isArray(source) ? source : [])
-      .slice(0, MAX_SOURCE_SEGMENTS)
-      .map((segment, index) => {
-        if (!segment || typeof segment !== "object") return null;
-        const start = Math.max(0, finite(segment.start, 0));
-        const end = Math.max(start, finite(segment.end, start));
-        const sourceText = text(segment.sourceText ?? segment.text, 4000);
-        if (!sourceText && end <= start) return null;
-        return {
-          id: text(segment.id, 240) || "segment-" + index,
-          start,
-          end,
-          sourceText,
-          index
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index);
+    const records = [];
+
+    for (const [index, segment] of (Array.isArray(source) ? source : []).slice(0, MAX_SOURCE_SEGMENTS).entries()) {
+      if (!segment || typeof segment !== "object") continue;
+      const start = Math.max(0, finite(segment.start, 0));
+      const end = Math.max(start, finite(segment.end, start));
+      const sourceText = text(segment.sourceText ?? segment.text, 4000);
+      if (!sourceText && end <= start) continue;
+      records.push({
+        baseId: text(segment.id, 240) || "segment-" + index,
+        start,
+        end,
+        sourceText,
+        index
+      });
+    }
+
+    const canonical = value => String(value || "").toLowerCase();
+    const reservedBaseIds = new Set(records.map(record => canonical(record.baseId)));
+    const usedIds = new Set();
+    const namespaceCounters = new Map();
+    const normalized = [];
+    const suffixWidth = 10;
+    const prefixLimit = 240 - suffixWidth;
+
+    for (const record of records) {
+      let id = record.baseId;
+      let idKey = canonical(id);
+      if (usedIds.has(idKey)) {
+        const namespace = record.baseId.slice(0, prefixLimit);
+        const namespaceKey = canonical(namespace);
+        let serial = namespaceCounters.get(namespaceKey) || 1;
+        do {
+          const suffix = "~d" + serial.toString(36).padStart(8, "0");
+          id = namespace + suffix;
+          idKey = canonical(id);
+          serial += 1;
+        } while (usedIds.has(idKey) || reservedBaseIds.has(idKey));
+        namespaceCounters.set(namespaceKey, serial);
+      }
+      usedIds.add(idKey);
+      normalized.push({
+        id,
+        start: record.start,
+        end: record.end,
+        sourceText: record.sourceText,
+        index: record.index
+      });
+    }
+
+    return normalized.sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index);
   }
 
   function stableSceneId(group, index) {
@@ -171,7 +204,7 @@
     const targetKinds = normalizeTargetKinds(input.targetKinds);
     const orientationRaw = text(input.orientation, 20).toLowerCase();
     const orientation = ORIENTATIONS.includes(orientationRaw) ? orientationRaw : "any";
-    const sourceSegmentIds = uniqueStrings(input.sourceSegmentIds, 500, 240);
+    const sourceSegmentIds = uniqueStrings(input.sourceSegmentIds, MAX_SOURCE_SEGMENTS, 240);
     const id = text(input.id, 512) || "scene-" + index;
     const createdAt = iso(input.createdAt, new Date(now).toISOString());
     const updatedAt = iso(input.updatedAt, createdAt);
@@ -250,12 +283,12 @@
 
   function sceneFromGroup(group, index, now) {
     const first = group[0];
-    const last = group[group.length - 1];
+    const end = group.reduce((maxEnd, segment) => Math.max(maxEnd, segment.end), first?.end || 0);
     return normalizeScene({
       id: stableSceneId(group, index),
       order: index,
       start: first.start,
-      end: last.end,
+      end,
       sourceSegmentIds: group.map(segment => segment.id),
       sourceText: group.map(segment => segment.sourceText).filter(Boolean).join(" "),
       sceneState: "draft",
@@ -264,6 +297,17 @@
       confidence: 0,
       provenance: { origin: "deterministic" }
     }, index, now);
+  }
+
+  function compactGroups(groups, maxGroups = MAX_SCENES) {
+    if (groups.length <= maxGroups) return groups;
+    const compacted = [];
+    for (let index = 0; index < maxGroups; index += 1) {
+      const start = Math.floor(index * groups.length / maxGroups);
+      const end = Math.floor((index + 1) * groups.length / maxGroups);
+      compacted.push(groups.slice(start, Math.max(start + 1, end)).flat());
+    }
+    return compacted;
   }
 
   function segmentTranscript(input, options = {}) {
@@ -276,36 +320,35 @@
     const now = finite(options.now, Date.now());
     const groups = [];
     let current = [];
-
-    function durationWith(segment) {
-      if (!current.length) return Math.max(0, segment.end - segment.start);
-      return Math.max(0, segment.end - current[0].start);
-    }
+    let currentMaxEnd = 0;
 
     function flush() {
       if (!current.length) return;
       groups.push(current);
       current = [];
+      currentMaxEnd = 0;
     }
 
     for (const segment of segments) {
       if (!current.length) {
         current.push(segment);
+        currentMaxEnd = segment.end;
         continue;
       }
-      const previous = current[current.length - 1];
-      const gap = Math.max(0, segment.start - previous.end);
-      const currentDuration = Math.max(0, previous.end - current[0].start);
-      const combinedDuration = durationWith(segment);
+      const previousEnd = currentMaxEnd;
+      const gap = Math.max(0, segment.start - previousEnd);
+      const currentDuration = Math.max(0, previousEnd - current[0].start);
+      const combinedDuration = Math.max(0, Math.max(previousEnd, segment.end) - current[0].start);
       const shouldSplitForGap = gap > maxGap;
       const shouldSplitForMax = combinedDuration > maxDuration && currentDuration >= minDuration;
       const shouldSplitAtTarget = currentDuration >= targetDuration && combinedDuration > targetDuration * 1.35;
       if (shouldSplitForGap || shouldSplitForMax || shouldSplitAtTarget) flush();
       current.push(segment);
+      currentMaxEnd = Math.max(currentMaxEnd, segment.end);
     }
     flush();
 
-    return groups.slice(0, MAX_SCENES).map((group, index) => sceneFromGroup(group, index, now));
+    return compactGroups(groups).map((group, index) => sceneFromGroup(group, index, now));
   }
 
   function createPlanFromTranscript(input, options = {}) {
