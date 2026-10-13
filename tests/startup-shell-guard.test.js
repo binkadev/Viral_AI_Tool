@@ -23,11 +23,20 @@ for (const required of [
   'contents.on("unresponsive"',
   'contents.on("console-message"',
   'contents.on("did-finish-load"',
+  "BrowserWindow.fromWebContents",
+  "showOwnerWindow",
+  '"startup-timeout"',
+  '"did-finish-load"',
+  "readRendererHealth",
+  "recoverRenderer",
   "contents.executeJavaScript",
   "shellPresent",
   "shellVisible",
   "titlebarPresent",
   "titlebarVisible",
+  'health?.firstPaint !== "pending"',
+  "coreFirstPaintGuard",
+  "startupRecovery",
   'require("./main.js")'
 ]) {
   assert(startup.includes(required), "Startup guard is missing: " + required);
@@ -38,4 +47,21 @@ assert(
   "single-instance lock must be acquired before the application main process initializes"
 );
 
-console.log("Startup single-instance and renderer diagnostics regression passed.");
+const didFinishHandler = startup.indexOf('contents.on("did-finish-load"');
+const showAfterFinish = startup.indexOf('showOwnerWindow(contents, "did-finish-load")', didFinishHandler);
+const healthProbeAfterFinish = startup.indexOf("const health = await readRendererHealth(contents);", didFinishHandler);
+
+assert(didFinishHandler >= 0, "startup must register a did-finish-load handler");
+assert(showAfterFinish >= didFinishHandler, "did-finish-load must show the owner window");
+assert(healthProbeAfterFinish >= didFinishHandler, "did-finish-load must probe renderer health");
+assert(
+  showAfterFinish < healthProbeAfterFinish,
+  "the window must become visible before renderer health probing can leave the user staring at a blank surface"
+);
+
+assert(
+  startup.includes("root.dataset.coreFirstPaint = 'recovered'"),
+  "startup recovery must release a stuck first-paint guard"
+);
+
+console.log("Startup single-instance, visibility fallback, health probe, and renderer recovery regression passed.");
