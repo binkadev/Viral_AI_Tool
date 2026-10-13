@@ -122,7 +122,8 @@
       });
     }
 
-    const reservedBaseIds = new Set(records.map(record => record.baseId));
+    const canonical = value => String(value || "").toLowerCase();
+    const reservedBaseIds = new Set(records.map(record => canonical(record.baseId)));
     const usedIds = new Set();
     const namespaceCounters = new Map();
     const normalized = [];
@@ -131,17 +132,20 @@
 
     for (const record of records) {
       let id = record.baseId;
-      if (usedIds.has(id)) {
+      let idKey = canonical(id);
+      if (usedIds.has(idKey)) {
         const namespace = record.baseId.slice(0, prefixLimit);
-        let serial = namespaceCounters.get(namespace) || 1;
+        const namespaceKey = canonical(namespace);
+        let serial = namespaceCounters.get(namespaceKey) || 1;
         do {
           const suffix = "~d" + serial.toString(36).padStart(8, "0");
           id = namespace + suffix;
+          idKey = canonical(id);
           serial += 1;
-        } while (usedIds.has(id) || reservedBaseIds.has(id));
-        namespaceCounters.set(namespace, serial);
+        } while (usedIds.has(idKey) || reservedBaseIds.has(idKey));
+        namespaceCounters.set(namespaceKey, serial);
       }
-      usedIds.add(id);
+      usedIds.add(idKey);
       normalized.push({
         id,
         start: record.start,
