@@ -6,7 +6,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 
 function read(relative) {
-  return fs.readFileSync(path.join(root, relative), "utf8");
+  return fs.readFileSync(path.join(root, relative), "utf8").replace(/\r\n/g, "\n");
 }
 
 function write(relative, value) {
