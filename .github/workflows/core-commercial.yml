@@ -67,6 +67,9 @@ jobs:
       - name: Run media provider pagination regression
         run: node tests/media-provider-pagination-regression.test.js
 
+      - name: Run Windows media cache path smoke regression
+        run: node tests/media-acquisition-path-windows.test.js
+
       - name: Run media acquisition manager regression
         run: node tests/media-acquisition-manager.test.js
 
