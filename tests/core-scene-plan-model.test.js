@@ -4,7 +4,7 @@ const assert = require("assert");
 const model = require("../renderer/core-scene-plan-model");
 
 assert.strictEqual(model.SCENE_PLAN_SCHEMA_VERSION, 1);
-assert.strictEqual(model.MAX_SCENES, 500);
+assert.strictEqual(model.MAX_SCENES, 2000);
 assert(model.PLANNER_STATES.includes("planning"));
 assert(model.PLANNER_STATES.includes("interrupted"));
 assert(model.LOCKABLE_FIELDS.includes("visualIntent"));
@@ -147,6 +147,8 @@ assert(longScenes.length > 100, "long transcript must produce the complete scene
 assert(longScenes.length <= model.MAX_SCENES, "project scene plan must enforce its explicit commercial capacity");
 const longOwned = longScenes.flatMap(scene => scene.sourceSegmentIds);
 assert.strictEqual(longOwned[0], "long-0");
-assert(longOwned.includes("long-1499") || longOwned.includes("long-1799"), "scene plan should cover deep long-form transcript content up to its explicit scene capacity");
+assert.strictEqual(longOwned[longOwned.length - 1], "long-1799", "long-form segmentation must retain the final transcript segment");
+assert.strictEqual(longOwned.length, 1800, "long-form segmentation must own every source segment exactly once");
+assert.strictEqual(new Set(longOwned).size, 1800, "long-form segmentation must not duplicate source ownership");
 
 console.log("Scene Planner schema, deterministic segmentation, source staleness, manual locks and restart safety tests passed.");
