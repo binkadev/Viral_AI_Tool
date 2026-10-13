@@ -84,3 +84,6 @@ jobs:
 
       - name: Run media workbench wiring regression
         run: node tests/media-workbench-wiring.test.js
+
+      - name: Run media review-gap regression
+        run: node tests/media-pr38-review-regression.test.js
