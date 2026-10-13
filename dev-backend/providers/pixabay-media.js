@@ -9,7 +9,6 @@ const {
 const PIXABAY_API_BASE = "https://pixabay.com/api/";
 const PIXABAY_VIDEO_API_BASE = "https://pixabay.com/api/videos/";
 const PIXABAY_LICENSE_URL = "https://pixabay.com/service/license-summary/";
-const MAX_FILTERED_PAGE_SCANS = 5;
 
 function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetchImpl = global.fetch } = {}) {
   const credential = String(apiKey || "").trim();
@@ -144,20 +143,19 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
 
     const perPage = Math.max(3, request.perPage);
     const normalize = request.kind === "video" ? normalizeVideo : normalizeImage;
-    const maxScans = request.orientation === "any" ? 1 : MAX_FILTERED_PAGE_SCANS;
     const results = [];
     const seen = new Set();
-    let totalResults = 0;
+    let totalResults = null;
     let lastRawCount = 0;
     let lastFetchedPage = request.page - 1;
+    let page = request.page;
 
-    for (let scan = 0; scan < maxScans && results.length < request.perPage; scan += 1) {
-      const page = request.page + scan;
+    while (results.length < request.perPage) {
       const { payload } = await fetchSearchPage(request, page, perPage, signal);
       const hits = Array.isArray(payload?.hits) ? payload.hits : [];
       lastRawCount = hits.length;
       lastFetchedPage = page;
-      if (scan === 0) {
+      if (totalResults == null) {
         totalResults = Math.max(0, Number(payload?.totalHits ?? payload?.total ?? 0) || 0);
       }
 
@@ -166,9 +164,8 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
         normalized = normalized.filter(item => item.meta?.orientation === request.orientation);
       }
 
-      // Consume the complete provider page before advancing nextPage. A provider
-      // page is the smallest stable cursor Pixabay gives us; truncating midway
-      // would make the remaining matches on that page unreachable to callers.
+      // Consume a complete provider page before advancing the provider cursor so
+      // no filtered match can become unreachable through nextPage.
       for (const item of normalized) {
         const identity = `${item.provider}:${item.providerAssetId}`;
         if (seen.has(identity)) continue;
@@ -176,12 +173,14 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
         results.push(item);
       }
 
-      if (hits.length < perPage) break;
-      if (totalResults > 0 && page * perPage >= totalResults) break;
+      const providerExhausted = hits.length < perPage || (totalResults > 0 && page * perPage >= totalResults);
+      if (providerExhausted || request.orientation === "any") break;
+      page += 1;
     }
 
+    const normalizedTotal = Math.max(0, Number(totalResults || 0));
     const hasMore = lastRawCount >= perPage && (
-      totalResults <= 0 || lastFetchedPage * perPage < totalResults
+      normalizedTotal <= 0 || lastFetchedPage * perPage < normalizedTotal
     );
 
     return {
@@ -191,7 +190,7 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
       orientation: request.orientation,
       page: request.page,
       perPage,
-      totalResults,
+      totalResults: normalizedTotal,
       nextPage: hasMore ? lastFetchedPage + 1 : null,
       results
     };
@@ -204,6 +203,5 @@ module.exports = {
   PIXABAY_API_BASE,
   PIXABAY_VIDEO_API_BASE,
   PIXABAY_LICENSE_URL,
-  MAX_FILTERED_PAGE_SCANS,
   createPixabayMediaProvider
 };
