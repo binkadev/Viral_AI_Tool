@@ -99,7 +99,10 @@
 
   function bootstrapSnapshot() {
     const raw = readJson(SNAPSHOT_KEY, null);
-    const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
+    const migrated = model.migrateSnapshot(raw, {
+      restartSafeMedia: true,
+      restartSafeScenePlan: true
+    });
     unsupportedSchemaVersion = migrated.unsupportedVersion;
     if (unsupportedSchemaVersion) return;
 
@@ -204,6 +207,9 @@
     if (!current || !currentSnapshot) return;
     if (!current.media && currentSnapshot.media) {
       current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
+    }
+    if (!current.scenePlan && currentSnapshot.scenePlan) {
+      current.scenePlan = model.clone(currentSnapshot.scenePlan, null);
     }
     ["translation", "voice"].forEach(section => {
       const persisted = currentSnapshot.workflow?.[section];
