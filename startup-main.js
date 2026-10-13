@@ -40,9 +40,35 @@ if (!gotSingleInstanceLock) {
       });
     });
 
-    contents.on("console-message", (_consoleEvent, level, message, line, sourceId) => {
-      if (Number(level) < 2) return;
-      console.error("[Renderer]", String(message || ""), sourceId ? `(${sourceId}:${line || 0})` : "");
+    contents.on("unresponsive", () => {
+      console.error("[Startup] Renderer became unresponsive before or during first paint.");
+    });
+
+    contents.on("console-message", (...args) => {
+      const current = args[0];
+      let level;
+      let message;
+      let lineNumber;
+      let sourceId;
+
+      if (current && typeof current === "object" && typeof current.message === "string") {
+        level = current.level;
+        message = current.message;
+        lineNumber = current.lineNumber;
+        sourceId = current.sourceId;
+      } else {
+        level = args[1];
+        message = args[2];
+        lineNumber = args[3];
+        sourceId = args[4];
+      }
+
+      const important = typeof level === "string"
+        ? ["warning", "error"].includes(level)
+        : Number(level) >= 2;
+      if (!important) return;
+
+      console.error("[Renderer]", String(message || ""), sourceId ? `(${sourceId}:${lineNumber || 0})` : "");
     });
 
     contents.on("did-finish-load", () => {
