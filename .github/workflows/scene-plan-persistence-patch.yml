@@ -1,0 +1,70 @@
+name: Scene Plan Persistence Patch
+
+on:
+  push:
+    branches: [feat/scene-planner-persistence]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scene-plan-persistence-patch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patch-and-verify:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/scene-planner-persistence
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply guarded regression updates
+        run: node scripts/apply-scene-plan-persistence-test-updates.js
+
+      - name: Syntax checks
+        shell: pwsh
+        run: |
+          node --check renderer/core-scene-plan-model.js
+          node --check renderer/core-project-snapshot.js
+          node --check renderer/core-project-persistence.js
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Scene Planner persistence regression
+        run: npm run test:core-scene-plan-persistence
+
+      - name: Scene Planner domain regression
+        run: npm run test:core-scene-plan
+
+      - name: Project persistence regression
+        run: npm run test:core-project-persistence
+
+      - name: Media library regression
+        run: npm run test:core-media-library
+
+      - name: Commercial regression
+        run: npm run test:core-commercial
+
+      - name: Commit verified updates
+        shell: pwsh
+        run: |
+          if (git status --porcelain) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add tests/core-project-persistence.test.js tests/core-media-library-model.test.js package.json .github/workflows/scene-planner.yml
+            git commit -m "test: gate Scene Planner project persistence"
+            git push origin HEAD:feat/scene-planner-persistence
+          } else {
+            Write-Host "No generated regression updates to commit."
+          }
