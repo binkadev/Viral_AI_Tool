@@ -105,24 +105,31 @@
 
   function normalizeTranscriptSegments(input) {
     const source = Array.isArray(input) ? input : input?.segments;
-    return (Array.isArray(source) ? source : [])
-      .slice(0, MAX_SOURCE_SEGMENTS)
-      .map((segment, index) => {
-        if (!segment || typeof segment !== "object") return null;
-        const start = Math.max(0, finite(segment.start, 0));
-        const end = Math.max(start, finite(segment.end, start));
-        const sourceText = text(segment.sourceText ?? segment.text, 4000);
-        if (!sourceText && end <= start) return null;
-        return {
-          id: text(segment.id, 240) || "segment-" + index,
-          start,
-          end,
-          sourceText,
-          index
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index);
+    const usedIds = new Set();
+    const baseCounts = new Map();
+    const normalized = [];
+
+    for (const [index, segment] of (Array.isArray(source) ? source : []).slice(0, MAX_SOURCE_SEGMENTS).entries()) {
+      if (!segment || typeof segment !== "object") continue;
+      const start = Math.max(0, finite(segment.start, 0));
+      const end = Math.max(start, finite(segment.end, start));
+      const sourceText = text(segment.sourceText ?? segment.text, 4000);
+      if (!sourceText && end <= start) continue;
+
+      const baseId = text(segment.id, 240) || "segment-" + index;
+      let count = baseCounts.get(baseId) || 0;
+      let id = baseId;
+      do {
+        count += 1;
+        id = count === 1 ? baseId : text(baseId + "~" + count, 240);
+      } while (usedIds.has(id));
+      baseCounts.set(baseId, count);
+      usedIds.add(id);
+
+      normalized.push({ id, start, end, sourceText, index });
+    }
+
+    return normalized.sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index);
   }
 
   function stableSceneId(group, index) {
@@ -171,7 +178,7 @@
     const targetKinds = normalizeTargetKinds(input.targetKinds);
     const orientationRaw = text(input.orientation, 20).toLowerCase();
     const orientation = ORIENTATIONS.includes(orientationRaw) ? orientationRaw : "any";
-    const sourceSegmentIds = uniqueStrings(input.sourceSegmentIds, 500, 240);
+    const sourceSegmentIds = uniqueStrings(input.sourceSegmentIds, MAX_SOURCE_SEGMENTS, 240);
     const id = text(input.id, 512) || "scene-" + index;
     const createdAt = iso(input.createdAt, new Date(now).toISOString());
     const updatedAt = iso(input.updatedAt, createdAt);
@@ -250,12 +257,12 @@
 
   function sceneFromGroup(group, index, now) {
     const first = group[0];
-    const last = group[group.length - 1];
+    const end = group.reduce((maxEnd, segment) => Math.max(maxEnd, segment.end), first?.end || 0);
     return normalizeScene({
       id: stableSceneId(group, index),
       order: index,
       start: first.start,
-      end: last.end,
+      end,
       sourceSegmentIds: group.map(segment => segment.id),
       sourceText: group.map(segment => segment.sourceText).filter(Boolean).join(" "),
       sceneState: "draft",
@@ -264,6 +271,17 @@
       confidence: 0,
       provenance: { origin: "deterministic" }
     }, index, now);
+  }
+
+  function compactGroups(groups, maxGroups = MAX_SCENES) {
+    if (groups.length <= maxGroups) return groups;
+    const compacted = [];
+    for (let index = 0; index < maxGroups; index += 1) {
+      const start = Math.floor(index * groups.length / maxGroups);
+      const end = Math.floor((index + 1) * groups.length / maxGroups);
+      compacted.push(groups.slice(start, Math.max(start + 1, end)).flat());
+    }
+    return compacted;
   }
 
   function segmentTranscript(input, options = {}) {
@@ -277,9 +295,13 @@
     const groups = [];
     let current = [];
 
+    function currentMaxEnd() {
+      return current.reduce((maxEnd, segment) => Math.max(maxEnd, segment.end), current[0]?.end || 0);
+    }
+
     function durationWith(segment) {
       if (!current.length) return Math.max(0, segment.end - segment.start);
-      return Math.max(0, segment.end - current[0].start);
+      return Math.max(0, Math.max(currentMaxEnd(), segment.end) - current[0].start);
     }
 
     function flush() {
@@ -293,9 +315,9 @@
         current.push(segment);
         continue;
       }
-      const previous = current[current.length - 1];
-      const gap = Math.max(0, segment.start - previous.end);
-      const currentDuration = Math.max(0, previous.end - current[0].start);
+      const previousEnd = currentMaxEnd();
+      const gap = Math.max(0, segment.start - previousEnd);
+      const currentDuration = Math.max(0, previousEnd - current[0].start);
       const combinedDuration = durationWith(segment);
       const shouldSplitForGap = gap > maxGap;
       const shouldSplitForMax = combinedDuration > maxDuration && currentDuration >= minDuration;
@@ -305,7 +327,7 @@
     }
     flush();
 
-    return groups.slice(0, MAX_SCENES).map((group, index) => sceneFromGroup(group, index, now));
+    return compactGroups(groups).map((group, index) => sceneFromGroup(group, index, now));
   }
 
   function createPlanFromTranscript(input, options = {}) {
