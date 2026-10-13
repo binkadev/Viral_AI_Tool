@@ -14,6 +14,7 @@ const ownerEmail = "owner@example.test";
 const ownerPassword = "Production-Test-Password-123!";
 const operationsToken = "ops-test-token-abcdefghijklmnopqrstuvwxyz-123456";
 const adminToken = "admin-test-token-abcdefghijklmnopqrstuvwxyz-123456";
+const mediaTicketSecret = "media-ticket-test-secret-abcdefghijklmnopqrstuvwxyz-123456";
 const earlyUserEmail = "early-user@example.test";
 const earlyUserPassword = "Early-User-Password-123!";
 const earlyUserResetPassword = "Early-User-New-Password-456!";
@@ -50,6 +51,7 @@ async function startServer({ bootstrap = false } = {}) {
     VIRAL_AI_STATE_DRIVER: "sqlite",
     VIRAL_AI_OPERATIONS_TOKEN: operationsToken,
     VIRAL_AI_ADMIN_TOKEN: adminToken,
+    VIRAL_AI_MEDIA_TICKET_SECRET: mediaTicketSecret,
     OPENAI_API_KEY: "",
     VIRAL_AI_TRANSLATION_API_KEY: "",
     VIRAL_AI_VOICE_API_KEY: ""

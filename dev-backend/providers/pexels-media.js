@@ -52,20 +52,62 @@ function createPexelsMediaProvider({ apiKey = process.env.PEXELS_API_KEY, fetchI
     });
   }
 
+  function normalizeImage(photo) {
+    if (!photo || typeof photo !== "object" || photo.id == null) return null;
+    const source = photo.src && typeof photo.src === "object" ? photo.src : {};
+    const variants = [
+      ["original", source.original],
+      ["large2x", source.large2x],
+      ["large", source.large],
+      ["medium", source.medium],
+      ["small", source.small],
+      ["portrait", source.portrait],
+      ["landscape", source.landscape],
+      ["tiny", source.tiny]
+    ].filter(([, url]) => Boolean(url)).map(([quality, url]) => ({
+      id: quality,
+      url,
+      width: quality === "original" ? photo.width : null,
+      height: quality === "original" ? photo.height : null,
+      quality,
+      mime: "image/jpeg"
+    }));
+    const preview = source.medium || source.small || source.large || source.original || null;
+    const creatorName = String(photo.photographer || "").trim() || null;
+
+    return normalizeSearchResult({
+      provider: "pexels",
+      providerAssetId: String(photo.id),
+      kind: "image",
+      name: String(photo.alt || "").trim() || (creatorName ? `${creatorName} — Pexels ${photo.id}` : `Pexels ${photo.id}`),
+      previewUrl: preview,
+      thumbnailUrl: source.small || source.tiny || preview,
+      meta: {
+        width: photo.width,
+        height: photo.height,
+        duration: 0
+      },
+      attribution: {
+        creatorName,
+        creatorUrl: photo.photographer_url,
+        sourceUrl: photo.url,
+        licenseName: "Pexels License",
+        licenseUrl: PEXELS_LICENSE_URL,
+        attributionText: creatorName ? `Photo by ${creatorName} on Pexels` : "Photo from Pexels"
+      },
+      variants
+    });
+  }
+
   async function search(input = {}, { signal } = {}) {
     const request = normalizeSearchRequest(input);
-    if (request.kind !== "video") {
-      throw mediaProviderError("MEDIA_PROVIDER_UNAVAILABLE", "Pexels image search is not enabled in this provider yet.", {
-        provider: "pexels"
-      });
-    }
     if (!isConfigured()) {
       throw mediaProviderError("MEDIA_PROVIDER_UNAVAILABLE", "Pexels media provider is not configured.", {
         provider: "pexels"
       });
     }
 
-    const url = new URL("/videos/search", PEXELS_API_BASE);
+    const url = new URL(request.kind === "image" ? "/v1/search" : "/videos/search", PEXELS_API_BASE);
     url.searchParams.set("query", request.query);
     url.searchParams.set("page", String(request.page));
     url.searchParams.set("per_page", String(request.perPage));
@@ -113,9 +155,9 @@ function createPexelsMediaProvider({ apiKey = process.env.PEXELS_API_KEY, fetchI
       });
     }
 
-    const results = (Array.isArray(payload?.videos) ? payload.videos : [])
-      .map(normalizeVideo)
-      .filter(Boolean);
+    const source = request.kind === "image" ? payload?.photos : payload?.videos;
+    const normalize = request.kind === "image" ? normalizeImage : normalizeVideo;
+    const results = (Array.isArray(source) ? source : []).map(normalize).filter(Boolean);
 
     return {
       provider: "pexels",
@@ -134,6 +176,7 @@ function createPexelsMediaProvider({ apiKey = process.env.PEXELS_API_KEY, fetchI
     id: "pexels",
     isConfigured,
     normalizeVideo,
+    normalizeImage,
     search
   };
 }
