@@ -2,6 +2,7 @@
   "use strict";
 
   const model = window.ViralCoreTranscriptModel;
+  const scenePlanModel = window.ViralCoreScenePlanModel;
   if (!model) return;
 
   function appState() {
@@ -51,6 +52,30 @@
     });
   }
 
+  function scenePlanStaleness(current, reason = "transcript-edited") {
+    const plan = current?.scenePlan;
+    const transcript = current?.speech?.result;
+    const hasAcceptedPlan = Boolean(plan?.sourceSignature && Array.isArray(plan?.scenes) && plan.scenes.length);
+    const stale = Boolean(
+      hasAcceptedPlan &&
+      scenePlanModel?.isStale &&
+      transcript?.segments &&
+      scenePlanModel.isStale(plan, transcript)
+    );
+
+    if (hasAcceptedPlan) {
+      window.dispatchEvent(new CustomEvent("viral-ai:scene-plan-staleness-changed", {
+        detail: {
+          stale,
+          reason,
+          sourceIdentity: plan.sourceIdentity || null,
+          sourceSignature: plan.sourceSignature || null
+        }
+      }));
+    }
+    return stale;
+  }
+
   function invalidateDownstream(current, sourcePath) {
     if (model.sourceMatches(current?.translation?.result, sourcePath)) {
       retainStaleSlot(current.translation, "result");
@@ -78,13 +103,15 @@
 
     current.speech.result = applied.result;
     invalidateDownstream(current, sourcePath);
+    const scenePlanStale = scenePlanStaleness(current);
     persistState();
 
     window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
       detail: {
         reason: "transcript-edited",
         sourcePath,
-        segmentId: applied.segment?.id || null
+        segmentId: applied.segment?.id || null,
+        scenePlanStale
       }
     }));
   }
