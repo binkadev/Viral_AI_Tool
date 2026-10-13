@@ -60,7 +60,6 @@ function createMediaRouteHandler({
       timedOut = true;
       controller.abort();
     }, boundedSearchTimeoutMs);
-    timeout.unref?.();
 
     req.once?.("aborted", abortSearch);
     res.once?.("close", abortOnResponseClose);
