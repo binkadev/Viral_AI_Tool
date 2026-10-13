@@ -6,7 +6,7 @@
   "use strict";
 
   const SCENE_PLAN_SCHEMA_VERSION = 1;
-  const MAX_SCENES = 500;
+  const MAX_SCENES = 2000;
   const MAX_SOURCE_SEGMENTS = 5000;
   const MAX_SEARCH_QUERIES = 8;
   const MAX_QUERY_LENGTH = 180;
