@@ -14,6 +14,9 @@
   let activeRequest = 0;
   let activeSearchRequestId = null;
   let lastResults = [];
+  let nextPage = null;
+  let searchContext = null;
+  let loadingMore = false;
   let currentView = "closed";
   let opener = null;
   let inertSnapshot = [];
@@ -30,6 +33,10 @@
 
   function t(key, vars = {}) {
     return window.I18N?.t?.(locale(), "mediaWorkbench." + key, vars) || key;
+  }
+
+  function tc(key, vars = {}) {
+    return window.I18N?.t?.(locale(), key, vars) || key;
   }
 
   function esc(value) {
@@ -71,6 +78,18 @@
     return provider && providerAssetId ? provider + ":" + providerAssetId : "";
   }
 
+  function mergeResults(current, additions) {
+    const merged = [];
+    const seen = new Set();
+    for (const item of [...(Array.isArray(current) ? current : []), ...(Array.isArray(additions) ? additions : [])]) {
+      const identity = resultIdentity(item) || "fallback:" + String(item?.id || item?.name || merged.length);
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      merged.push(item);
+    }
+    return merged;
+  }
+
   function requestId(prefix) {
     const random = Math.random().toString(36).slice(2, 10);
     return String(prefix || "media") + "_" + Date.now().toString(36) + "_" + random;
@@ -110,8 +129,6 @@
     const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
     if (count >= Number(model.MAX_PROJECT_ASSETS || 500)) return { status: "capacity" };
 
-    // Provider preview/download URLs are search-time data. The durable project
-    // record owns the verified local cache path and attribution instead.
     const candidate = {
       ...rawAsset,
       previewUrl: null,
@@ -288,11 +305,15 @@
     drawer.querySelectorAll("[data-media-close]").forEach(button => button.addEventListener("click", close));
     drawer.querySelector("[data-media-form]")?.addEventListener("submit", event => {
       event.preventDefault();
-      runSearch();
+      runSearch({ append: false, page: 1 });
     });
     drawer.querySelector("[data-media-results]")?.addEventListener("click", event => {
       const target = event.target instanceof Element ? event.target.closest("[data-media-action]") : null;
       if (!(target instanceof HTMLElement)) return;
+      if (target.dataset.mediaAction === "load-more") {
+        if (nextPage != null && !loadingMore) runSearch({ append: true, page: nextPage });
+        return;
+      }
       const index = Number(target.dataset.resultIndex);
       const result = lastResults[index];
       if (!result) return;
@@ -344,12 +365,19 @@
     if (resultsLabel) resultsLabel.textContent = t("results");
   }
 
+  function resetContinuation() {
+    nextPage = null;
+    searchContext = null;
+    loadingMore = false;
+  }
+
   function renderState(kind, titleKey, bodyKey) {
     const drawer = ensureDrawer();
     const root = drawer.querySelector("[data-media-results]");
     const count = drawer.querySelector("[data-media-result-count]");
     currentView = kind;
     lastResults = [];
+    resetContinuation();
     if (count) count.textContent = "";
     if (!root) return;
     root.innerHTML =
@@ -364,9 +392,9 @@
     if (!active) return "";
     const value = Math.max(0, Math.min(100, Math.round(Number(active.progress || 0))));
     if (active.state === "failed") return t("failedTitle");
-    if (active.state === "cancelling") return locale() === "en" ? "Stopping..." : "Đang dừng...";
-    if (active.state === "verifying") return locale() === "en" ? "Verifying..." : "Đang xác minh...";
-    return (locale() === "en" ? "Adding " : "Đang thêm ") + value + "%";
+    if (active.state === "cancelling") return tc("common.cancelling");
+    if (active.state === "verifying") return tc("common.processing");
+    return tc("common.processing") + " · " + value + "%";
   }
 
   function renderResults(results) {
@@ -383,7 +411,7 @@
     if (count) count.textContent = t("items", { count: lastResults.length });
     if (!root) return;
 
-    root.innerHTML = lastResults.map((result, index) => {
+    const cards = lastResults.map((result, index) => {
       const added = existingIdentity(result);
       const active = acquisitionState(result);
       const preview = result.thumbnailUrl || result.previewUrl || "";
@@ -414,6 +442,11 @@
         (working ? '<div class="core-media-acquire-progress" aria-hidden="true"><span style="width:' + progress + '%"></span></div>' : '') +
       '</article>';
     }).join("");
+
+    const continuation = nextPage != null
+      ? '<div class="core-media-continuation"><button type="button" data-media-action="load-more"' + (loadingMore ? ' disabled' : '') + '>' + esc(loadingMore ? t("searching") : tc("dashboard.next")) + '</button></div>'
+      : '';
+    root.innerHTML = cards + continuation;
   }
 
   function cancelActiveSearch() {
@@ -424,21 +457,38 @@
     }
   }
 
-  async function runSearch() {
+  async function runSearch({ append = false, page = 1 } = {}) {
     const drawer = ensureDrawer();
     const queryEl = drawer.querySelector("[data-media-query]");
     const kindEl = drawer.querySelector("[data-media-kind]");
     const orientationEl = drawer.querySelector("[data-media-orientation]");
-    const query = queryEl instanceof HTMLInputElement ? queryEl.value.trim() : "";
+    const context = append && searchContext
+      ? searchContext
+      : {
+          query: queryEl instanceof HTMLInputElement ? queryEl.value.trim() : "",
+          kind: kindEl instanceof HTMLSelectElement ? kindEl.value : "video",
+          orientation: orientationEl instanceof HTMLSelectElement ? orientationEl.value : "any",
+          provider: "auto"
+        };
+    const query = context.query;
+
     cancelActiveSearch();
     const requestNumber = ++activeRequest;
     const searchRequestId = requestId("search");
     activeSearchRequestId = searchRequestId;
-    lastResults = [];
-    currentView = "validating";
+    if (!append) {
+      lastResults = [];
+      nextPage = null;
+      searchContext = context;
+      currentView = "validating";
+    } else {
+      loadingMore = true;
+      renderResults(lastResults);
+    }
 
     if (query.length < 2) {
       activeSearchRequestId = null;
+      loadingMore = false;
       renderState("empty", "emptyTitle", "emptyBody");
       queryEl?.focus?.();
       return;
@@ -446,25 +496,31 @@
 
     if (typeof window.desktopAPI?.searchMedia !== "function") {
       activeSearchRequestId = null;
+      loadingMore = false;
       renderState("unavailable", "unavailableTitle", "unavailableBody");
       return;
     }
 
-    renderState("loading", "searching", "emptyBody");
+    if (!append) renderState("loading", "searching", "emptyBody");
     try {
       const payload = await window.desktopAPI.searchMedia({
         requestId: searchRequestId,
         query,
-        kind: kindEl instanceof HTMLSelectElement ? kindEl.value : "video",
-        orientation: orientationEl instanceof HTMLSelectElement ? orientationEl.value : "any",
-        page: 1,
+        kind: context.kind,
+        orientation: context.orientation,
+        page: Math.max(1, Number(page || 1)),
         perPage: SEARCH_PAGE_SIZE,
-        provider: "auto"
+        provider: context.provider
       });
       if (requestNumber !== activeRequest) return;
       if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
+      loadingMore = false;
       if (payload?.ok === false) {
         const code = payload?.error?.code || payload?.code;
+        if (append && lastResults.length) {
+          renderResults(lastResults);
+          return;
+        }
         if (code === "MEDIA_CANCELLED") {
           return;
         } else if (code === "MEDIA_AUTH_REQUIRED" || code === "AUTH_REQUIRED") {
@@ -478,11 +534,19 @@
         }
         return;
       }
-      renderResults(payload?.results || payload?.data?.results || []);
+
+      const data = payload?.data && typeof payload.data === "object" ? payload.data : payload;
+      const received = Array.isArray(data?.results) ? data.results : [];
+      lastResults = append ? mergeResults(lastResults, received) : mergeResults([], received);
+      nextPage = Number.isFinite(Number(data?.nextPage)) && Number(data.nextPage) > 0 ? Number(data.nextPage) : null;
+      searchContext = context;
+      renderResults(lastResults);
     } catch {
       if (requestNumber !== activeRequest) return;
       if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
-      renderState("error", "failedTitle", "failedBody");
+      loadingMore = false;
+      if (append && lastResults.length) renderResults(lastResults);
+      else renderState("error", "failedTitle", "failedBody");
     }
   }
 
@@ -508,6 +572,7 @@
     cancelActiveSearch();
     currentView = "closed";
     lastResults = [];
+    resetContinuation();
     drawer.classList.add("hidden");
     drawer.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("core-media-discovery-open");
