@@ -39,15 +39,19 @@ assert(assets.includes('viral-ai:media-discovery-open'), "Find media must open t
 assert(assets.includes('current?.media?.assets'), "asset counts must come from project-owned media state");
 
 assert(discovery.includes('window.desktopAPI?.searchMedia'), "online search must go through the narrow desktop bridge");
+assert(discovery.includes('window.desktopAPI?.acquireMedia'), "adding online media must use native acquisition rather than persisting a provider URL");
 assert(discovery.includes('window.ViralCoreMediaLibraryModel'), "project insertion must use the media domain model");
-assert(discovery.includes('model.addAssets(current.media, [candidate])'), "duplicate protection must be enforced through domain addAssets");
+assert(discovery.includes('model.addAssets(current.media, [candidate])'), "duplicate protection must be enforced through domain addAssets after acquisition");
 assert(discovery.includes('model.MAX_PROJECT_ASSETS'), "project capacity must be enforced from the domain model rather than a UI magic number alone");
 assert(discovery.includes('renderState("capacity", "libraryFullTitle", "libraryFullBody")'), "capacity rejection must be visible and localized");
-assert(discovery.includes('fileState: "remote"'), "selected remote stock must remain explicitly remote before download/cache");
+assert(discovery.includes('previewUrl: null') && discovery.includes('remoteUrl: null'), "durable project assets must not retain temporary provider media URLs");
+assert(discovery.includes('fileState: "available"'), "successful acquisition must become a locally available project asset");
 assert(discovery.includes('origin: "stock"'), "selected search media must retain stock origin");
-assert(discovery.includes('attribution: result.attribution || {}'), "selected media must retain attribution/license metadata");
+assert(discovery.includes('attribution: result.attribution || {}'), "search identity must retain attribution/license metadata until acquisition");
 assert(discovery.includes('typeof window.desktopAPI?.searchMedia !== "function"'), "missing bridge must produce an unavailable state rather than fake results");
 assert(discovery.includes("cancelActiveSearch();"), "superseded and closed searches must cancel the active desktop request");
+assert(discovery.includes('cancelMediaAcquisition(active.jobId)'), "active acquisition must be user-cancellable by job id");
+assert(discovery.includes('onMediaAcquisitionProgress'), "download/verification progress must project native job state into the workbench");
 assert(discovery.includes('renderState("unavailable", "providerUnavailableTitle", "providerUnavailableBody")'), "provider configuration failures need a specific recovery state");
 assert(discovery.includes('renderState("quota", "quotaTitle", "quotaBody")'), "quota failures need a specific recovery state");
 assert(!/mock|fixture|sampleResults|fakeResults/i.test(discovery), "production discovery controller must not contain fake stock result fixtures");
@@ -61,9 +65,10 @@ assert(discovery.includes('const sourceIdentity = [provider, creator].filter(Boo
 assert(discovery.includes('<span>\' + esc(provider) + \'</span>↗'), "source action must visibly use the provider brand rather than generic source copy");
 assert(discovery.includes('aria-label="\' + esc(t("preview") + " — " + provider)'), "provider source action must retain a localized accessible action label");
 
-const requestIncrement = discovery.indexOf("const requestId = ++activeRequest;");
+const requestIncrement = discovery.indexOf("const requestNumber = ++activeRequest;");
 const queryValidation = discovery.indexOf("if (query.length < 2)");
 assert(requestIncrement >= 0 && requestIncrement < queryValidation, "each submit must invalidate older async results before early validation returns");
+assert(discovery.includes('requestId: searchRequestId'), "renderer and main process must share an explicit search request identity for cancellation");
 assert(discovery.includes('currentView === "results" && lastResults.length'), "semantic state changes must only refresh an active results view");
 assert(discovery.includes('lastResults = [];'), "non-results states must clear stale result cache");
 
@@ -83,6 +88,8 @@ for (const key of ["discoveryTitle", "searchPlaceholder", "unavailableTitle", "s
 
 assert(css.includes("prefers-reduced-motion:reduce"), "media discovery must respect reduced motion");
 assert(css.includes("core-media-state"), "discovery must style empty/loading/error states");
+assert(css.includes("core-media-acquire-progress"), "acquisition must have a restrained visible progress treatment");
+assert(css.includes("core-media-card.is-acquiring"), "active acquisition must be visually distinct from idle results");
 assert(css.includes("font-size:13px"), "essential discovery controls/body copy must reach the 13px readability floor");
 assert(css.includes("font-size:12px"), "secondary discovery copy must reach the 12px readability floor");
 assert(css.includes("font-size:11px"), "tiny discovery metadata must not fall below the 11px floor");
@@ -93,4 +100,4 @@ assert(assetCss.includes("core-asset-stat.has-items"), "real project media count
 assert(!assetCss.includes("@media(max-width:1320px){.core-editor-assets-panel{display:none!important}"), "responsive layout must not remove the only Find media entry");
 assert(assetCss.includes("grid-template-columns:54px minmax(0,1fr) 340px"), "responsive layout must retain a compact media rail below 1320px");
 
-console.log("Commercial media workbench hierarchy, attribution, recovery, accessibility, readability, bridge boundary and no-fake-data contracts passed.");
+console.log("Commercial media workbench acquisition, attribution, recovery, accessibility, readability and no-fake-data contracts passed.");
