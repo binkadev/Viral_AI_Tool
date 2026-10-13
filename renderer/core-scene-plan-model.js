@@ -105,9 +105,7 @@
 
   function normalizeTranscriptSegments(input) {
     const source = Array.isArray(input) ? input : input?.segments;
-    const usedIds = new Set();
-    const baseCounts = new Map();
-    const normalized = [];
+    const records = [];
 
     for (const [index, segment] of (Array.isArray(source) ? source : []).slice(0, MAX_SOURCE_SEGMENTS).entries()) {
       if (!segment || typeof segment !== "object") continue;
@@ -115,23 +113,42 @@
       const end = Math.max(start, finite(segment.end, start));
       const sourceText = text(segment.sourceText ?? segment.text, 4000);
       if (!sourceText && end <= start) continue;
+      records.push({
+        baseId: text(segment.id, 240) || "segment-" + index,
+        start,
+        end,
+        sourceText,
+        index
+      });
+    }
 
-      const baseId = text(segment.id, 240) || "segment-" + index;
-      let count = baseCounts.get(baseId) || 0;
-      let id = baseId;
-      do {
-        count += 1;
-        if (count === 1) {
-          id = baseId;
-        } else {
-          const suffix = "~" + count;
-          id = text(baseId, Math.max(1, 240 - suffix.length)) + suffix;
-        }
-      } while (usedIds.has(id));
-      baseCounts.set(baseId, count);
+    const reservedBaseIds = new Set(records.map(record => record.baseId));
+    const usedIds = new Set();
+    const namespaceCounters = new Map();
+    const normalized = [];
+    const suffixWidth = 10;
+    const prefixLimit = 240 - suffixWidth;
+
+    for (const record of records) {
+      let id = record.baseId;
+      if (usedIds.has(id)) {
+        const namespace = record.baseId.slice(0, prefixLimit);
+        let serial = namespaceCounters.get(namespace) || 1;
+        do {
+          const suffix = "~d" + serial.toString(36).padStart(8, "0");
+          id = namespace + suffix;
+          serial += 1;
+        } while (usedIds.has(id) || reservedBaseIds.has(id));
+        namespaceCounters.set(namespace, serial);
+      }
       usedIds.add(id);
-
-      normalized.push({ id, start, end, sourceText, index });
+      normalized.push({
+        id,
+        start: record.start,
+        end: record.end,
+        sourceText: record.sourceText,
+        index: record.index
+      });
     }
 
     return normalized.sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index);
