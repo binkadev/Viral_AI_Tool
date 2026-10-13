@@ -12,10 +12,12 @@
     '[tabindex]:not([tabindex="-1"])'
   ].join(",");
   let activeRequest = 0;
+  let activeSearchRequestId = null;
   let lastResults = [];
   let currentView = "closed";
   let opener = null;
   let inertSnapshot = [];
+  const acquisitions = new Map();
 
   function locale() {
     try {
@@ -56,59 +58,68 @@
     return current?.media || { schemaVersion: 1, assets: [], selectedAssetId: null };
   }
 
-  function selectedVariant(result) {
-    const variants = Array.isArray(result?.variants) ? result.variants : [];
-    if (!variants.length) return null;
-    return variants
-      .slice()
-      .sort((a, b) => (Number(b?.width || 0) * Number(b?.height || 0)) - (Number(a?.width || 0) * Number(a?.height || 0)))[0] || null;
+  function currentProjectId() {
+    const current = appState();
+    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
+    const source = jobs.find(job => job?.sourcePath && !job?.isRenderOutput);
+    return String(source?.id || source?.sourcePath || "").trim();
   }
 
-  function toProjectAsset(result) {
+  function resultIdentity(result) {
+    const provider = String(result?.provider || "").trim().toLowerCase();
+    const providerAssetId = String(result?.providerAssetId || "").trim();
+    return provider && providerAssetId ? provider + ":" + providerAssetId : "";
+  }
+
+  function requestId(prefix) {
+    const random = Math.random().toString(36).slice(2, 10);
+    return String(prefix || "media") + "_" + Date.now().toString(36) + "_" + random;
+  }
+
+  function identityCandidate(result) {
     if (!result || !result.provider || !result.providerAssetId) return null;
-    const variant = selectedVariant(result);
     return {
-      id: result.provider + ":" + result.providerAssetId,
+      id: resultIdentity(result),
       kind: result.kind || "video",
       origin: "stock",
       provider: result.provider,
       providerAssetId: String(result.providerAssetId),
       name: result.name || (result.kind === "image" ? t("images") : t("video")),
-      previewUrl: result.previewUrl || result.thumbnailUrl || null,
-      remoteUrl: variant?.url || null,
+      previewUrl: null,
+      remoteUrl: null,
       status: "ready",
       fileState: "remote",
       progress: 100,
-      favorite: false,
-      meta: {
-        width: Number(result?.meta?.width || variant?.width || 0),
-        height: Number(result?.meta?.height || variant?.height || 0),
-        duration: Number(result?.meta?.duration || 0),
-        sizeBytes: Number(variant?.sizeBytes || 0),
-        mime: variant?.mime || null,
-        orientation: result?.meta?.orientation || null
-      },
+      meta: result.meta || {},
       attribution: result.attribution || {}
     };
   }
 
   function existingIdentity(result) {
     const model = window.ViralCoreMediaLibraryModel;
-    const candidate = toProjectAsset(result);
+    const candidate = identityCandidate(result);
     if (!model || !candidate) return false;
     const identity = model.assetIdentity(candidate);
     return (Array.isArray(library()?.assets) ? library().assets : []).some(asset => model.assetIdentity(asset) === identity);
   }
 
-  function addToProject(result) {
+  function addAcquiredAsset(rawAsset) {
     const model = window.ViralCoreMediaLibraryModel;
     const current = appState();
-    const candidate = toProjectAsset(result);
-    if (!model || !current || !candidate) return { status: "invalid" };
-    if (existingIdentity(result)) return { status: "duplicate" };
+    if (!model || !current || !rawAsset) return { status: "invalid" };
     const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
     if (count >= Number(model.MAX_PROJECT_ASSETS || 500)) return { status: "capacity" };
 
+    // Provider preview/download URLs are search-time data. The durable project
+    // record owns the verified local cache path and attribution instead.
+    const candidate = {
+      ...rawAsset,
+      previewUrl: null,
+      remoteUrl: null,
+      status: "ready",
+      fileState: "available",
+      progress: 100
+    };
     const next = model.addAssets(current.media, [candidate]);
     if (!next.added.length) {
       const atCapacity = next.library?.assets?.length >= Number(model.MAX_PROJECT_ASSETS || 500);
@@ -120,6 +131,76 @@
       detail: { reason: "media-library", addedAssetIds: next.added.map(item => item.id) }
     }));
     return { status: "added", asset: next.added[0] };
+  }
+
+  function acquisitionState(result) {
+    return acquisitions.get(resultIdentity(result)) || null;
+  }
+
+  async function acquireToProject(result) {
+    const identity = resultIdentity(result);
+    if (!identity || existingIdentity(result)) return;
+    if (acquisitions.has(identity)) return;
+
+    const model = window.ViralCoreMediaLibraryModel;
+    const current = appState();
+    const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
+    if (!model || !current || count >= Number(model.MAX_PROJECT_ASSETS || 500)) {
+      renderState("capacity", "libraryFullTitle", "libraryFullBody");
+      return;
+    }
+
+    const ticket = String(result?.acquisition?.ticket || "").trim();
+    const projectId = currentProjectId();
+    if (!ticket || !projectId || typeof window.desktopAPI?.acquireMedia !== "function") {
+      acquisitions.set(identity, { state: "failed", progress: 0, error: "MEDIA_SOURCE_UNAVAILABLE" });
+      renderResults(lastResults);
+      return;
+    }
+
+    const jobId = requestId("acquire");
+    acquisitions.set(identity, { jobId, state: "validating", progress: 0, error: null });
+    renderResults(lastResults);
+
+    try {
+      const payload = await window.desktopAPI.acquireMedia({ jobId, projectId, ticket });
+      const active = acquisitions.get(identity);
+      if (!active || active.jobId !== jobId) return;
+
+      if (payload?.ok === false) {
+        const code = payload?.error?.code || "MEDIA_DOWNLOAD_FAILED";
+        if (code === "MEDIA_CANCELLED") acquisitions.delete(identity);
+        else acquisitions.set(identity, { ...active, state: "failed", error: code });
+        renderResults(lastResults);
+        return;
+      }
+
+      const acquired = payload?.data?.asset || payload?.asset || null;
+      const outcome = addAcquiredAsset(acquired);
+      acquisitions.delete(identity);
+      if (outcome.status === "capacity") {
+        renderState("capacity", "libraryFullTitle", "libraryFullBody");
+        return;
+      }
+      renderResults(lastResults);
+    } catch {
+      const active = acquisitions.get(identity);
+      if (active?.jobId === jobId) {
+        acquisitions.set(identity, { ...active, state: "failed", error: "MEDIA_DOWNLOAD_FAILED" });
+        renderResults(lastResults);
+      }
+    }
+  }
+
+  function cancelAcquisition(result) {
+    const identity = resultIdentity(result);
+    const active = acquisitions.get(identity);
+    if (!active?.jobId) return;
+    acquisitions.set(identity, { ...active, state: "cancelling" });
+    renderResults(lastResults);
+    if (typeof window.desktopAPI?.cancelMediaAcquisition === "function") {
+      Promise.resolve(window.desktopAPI.cancelMediaAcquisition(active.jobId)).catch(() => {});
+    }
   }
 
   function focusableElements(drawer) {
@@ -220,14 +301,11 @@
         if (url && typeof window.desktopAPI?.openExternal === "function") window.desktopAPI.openExternal(url);
         return;
       }
-      if (target.dataset.mediaAction === "add") {
-        const outcome = addToProject(result);
-        if (outcome.status === "capacity") {
-          renderState("capacity", "libraryFullTitle", "libraryFullBody");
-          return;
-        }
-        renderResults(lastResults);
+      if (target.dataset.mediaAction === "cancel-add") {
+        cancelAcquisition(result);
+        return;
       }
+      if (target.dataset.mediaAction === "add") acquireToProject(result);
     });
     updateCopy(drawer);
     return drawer;
@@ -282,6 +360,15 @@
       '</div>';
   }
 
+  function progressLabel(active) {
+    if (!active) return "";
+    const value = Math.max(0, Math.min(100, Math.round(Number(active.progress || 0))));
+    if (active.state === "failed") return t("failedTitle");
+    if (active.state === "cancelling") return locale() === "en" ? "Stopping..." : "Đang dừng...";
+    if (active.state === "verifying") return locale() === "en" ? "Verifying..." : "Đang xác minh...";
+    return (locale() === "en" ? "Adding " : "Đang thêm ") + value + "%";
+  }
+
   function renderResults(results) {
     const drawer = ensureDrawer();
     const root = drawer.querySelector("[data-media-results]");
@@ -298,6 +385,7 @@
 
     root.innerHTML = lastResults.map((result, index) => {
       const added = existingIdentity(result);
+      const active = acquisitionState(result);
       const preview = result.thumbnailUrl || result.previewUrl || "";
       const creator = result?.attribution?.creatorName || "";
       const provider = providerLabel(result?.provider);
@@ -307,23 +395,32 @@
         result?.meta?.width && result?.meta?.height ? result.meta.width + "×" + result.meta.height : "",
         duration > 0 ? t("duration", { seconds: Math.round(duration) }) : ""
       ].filter(Boolean).join(" · ");
-      return '<article class="core-media-card" data-result-card="' + index + '">' +
+      const working = active && !["failed", "cancelled"].includes(active.state);
+      const label = added ? t("addProject") : active ? progressLabel(active) : t("addProject");
+      const action = working ? "cancel-add" : "add";
+      const disabled = added || (active?.state === "cancelling");
+      const progress = active && working ? Math.max(0, Math.min(100, Number(active.progress || 0))) : 0;
+      return '<article class="core-media-card' + (working ? ' is-acquiring' : '') + '" data-result-card="' + index + '">' +
         '<div class="core-media-thumb">' + (preview ? '<img src="' + esc(preview) + '" alt="" loading="lazy" />' : '<span>' + esc(t("media")) + '</span>') + '</div>' +
         '<div class="core-media-card-copy"><strong>' + esc(result.name || t(result.kind === "image" ? "images" : "video")) + '</strong>' +
           '<small>' + esc(meta || result?.meta?.orientation || "") + '</small>' +
           (sourceIdentity ? '<em>' + esc(t("sourceBy", { name: sourceIdentity })) + '</em>' : '') +
+          (active?.state === "failed" ? '<em class="core-media-acquire-error">' + esc(t("failedBody")) + '</em>' : '') +
         '</div>' +
         '<div class="core-media-card-actions">' +
-          '<button type="button" data-media-action="add" data-result-index="' + index + '"' + (added ? ' disabled class="is-added"' : '') + '>' + (added ? "✓" : "+") + '<span>' + esc(t("addProject")) + '</span></button>' +
+          '<button type="button" data-media-action="' + action + '" data-result-index="' + index + '"' + (disabled ? ' disabled' : '') + (added ? ' class="is-added"' : '') + '>' + (added ? "✓" : working ? "×" : "+") + '<span>' + esc(label) + '</span></button>' +
           (result?.attribution?.sourceUrl && provider ? '<button type="button" data-media-action="source" data-result-index="' + index + '" aria-label="' + esc(t("preview") + " — " + provider) + '"><span>' + esc(provider) + '</span>↗</button>' : '') +
         '</div>' +
+        (working ? '<div class="core-media-acquire-progress" aria-hidden="true"><span style="width:' + progress + '%"></span></div>' : '') +
       '</article>';
     }).join("");
   }
 
   function cancelActiveSearch() {
-    if (typeof window.desktopAPI?.cancelMediaSearch === "function") {
-      Promise.resolve(window.desktopAPI.cancelMediaSearch()).catch(() => {});
+    const requestIdValue = activeSearchRequestId;
+    activeSearchRequestId = null;
+    if (requestIdValue && typeof window.desktopAPI?.cancelMediaSearch === "function") {
+      Promise.resolve(window.desktopAPI.cancelMediaSearch(requestIdValue)).catch(() => {});
     }
   }
 
@@ -334,17 +431,21 @@
     const orientationEl = drawer.querySelector("[data-media-orientation]");
     const query = queryEl instanceof HTMLInputElement ? queryEl.value.trim() : "";
     cancelActiveSearch();
-    const requestId = ++activeRequest;
+    const requestNumber = ++activeRequest;
+    const searchRequestId = requestId("search");
+    activeSearchRequestId = searchRequestId;
     lastResults = [];
     currentView = "validating";
 
     if (query.length < 2) {
+      activeSearchRequestId = null;
       renderState("empty", "emptyTitle", "emptyBody");
       queryEl?.focus?.();
       return;
     }
 
     if (typeof window.desktopAPI?.searchMedia !== "function") {
+      activeSearchRequestId = null;
       renderState("unavailable", "unavailableTitle", "unavailableBody");
       return;
     }
@@ -352,6 +453,7 @@
     renderState("loading", "searching", "emptyBody");
     try {
       const payload = await window.desktopAPI.searchMedia({
+        requestId: searchRequestId,
         query,
         kind: kindEl instanceof HTMLSelectElement ? kindEl.value : "video",
         orientation: orientationEl instanceof HTMLSelectElement ? orientationEl.value : "any",
@@ -359,7 +461,8 @@
         perPage: SEARCH_PAGE_SIZE,
         provider: "auto"
       });
-      if (requestId !== activeRequest) return;
+      if (requestNumber !== activeRequest) return;
+      if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
       if (payload?.ok === false) {
         const code = payload?.error?.code || payload?.code;
         if (code === "MEDIA_CANCELLED") {
@@ -377,7 +480,8 @@
       }
       renderResults(payload?.results || payload?.data?.results || []);
     } catch {
-      if (requestId !== activeRequest) return;
+      if (requestNumber !== activeRequest) return;
+      if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
       renderState("error", "failedTitle", "failedBody");
     }
   }
@@ -412,6 +516,28 @@
     opener = null;
     requestAnimationFrame(() => {
       if (target?.isConnected && typeof target.focus === "function") target.focus();
+    });
+  }
+
+  if (typeof window.desktopAPI?.onMediaAcquisitionProgress === "function") {
+    window.desktopAPI.onMediaAcquisitionProgress(payload => {
+      const jobId = String(payload?.jobId || "");
+      if (!jobId) return;
+      for (const [identity, active] of acquisitions.entries()) {
+        if (active?.jobId !== jobId) continue;
+        const stateValue = String(payload?.state || active.state || "downloading");
+        if (stateValue === "cancelled") acquisitions.delete(identity);
+        else acquisitions.set(identity, {
+          ...active,
+          state: stateValue,
+          progress: Math.max(0, Math.min(100, Number(payload?.progress || active.progress || 0))),
+          error: payload?.error?.code || active.error || null
+        });
+        if (document.documentElement.classList.contains("core-media-discovery-open") && currentView === "results" && lastResults.length) {
+          renderResults(lastResults);
+        }
+        break;
+      }
     });
   }
 
