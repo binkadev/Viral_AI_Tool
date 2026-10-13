@@ -6,6 +6,7 @@ on:
     paths:
       - "renderer/core-scene-plan-model.js"
       - "tests/core-scene-plan-model.test.js"
+      - "tests/core-scene-plan-collision.test.js"
       - "docs/SCENE_PLANNER_SPEC.md"
       - ".github/workflows/scene-planner.yml"
   pull_request:
@@ -13,6 +14,7 @@ on:
     paths:
       - "renderer/core-scene-plan-model.js"
       - "tests/core-scene-plan-model.test.js"
+      - "tests/core-scene-plan-collision.test.js"
       - "docs/SCENE_PLANNER_SPEC.md"
       - ".github/workflows/scene-planner.yml"
 
@@ -40,4 +42,6 @@ jobs:
         run: node --check renderer/core-scene-plan-model.js
 
       - name: Run Scene Planner domain regression
-        run: node tests/core-scene-plan-model.test.js
+        run: |
+          node tests/core-scene-plan-model.test.js
+          node tests/core-scene-plan-collision.test.js
