@@ -62,6 +62,9 @@ jobs:
       - name: Run media engine search regression
         run: npm run test:media-engine-search
 
+      - name: Run media provider pagination regression
+        run: node tests/media-provider-pagination-regression.test.js
+
       - name: Run media desktop IPC regression
         run: node tests/media-desktop-ipc.test.js
 
