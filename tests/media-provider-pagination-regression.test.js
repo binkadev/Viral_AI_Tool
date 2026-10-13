@@ -74,7 +74,35 @@ function hit(id, portrait) {
   );
   assert.strictEqual(result.nextPage, 3, "nextPage must advance only after the complete second provider page was consumed");
 
-  console.log("Pixabay filtered pagination preserves complete provider pages without dropping matches.");
+  const deepCalls = [];
+  const deepProvider = createPixabayMediaProvider({
+    apiKey: "pixabay-key",
+    fetchImpl: async url => {
+      const parsed = new URL(url.toString());
+      deepCalls.push(parsed);
+      const page = Number(parsed.searchParams.get("page") || 1);
+      const portrait = page === 6;
+      return response({
+        totalHits: 18,
+        hits: Array.from({ length: 3 }, (_, index) => hit(page * 10 + index, portrait))
+      });
+    }
+  });
+
+  const deepResult = await deepProvider.search({
+    query: "deep portrait wildlife",
+    kind: "video",
+    orientation: "portrait",
+    page: 1,
+    perPage: 3
+  });
+
+  assert.strictEqual(deepCalls.length, 6, "filtered discovery must continue beyond five provider pages when valid matches exist later");
+  assert.strictEqual(deepResult.results.length, 3);
+  assert.deepStrictEqual(deepResult.results.map(item => item.providerAssetId), ["60", "61", "62"]);
+  assert.strictEqual(deepResult.nextPage, null, "search should report exhaustion after consuming the final provider page");
+
+  console.log("Pixabay filtered pagination preserves complete pages and reaches deep valid matches.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
