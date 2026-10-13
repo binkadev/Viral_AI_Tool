@@ -112,9 +112,14 @@ const descriptor = {
 
     const paths = cachePaths(temp, "project-source-2", descriptor);
     let releaseSlow;
+    let signalSlowBlocked;
+    const slowBlocked = new Promise(resolve => { signalSlowBlocked = resolve; });
     const slowBody = (async function* () {
       yield Buffer.from("part-one");
-      await new Promise(resolve => { releaseSlow = resolve; });
+      await new Promise(resolve => {
+        releaseSlow = resolve;
+        signalSlowBlocked();
+      });
       yield Buffer.from("part-two");
     })();
     const slowEvents = [];
@@ -138,7 +143,8 @@ const descriptor = {
       descriptor
     });
     const pendingCancellation = assert.rejects(pending, error => error?.code === "MEDIA_CANCELLED");
-    await new Promise(resolve => setImmediate(resolve));
+    await slowBlocked;
+    assert.strictEqual(typeof releaseSlow, "function", "slow stream must reach its blocking point before cancellation");
     assert.strictEqual(slowManager.activeCount(), 1);
     await assert.rejects(
       () => slowManager.acquire({
