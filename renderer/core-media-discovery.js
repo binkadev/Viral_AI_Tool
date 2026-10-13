@@ -122,10 +122,11 @@
     return (Array.isArray(library()?.assets) ? library().assets : []).some(asset => model.assetIdentity(asset) === identity);
   }
 
-  function addAcquiredAsset(rawAsset) {
+  function addAcquiredAsset(rawAsset, expectedProjectId) {
     const model = window.ViralCoreMediaLibraryModel;
     const current = appState();
     if (!model || !current || !rawAsset) return { status: "invalid" };
+    if (!expectedProjectId || currentProjectId() !== expectedProjectId) return { status: "project-changed" };
     const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
     if (count >= Number(model.MAX_PROJECT_ASSETS || 500)) return { status: "capacity" };
 
@@ -152,6 +153,18 @@
 
   function acquisitionState(result) {
     return acquisitions.get(resultIdentity(result)) || null;
+  }
+
+  function acquisitionErrorKey(code) {
+    const value = String(code || "");
+    if (value === "MEDIA_DISK_SPACE_LOW") return "acquisitionDiskBody";
+    if (value === "MEDIA_DESTINATION_UNAVAILABLE") return "acquisitionDestinationBody";
+    if (value === "MEDIA_SOURCE_UNAVAILABLE") return "acquisitionSourceBody";
+    if (value === "MEDIA_VERIFY_FAILED") return "acquisitionVerifyBody";
+    if (value === "MEDIA_DOWNLOAD_DUPLICATE") return "acquisitionDuplicateBody";
+    if (value === "MEDIA_AUTH_REQUIRED") return "acquisitionAuthBody";
+    if (value === "MEDIA_PROJECT_CHANGED") return "acquisitionProjectChangedBody";
+    return "acquisitionDownloadBody";
   }
 
   async function acquireToProject(result) {
@@ -193,7 +206,12 @@
       }
 
       const acquired = payload?.data?.asset || payload?.asset || null;
-      const outcome = addAcquiredAsset(acquired);
+      const outcome = addAcquiredAsset(acquired, projectId);
+      if (outcome.status === "project-changed") {
+        acquisitions.set(identity, { ...active, state: "failed", error: "MEDIA_PROJECT_CHANGED" });
+        renderResults(lastResults);
+        return;
+      }
       acquisitions.delete(identity);
       if (outcome.status === "capacity") {
         renderState("capacity", "libraryFullTitle", "libraryFullBody");
@@ -433,7 +451,7 @@
         '<div class="core-media-card-copy"><strong>' + esc(result.name || t(result.kind === "image" ? "images" : "video")) + '</strong>' +
           '<small>' + esc(meta || result?.meta?.orientation || "") + '</small>' +
           (sourceIdentity ? '<em>' + esc(t("sourceBy", { name: sourceIdentity })) + '</em>' : '') +
-          (active?.state === "failed" ? '<em class="core-media-acquire-error">' + esc(t("failedBody")) + '</em>' : '') +
+          (active?.state === "failed" ? '<em class="core-media-acquire-error">' + esc(t(acquisitionErrorKey(active.error))) + '</em>' : '') +
         '</div>' +
         '<div class="core-media-card-actions">' +
           '<button type="button" data-media-action="' + action + '" data-result-index="' + index + '"' + (disabled ? ' disabled' : '') + (added ? ' class="is-added"' : '') + '>' + (added ? "✓" : working ? "×" : "+") + '<span>' + esc(label) + '</span></button>' +

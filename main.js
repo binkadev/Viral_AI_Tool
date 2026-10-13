@@ -446,6 +446,7 @@ function createWindow() {
         await cancelAllTranslations();
         await cancelAllVoice();
         speechModelManager.cancelAll();
+        try { mediaDesktopController?.cancelAll(); } catch {}
         await waitForWorkToStop();
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
       }
