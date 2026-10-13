@@ -7,6 +7,7 @@ on:
       - "renderer/core-scene-plan-model.js"
       - "tests/core-scene-plan-model.test.js"
       - "tests/core-scene-plan-collision.test.js"
+      - "tests/core-scene-plan-ownership-budget.test.js"
       - "docs/SCENE_PLANNER_SPEC.md"
       - ".github/workflows/scene-planner.yml"
   pull_request:
@@ -15,6 +16,7 @@ on:
       - "renderer/core-scene-plan-model.js"
       - "tests/core-scene-plan-model.test.js"
       - "tests/core-scene-plan-collision.test.js"
+      - "tests/core-scene-plan-ownership-budget.test.js"
       - "docs/SCENE_PLANNER_SPEC.md"
       - ".github/workflows/scene-planner.yml"
 
@@ -45,3 +47,4 @@ jobs:
         run: |
           node tests/core-scene-plan-model.test.js
           node tests/core-scene-plan-collision.test.js
+          node tests/core-scene-plan-ownership-budget.test.js
