@@ -150,6 +150,22 @@ assert.strictEqual(maxLengthDuplicateIds.length, 2);
 assert.strictEqual(new Set(maxLengthDuplicateIds.map(segment => segment.id)).size, 2, "max-length duplicate IDs must remain finite and unique");
 assert(maxLengthDuplicateIds.every(segment => segment.id.length <= 240));
 
+const sharedPrefix = "p".repeat(230);
+const collisionStressSource = {
+  segments: Array.from({ length: 2500 }, (_, index) => {
+    const uniqueTail = index.toString(36).padStart(10, "0");
+    const id = sharedPrefix + uniqueTail;
+    return [
+      { id, start: index * 2, end: index * 2 + 0.5, text: "Primary " + index },
+      { id, start: index * 2 + 0.5, end: index * 2 + 1, text: "Duplicate " + index }
+    ];
+  }).flat()
+};
+const collisionStress = model.normalizeTranscriptSegments(collisionStressSource);
+assert.strictEqual(collisionStress.length, model.MAX_SOURCE_SEGMENTS, "collision stress fixture must cover the full supported transcript capacity");
+assert.strictEqual(new Set(collisionStress.map(segment => segment.id)).size, model.MAX_SOURCE_SEGMENTS, "shared-prefix duplicate IDs must remain unique at full capacity");
+assert(collisionStress.every(segment => segment.id.length <= 240));
+
 const overlapScenes = model.segmentTranscript({
   segments: [
     { id: "outer", start: 0, end: 10, text: "Outer" },
