@@ -47,8 +47,15 @@ assert(
   "single-instance lock must be acquired before the application main process initializes"
 );
 
+const didFinishHandler = startup.indexOf('contents.on("did-finish-load"');
+const showAfterFinish = startup.indexOf('showOwnerWindow(contents, "did-finish-load")', didFinishHandler);
+const healthProbeAfterFinish = startup.indexOf("const health = await readRendererHealth(contents);", didFinishHandler);
+
+assert(didFinishHandler >= 0, "startup must register a did-finish-load handler");
+assert(showAfterFinish >= didFinishHandler, "did-finish-load must show the owner window");
+assert(healthProbeAfterFinish >= didFinishHandler, "did-finish-load must probe renderer health");
 assert(
-  startup.indexOf('showOwnerWindow(contents, "did-finish-load")') < startup.indexOf("readRendererHealth(contents)"),
+  showAfterFinish < healthProbeAfterFinish,
   "the window must become visible before renderer health probing can leave the user staring at a blank surface"
 );
 
