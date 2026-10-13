@@ -121,7 +121,12 @@
       let id = baseId;
       do {
         count += 1;
-        id = count === 1 ? baseId : text(baseId + "~" + count, 240);
+        if (count === 1) {
+          id = baseId;
+        } else {
+          const suffix = "~" + count;
+          id = text(baseId, Math.max(1, 240 - suffix.length)) + suffix;
+        }
       } while (usedIds.has(id));
       baseCounts.set(baseId, count);
       usedIds.add(id);
