@@ -39,6 +39,13 @@
       .replace(/'/g, "&#39;");
   }
 
+  function providerLabel(value) {
+    const provider = String(value || "").trim().toLowerCase();
+    if (provider === "pexels") return "Pexels";
+    if (provider === "pixabay") return "Pixabay";
+    return String(value || "").trim();
+  }
+
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
     catch { return null; }
@@ -293,6 +300,8 @@
       const added = existingIdentity(result);
       const preview = result.thumbnailUrl || result.previewUrl || "";
       const creator = result?.attribution?.creatorName || "";
+      const provider = providerLabel(result?.provider);
+      const sourceIdentity = [provider, creator].filter(Boolean).join(" · ");
       const duration = Number(result?.meta?.duration || 0);
       const meta = [
         result?.meta?.width && result?.meta?.height ? result.meta.width + "×" + result.meta.height : "",
@@ -302,11 +311,11 @@
         '<div class="core-media-thumb">' + (preview ? '<img src="' + esc(preview) + '" alt="" loading="lazy" />' : '<span>' + esc(t("media")) + '</span>') + '</div>' +
         '<div class="core-media-card-copy"><strong>' + esc(result.name || t(result.kind === "image" ? "images" : "video")) + '</strong>' +
           '<small>' + esc(meta || result?.meta?.orientation || "") + '</small>' +
-          (creator ? '<em>' + esc(t("sourceBy", { name: creator })) + '</em>' : '') +
+          (sourceIdentity ? '<em>' + esc(t("sourceBy", { name: sourceIdentity })) + '</em>' : '') +
         '</div>' +
         '<div class="core-media-card-actions">' +
           '<button type="button" data-media-action="add" data-result-index="' + index + '"' + (added ? ' disabled class="is-added"' : '') + '>' + (added ? "✓" : "+") + '<span>' + esc(t("addProject")) + '</span></button>' +
-          (result?.attribution?.sourceUrl ? '<button type="button" data-media-action="source" data-result-index="' + index + '"><span>' + esc(t("preview")) + '</span>↗</button>' : '') +
+          (result?.attribution?.sourceUrl && provider ? '<button type="button" data-media-action="source" data-result-index="' + index + '" aria-label="' + esc(t("preview") + " — " + provider) + '"><span>' + esc(provider) + '</span>↗</button>' : '') +
         '</div>' +
       '</article>';
     }).join("");
