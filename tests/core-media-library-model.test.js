@@ -167,15 +167,17 @@ const activeSnapshot = {
 };
 const liveSnapshot = snapshotModel.migrateSnapshot(activeSnapshot);
 assert.strictEqual(liveSnapshot.snapshot.media.assets[0].status, "downloading", "normal in-session normalization must not interrupt live work");
-assert.strictEqual(liveSnapshot.migrated, false);
-const bootSnapshot = snapshotModel.migrateSnapshot(activeSnapshot, { restartSafeMedia: true });
+assert.strictEqual(liveSnapshot.migrated, true, "schema-v2 media snapshots must migrate to schema v3 even when live media state is retained");
+assert.strictEqual(liveSnapshot.snapshot.schemaVersion, 3);
+assert.deepStrictEqual(liveSnapshot.snapshot.scenePlan.scenes, [], "media migration must add an empty scene plan without inventing scenes");
+const bootSnapshot = snapshotModel.migrateSnapshot(activeSnapshot, { restartSafeMedia: true, restartSafeScenePlan: true });
 assert.strictEqual(bootSnapshot.snapshot.media.assets[0].status, "interrupted", "bootstrap normalization must not resurrect stale work");
 assert.strictEqual(bootSnapshot.migrated, true, "restart-safe transition must be backfilled durably");
 
 const persistence = fs.readFileSync(path.join(__dirname, "..", "renderer", "core-project-persistence.js"), "utf8");
 assert(
-  persistence.includes('model.migrateSnapshot(raw, { restartSafeMedia: true })'),
-  "project persistence bootstrap must explicitly request restart-safe media normalization"
+  persistence.includes("restartSafeMedia: true") && persistence.includes("restartSafeScenePlan: true"),
+  "project persistence bootstrap must explicitly request restart-safe media and scene-plan normalization"
 );
 assert(
   persistence.includes("if (!current.media && currentSnapshot.media)"),
@@ -186,4 +188,4 @@ assert(
   "media hydration must happen before snapshot rebuild"
 );
 
-console.log("Core media library normalization, dedupe, attribution, URL safety, project ownership and restart-state tests passed.");
+console.log("Core media library normalization, dedupe, attribution, URL safety, project ownership and schema-v3 restart-state tests passed.");
