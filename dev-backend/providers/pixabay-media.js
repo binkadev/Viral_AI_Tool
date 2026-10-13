@@ -9,6 +9,7 @@ const {
 const PIXABAY_API_BASE = "https://pixabay.com/api/";
 const PIXABAY_VIDEO_API_BASE = "https://pixabay.com/api/videos/";
 const PIXABAY_LICENSE_URL = "https://pixabay.com/service/license-summary/";
+const MAX_FILTERED_PAGE_SCANS = 5;
 
 function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetchImpl = global.fetch } = {}) {
   const credential = String(apiKey || "").trim();
@@ -99,17 +100,12 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
     });
   }
 
-  async function search(input = {}, { signal } = {}) {
-    const request = normalizeSearchRequest(input);
-    if (!isConfigured()) {
-      throw mediaProviderError("MEDIA_PROVIDER_UNAVAILABLE", "Pixabay media provider is not configured.", { provider: "pixabay" });
-    }
-
+  async function fetchSearchPage(request, page, perPage, signal) {
     const url = new URL(request.kind === "video" ? PIXABAY_VIDEO_API_BASE : PIXABAY_API_BASE);
     url.searchParams.set("key", credential);
     url.searchParams.set("q", request.query.slice(0, 100));
-    url.searchParams.set("page", String(request.page));
-    url.searchParams.set("per_page", String(Math.max(3, request.perPage)));
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("per_page", String(perPage));
     url.searchParams.set("safesearch", "true");
     if (request.kind === "image") url.searchParams.set("orientation", apiOrientation(request.orientation));
 
@@ -133,17 +129,58 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
       throw mediaProviderError("MEDIA_SEARCH_UNAVAILABLE", "Pixabay media search failed.", { provider: "pixabay" });
     }
 
-    let payload;
-    try { payload = await response.json(); }
-    catch {
+    try {
+      return { payload: await response.json(), url };
+    } catch {
       throw mediaProviderError("MEDIA_SEARCH_UNAVAILABLE", "Pixabay returned an invalid response.", { provider: "pixabay" });
     }
+  }
 
-    const normalize = request.kind === "video" ? normalizeVideo : normalizeImage;
-    let results = (Array.isArray(payload?.hits) ? payload.hits : []).map(normalize).filter(Boolean);
-    if (request.orientation !== "any") {
-      results = results.filter(item => item.meta?.orientation === request.orientation);
+  async function search(input = {}, { signal } = {}) {
+    const request = normalizeSearchRequest(input);
+    if (!isConfigured()) {
+      throw mediaProviderError("MEDIA_PROVIDER_UNAVAILABLE", "Pixabay media provider is not configured.", { provider: "pixabay" });
     }
+
+    const perPage = Math.max(3, request.perPage);
+    const normalize = request.kind === "video" ? normalizeVideo : normalizeImage;
+    const maxScans = request.orientation === "any" ? 1 : MAX_FILTERED_PAGE_SCANS;
+    const results = [];
+    const seen = new Set();
+    let totalResults = 0;
+    let lastRawCount = 0;
+    let lastFetchedPage = request.page - 1;
+
+    for (let scan = 0; scan < maxScans && results.length < request.perPage; scan += 1) {
+      const page = request.page + scan;
+      const { payload } = await fetchSearchPage(request, page, perPage, signal);
+      const hits = Array.isArray(payload?.hits) ? payload.hits : [];
+      lastRawCount = hits.length;
+      lastFetchedPage = page;
+      if (scan === 0) {
+        totalResults = Math.max(0, Number(payload?.totalHits ?? payload?.total ?? 0) || 0);
+      }
+
+      let normalized = hits.map(normalize).filter(Boolean);
+      if (request.orientation !== "any") {
+        normalized = normalized.filter(item => item.meta?.orientation === request.orientation);
+      }
+
+      for (const item of normalized) {
+        const identity = `${item.provider}:${item.providerAssetId}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        results.push(item);
+        if (results.length >= request.perPage) break;
+      }
+
+      if (hits.length < perPage) break;
+      if (totalResults > 0 && page * perPage >= totalResults) break;
+    }
+
+    const hasMore = lastRawCount >= perPage && (
+      totalResults <= 0 || lastFetchedPage * perPage < totalResults
+    );
 
     return {
       provider: "pixabay",
@@ -151,9 +188,9 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
       kind: request.kind,
       orientation: request.orientation,
       page: request.page,
-      perPage: Math.max(3, request.perPage),
-      totalResults: Math.max(0, Number(payload?.totalHits ?? payload?.total ?? 0) || 0),
-      nextPage: (Array.isArray(payload?.hits) ? payload.hits.length : 0) >= Math.max(3, request.perPage) ? request.page + 1 : null,
+      perPage,
+      totalResults,
+      nextPage: hasMore ? lastFetchedPage + 1 : null,
       results
     };
   }
@@ -165,5 +202,6 @@ module.exports = {
   PIXABAY_API_BASE,
   PIXABAY_VIDEO_API_BASE,
   PIXABAY_LICENSE_URL,
+  MAX_FILTERED_PAGE_SCANS,
   createPixabayMediaProvider
 };
