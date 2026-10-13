@@ -1,7 +1,10 @@
 "use strict";
 
 const assert = require("assert");
-const { createPixabayMediaProvider } = require("../dev-backend/providers/pixabay-media");
+const {
+  MAX_FILTERED_PROVIDER_PAGES_PER_REQUEST,
+  createPixabayMediaProvider
+} = require("../dev-backend/providers/pixabay-media");
 
 function response(payload) {
   return { ok: true, status: 200, json: async () => payload };
@@ -17,17 +20,19 @@ function hit(id, portrait) {
     user_id: 1,
     videos: {
       medium: {
-        url: `https://cdn.example.test/${id}.mp4`,
+        url: `https://cdn.pixabay.com/video/${id}.mp4`,
         width: portrait ? 1080 : 1920,
         height: portrait ? 1920 : 1080,
         size: 1000,
-        thumbnail: `https://cdn.example.test/${id}.jpg`
+        thumbnail: `https://cdn.pixabay.com/video/${id}.jpg`
       }
     }
   };
 }
 
 (async () => {
+  assert.strictEqual(MAX_FILTERED_PROVIDER_PAGES_PER_REQUEST, 2);
+
   const calls = [];
   const provider = createPixabayMediaProvider({
     apiKey: "pixabay-key",
@@ -65,14 +70,13 @@ function hit(id, portrait) {
     perPage: 18
   });
 
-  assert.strictEqual(calls.length, 2, "search should stop after the second complete provider page fills the requested result count");
-  assert.strictEqual(result.results.length, 28, "all filtered matches from the final fetched provider page must be preserved");
+  assert.strictEqual(calls.length, 2, "one filtered UI request must never scan more than its provider-page budget");
+  assert.strictEqual(result.results.length, 28, "all matches from fetched pages must remain reachable");
   assert.deepStrictEqual(
     result.results.slice(10).map(item => item.providerAssetId),
-    Array.from({ length: 18 }, (_, index) => String(300 + index)),
-    "no matches from the partially-consumed provider page may become unreachable"
+    Array.from({ length: 18 }, (_, index) => String(300 + index))
   );
-  assert.strictEqual(result.nextPage, 3, "nextPage must advance only after the complete second provider page was consumed");
+  assert.strictEqual(result.nextPage, 3, "continuation must start after the final completely consumed provider page");
 
   const deepCalls = [];
   const deepProvider = createPixabayMediaProvider({
@@ -89,20 +93,30 @@ function hit(id, portrait) {
     }
   });
 
-  const deepResult = await deepProvider.search({
-    query: "deep portrait wildlife",
-    kind: "video",
-    orientation: "portrait",
-    page: 1,
-    perPage: 3
-  });
+  let page = 1;
+  let deepResult = null;
+  const requestCallCounts = [];
+  for (let requestNumber = 0; requestNumber < 3; requestNumber += 1) {
+    const before = deepCalls.length;
+    deepResult = await deepProvider.search({
+      query: "deep portrait wildlife",
+      kind: "video",
+      orientation: "portrait",
+      page,
+      perPage: 3
+    });
+    requestCallCounts.push(deepCalls.length - before);
+    if (deepResult.results.length || deepResult.nextPage == null) break;
+    page = deepResult.nextPage;
+  }
 
-  assert.strictEqual(deepCalls.length, 6, "filtered discovery must continue beyond five provider pages when valid matches exist later");
+  assert.deepStrictEqual(requestCallCounts, [2, 2, 2], "deep discovery must advance in explicit bounded continuations instead of one quota-heavy request");
+  assert.strictEqual(deepCalls.length, 6, "valid page-six matches must remain reachable across continuations");
   assert.strictEqual(deepResult.results.length, 3);
   assert.deepStrictEqual(deepResult.results.map(item => item.providerAssetId), ["60", "61", "62"]);
-  assert.strictEqual(deepResult.nextPage, null, "search should report exhaustion after consuming the final provider page");
+  assert.strictEqual(deepResult.nextPage, null);
 
-  console.log("Pixabay filtered pagination preserves complete pages and reaches deep valid matches.");
+  console.log("Pixabay filtered pagination is quota-bounded while preserving deep continuation reachability.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
