@@ -14,6 +14,7 @@ RUN mkdir -p /data/backups \
     && chown -R node:node /app /data
 
 COPY --chown=node:node dev-backend ./dev-backend
+COPY --chown=node:node services/media ./services/media
 
 USER node
 

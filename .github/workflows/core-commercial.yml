@@ -4,26 +4,34 @@ on:
   push:
     branches: [master]
     paths:
+      - "main.js"
+      - "preload.js"
       - "renderer/**"
       - "services/media/**"
+      - "dev-backend/server.js"
       - "dev-backend/media-search.js"
+      - "dev-backend/media-routes.js"
+      - "dev-backend/media-tickets.js"
       - "dev-backend/providers/*-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
-      - "preload.js"
       - ".github/workflows/core-commercial.yml"
   pull_request:
     branches: [master]
     paths:
+      - "main.js"
+      - "preload.js"
       - "renderer/**"
       - "services/media/**"
+      - "dev-backend/server.js"
       - "dev-backend/media-search.js"
+      - "dev-backend/media-routes.js"
+      - "dev-backend/media-tickets.js"
       - "dev-backend/providers/*-media.js"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
-      - "preload.js"
       - ".github/workflows/core-commercial.yml"
 
 permissions:
@@ -55,3 +63,21 @@ jobs:
 
       - name: Run media engine search regression
         run: npm run test:media-engine-search
+
+      - name: Run media provider pagination regression
+        run: node tests/media-provider-pagination-regression.test.js
+
+      - name: Run media acquisition manager regression
+        run: node tests/media-acquisition-manager.test.js
+
+      - name: Run media acquisition ticket regression
+        run: node tests/media-tickets.test.js
+
+      - name: Run media desktop controller regression
+        run: node tests/media-desktop-controller.test.js
+
+      - name: Run media workbench regression
+        run: node tests/core-media-workbench.test.js
+
+      - name: Run media workbench wiring regression
+        run: node tests/media-workbench-wiring.test.js
