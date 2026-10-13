@@ -6,6 +6,7 @@ const { providerDownloadAllowed } = require("../services/media/acquisition-polic
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const VERSION = 1;
+const PLACEHOLDER_SECRET = /(?:replace[-_ ]?with|placeholder|change[-_ ]?me|example|your[-_ ]?secret)/i;
 
 function ticketError(code, message) {
   const error = new Error(message);
@@ -51,13 +52,35 @@ function publicAttribution(value) {
   };
 }
 
+function resolveTicketSecret(explicitSecret, environment = process.env.VIRAL_AI_ENV) {
+  const production = String(environment || "development").trim().toLowerCase() === "production";
+  const configured = String(explicitSecret || process.env.VIRAL_AI_MEDIA_TICKET_SECRET || "").trim();
+
+  if (configured) {
+    const key = Buffer.from(configured);
+    if (key.length < 32) throw new TypeError("Media ticket secret must be at least 32 bytes.");
+    if (production && PLACEHOLDER_SECRET.test(configured)) {
+      throw new TypeError("Production media ticket secret must not use an example or placeholder value.");
+    }
+    return configured;
+  }
+
+  if (production) {
+    throw new TypeError("VIRAL_AI_MEDIA_TICKET_SECRET is required in production.");
+  }
+
+  // Development may use an ephemeral process-local key. Production deliberately
+  // fails closed because tickets must survive backend restarts and load-balanced replicas.
+  return crypto.randomBytes(32).toString("hex");
+}
+
 function createMediaTicketService({
-  secret = process.env.VIRAL_AI_MEDIA_TICKET_SECRET || crypto.randomBytes(32).toString("hex"),
+  secret,
+  environment = process.env.VIRAL_AI_ENV,
   ttlMs = DEFAULT_TTL_MS,
   now = () => Date.now()
 } = {}) {
-  const key = Buffer.from(String(secret || ""));
-  if (key.length < 32) throw new TypeError("Media ticket secret must be at least 32 bytes.");
+  const key = Buffer.from(resolveTicketSecret(secret, environment));
   const lifetime = Math.max(60_000, Math.min(60 * 60 * 1000, Number(ttlMs || DEFAULT_TTL_MS)));
 
   function sign(encodedPayload) {
@@ -156,7 +179,9 @@ function createMediaTicketService({
 
 module.exports = {
   DEFAULT_TTL_MS,
+  PLACEHOLDER_SECRET,
   preferredVariant,
   providerDownloadAllowed,
+  resolveTicketSecret,
   createMediaTicketService
 };
