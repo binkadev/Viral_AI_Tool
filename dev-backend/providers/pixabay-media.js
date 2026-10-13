@@ -9,6 +9,7 @@ const {
 const PIXABAY_API_BASE = "https://pixabay.com/api/";
 const PIXABAY_VIDEO_API_BASE = "https://pixabay.com/api/videos/";
 const PIXABAY_LICENSE_URL = "https://pixabay.com/service/license-summary/";
+const MAX_FILTERED_PROVIDER_PAGES_PER_REQUEST = 2;
 
 function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetchImpl = global.fetch } = {}) {
   const credential = String(apiKey || "").trim();
@@ -149,9 +150,12 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
     let lastRawCount = 0;
     let lastFetchedPage = request.page - 1;
     let page = request.page;
+    let fetchedPages = 0;
+    const pageBudget = request.orientation === "any" ? 1 : MAX_FILTERED_PROVIDER_PAGES_PER_REQUEST;
 
-    while (results.length < request.perPage) {
+    while (fetchedPages < pageBudget) {
       const { payload } = await fetchSearchPage(request, page, perPage, signal);
+      fetchedPages += 1;
       const hits = Array.isArray(payload?.hits) ? payload.hits : [];
       lastRawCount = hits.length;
       lastFetchedPage = page;
@@ -164,8 +168,10 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
         normalized = normalized.filter(item => item.meta?.orientation === request.orientation);
       }
 
-      // Consume a complete provider page before advancing the provider cursor so
-      // no filtered match can become unreachable through nextPage.
+      // Consume each fetched provider page completely before advancing. We do
+      // not scan the whole provider catalog in one UI request: the bounded
+      // cursor below lets the user continue explicitly without burning a
+      // shared server quota on one rare-orientation query.
       for (const item of normalized) {
         const identity = `${item.provider}:${item.providerAssetId}`;
         if (seen.has(identity)) continue;
@@ -173,7 +179,8 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
         results.push(item);
       }
 
-      const providerExhausted = hits.length < perPage || (totalResults > 0 && page * perPage >= totalResults);
+      const normalizedTotal = Math.max(0, Number(totalResults || 0));
+      const providerExhausted = hits.length < perPage || (normalizedTotal > 0 && page * perPage >= normalizedTotal);
       if (providerExhausted || request.orientation === "any") break;
       page += 1;
     }
@@ -203,5 +210,6 @@ module.exports = {
   PIXABAY_API_BASE,
   PIXABAY_VIDEO_API_BASE,
   PIXABAY_LICENSE_URL,
+  MAX_FILTERED_PROVIDER_PAGES_PER_REQUEST,
   createPixabayMediaProvider
 };
