@@ -17,51 +17,78 @@ function clientError(code, message, details = {}) {
 }
 
 function normalizeBaseUrl(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw clientError("MEDIA_NOT_CONFIGURED", "Cloud backend URL is not configured.");
-  }
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) throw clientError("MEDIA_NOT_CONFIGURED", "Cloud backend URL is not configured.");
+
   let url;
-  try { url = new URL(value.trim()); }
+  try { url = new URL(raw); }
   catch { throw clientError("MEDIA_CONFIG_INVALID", "Cloud backend URL is invalid."); }
-  const localhost = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(localhost && url.protocol === "http:")) {
+
+  const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  if (url.protocol !== "https:" && !(local && url.protocol === "http:")) {
     throw clientError("MEDIA_HTTPS_REQUIRED", "Cloud backend must use HTTPS.");
   }
+
   url.pathname = url.pathname.replace(/\/+$/, "");
   return url;
 }
 
 function safeJson(text) {
-  if (!text) return {};
-  try { return JSON.parse(text); } catch { return {}; }
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function stableApiError(status, payload = {}) {
-  const backendCode = payload?.error?.code || payload?.code || "";
+  const backendCode = String(payload?.error?.code || payload?.code || "");
   const mapped = {
     AUTH_REQUIRED: "MEDIA_AUTH_REQUIRED",
     AUTH_EXPIRED: "MEDIA_AUTH_REQUIRED",
     MEDIA_SEARCH_INVALID: "MEDIA_SEARCH_INVALID",
-    MEDIA_PROVIDER_UNAVAILABLE: "MEDIA_PROVIDER_UNAVAILABLE",
     MEDIA_SEARCH_UNAVAILABLE: "MEDIA_SEARCH_UNAVAILABLE",
     MEDIA_SEARCH_TIMEOUT: "MEDIA_SEARCH_TIMEOUT",
+    MEDIA_PROVIDER_UNAVAILABLE: "MEDIA_PROVIDER_UNAVAILABLE",
+    MEDIA_AUTH_REQUIRED: "MEDIA_AUTH_REQUIRED",
     MEDIA_QUOTA_EXCEEDED: "MEDIA_QUOTA_EXCEEDED",
-    RATE_LIMITED: "MEDIA_QUOTA_EXCEEDED"
+    MEDIA_SOURCE_UNAVAILABLE: "MEDIA_SOURCE_UNAVAILABLE",
+    QUOTA_EXCEEDED: "MEDIA_QUOTA_EXCEEDED",
+    PLAN_REQUIRED: "MEDIA_PLAN_REQUIRED",
+    SUBSCRIPTION_INACTIVE: "MEDIA_SUBSCRIPTION_INACTIVE",
+    SERVICE_UNAVAILABLE: "MEDIA_SEARCH_UNAVAILABLE"
   };
-  if (mapped[backendCode]) return clientError(mapped[backendCode], "Media backend rejected the request.", { status, backendCode });
+
+  const code = mapped[backendCode];
+  if (code) return clientError(code, "Media service rejected the request.", { status, backendCode });
   if (status === 401) return clientError("MEDIA_AUTH_REQUIRED", "Authentication is required.", { status });
-  if (status === 429) return clientError("MEDIA_QUOTA_EXCEEDED", "Media search allowance was exceeded.", { status });
-  if (status >= 500) return clientError("MEDIA_SEARCH_UNAVAILABLE", "Media search service is unavailable.", { status });
+  if (status === 403) return clientError("MEDIA_PLAN_REQUIRED", "The current plan does not include this feature.", { status });
+  if (status === 402 || status === 429) return clientError("MEDIA_QUOTA_EXCEEDED", "Media search allowance is unavailable.", { status });
+  if (status >= 500) return clientError("MEDIA_SEARCH_UNAVAILABLE", "Media search is unavailable.", { status });
   return clientError("MEDIA_REQUEST_FAILED", "Media request failed.", { status, backendCode: backendCode || null });
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function safeRequestHeaders(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const output = {};
+  for (const [key, rawValue] of Object.entries(source)) {
+    const name = String(key || "").trim().toLowerCase();
+    if (!/^x-viral-ai-[a-z0-9-]{1,80}$/.test(name)) continue;
+    const headerValue = String(rawValue == null ? "" : rawValue).trim();
+    if (!headerValue || headerValue.length > 8192 || /[\r\n]/.test(headerValue)) continue;
+    output[name] = headerValue;
+  }
+  return output;
+}
+
 class CloudMediaClient {
-  constructor({ backendUrl, getAccessToken, appVersion = "dev", fetchImpl = global.fetch, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+  constructor({ backendUrl, getAccessToken, appVersion = "dev", timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = global.fetch }) {
     this.backendUrl = backendUrl;
     this.getAccessToken = typeof getAccessToken === "function" ? getAccessToken : () => null;
     this.appVersion = String(appVersion || "dev");
-    this.fetchImpl = fetchImpl;
     this.timeoutMs = Math.max(3000, Number(timeoutMs || DEFAULT_TIMEOUT_MS));
+    this.fetchImpl = fetchImpl;
   }
 
   accessToken() {
@@ -72,59 +99,75 @@ class CloudMediaClient {
     return token.trim();
   }
 
-  async request(pathname, { query, retries = 1, timeoutMs = this.timeoutMs, signal } = {}) {
-    if (typeof this.fetchImpl !== "function") throw clientError("MEDIA_SEARCH_UNAVAILABLE", "Network client is unavailable.");
+  async request(pathname, { searchParams, requestHeaders, retries = 1, timeoutMs = this.timeoutMs, signal } = {}) {
+    if (typeof this.fetchImpl !== "function") {
+      throw clientError("MEDIA_SEARCH_UNAVAILABLE", "Media network client is unavailable.");
+    }
+
     const base = normalizeBaseUrl(this.backendUrl);
     const url = new URL(base.toString());
     url.pathname = (base.pathname + "/" + String(pathname || "").replace(/^\/+/, "")).replace(/\/+/g, "/");
-    for (const [key, value] of Object.entries(query || {})) {
-      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    for (const [key, value] of Object.entries(searchParams || {})) {
+      if (value === undefined || value === null || value === "") continue;
+      url.searchParams.set(key, String(value));
     }
 
-    let lastError;
+    const headers = {
+      accept: "application/json",
+      authorization: "Bearer " + this.accessToken(),
+      "x-viral-ai-client": "desktop",
+      "x-viral-ai-version": this.appVersion,
+      ...safeRequestHeaders(requestHeaders)
+    };
+
     const attempts = Math.max(1, Number(retries || 0) + 1);
+    let lastError;
+
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       const controller = new AbortController();
-      let externalAbort;
+      let externalAbort = null;
       if (signal) {
         externalAbort = () => controller.abort(signal.reason);
         if (signal.aborted) controller.abort(signal.reason);
         else signal.addEventListener("abort", externalAbort, { once: true });
       }
       const timer = setTimeout(() => controller.abort(new Error("timeout")), timeoutMs);
+
       try {
-        const response = await this.fetchImpl(url, {
-          method: "GET",
-          headers: {
-            accept: "application/json",
-            authorization: "Bearer " + this.accessToken(),
-            "x-viral-ai-client": "desktop",
-            "x-viral-ai-version": this.appVersion
-          },
-          signal: controller.signal
-        });
-        const payload = safeJson(await response.text());
+        const response = await this.fetchImpl(url, { method: "GET", headers, signal: controller.signal });
+        const text = await response.text();
+        const payload = safeJson(text) || {};
         if (!response.ok) {
           const error = stableApiError(response.status, payload);
-          if (attempt < attempts && RETRY_STATUS.has(response.status)) { lastError = error; continue; }
+          if (attempt < attempts && RETRY_STATUS.has(response.status)) {
+            lastError = error;
+            await sleep(Math.min(1200, 200 * Math.pow(2, attempt - 1)));
+            continue;
+          }
           throw error;
         }
         return payload;
       } catch (error) {
         if (signal?.aborted) throw clientError("MEDIA_CANCELLED", "Media request was cancelled.");
-        if (error instanceof MediaClientError) {
-          if (attempt < attempts && ["MEDIA_SEARCH_UNAVAILABLE", "MEDIA_SEARCH_TIMEOUT"].includes(error.code)) { lastError = error; continue; }
-          throw error;
+        if (error instanceof MediaClientError) throw error;
+
+        const wrapped = clientError(
+          controller.signal.aborted ? "MEDIA_SEARCH_TIMEOUT" : "MEDIA_NETWORK",
+          controller.signal.aborted ? "Media search timed out." : "Media service could not be reached.",
+          { technicalMessage: error?.message || String(error) }
+        );
+        if (attempt < attempts) {
+          lastError = wrapped;
+          await sleep(Math.min(1200, 200 * Math.pow(2, attempt - 1)));
+          continue;
         }
-        const timedOut = controller.signal.aborted;
-        const wrapped = clientError(timedOut ? "MEDIA_SEARCH_TIMEOUT" : "MEDIA_NETWORK", timedOut ? "Media search timed out." : "Media backend could not be reached.", { technicalMessage: error?.message || String(error) });
-        if (attempt < attempts) { lastError = wrapped; continue; }
         throw wrapped;
       } finally {
         clearTimeout(timer);
         if (signal && externalAbort) signal.removeEventListener("abort", externalAbort);
       }
     }
+
     throw lastError || clientError("MEDIA_REQUEST_FAILED", "Media request failed.");
   }
 
@@ -134,9 +177,22 @@ class CloudMediaClient {
 
   search({ query, kind = "video", orientation = "any", page = 1, perPage = 18, provider = "auto", signal } = {}) {
     return this.request("/v1/media/search", {
-      query: { query, kind, orientation, page, perPage, provider },
       retries: 1,
-      signal
+      signal,
+      searchParams: { query, kind, orientation, page, perPage, provider }
+    });
+  }
+
+  resolveAcquisition(ticket, { signal } = {}) {
+    const value = String(ticket || "").trim();
+    if (!value || value.length > 8192 || /[\r\n]/.test(value)) {
+      throw clientError("MEDIA_SOURCE_UNAVAILABLE", "Media acquisition ticket is invalid.");
+    }
+    return this.request("/v1/media/acquisition", {
+      retries: 0,
+      timeoutMs: 8000,
+      signal,
+      requestHeaders: { "x-viral-ai-media-ticket": value }
     });
   }
 }
@@ -145,5 +201,6 @@ module.exports = {
   CloudMediaClient,
   MediaClientError,
   normalizeBaseUrl,
+  safeRequestHeaders,
   stableApiError
 };
