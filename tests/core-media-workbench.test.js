@@ -56,6 +56,10 @@ assert(discovery.includes('data-media-kicker'), "discovery kicker must be popula
 assert(discovery.includes('kicker.textContent = t("media")'), "discovery kicker must use localized media copy");
 assert(discovery.includes('esc(t("media"))'), "no-preview media cards must use localized media copy");
 assert(!discovery.includes('>MEDIA<') && !discovery.includes('<span>MEDIA</span>'), "visible MEDIA labels must not bypass i18n");
+assert(discovery.includes("function providerLabel(value)"), "provider attribution must use a stable brand label helper");
+assert(discovery.includes('const sourceIdentity = [provider, creator].filter(Boolean).join(" · ")'), "result cards must identify the stock provider alongside the creator");
+assert(discovery.includes('<span>\' + esc(provider) + \'</span>↗'), "source action must visibly use the provider brand rather than generic source copy");
+assert(discovery.includes('aria-label="\' + esc(t("preview") + " — " + provider)'), "provider source action must retain a localized accessible action label");
 
 const requestIncrement = discovery.indexOf("const requestId = ++activeRequest;");
 const queryValidation = discovery.indexOf("if (query.length < 2)");
@@ -89,4 +93,4 @@ assert(assetCss.includes("core-asset-stat.has-items"), "real project media count
 assert(!assetCss.includes("@media(max-width:1320px){.core-editor-assets-panel{display:none!important}"), "responsive layout must not remove the only Find media entry");
 assert(assetCss.includes("grid-template-columns:54px minmax(0,1fr) 340px"), "responsive layout must retain a compact media rail below 1320px");
 
-console.log("Commercial media workbench hierarchy, recovery, accessibility, readability, bridge boundary and no-fake-data contracts passed.");
+console.log("Commercial media workbench hierarchy, attribution, recovery, accessibility, readability, bridge boundary and no-fake-data contracts passed.");
