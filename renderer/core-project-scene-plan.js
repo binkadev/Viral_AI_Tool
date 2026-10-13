@@ -19,9 +19,13 @@
     return sceneModel.normalizePlan({});
   }
 
+  function shouldRestartScenePlan(options = {}) {
+    return options.restartSafeScenePlan === true || options.restartSafeMedia === true;
+  }
+
   function scenePlanFromState(state, options = {}) {
     return sceneModel.normalizePlan(state?.scenePlan || {}, {
-      restartSafe: options.restartSafeScenePlan === true
+      restartSafe: shouldRestartScenePlan(options)
     });
   }
 
@@ -34,7 +38,7 @@
   }
 
   function sceneRestartChanged(input, normalized, options) {
-    if (!options.restartSafeScenePlan) return false;
+    if (!shouldRestartScenePlan(options)) return false;
     return String(input?.scenePlan?.plannerJob?.status || "idle") !== String(normalized?.scenePlan?.plannerJob?.status || "idle");
   }
 
@@ -47,7 +51,7 @@
       ...normalizedBase,
       schemaVersion: CURRENT_SCHEMA_VERSION,
       scenePlan: sceneModel.normalizePlan(input?.scenePlan || {}, {
-        restartSafe: options.restartSafeScenePlan === true
+        restartSafe: shouldRestartScenePlan(options)
       })
     };
   }
@@ -83,7 +87,7 @@
         ...migratedBase.snapshot,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         scenePlan: sceneModel.normalizePlan(input.scenePlan || {}, {
-          restartSafe: options.restartSafeScenePlan === true
+          restartSafe: shouldRestartScenePlan(options)
         })
       },
       migrated: true,
