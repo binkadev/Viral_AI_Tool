@@ -137,6 +137,20 @@
     return uniqueStrings(value, LOCKABLE_FIELDS.length, 80).filter(field => allowed.has(field));
   }
 
+  function normalizeTargetKinds(value) {
+    const allowed = new Set(TARGET_KINDS);
+    const seen = new Set();
+    const output = [];
+    for (const candidate of Array.isArray(value) ? value : []) {
+      const kind = text(candidate, 20).toLowerCase();
+      if (!allowed.has(kind) || seen.has(kind)) continue;
+      seen.add(kind);
+      output.push(kind);
+      if (output.length >= TARGET_KINDS.length) break;
+    }
+    return output;
+  }
+
   function normalizeProvenance(value, now) {
     const source = value && typeof value === "object" ? value : {};
     const origin = ["deterministic", "ai", "manual"].includes(text(source.origin, 40).toLowerCase())
@@ -154,7 +168,7 @@
     const start = Math.max(0, finite(input.start, 0));
     const end = Math.max(start, finite(input.end, start));
     const lockedFields = normalizeLockedFields(input.lockedFields);
-    const targetKinds = uniqueStrings(input.targetKinds, TARGET_KINDS.length, 20).filter(kind => TARGET_KINDS.includes(kind));
+    const targetKinds = normalizeTargetKinds(input.targetKinds);
     const orientationRaw = text(input.orientation, 20).toLowerCase();
     const orientation = ORIENTATIONS.includes(orientationRaw) ? orientationRaw : "any";
     const sourceSegmentIds = uniqueStrings(input.sourceSegmentIds, 500, 240);
