@@ -25,18 +25,31 @@ for (const required of [
   'contents.on("did-finish-load"',
   "BrowserWindow.fromWebContents",
   "showOwnerWindow",
+  "window.setIgnoreMouseEvents(false)",
+  "window.setFocusable(true)",
   '"startup-timeout"',
   '"did-finish-load"',
   "readRendererHealth",
   "recoverRenderer",
+  "recoverInteraction",
+  "probeAndRecover",
   "contents.executeJavaScript",
   "shellPresent",
   "shellVisible",
   "titlebarPresent",
   "titlebarVisible",
+  "bodyInert",
+  "shellInert",
+  "titlebarInert",
+  "pageInert",
+  "interactionBlocked",
+  "activeModal",
   'health?.firstPaint !== "pending"',
   "coreFirstPaintGuard",
+  "core-media-discovery-open",
   "startupRecovery",
+  '"first-paint"',
+  '"interaction-settle"',
   'require("./main.js")'
 ]) {
   assert(startup.includes(required), "Startup guard is missing: " + required);
@@ -49,19 +62,33 @@ assert(
 
 const didFinishHandler = startup.indexOf('contents.on("did-finish-load"');
 const showAfterFinish = startup.indexOf('showOwnerWindow(contents, "did-finish-load")', didFinishHandler);
-const healthProbeAfterFinish = startup.indexOf("const health = await readRendererHealth(contents);", didFinishHandler);
+const firstProbe = startup.indexOf('probeAndRecover(contents, "first-paint")', didFinishHandler);
+const settleProbe = startup.indexOf('probeAndRecover(contents, "interaction-settle")', didFinishHandler);
 
 assert(didFinishHandler >= 0, "startup must register a did-finish-load handler");
-assert(showAfterFinish >= didFinishHandler, "did-finish-load must show the owner window");
-assert(healthProbeAfterFinish >= didFinishHandler, "did-finish-load must probe renderer health");
+assert(showAfterFinish >= didFinishHandler, "did-finish-load must activate the owner window");
+assert(firstProbe >= didFinishHandler, "did-finish-load must schedule the first renderer health probe");
+assert(settleProbe > firstProbe, "startup must re-check interaction after renderer state settles");
 assert(
-  showAfterFinish < healthProbeAfterFinish,
-  "the window must become visible before renderer health probing can leave the user staring at a blank surface"
+  showAfterFinish < firstProbe,
+  "the window must become active before renderer health probing can leave the user staring at a blank surface"
 );
 
 assert(
   startup.includes("root.dataset.coreFirstPaint = 'recovered'"),
   "startup recovery must release a stuck first-paint guard"
 );
+assert(
+  startup.includes("child.inert = false") && startup.includes("node.inert = false"),
+  "interaction recovery must clear stale inert locks when no modal is active"
+);
+assert(
+  startup.includes("node.style.removeProperty('pointer-events')"),
+  "interaction recovery must clear stale pointer-event locks from critical surfaces"
+);
+assert(
+  startup.includes("if (health?.activeModal) return { skipped: \"active-modal\" }"),
+  "interaction recovery must not break legitimate modal isolation"
+);
 
-console.log("Startup single-instance, visibility fallback, health probe, and renderer recovery regression passed.");
+console.log("Startup single-instance, first-paint recovery, native hit-test reset, and renderer interaction recovery regression passed.");

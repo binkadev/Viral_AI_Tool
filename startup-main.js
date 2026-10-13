@@ -17,13 +17,17 @@ function showOwnerWindow(contents, reason) {
   const window = ownerWindow(contents);
   if (!window) return false;
   try {
+    if (window.isMinimized()) window.restore();
+    try { window.setIgnoreMouseEvents(false); } catch {}
+    try { window.setFocusable(true); } catch {}
     if (!window.isVisible()) window.show();
-    console.log("[Startup] Window visible", { reason });
+    window.focus();
+    console.log("[Startup] Window interactive", { reason });
     return true;
   } catch (error) {
-    console.error("[Startup] Failed to show owner window", {
+    console.error("[Startup] Failed to activate owner window", {
       reason,
-      message: String(error?.message || error || "unknown show error")
+      message: String(error?.message || error || "unknown activation error")
     });
     return false;
   }
@@ -34,12 +38,33 @@ async function readRendererHealth(contents) {
     const shell = document.querySelector('.shell');
     const titlebar = document.querySelector('.titlebar');
     const page = document.getElementById('page');
+    const quickProject = document.getElementById('quickProject');
     const visible = node => {
       if (!node) return false;
       const style = getComputedStyle(node);
       const rect = node.getBoundingClientRect();
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
     };
+    const pointerEvents = node => node ? getComputedStyle(node).pointerEvents : null;
+    const dialogSelectors = [
+      '#modal:not(.hidden)',
+      '#core-media-discovery:not(.hidden)',
+      '.core-command-overlay:not([hidden])',
+      '[role="dialog"][aria-modal="true"]'
+    ];
+    const activeModal = dialogSelectors.some(selector => Array.from(document.querySelectorAll(selector)).some(visible));
+
+    let interactionBlocked = false;
+    let hitTarget = null;
+    if (!activeModal && quickProject && visible(quickProject)) {
+      const rect = quickProject.getBoundingClientRect();
+      const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
+      const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      interactionBlocked = !hit || !(hit === quickProject || quickProject.contains(hit));
+      hitTarget = hit ? [hit.tagName, hit.id || '', hit.className || ''].join('#').slice(0, 180) : null;
+    }
+
     return {
       readyState: document.readyState,
       shellPresent: Boolean(shell),
@@ -49,7 +74,17 @@ async function readRendererHealth(contents) {
       pagePresent: Boolean(page),
       pageVisible: visible(page),
       firstPaint: document.documentElement.dataset.coreFirstPaint || null,
-      bodyChildren: document.body?.children?.length || 0
+      bodyChildren: document.body?.children?.length || 0,
+      bodyInert: Boolean(document.body?.inert),
+      shellInert: Boolean(shell?.inert),
+      titlebarInert: Boolean(titlebar?.inert),
+      pageInert: Boolean(page?.inert),
+      shellPointerEvents: pointerEvents(shell),
+      titlebarPointerEvents: pointerEvents(titlebar),
+      pagePointerEvents: pointerEvents(page),
+      activeModal,
+      interactionBlocked,
+      hitTarget
     };
   })()`, true);
 }
@@ -106,6 +141,134 @@ async function recoverRenderer(contents, health) {
   }
 }
 
+async function recoverInteraction(contents, health) {
+  if (contents.isDestroyed()) return null;
+  if (health?.activeModal) return { skipped: "active-modal" };
+
+  console.error("[Startup] Renderer interaction unhealthy; attempting hit-test recovery", health || {});
+
+  try {
+    const recovered = await contents.executeJavaScript(`(() => {
+      const root = document.documentElement;
+      const visible = node => {
+        if (!node) return false;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+      };
+      const activeModal = [
+        '#modal:not(.hidden)',
+        '#core-media-discovery:not(.hidden)',
+        '.core-command-overlay:not([hidden])',
+        '[role="dialog"][aria-modal="true"]'
+      ].some(selector => Array.from(document.querySelectorAll(selector)).some(visible));
+      if (activeModal) return { skipped: 'active-modal' };
+
+      const drawer = document.getElementById('core-media-discovery');
+      if (drawer && (!visible(drawer) || drawer.classList.contains('hidden'))) {
+        drawer.classList.add('hidden');
+        drawer.setAttribute('aria-hidden', 'true');
+        root.classList.remove('core-media-discovery-open');
+      }
+
+      const commandOverlay = document.querySelector('.core-command-overlay');
+      if (commandOverlay && !visible(commandOverlay)) commandOverlay.hidden = true;
+
+      const modal = document.getElementById('modal');
+      if (modal && !visible(modal)) modal.classList.add('hidden');
+
+      if (document.body) document.body.inert = false;
+      for (const child of Array.from(document.body?.children || [])) {
+        if (!(child instanceof HTMLElement)) continue;
+        if (child !== drawer || drawer?.classList.contains('hidden')) child.inert = false;
+      }
+
+      const critical = [
+        document.querySelector('.titlebar'),
+        document.querySelector('.shell'),
+        document.querySelector('.main'),
+        document.querySelector('.sidebar'),
+        document.querySelector('.topbar'),
+        document.getElementById('page')
+      ];
+      for (const node of critical) {
+        if (!(node instanceof HTMLElement)) continue;
+        node.inert = false;
+        node.removeAttribute('aria-hidden');
+        node.style.removeProperty('pointer-events');
+      }
+
+      const firstPaintGuard = document.getElementById('coreFirstPaintGuard');
+      if (root.dataset.coreFirstPaint === 'pending') {
+        root.dataset.coreFirstPaint = 'recovered';
+        firstPaintGuard?.remove();
+      }
+
+      return {
+        bodyInert: Boolean(document.body?.inert),
+        shellInert: Boolean(document.querySelector('.shell')?.inert),
+        titlebarInert: Boolean(document.querySelector('.titlebar')?.inert),
+        pageInert: Boolean(document.getElementById('page')?.inert),
+        discoveryOpen: root.classList.contains('core-media-discovery-open'),
+        firstPaint: root.dataset.coreFirstPaint || null
+      };
+    })()`, true);
+
+    showOwnerWindow(contents, "interaction-recovery");
+    return recovered;
+  } catch (error) {
+    console.error("[Startup] Renderer interaction recovery failed", {
+      message: String(error?.message || error || "unknown interaction recovery error")
+    });
+    showOwnerWindow(contents, "interaction-recovery-failed");
+    return null;
+  }
+}
+
+async function probeAndRecover(contents, reason) {
+  if (contents.isDestroyed()) return;
+  try {
+    const health = await readRendererHealth(contents);
+    console.log("[Startup] Renderer health", { reason, ...health });
+
+    const shellHealthy = Boolean(
+      health?.shellPresent &&
+      health?.titlebarPresent &&
+      health?.shellVisible &&
+      health?.titlebarVisible &&
+      health?.firstPaint !== "pending"
+    );
+
+    if (!shellHealthy) {
+      const recovery = await recoverRenderer(contents, health);
+      console.log("[Startup] Renderer recovery result", recovery);
+    }
+
+    const interactionHealthy = Boolean(
+      !health?.bodyInert &&
+      !health?.shellInert &&
+      !health?.titlebarInert &&
+      !health?.pageInert &&
+      health?.shellPointerEvents !== "none" &&
+      health?.titlebarPointerEvents !== "none" &&
+      health?.pagePointerEvents !== "none" &&
+      !health?.interactionBlocked
+    );
+
+    if (!health?.activeModal && !interactionHealthy) {
+      const recovery = await recoverInteraction(contents, health);
+      console.log("[Startup] Interaction recovery result", recovery);
+    }
+  } catch (error) {
+    console.error("[Startup] Renderer health check failed", {
+      reason,
+      message: String(error?.message || error || "unknown health-check error")
+    });
+    await recoverRenderer(contents, { healthCheckFailed: true, reason });
+    await recoverInteraction(contents, { healthCheckFailed: true, reason });
+  }
+}
+
 if (!gotSingleInstanceLock) {
   console.warn("[Startup] Another Viral AI Tool instance is already running. Exiting this launch.");
   app.quit();
@@ -114,6 +277,8 @@ if (!gotSingleInstanceLock) {
     const window = BrowserWindow.getAllWindows().find(item => item && !item.isDestroyed());
     if (!window) return;
     if (window.isMinimized()) window.restore();
+    try { window.setIgnoreMouseEvents(false); } catch {}
+    try { window.setFocusable(true); } catch {}
     window.show();
     window.focus();
   });
@@ -187,31 +352,8 @@ if (!gotSingleInstanceLock) {
       clearTimeout(visibilityFallback);
       showOwnerWindow(contents, "did-finish-load");
 
-      setTimeout(async () => {
-        if (contents.isDestroyed()) return;
-        try {
-          const health = await readRendererHealth(contents);
-          console.log("[Startup] Renderer health", health);
-
-          const shellHealthy = Boolean(
-            health?.shellPresent &&
-            health?.titlebarPresent &&
-            health?.shellVisible &&
-            health?.titlebarVisible &&
-            health?.firstPaint !== "pending"
-          );
-
-          if (!shellHealthy) {
-            const recovery = await recoverRenderer(contents, health);
-            console.log("[Startup] Renderer recovery result", recovery);
-          }
-        } catch (error) {
-          console.error("[Startup] Renderer health check failed", {
-            message: String(error?.message || error || "unknown health-check error")
-          });
-          await recoverRenderer(contents, { healthCheckFailed: true });
-        }
-      }, 1200);
+      setTimeout(() => probeAndRecover(contents, "first-paint").catch(() => {}), 1200);
+      setTimeout(() => probeAndRecover(contents, "interaction-settle").catch(() => {}), 3500);
     });
   });
 
