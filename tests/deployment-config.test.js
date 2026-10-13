@@ -59,13 +59,16 @@ for (const required of [
   "VIRAL_AI_OPENAI_TRANSLATION_MODEL=gpt-5-mini",
   "VIRAL_AI_OPENAI_TTS_MODEL=gpt-4o-mini-tts",
   "PEXELS_API_KEY=",
-  "PIXABAY_API_KEY="
+  "PIXABAY_API_KEY=",
+  "VIRAL_AI_MEDIA_TICKET_SECRET="
 ]) {
   assert(envExample.includes(required), "Production environment template is missing: " + required);
 }
 assert(productionDocs.includes("PEXELS_API_KEY=<server-side Pexels key"), "Production docs must explain server-side Pexels configuration.");
 assert(productionDocs.includes("PIXABAY_API_KEY=<server-side Pixabay key"), "Production docs must explain server-side Pixabay configuration.");
+assert(productionDocs.includes("VIRAL_AI_MEDIA_TICKET_SECRET=<different random 32+ byte secret>"), "Production docs must explain the media acquisition signing secret.");
 assert(productionDocs.includes("Find media"), "Production docs must explain the online media discovery dependency.");
+assert(productionDocs.includes("short-lived") && productionDocs.includes("acquisition ticket"), "Production docs must explain short-lived account-bound media acquisition tickets.");
 
 assert(gitignore.includes(".env.*"), "Environment secret files must remain ignored.");
 assert(gitignore.includes("!deploy/.env.production.example"), "Production environment template must stay trackable.");
