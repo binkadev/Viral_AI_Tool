@@ -99,7 +99,10 @@
 
   function bootstrapSnapshot() {
     const raw = readJson(SNAPSHOT_KEY, null);
-    const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
+    const migrated = model.migrateSnapshot(raw, {
+      restartSafeMedia: true,
+      restartSafeScenePlan: true
+    });
     unsupportedSchemaVersion = migrated.unsupportedVersion;
     if (unsupportedSchemaVersion) return;
 
@@ -108,8 +111,6 @@
       currentSnapshot = model.fromLegacy(readJson(LEGACY_STATE_KEY, {}) || {}, legacyUiState());
       if (currentSnapshot) writeBootstrapSnapshot(currentSnapshot, "bootstrap-legacy-migration");
     } else if (migrated.migrated) {
-      // A bootstrap backfill is best-effort. Keep the normalized snapshot authoritative
-      // in memory even when storage is full/unavailable so persistence still starts.
       writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill");
     }
 
@@ -204,6 +205,9 @@
     if (!current || !currentSnapshot) return;
     if (!current.media && currentSnapshot.media) {
       current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
+    }
+    if (!current.scenePlan && currentSnapshot.scenePlan) {
+      current.scenePlan = model.clone(currentSnapshot.scenePlan, null);
     }
     ["translation", "voice"].forEach(section => {
       const persisted = currentSnapshot.workflow?.[section];

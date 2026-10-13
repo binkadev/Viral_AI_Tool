@@ -11,7 +11,7 @@ const timelineSelection = fs.readFileSync(path.join(root, "renderer", "core-time
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-assert.strictEqual(snapshotModel.CURRENT_SCHEMA_VERSION, 2);
+assert.strictEqual(snapshotModel.CURRENT_SCHEMA_VERSION, 3);
 assert.strictEqual(snapshotModel.SNAPSHOT_KEY, "viral-ai-core-project-snapshot");
 
 const sourceJob = {
@@ -98,7 +98,7 @@ const migrated = snapshotModel.fromLegacy(legacy, {
 }, Date.UTC(2026, 9, 8, 12, 0, 0));
 
 assert(migrated, "legacy project with a source must migrate into a snapshot");
-assert.strictEqual(migrated.schemaVersion, 2);
+assert.strictEqual(migrated.schemaVersion, 3);
 assert.strictEqual(migrated.projectId, "source-1");
 assert.strictEqual(migrated.projectName, "Long Interview.mp4", "legacy projects must gain a stable project name from the current source");
 assert.strictEqual(migrated.source.path, sourceJob.sourcePath);
@@ -108,6 +108,8 @@ assert.strictEqual(migrated.media.selectedAssetId, "media-local-1");
 assert.strictEqual(migrated.media.assets[0].fileState, "available");
 assert.strictEqual(migrated.media.assets[1].status, "interrupted", "active media work must become interrupted on legacy/bootstrap restore");
 assert.strictEqual(migrated.media.assets[1].attribution.creatorName, "Creator");
+assert.strictEqual(migrated.scenePlan.status, "empty", "legacy migration must add an empty Scene Planner container without inventing scenes");
+assert.deepStrictEqual(migrated.scenePlan.scenes, []);
 assert.strictEqual(migrated.workflow.speech.result.segments[0].start, 12.5);
 assert.strictEqual(migrated.workflow.speech.result.segments[0].end, 15.75);
 assert.strictEqual(migrated.workflow.speech.result.segments[0].status, "source-edited");
@@ -136,6 +138,7 @@ assert.strictEqual(legacyProjection.motion, "reduced");
 assert.strictEqual(legacyProjection.jobs[0].fileState, "missing");
 assert.strictEqual(legacyProjection.media.assets.length, 2, "legacy projection must carry project media until app state becomes snapshot-native");
 assert.strictEqual(legacyProjection.media.selectedAssetId, "media-local-1");
+assert.deepStrictEqual(legacyProjection.scenePlan.scenes, [], "legacy runtime projection must carry the project-owned Scene Planner container");
 assert.strictEqual(legacyProjection.translation.staleResult.status, "stale");
 assert.strictEqual(legacyProjection.voice.staleJob.status, "stale");
 
@@ -162,6 +165,7 @@ assert.strictEqual(persisted.projectId, migrated.projectId);
 assert.strictEqual(persisted.projectName, migrated.projectName, "reopen/autosave must retain the project name");
 assert.strictEqual(persisted.media.assets.length, 2);
 assert.strictEqual(persisted.media.assets[1].providerAssetId, "441");
+assert.strictEqual(persisted.scenePlan.status, "empty");
 assert.strictEqual(persisted.editor.playback.position, 3678.25);
 assert.strictEqual(persisted.editor.timeline.scrollLeft, 812);
 assert.strictEqual(persisted.editor.timeline.selection, "subtitle:0");
@@ -189,27 +193,37 @@ assert.strictEqual(
   "updatedAt must not cause an autosave loop"
 );
 
-const v2WithoutProjectName = { ...persisted };
-delete v2WithoutProjectName.projectName;
-const normalizedV2 = snapshotModel.migrateSnapshot(v2WithoutProjectName);
-assert.strictEqual(normalizedV2.snapshot.projectName, sourceJob.name, "schema-v2 snapshots must normalize projectName without data loss");
-assert.strictEqual(normalizedV2.migrated, true, "schema-v2 snapshots missing required normalized fields must be rewritten durably during bootstrap");
+const v3WithoutProjectName = { ...persisted };
+delete v3WithoutProjectName.projectName;
+const normalizedV3 = snapshotModel.migrateSnapshot(v3WithoutProjectName);
+assert.strictEqual(normalizedV3.snapshot.projectName, sourceJob.name, "schema-v3 snapshots must normalize projectName without data loss");
+assert.strictEqual(normalizedV3.migrated, true, "schema-v3 snapshots missing required normalized fields must be rewritten durably during bootstrap");
+
+const v2 = { ...persisted, schemaVersion: 2 };
+delete v2.scenePlan;
+const upgradedV2 = snapshotModel.migrateSnapshot(v2);
+assert.strictEqual(upgradedV2.migrated, true, "schema-v2 projects must migrate to project-owned Scene Planner state");
+assert.strictEqual(upgradedV2.snapshot.schemaVersion, 3);
+assert.deepStrictEqual(upgradedV2.snapshot.scenePlan.scenes, [], "schema-v2 migration must not invent scenes");
 
 const v1 = { ...persisted, schemaVersion: 1 };
 delete v1.media;
+delete v1.scenePlan;
 const upgradedV1 = snapshotModel.migrateSnapshot(v1);
-assert.strictEqual(upgradedV1.migrated, true, "schema-v1 projects must migrate to the media-aware schema");
-assert.strictEqual(upgradedV1.snapshot.schemaVersion, 2);
+assert.strictEqual(upgradedV1.migrated, true, "schema-v1 projects must migrate to the current project schema");
+assert.strictEqual(upgradedV1.snapshot.schemaVersion, 3);
 assert.strictEqual(upgradedV1.snapshot.projectName, persisted.projectName);
 assert.deepStrictEqual(upgradedV1.snapshot.media.assets, [], "v1 migration must add an empty media library without inventing assets");
+assert.deepStrictEqual(upgradedV1.snapshot.scenePlan.scenes, [], "v1 migration must add an empty scene plan without inventing scenes");
 
 const v0 = { ...migrated };
 delete v0.schemaVersion;
 const upgraded = snapshotModel.migrateSnapshot(v0);
 assert.strictEqual(upgraded.migrated, true);
-assert.strictEqual(upgraded.snapshot.schemaVersion, 2);
+assert.strictEqual(upgraded.snapshot.schemaVersion, 3);
 assert.strictEqual(upgraded.snapshot.projectName, migrated.projectName);
 assert.strictEqual(upgraded.snapshot.media.assets.length, 2);
+assert.deepStrictEqual(upgraded.snapshot.scenePlan.scenes, []);
 const future = snapshotModel.migrateSnapshot({ schemaVersion: 99, source: migrated.source, workflow: migrated.workflow });
 assert.strictEqual(future.snapshot, null, "future schemas must never be silently downgraded");
 assert.strictEqual(future.unsupportedVersion, 99);
@@ -280,16 +294,20 @@ for (const required of [
 assert(!timelineSelection.includes(".click()"), "restoring timeline selection must not fake a click/seek");
 
 assert(index.includes('src="core-media-library-model.js"'), "media library model must load in the renderer");
+assert(index.includes('src="core-scene-plan-model.js"'), "scene plan model must load in the renderer");
 assert(index.includes('src="core-project-snapshot.js"'), "snapshot model must load in the renderer");
 assert(index.includes('src="core-project-persistence.js"'), "persistence coordinator must load in the renderer");
 assert(index.indexOf('src="core-media-library-model.js"') < index.indexOf('src="core-project-snapshot.js"'), "media normalization must exist before snapshot restoration");
+assert(index.indexOf('src="core-scene-plan-model.js"') < index.indexOf('src="core-project-snapshot.js"'), "scene plan normalization must exist before snapshot restoration");
 assert(index.indexOf('src="core-project-snapshot.js"') < index.indexOf('src="core-project-persistence.js"'));
 assert(index.indexOf('src="core-project-persistence.js"') < index.indexOf('src="core-bootstrap.js"'), "snapshot projection must happen before app/bootstrap reads legacy state");
 assert(index.indexOf('src="core-project-persistence.js"') < index.indexOf('src="app.js"'));
 
 assert(pkg.scripts["test:core-project-persistence"], "package.json must expose the project persistence regression");
+assert(pkg.scripts["test:core-scene-plan-persistence"], "package.json must expose the scene plan persistence regression");
 assert(pkg.scripts["test:core-media-library"], "package.json must expose the media library domain regression");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-project-persistence"), "commercial regression must gate project persistence");
+assert(pkg.scripts["test:core-commercial"].includes("test:core-scene-plan-persistence"), "commercial regression must gate scene plan persistence");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-media-library"), "commercial regression must gate media library invariants");
 
-console.log("Core project snapshot v2, media ownership, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
+console.log("Core project snapshot v3, media and scene-plan ownership, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
