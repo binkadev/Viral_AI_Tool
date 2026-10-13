@@ -1,15 +1,21 @@
 (function attachCoreProjectSnapshot(root, factory) {
   let mediaModel = root?.ViralCoreMediaLibraryModel || null;
-  if (!mediaModel && typeof module !== "undefined" && module.exports && typeof require === "function") {
-    try { mediaModel = require("./core-media-library-model"); } catch {}
+  let scenePlanModel = root?.ViralCoreScenePlanModel || null;
+  if (typeof module !== "undefined" && module.exports && typeof require === "function") {
+    if (!mediaModel) {
+      try { mediaModel = require("./core-media-library-model"); } catch {}
+    }
+    if (!scenePlanModel) {
+      try { scenePlanModel = require("./core-scene-plan-model"); } catch {}
+    }
   }
-  const api = factory(mediaModel);
+  const api = factory(mediaModel, scenePlanModel);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreProjectSnapshot = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel) {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel, scenePlanModel) {
   "use strict";
 
-  const CURRENT_SCHEMA_VERSION = 2;
+  const CURRENT_SCHEMA_VERSION = 3;
   const SNAPSHOT_KEY = "viral-ai-core-project-snapshot";
   const LEGACY_STATE_KEY = "viral-ai-tool-state";
   const LEGACY_UI_KEYS = Object.freeze({
@@ -60,6 +66,30 @@
       assets: Array.isArray(raw.assets) ? clone(raw.assets, []).slice(0, 500) : [],
       selectedAssetId: raw.selectedAssetId ? String(raw.selectedAssetId) : null
     };
+  }
+
+  function emptyScenePlan() {
+    if (scenePlanModel?.normalizePlan) return scenePlanModel.normalizePlan({});
+    return {
+      schemaVersion: 1,
+      sourceType: "transcript",
+      sourceIdentity: null,
+      sourceSignature: null,
+      status: "empty",
+      plannerJob: { id: null, status: "idle", progress: 0, errorCode: null, startedAt: null, updatedAt: null },
+      scenes: [],
+      selectedSceneId: null,
+      createdAt: null,
+      updatedAt: null
+    };
+  }
+
+  function scenePlanFromState(state, options = {}) {
+    if (scenePlanModel?.normalizePlan) {
+      return scenePlanModel.normalizePlan(state?.scenePlan, { restartSafe: options.restartSafe === true });
+    }
+    const raw = state?.scenePlan && typeof state.scenePlan === "object" ? state.scenePlan : emptyScenePlan();
+    return clone(raw, emptyScenePlan());
   }
 
   function safeJob(job) {
@@ -184,7 +214,7 @@
     };
   }
 
-  function normalizeV2(snapshot, options = {}) {
+  function normalizeV3(snapshot, options = {}) {
     if (!snapshot || typeof snapshot !== "object") return null;
     const source = normalizeSource(snapshot.source);
     if (!source) return null;
@@ -206,6 +236,10 @@
         { media: snapshot.media || emptyMedia() },
         { restartSafe: options.restartSafeMedia === true }
       ),
+      scenePlan: scenePlanFromState(
+        { scenePlan: snapshot.scenePlan || emptyScenePlan() },
+        { restartSafe: options.restartSafeScenePlan === true }
+      ),
       workflow,
       editor: normalizeEditor(snapshot.editor, source)
     };
@@ -218,6 +252,13 @@
     return after.some((asset, index) => asset?.status !== before[index]?.status);
   }
 
+  function scenePlanRestartChanged(input, normalized, options) {
+    if (!options.restartSafeScenePlan) return false;
+    const before = String(input?.scenePlan?.plannerJob?.status || "idle");
+    const after = String(normalized?.scenePlan?.plannerJob?.status || "idle");
+    return before !== after;
+  }
+
   function migrateSnapshot(input, options = {}) {
     if (!input || typeof input !== "object") return { snapshot: null, migrated: false, unsupportedVersion: null };
     const version = Number(input.schemaVersion || 0);
@@ -225,28 +266,29 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV2(input, options);
+      const snapshot = normalizeV3(input, options);
       const migrated = Boolean(
         snapshot &&
         (
           String(input.projectName || "") !== snapshot.projectName ||
           !input.media ||
           Number(input.media?.schemaVersion || 0) !== 1 ||
-          mediaRestartChanged(input, snapshot, options)
+          !input.scenePlan ||
+          Number(input.scenePlan?.schemaVersion || 0) !== 1 ||
+          mediaRestartChanged(input, snapshot, options) ||
+          scenePlanRestartChanged(input, snapshot, options)
         )
       );
       return { snapshot, migrated, unsupportedVersion: null };
     }
-    if (version === 1 && input.source && input.workflow) {
+    if ((version === 2 || version === 1 || version === 0) && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
-        migrated: true,
-        unsupportedVersion: null
-      };
-    }
-    if (version === 0 && input.source && input.workflow) {
-      return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
+        snapshot: normalizeV3({
+          ...input,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          media: input.media || emptyMedia(),
+          scenePlan: input.scenePlan || emptyScenePlan()
+        }, options),
         migrated: true,
         unsupportedVersion: null
       };
@@ -285,6 +327,7 @@
       updatedAt: new Date(now).toISOString(),
       source,
       media: mediaFromState(legacyState, { restartSafe: true }),
+      scenePlan: scenePlanFromState(legacyState, { restartSafe: true }),
       workflow: workflowFromState(legacyState),
       editor: editorFromLegacy(legacyUi, source)
     };
@@ -307,6 +350,7 @@
       updatedAt: new Date(now).toISOString(),
       source,
       media: mediaFromState(appState),
+      scenePlan: scenePlanFromState(appState),
       workflow: workflowFromState(appState),
       editor: normalizeEditor(editorState, source)
     };
@@ -321,6 +365,7 @@
       page: "ai-video",
       output: workflow.output,
       media: clone(migrated.media, emptyMedia()),
+      scenePlan: clone(migrated.scenePlan, emptyScenePlan()),
       renderOptions: clone(workflow.renderOptions, {}),
       speech: clone(workflow.speech, {}),
       translation: clone(workflow.translation, {}),
@@ -363,6 +408,7 @@
     latestSourceJob,
     sourceFromState,
     mediaFromState,
+    scenePlanFromState,
     workflowFromState,
     normalizeEditor,
     migrateSnapshot,
