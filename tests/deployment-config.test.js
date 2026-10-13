@@ -11,6 +11,7 @@ const compose = fs.readFileSync(path.join(root, "deploy", "docker-compose.produc
 const caddy = fs.readFileSync(path.join(root, "deploy", "Caddyfile"), "utf8");
 const envExample = fs.readFileSync(path.join(root, "deploy", ".env.production.example"), "utf8");
 const productionDocs = fs.readFileSync(path.join(root, "docs", "PRODUCTION_BACKEND.md"), "utf8");
+const mediaDocs = fs.readFileSync(path.join(root, "docs", "MEDIA_ACQUISITION_PRODUCTION.md"), "utf8");
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 const server = fs.readFileSync(path.join(root, "dev-backend", "server.js"), "utf8");
 const railway = JSON.parse(fs.readFileSync(path.join(root, "railway.json"), "utf8"));
@@ -66,9 +67,11 @@ for (const required of [
 }
 assert(productionDocs.includes("PEXELS_API_KEY=<server-side Pexels key"), "Production docs must explain server-side Pexels configuration.");
 assert(productionDocs.includes("PIXABAY_API_KEY=<server-side Pixabay key"), "Production docs must explain server-side Pixabay configuration.");
-assert(productionDocs.includes("VIRAL_AI_MEDIA_TICKET_SECRET=<different random 32+ byte secret>"), "Production docs must explain the media acquisition signing secret.");
 assert(productionDocs.includes("Find media"), "Production docs must explain the online media discovery dependency.");
-assert(productionDocs.includes("short-lived") && productionDocs.includes("acquisition ticket"), "Production docs must explain short-lived account-bound media acquisition tickets.");
+assert(mediaDocs.includes("VIRAL_AI_MEDIA_TICKET_SECRET=<different random 32+ byte secret>"), "Media acquisition docs must explain the signing secret.");
+assert(mediaDocs.includes("short-lived, account-bound acquisition tickets"), "Media acquisition docs must explain account-bound tickets.");
+assert(mediaDocs.includes("download to .part") && mediaDocs.includes("atomic finalize"), "Media acquisition docs must describe durable partial-download/finalize semantics.");
+assert(mediaDocs.includes("must not persist provider CDN URLs"), "Media acquisition docs must prohibit provider CDN URLs as durable project state.");
 
 assert(gitignore.includes(".env.*"), "Environment secret files must remain ignored.");
 assert(gitignore.includes("!deploy/.env.production.example"), "Production environment template must stay trackable.");
