@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   saveCloudConfig: payload => ipcRenderer.invoke('cloud:config-save', payload),
   clearCloudConfig: () => ipcRenderer.invoke('cloud:config-clear'),
   testCloudConnection: backendUrl => ipcRenderer.invoke('cloud:test-connection', backendUrl),
+  getMediaStatus: () => ipcRenderer.invoke('media:status'),
+  searchMedia: payload => ipcRenderer.invoke('media:search', payload),
+  cancelMediaSearch: requestId => ipcRenderer.invoke('media:cancel-search', requestId),
 
   getSpeechModelCatalog: () => ipcRenderer.invoke('speech:model-catalog'),
   getSpeechModelStatus: modelId => ipcRenderer.invoke('speech:model-status', modelId),

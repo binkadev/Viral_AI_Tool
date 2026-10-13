@@ -8,6 +8,8 @@ const translationProvider = require("./providers/translation");
 const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
+const { createMediaSearchService } = require("./media-search");
+const { createMediaRouteHandler } = require("./media-routes");
 const billing = require("./billing");
 const { createDurableStateStore } = require("./state-store");
 const { createSqliteStateStore } = require("./state-store-sqlite");
@@ -104,6 +106,14 @@ const jobs = new Map();
 const idempotency = new Map();
 const uploadTokens = new Map();
 const serviceQuotaReservations = new Map();
+const mediaSearchService = createMediaSearchService();
+const handleMediaRoute = createMediaRouteHandler({
+  mediaSearchService,
+  authenticate,
+  json,
+  error,
+  requestRateLimited
+});
 
 function serializeSpeechJob(job) {
   if (!job) return null;
@@ -1841,6 +1851,8 @@ for (const job of jobs.values()) {
 async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
   const method = req.method || "GET";
+
+  if (await handleMediaRoute(req, res, url, method)) return;
 
   if (method === "GET" && url.pathname === "/health") {
     return json(res, 200, {

@@ -42,6 +42,7 @@ const {
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
+const { CloudMediaClient } = require('./services/media/cloud-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
 const {
   checkForUpdate,
@@ -64,6 +65,7 @@ let activeUpdateDownloadController = null;
 let diagnosticLogger = null;
 let removeDiagnosticProcessHandlers = null;
 let removeDiagnosticConsoleCapture = null;
+const activeMediaSearchControllers = new Map();
 
 function releaseInfo() {
   let metadata = {};
@@ -158,6 +160,38 @@ function billingClient() {
     backendUrl: cloudConfig.backendUrl || '',
     appVersion: app.getVersion()
   });
+}
+
+function mediaClient() {
+  const cloudConfig = cloudConfigStore?.read() || {
+    backendUrl: process.env.VIRAL_AI_CLOUD_URL || ''
+  };
+
+  return new CloudMediaClient({
+    backendUrl: cloudConfig.backendUrl || '',
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    appVersion: app.getVersion()
+  });
+}
+
+function publicMediaError(error) {
+  const allowed = new Set([
+    'MEDIA_AUTH_REQUIRED',
+    'MEDIA_NOT_CONFIGURED',
+    'MEDIA_CONFIG_INVALID',
+    'MEDIA_HTTPS_REQUIRED',
+    'MEDIA_SEARCH_INVALID',
+    'MEDIA_PROVIDER_UNAVAILABLE',
+    'MEDIA_SEARCH_UNAVAILABLE',
+    'MEDIA_SEARCH_TIMEOUT',
+    'MEDIA_QUOTA_EXCEEDED',
+    'MEDIA_NETWORK',
+    'MEDIA_CANCELLED'
+  ]);
+  return {
+    code: allowed.has(error?.code) ? error.code : 'MEDIA_SEARCH_UNAVAILABLE',
+    details: {}
+  };
 }
 
 async function withBillingSession(action) {
@@ -1129,6 +1163,65 @@ ipcMain.handle('cloud:test-connection', async (_event, backendUrl) => {
     ? backendUrl.trim()
     : configured?.backendUrl || '';
   return testCloudConnection(target);
+});
+
+ipcMain.handle('media:status', async () => {
+  try {
+    const ready = await refreshSessionIfNeeded();
+    if (!ready) return { ready: false, code: 'MEDIA_AUTH_REQUIRED', providers: [] };
+    return await mediaClient().status();
+  } catch (error) {
+    const serialized = publicMediaError(error);
+    console.error('[MediaStatus]', serialized.code);
+    return { ready: false, code: serialized.code, providers: [] };
+  }
+});
+
+ipcMain.handle('media:search', async (_event, payload) => {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const requestedId = String(safePayload.requestId || '').trim();
+  const requestId = /^[A-Za-z0-9._-]{1,120}$/.test(requestedId)
+    ? requestedId
+    : crypto.randomUUID();
+
+  const previous = activeMediaSearchControllers.get(requestId);
+  if (previous) previous.abort();
+  const controller = new AbortController();
+  activeMediaSearchControllers.set(requestId, controller);
+
+  try {
+    const ready = await refreshSessionIfNeeded();
+    if (!ready) return { ok: false, requestId, error: { code: 'MEDIA_AUTH_REQUIRED', details: {} } };
+
+    const data = await mediaClient().search({
+      query: safePayload.query,
+      kind: safePayload.kind,
+      orientation: safePayload.orientation,
+      page: safePayload.page,
+      perPage: safePayload.perPage,
+      provider: safePayload.provider,
+      signal: controller.signal
+    });
+
+    return { ok: true, requestId, data };
+  } catch (error) {
+    const serialized = publicMediaError(error);
+    if (serialized.code !== 'MEDIA_CANCELLED') console.error('[MediaSearch]', serialized.code);
+    return { ok: false, requestId, error: serialized };
+  } finally {
+    if (activeMediaSearchControllers.get(requestId) === controller) {
+      activeMediaSearchControllers.delete(requestId);
+    }
+  }
+});
+
+ipcMain.handle('media:cancel-search', async (_event, requestIdValue) => {
+  const requestId = String(requestIdValue || '').trim();
+  const controller = activeMediaSearchControllers.get(requestId);
+  if (!controller) return { ok: true, cancelled: false };
+  activeMediaSearchControllers.delete(requestId);
+  controller.abort();
+  return { ok: true, cancelled: true };
 });
 
 ipcMain.handle('files:select-videos', async () => {
