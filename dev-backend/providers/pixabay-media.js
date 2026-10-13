@@ -166,12 +166,14 @@ function createPixabayMediaProvider({ apiKey = process.env.PIXABAY_API_KEY, fetc
         normalized = normalized.filter(item => item.meta?.orientation === request.orientation);
       }
 
+      // Consume the complete provider page before advancing nextPage. A provider
+      // page is the smallest stable cursor Pixabay gives us; truncating midway
+      // would make the remaining matches on that page unreachable to callers.
       for (const item of normalized) {
         const identity = `${item.provider}:${item.providerAssetId}`;
         if (seen.has(identity)) continue;
         seen.add(identity);
         results.push(item);
-        if (results.length >= request.perPage) break;
       }
 
       if (hits.length < perPage) break;
