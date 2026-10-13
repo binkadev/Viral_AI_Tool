@@ -4,13 +4,14 @@ const assert = require("assert");
 const { createMediaRouteHandler, mediaRouteError } = require("../dev-backend/media-routes");
 
 function responseCapture() {
-  return { calls: [] };
+  return { calls: [], writableEnded: false };
 }
 
 (async () => {
   assert.deepStrictEqual(mediaRouteError({ code: "MEDIA_SEARCH_INVALID" }), { status: 400, code: "MEDIA_SEARCH_INVALID" });
   assert.deepStrictEqual(mediaRouteError({ code: "MEDIA_QUOTA_EXCEEDED" }), { status: 429, code: "MEDIA_QUOTA_EXCEEDED" });
   assert.deepStrictEqual(mediaRouteError({ code: "MEDIA_PROVIDER_UNAVAILABLE" }), { status: 503, code: "MEDIA_PROVIDER_UNAVAILABLE" });
+  assert.deepStrictEqual(mediaRouteError({ code: "MEDIA_SEARCH_TIMEOUT" }), { status: 503, code: "MEDIA_SEARCH_TIMEOUT" });
 
   const captures = [];
   const service = {
@@ -89,7 +90,34 @@ function responseCapture() {
   await failing({}, responseCapture(), new URL("http://localhost/v1/media/search?query=lion"), "GET");
   assert.deepStrictEqual(errorCalls.at(-1), { status: 503, code: "MEDIA_PROVIDER_UNAVAILABLE", details: {} });
 
-  console.log("Media HTTP route auth, validation, rate-limit and public-error isolation tests passed.");
+  const timeoutErrors = [];
+  const timeoutHandler = createMediaRouteHandler({
+    mediaSearchService: {
+      status: () => ({ ready: true, providers: [{ id: "pixabay", configured: true }] }),
+      search: async (_input, { signal } = {}) => new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+          const aborted = new Error("aborted");
+          aborted.name = "AbortError";
+          reject(aborted);
+          return;
+        }
+        signal?.addEventListener("abort", () => {
+          const aborted = new Error("aborted");
+          aborted.name = "AbortError";
+          reject(aborted);
+        }, { once: true });
+      })
+    },
+    authenticate: () => ({ id: "user-1" }),
+    json: () => { throw new Error("timed-out search must not succeed"); },
+    error: (_res, status, code, details) => timeoutErrors.push({ status, code, details }),
+    searchTimeoutMs: 10
+  });
+  const timeoutHandled = await timeoutHandler({}, responseCapture(), new URL("http://localhost/v1/media/search?query=slow"), "GET");
+  assert.strictEqual(timeoutHandled, true);
+  assert.deepStrictEqual(timeoutErrors[0], { status: 503, code: "MEDIA_SEARCH_TIMEOUT", details: {} });
+
+  console.log("Media HTTP route auth, validation, rate-limit, timeout and public-error isolation tests passed.");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

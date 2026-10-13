@@ -1,6 +1,12 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      mediaWorkbench: {
+        assets: "Tài nguyên", project: "Dự án", source: "Video nguồn", transcript: "Transcript", noTranscript: "Cần nhận diện lời nói trước", segments: "{count} đoạn",
+        media: "Tư liệu", video: "Video", images: "Hình ảnh", audio: "Âm thanh", discover: "Khám phá", findMedia: "Tìm tư liệu", findMediaHint: "Tìm video và hình ảnh phù hợp với nội dung", generateAi: "Tạo bằng AI", generateAiHint: "Tạo tư liệu mới bằng AI", generated: "Đã tạo", aiVideo: "Video AI", aiImages: "Ảnh AI", aiAudio: "Âm thanh AI", favorites: "Yêu thích", saved: "Đã lưu", items: "{count} mục", collapse: "Thu gọn tài nguyên", expand: "Mở tài nguyên",
+        discoveryTitle: "Tìm tư liệu", discoveryDesc: "Tìm video hoặc hình ảnh và thêm vào dự án mà không rời trình chỉnh sửa.", searchPlaceholder: "Ví dụ: sư tử săn mồi trong hoàng hôn", search: "Tìm kiếm", mediaType: "Loại tư liệu", orientation: "Khung hình", any: "Tất cả", portrait: "Dọc", landscape: "Ngang", square: "Vuông", close: "Đóng",
+        emptyTitle: "Tìm tư liệu cho cảnh của bạn", emptyBody: "Nhập mô tả ngắn về cảnh. Tư liệu tìm thấy chỉ được thêm vào dự án khi bạn chọn.", unavailableTitle: "Tìm tư liệu chưa sẵn sàng", unavailableBody: "Dịch vụ tìm tư liệu chưa được kết nối trên bản này. Dự án hiện tại vẫn an toàn và bạn có thể tiếp tục chỉnh sửa.", signInTitle: "Đăng nhập để tìm tư liệu", signInBody: "Đăng nhập tài khoản Viral AI Tool trước khi tìm tư liệu trực tuyến.", searching: "Đang tìm tư liệu...", noResultsTitle: "Chưa tìm thấy tư liệu phù hợp", noResultsBody: "Thử mô tả ngắn hơn hoặc đổi khung hình.", failedTitle: "Chưa thể tìm tư liệu", failedBody: "Kết nối tìm kiếm đang gặp sự cố. Thử lại sau ít phút.", providerUnavailableTitle: "Nguồn tư liệu chưa sẵn sàng", providerUnavailableBody: "Tìm kiếm trực tuyến chưa được cấu hình. Bạn vẫn có thể dùng tư liệu cục bộ và tiếp tục chỉnh sửa.", quotaTitle: "Đã đạt giới hạn tìm kiếm", quotaBody: "Hạn mức tìm kiếm hiện tại đã được sử dụng hết. Kiểm tra gói và hạn mức của tài khoản, hoặc thử lại sau khi hạn mức được làm mới.", libraryFullTitle: "Dự án đã đạt giới hạn tư liệu", libraryFullBody: "Xóa bớt tư liệu không còn dùng khỏi dự án rồi thử thêm lại. Tư liệu đang tìm vẫn chưa được thêm hoặc tải xuống.", results: "Kết quả", addProject: "Thêm vào dự án", preview: "Xem nguồn", sourceBy: "Nguồn: {name}", duration: "{seconds} giây"
+      },
       app: {
         desktop: "Ứng dụng desktop",
         workspace: "Khu làm việc",
@@ -979,6 +985,12 @@ window.I18N = (() => {
     },
 
     en: {
+      mediaWorkbench: {
+        assets: "Assets", project: "Project", source: "Source video", transcript: "Transcript", noTranscript: "Run speech recognition first", segments: "{count} segments",
+        media: "Media", video: "Video", images: "Images", audio: "Audio", discover: "Discover", findMedia: "Find media", findMediaHint: "Find video and images that match your content", generateAi: "Generate with AI", generateAiHint: "Create new media with AI", generated: "Generated", aiVideo: "AI video", aiImages: "AI images", aiAudio: "AI audio", favorites: "Favorites", saved: "Saved", items: "{count} items", collapse: "Collapse assets", expand: "Expand assets",
+        discoveryTitle: "Find media", discoveryDesc: "Find video or images and add them to the project without leaving the editor.", searchPlaceholder: "For example: lion hunting at sunset", search: "Search", mediaType: "Media type", orientation: "Orientation", any: "Any", portrait: "Portrait", landscape: "Landscape", square: "Square", close: "Close",
+        emptyTitle: "Find media for your scene", emptyBody: "Describe the scene briefly. Search results are only added to the project when you choose them.", unavailableTitle: "Media search is not ready", unavailableBody: "Online media search is not connected in this build. Your current project remains safe and editable.", signInTitle: "Sign in to find media", signInBody: "Sign in to your Viral AI Tool account before searching online media.", searching: "Searching media...", noResultsTitle: "No matching media yet", noResultsBody: "Try a shorter description or a different orientation.", failedTitle: "Media search could not finish", failedBody: "The search connection is having trouble. Try again in a moment.", providerUnavailableTitle: "Media sources are not ready", providerUnavailableBody: "Online media search is not configured yet. You can keep using local media and continue editing this project.", quotaTitle: "Search allowance reached", quotaBody: "The current media search allowance has been used. Check your account plan and usage, or try again after the allowance refreshes.", libraryFullTitle: "This project has reached its media limit", libraryFullBody: "Remove media you no longer need from the project, then try again. The selected result has not been added or downloaded.", results: "Results", addProject: "Add to project", preview: "View source", sourceBy: "Source: {name}", duration: "{seconds} sec"
+      },
       app: {
         desktop: "Desktop app",
         workspace: "Workspace",

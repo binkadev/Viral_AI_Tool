@@ -42,6 +42,7 @@ const {
 const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
+const { registerMediaIpc } = require('./services/media/desktop-ipc');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
 const {
   checkForUpdate,
@@ -482,6 +483,13 @@ app.whenReady().then(() => {
     isPackaged: app.isPackaged,
     releaseBackendUrl: release.cloudBackendUrl || '',
     releaseEnvironment: release.cloudEnvironment || (release.channel === 'stable' ? 'production' : 'development')
+  });
+  registerMediaIpc({
+    ipcMain,
+    getCloudConfig: () => cloudConfigStore?.read() || { backendUrl: process.env.VIRAL_AI_CLOUD_URL || '' },
+    getAccessToken: () => sessionStore?.getAccessToken() || null,
+    refreshSession: () => refreshSessionIfNeeded(),
+    appVersion: app.getVersion()
   });
   createWindow();
 

@@ -195,7 +195,10 @@ html.core-editor-premium .core-inspector-render{min-height:38px!important;border
   html.core-editor-premium .core-editor-assets-panel .core-asset-item{min-height:44px!important;grid-template-columns:1fr!important;padding:5px!important;place-items:center!important;box-shadow:none!important}
   html.core-editor-premium .core-editor-assets-panel .core-asset-icon{width:34px!important;height:34px!important}
 }
-@media(max-width:1120px){html.core-editor-premium .core-editor-assets-panel{display:none!important}}
+@media(max-width:1120px){
+  html.core-editor-premium .core-editor-assets-page .core-editor-focus-section .editor-grid.core-editor-assets-grid{grid-template-columns:52px minmax(0,1fr) 320px!important}
+  html.core-editor-premium .core-editor-assets-panel{display:flex!important;width:52px!important}
+}
 @media(prefers-reduced-motion:reduce){
   html.core-editor-premium .core-assets-head button,
   html.core-editor-premium .core-asset-item,

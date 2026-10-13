@@ -14,6 +14,7 @@ RUN mkdir -p /var/lib/viral-ai-tool /var/backups/viral-ai-tool \
     && chown -R node:node /app /var/lib/viral-ai-tool /var/backups/viral-ai-tool
 
 COPY --chown=node:node dev-backend ./dev-backend
+COPY --chown=node:node services/media ./services/media
 
 USER node
 

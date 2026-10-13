@@ -9,6 +9,8 @@ const translationJobs = require("./translation-jobs");
 const voiceProvider = require("./providers/voice");
 const voiceJobs = require("./voice-jobs");
 const billing = require("./billing");
+const { createMediaSearchService } = require("./media-search");
+const { createMediaRouteHandler } = require("./media-routes");
 const { createDurableStateStore } = require("./state-store");
 const { createSqliteStateStore } = require("./state-store-sqlite");
 const { createAuditLog } = require("./audit-log");
@@ -1838,6 +1840,16 @@ for (const job of jobs.values()) {
   }
 }
 
+const mediaSearchService = createMediaSearchService();
+const handleMediaRoute = createMediaRouteHandler({
+  mediaSearchService,
+  authenticate,
+  json,
+  error,
+  requestRateLimited: (req, scope) =>
+    requestRateLimited(req, scope, MAX_SENSITIVE_REQUESTS_PER_WINDOW, GENERAL_RATE_WINDOW_MS)
+});
+
 async function handle(req, res) {
   const url = new URL(req.url, "http://" + (req.headers.host || HOST));
   const method = req.method || "GET";
@@ -1896,6 +1908,8 @@ async function handle(req, res) {
     audit("rate_limit.general", req, { method, path: url.pathname });
     return error(res, 429, "RATE_LIMITED");
   }
+
+  if (await handleMediaRoute(req, res, url, method)) return;
 
   if (method === "GET" && url.pathname === "/v1/internal/ops/status") {
     if (!operationsConfigured()) {
