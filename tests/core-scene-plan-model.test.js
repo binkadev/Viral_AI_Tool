@@ -139,6 +139,17 @@ assert.strictEqual(new Set(duplicateSourceIds.map(segment => segment.id)).size, 
 const duplicateIdPlan = model.createPlanFromTranscript({ segments: duplicateSourceIds });
 assert.strictEqual(duplicateIdPlan.scenes.flatMap(scene => scene.sourceSegmentIds).length, 3, "duplicate provider IDs must not drop source ownership");
 
+const maxLengthId = "x".repeat(240);
+const maxLengthDuplicateIds = model.normalizeTranscriptSegments({
+  segments: [
+    { id: maxLengthId, start: 0, end: 1, text: "One" },
+    { id: maxLengthId, start: 1, end: 2, text: "Two" }
+  ]
+});
+assert.strictEqual(maxLengthDuplicateIds.length, 2);
+assert.strictEqual(new Set(maxLengthDuplicateIds.map(segment => segment.id)).size, 2, "max-length duplicate IDs must remain finite and unique");
+assert(maxLengthDuplicateIds.every(segment => segment.id.length <= 240));
+
 const overlapScenes = model.segmentTranscript({
   segments: [
     { id: "outer", start: 0, end: 10, text: "Outer" },
