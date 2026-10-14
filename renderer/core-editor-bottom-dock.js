@@ -15,9 +15,8 @@
     try {
       const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
       return saved?.locale === "en" ? "en" : "vi";
-    } catch {
-      return "vi";
-    }
+    } catch {}
+    return "vi";
   }
 
   function copy() {
@@ -61,6 +60,12 @@
     const seconds = Math.floor(total % 60);
     if (hours > 0) return [hours, minutes, seconds].map(part => String(part).padStart(2, "0")).join(":");
     return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+  }
+
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
   }
 
   function durationFor(video) {
@@ -111,7 +116,7 @@
     dock.classList.toggle("is-collapsed", collapsed);
     const button = dock.querySelector("[data-bottom-collapse]");
     if (button instanceof HTMLButtonElement) {
-      button.textContent = collapsed ? "⌃" : "⌄";
+      setText(button, collapsed ? "⌃" : "⌄");
       button.title = collapsed ? c.expand : c.collapse;
       button.setAttribute("aria-label", button.title);
       button.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -378,7 +383,7 @@
     const time = dock.querySelector("[data-bottom-time]");
 
     if (playhead instanceof HTMLElement) playhead.style.left = (ratio * 100) + "%";
-    if (time instanceof HTMLOutputElement) time.textContent = formatClock(current) + " / " + formatClock(duration);
+    if (time instanceof HTMLOutputElement) setText(time, formatClock(current) + " / " + formatClock(duration));
 
     renderRuler(dock, duration);
     ensureSourceClips(dock, video, duration);
@@ -450,7 +455,9 @@
 
   const start = () => {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
+    // Only direct page-level structure changes can create/remove the focus section or dock.
+    // Internal dock text/timeline updates must never wake this observer and feed back into sync().
+    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: false });
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:transcript-edit", queue);
