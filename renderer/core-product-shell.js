@@ -24,8 +24,11 @@
           workflow: "Create video",
           manage: "Manage",
           workspaceName: "Video Studio",
+          aiCreate: "Create with AI",
           import: "Import video",
           editor: "Video studio",
+          aiCreateTitle: "Create with AI",
+          aiCreateBreadcrumb: "Create video / Create with AI",
           importTitle: "Import video",
           importBreadcrumb: "Create video / Import",
           editorTitle: "Video studio",
@@ -50,8 +53,11 @@
           workflow: "Tạo video",
           manage: "Quản lý",
           workspaceName: "Studio video",
+          aiCreate: "Tạo bằng AI",
           import: "Nhập video",
           editor: "Studio video",
+          aiCreateTitle: "Tạo bằng AI",
+          aiCreateBreadcrumb: "Tạo video / Tạo bằng AI",
           importTitle: "Nhập video",
           importBreadcrumb: "Tạo video / Nhập video",
           editorTitle: "Studio video",
@@ -106,6 +112,7 @@
 
     navItems.splice(0, navItems.length,
       { group: "core-workflow" },
+      { id: "ai-create", icon: "✦", label: "core-ai-create" },
       { id: "download", icon: "⇩", label: "core-import" },
       { id: "ai-video", icon: "◫", label: "core-editor" },
       { group: "core-manage" },
@@ -128,11 +135,13 @@
             return '<div class="nav-group">' + groupLabel + '</div>';
           }
 
-          const label = item.id === "download"
-            ? c.import
-            : item.id === "ai-video"
-              ? c.editor
-              : (typeof t === "function" ? t(item.label) : item.label);
+          const label = item.id === "ai-create"
+            ? c.aiCreate
+            : item.id === "download"
+              ? c.import
+              : item.id === "ai-video"
+                ? c.editor
+                : (typeof t === "function" ? t(item.label) : item.label);
 
           return '<button class="nav-item ' + (appState()?.page === item.id ? "active" : "") + '" data-page="' + item.id + '" type="button">' +
             '<span class="nav-icon" aria-hidden="true">' + item.icon + '</span>' +
@@ -177,6 +186,7 @@
   function normalizeCurrentPage() {
     const current = appState();
     if (!current) return;
+    if (current.page === "ai-create") return;
 
     const startupPage = hasSourceVideo() ? "ai-video" : "download";
     if (current.page === startupPage) return;
@@ -196,7 +206,10 @@
     if (projectLabel) projectLabel.textContent = c.importAction;
     if (workspaceName) workspaceName.textContent = c.workspaceName;
 
-    if (current.page === "download") {
+    if (current.page === "ai-create") {
+      if (title) title.textContent = c.aiCreateTitle;
+      if (breadcrumb) breadcrumb.textContent = c.aiCreateBreadcrumb;
+    } else if (current.page === "download") {
       if (title) title.textContent = c.importTitle;
       if (breadcrumb) breadcrumb.textContent = c.importBreadcrumb;
     } else if (current.page === "ai-video") {
