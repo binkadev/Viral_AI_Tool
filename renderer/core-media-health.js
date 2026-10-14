@@ -1,6 +1,7 @@
 (function installCoreMediaHealth() {
   "use strict";
 
+  const MEDIA_SELECTOR = "video.preview-video, video.core-player-media";
   const wired = new WeakSet();
   const wiredRetries = new WeakSet();
   const retryCount = new WeakMap();
@@ -40,12 +41,24 @@
         };
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setHidden(node, value) {
+    if (!(node instanceof HTMLElement)) return;
+    const next = Boolean(value);
+    if (node.hidden !== next) node.hidden = next;
+  }
+
   function hostFor(video) {
     return video?.closest?.(".preview.core-player-host, .preview.preview-real") || null;
   }
 
   function mediaFor(host) {
-    const video = host?.querySelector?.("video.preview-video, video.core-player-media");
+    const video = host?.querySelector?.(MEDIA_SELECTOR);
     return video instanceof HTMLVideoElement ? video : null;
   }
 
@@ -98,11 +111,11 @@
     wireRetry(host, overlay);
 
     const c = copy();
-    host.dataset.coreMediaState = state;
-    overlay.dataset.state = state;
+    if (host.dataset.coreMediaState !== state) host.dataset.coreMediaState = state;
+    if (overlay.dataset.state !== state) overlay.dataset.state = state;
 
     if (state === "ready") {
-      overlay.hidden = true;
+      setHidden(overlay, true);
       return;
     }
 
@@ -111,23 +124,23 @@
     const symbol = overlay.querySelector("[data-media-state-symbol]");
     const retry = overlay.querySelector("[data-media-retry]");
 
-    overlay.hidden = false;
+    setHidden(overlay, false);
 
     if (state === "loading" || state === "waiting") {
-      if (title) title.textContent = state === "loading" ? c.loading : c.waiting;
-      if (body) body.textContent = state === "loading" ? c.loadingBody : c.waitingBody;
-      if (symbol) symbol.textContent = "";
-      if (retry) retry.hidden = true;
+      setText(title, state === "loading" ? c.loading : c.waiting);
+      setText(body, state === "loading" ? c.loadingBody : c.waitingBody);
+      setText(symbol, "");
+      setHidden(retry, true);
       return;
     }
 
     const unsupported = Number(details.errorCode) === 4;
-    if (title) title.textContent = c.failedTitle;
-    if (body) body.textContent = unsupported ? c.unsupportedBody : c.failedBody;
-    if (symbol) symbol.textContent = "!";
-    if (retry) {
-      retry.hidden = false;
-      retry.textContent = c.retry;
+    setText(title, c.failedTitle);
+    setText(body, unsupported ? c.unsupportedBody : c.failedBody);
+    setText(symbol, "!");
+    if (retry instanceof HTMLElement) {
+      setHidden(retry, false);
+      setText(retry, c.retry);
     }
 
     if (logFailure) {
@@ -145,8 +158,10 @@
   }
 
   function setState(video, state, details = {}) {
+    const previous = surfaceStates.get(video);
     surfaceStates.set(video, { state, details });
-    renderState(video, state, details, state === "failed");
+    const changed = previous?.state !== state || Number(previous?.details?.errorCode || 0) !== Number(details?.errorCode || 0);
+    renderState(video, state, details, changed && state === "failed");
   }
 
   function syncSurface(video) {
@@ -228,13 +243,31 @@
   }
 
   function scan() {
-    document.querySelectorAll("video.preview-video, video.core-player-media").forEach(wire);
+    document.querySelectorAll(MEDIA_SELECTOR).forEach(wire);
   }
 
-  const observer = new MutationObserver(scan);
+  function structuralMediaNode(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches(MEDIA_SELECTOR) || Boolean(node.querySelector?.(MEDIA_SELECTOR));
+  }
+
+  function mutationNeedsScan(records) {
+    return records.some(record => {
+      if (record.type === "attributes") {
+        return record.target instanceof HTMLVideoElement && (record.attributeName === "src" || record.attributeName === "class");
+      }
+      if (record.type !== "childList") return false;
+      return [...record.addedNodes, ...record.removedNodes].some(structuralMediaNode);
+    });
+  }
+
+  const observer = new MutationObserver(records => {
+    if (mutationNeedsScan(records)) scan();
+  });
+
   const start = () => {
     const page = document.getElementById("page");
-    if (page) observer.observe(page, { childList: true, subtree: true });
+    if (page) observer.observe(page, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "class"] });
     window.addEventListener("viral-ai:editor-preview-preserved", scan);
     scan();
   };
