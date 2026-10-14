@@ -2,6 +2,15 @@
   "use strict";
 
   const COLLAPSED_KEY = "viral-ai-core-editor-assets-collapsed";
+  const STRUCTURE_SELECTOR = [
+    ".core-editor-focus-section",
+    ".editor-grid",
+    "video.preview-video",
+    "video.core-player-media",
+    ".speech-result",
+    ".transcript-list",
+    ".transcript-row"
+  ].join(",");
   let queued = false;
 
   function locale() {
@@ -61,6 +70,12 @@
     return String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0");
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function collapsed() {
     return localStorage.getItem(COLLAPSED_KEY) === "true";
   }
@@ -78,7 +93,7 @@
     panel.classList.toggle("is-collapsed", value);
     const button = panel.querySelector("[data-assets-collapse]");
     if (button instanceof HTMLButtonElement) {
-      button.textContent = value ? "›" : "‹";
+      setText(button, value ? "›" : "‹");
       button.title = value ? t("expand") : t("collapse");
       button.setAttribute("aria-label", button.title);
       button.setAttribute("aria-expanded", value ? "false" : "true");
@@ -160,7 +175,7 @@
   function updateCount(panel, key, value) {
     const row = panel.querySelector('[data-media-count="' + key + '"]');
     const target = row?.querySelector("[data-count-value]");
-    if (target) target.textContent = t("items", { count: value });
+    setText(target, t("items", { count: value }));
     row?.classList.toggle("has-items", value > 0);
   }
 
@@ -173,7 +188,7 @@
     const transcriptStatus = panel.querySelector("[data-transcript-status]");
 
     const sourceName = source?.name || source?.sourcePath || video?.currentSrc || video?.src;
-    if (name) name.textContent = basename(sourceName);
+    setText(name, basename(sourceName));
 
     if (meta) {
       const nativeWidth = Number(video?.videoWidth || 0);
@@ -184,7 +199,7 @@
       const height = nativeHeight > 0 ? nativeHeight : storedHeight;
       const duration = durationFor(video, source);
       const dimensions = width > 0 && height > 0 ? width + "×" + height : "—";
-      meta.textContent = dimensions + " · " + formatDuration(duration);
+      setText(meta, dimensions + " · " + formatDuration(duration));
     }
 
     const transcriptCount = document.querySelectorAll(".transcript-list .transcript-row").length;
@@ -193,7 +208,7 @@
       transcript.classList.toggle("is-disabled", transcriptCount === 0);
       transcript.title = transcriptCount === 0 ? t("noTranscript") : t("segments", { count: transcriptCount });
     }
-    if (transcriptStatus) transcriptStatus.textContent = transcriptCount === 0 ? t("noTranscript") : t("segments", { count: transcriptCount });
+    setText(transcriptStatus, transcriptCount === 0 ? t("noTranscript") : t("segments", { count: transcriptCount }));
 
     updateCount(panel, "video", countAssets({ kind: "video" }));
     updateCount(panel, "image", countAssets({ kind: "image" }));
@@ -228,9 +243,26 @@
     requestAnimationFrame(enhance);
   }
 
+  function structuralNode(node) {
+    if (!(node instanceof Element)) return false;
+    if (node.closest?.(".core-editor-assets-panel")) return false;
+    return node.matches(STRUCTURE_SELECTOR) || Boolean(node.querySelector?.(STRUCTURE_SELECTOR));
+  }
+
+  function mutationNeedsRefresh(records) {
+    return records.some(record => {
+      if (record.type !== "childList") return false;
+      return [...record.addedNodes, ...record.removedNodes].some(structuralNode);
+    });
+  }
+
   const start = () => {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
+    if (page) {
+      new MutationObserver(records => {
+        if (mutationNeedsRefresh(records)) queue();
+      }).observe(page, { childList: true, subtree: true });
+    }
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:transcript-edit", queue);

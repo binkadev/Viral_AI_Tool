@@ -13,6 +13,12 @@
     return appState()?.locale === "en" || document.documentElement.lang === "en" ? "en" : "vi";
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function copy() {
     return locale() === "en"
       ? {
@@ -85,13 +91,13 @@
       return;
     }
 
-    overlay.dataset.sourceRecovery = "true";
-    if (title) title.textContent = source?.fileState === "trashed" ? c.trashedTitle : c.missingTitle;
-    if (body) body.textContent = c.body;
+    if (overlay.dataset.sourceRecovery !== "true") overlay.dataset.sourceRecovery = "true";
+    setText(title, source?.fileState === "trashed" ? c.trashedTitle : c.missingTitle);
+    setText(body, c.body);
     if (action instanceof HTMLButtonElement) {
-      action.textContent = busy ? c.relinking : c.relink;
+      setText(action, busy ? c.relinking : c.relink);
       action.disabled = busy;
-      action.dataset.sourceRecoveryAction = "relink";
+      if (action.dataset.sourceRecoveryAction !== "relink") action.dataset.sourceRecoveryAction = "relink";
       action.setAttribute("aria-busy", busy ? "true" : "false");
     }
   }
@@ -112,9 +118,10 @@
     button.disabled = false;
     button.classList.remove("is-disabled");
     button.classList.add("needs-source-recovery");
-    button.dataset.sourceRecoveryAction = "relink";
-    button.title = c.unavailable + " · " + c.relink;
-    button.setAttribute("aria-label", button.title);
+    if (button.dataset.sourceRecoveryAction !== "relink") button.dataset.sourceRecoveryAction = "relink";
+    const nextTitle = c.unavailable + " · " + c.relink;
+    if (button.title !== nextTitle) button.title = nextTitle;
+    button.setAttribute("aria-label", nextTitle);
     button.setAttribute("aria-busy", busy ? "true" : "false");
 
     if (!hint) {
@@ -122,7 +129,7 @@
       hint.className = "core-source-recovery-hint";
       button.appendChild(hint);
     }
-    hint.textContent = busy ? c.relinking : c.sourceHint;
+    setText(hint, busy ? c.relinking : c.sourceHint);
   }
 
   function sync() {
