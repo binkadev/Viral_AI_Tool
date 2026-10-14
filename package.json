@@ -31,7 +31,7 @@
     "release:preflight": "node scripts/release-preflight.js",
     "test:deployment-config": "node tests/deployment-config.test.js",
     "test:cloud-speech-upload": "node tests/cloud-speech-upload.test.js",
-    "test:core-player": "node tests/core-player.test.js",
+    "test:core-player": "node tests/core-player.test.js && node tests/core-player-mutation-loop.test.js",
     "test:core-player-workstation": "node tests/core-player-workstation.test.js",
     "test:core-transcript": "node tests/core-transcript.test.js",
     "test:core-project-persistence": "node tests/core-project-persistence.test.js",
