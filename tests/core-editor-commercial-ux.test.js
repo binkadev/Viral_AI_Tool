@@ -25,10 +25,10 @@ for (const required of [
   "dataset.fileState",
   "classifyToast",
   "syncWorkflowActions",
-  'setAttribute("data-commercial-stage-state"',
+  'setAttr(tab, "data-commercial-stage-state"',
   "commercialActionState",
   "core-commercial-stage-dot",
-  'setAttribute("aria-busy"',
+  'setAttr(button, "aria-busy"',
   "window.I18N?.t",
   'catalog("common.processing"',
   'catalog("translation.notReady"',
@@ -40,7 +40,9 @@ for (const required of [
   'value === "Lỗi nối"',
   "NodeFilter.SHOW_TEXT",
   'replace("Lỗi nối", replacement)',
-  'setAttribute("aria-label", replacement)'
+  'setAttribute("aria-label", replacement)',
+  "function setText(",
+  "function setAttr("
 ]) {
   assert(js.includes(required), "Commercial UX JS missing: " + required);
 }
