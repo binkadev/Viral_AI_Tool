@@ -17,6 +17,12 @@
     return appState()?.locale === "en" ? "en" : "vi";
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value ?? "");
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   function copy() {
     return locale() === "en"
       ? {
@@ -216,7 +222,7 @@
     if (!(activity instanceof HTMLElement)) return;
 
     if (!active) {
-      activity.hidden = true;
+      if (!activity.hidden) activity.hidden = true;
       activity.removeAttribute("data-state");
       return;
     }
@@ -228,7 +234,7 @@
     const phaseLabel = labels.phases[rawPhase] || labels.phases[meta.state] || labels.phases.processing;
     const isAttention = meta.state === "failed" || meta.state === "cancelled";
 
-    activity.hidden = false;
+    if (activity.hidden) activity.hidden = false;
     activity.dataset.state = isAttention ? meta.state : "processing";
     activity.dataset.step = active.id;
 
@@ -241,13 +247,10 @@
     const stop = activity.querySelector("[data-activity-stop]");
     const retry = activity.querySelector("[data-activity-retry]");
 
-    if (kicker) kicker.textContent = labels.title;
-    if (title) title.textContent = labels.steps[active.id] || active.id;
-    if (detail) detail.textContent = isAttention
-      ? failureCopy(job, meta, labels) + " " + labels.projectSafe
-      : phaseLabel;
-
-    if (percent) percent.textContent = !isAttention && !progress.indeterminate ? labels.percent(progress.value) : "";
+    setText(kicker, labels.title);
+    setText(title, labels.steps[active.id] || active.id);
+    setText(detail, isAttention ? failureCopy(job, meta, labels) + " " + labels.projectSafe : phaseLabel);
+    setText(percent, !isAttention && !progress.indeterminate ? labels.percent(progress.value) : "");
 
     if (track instanceof HTMLElement) {
       track.hidden = isAttention;
@@ -267,7 +270,7 @@
     const canStop = (stopTarget instanceof HTMLButtonElement && !stopTarget.disabled) || renderCanStop(active);
     if (stop instanceof HTMLButtonElement) {
       stop.hidden = !meta.busy || !canStop;
-      stop.textContent = rawPhase === "cancelling" ? labels.stopping : labels.stop;
+      setText(stop, rawPhase === "cancelling" ? labels.stopping : labels.stop);
       stop.disabled = rawPhase === "cancelling" || !canStop;
       stop.onclick = () => stopActivity(active, stopTarget);
     }
@@ -275,7 +278,7 @@
     const retryTarget = buttonFor(active.start);
     if (retry instanceof HTMLButtonElement) {
       retry.hidden = !isAttention;
-      retry.textContent = labels.retry;
+      setText(retry, labels.retry);
       retry.disabled = !(retryTarget instanceof HTMLButtonElement) || retryTarget.disabled;
       retry.title = retryTarget?.title || "";
       retry.onclick = () => {
@@ -323,7 +326,9 @@
 
   function start() {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
+    // Activity itself is a direct page child. Internal text/progress mutations must not
+    // schedule another full activity render.
+    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: false });
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("beforeunload", cleanupProgressSignals, { once: true });
