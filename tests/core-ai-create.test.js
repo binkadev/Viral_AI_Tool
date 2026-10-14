@@ -27,7 +27,7 @@ for (const required of [
   'window.desktopAPI?.searchMedia',
   'type === "local-ai"',
   'route("settings")',
-  'provider execution is intentionally not faked',
+  'Provider execution is intentionally not faked',
   'Phần thực thi provider không được giả lập'
 ]) assert(js.includes(required), "Create with AI workspace missing: " + required);
 
