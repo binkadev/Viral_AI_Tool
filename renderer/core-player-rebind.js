@@ -1,6 +1,16 @@
 (function installCorePlayerRebind() {
   "use strict";
 
+  const PLAYER_SELECTOR = "video.preview-video, video.core-player-media";
+  const PLAYER_STRUCTURE_SELECTOR = [
+    PLAYER_SELECTOR,
+    ".preview",
+    ".core-player-controls",
+    "[data-core-seek]",
+    "[data-core-play]",
+    "[data-core-toggle-play]",
+    "[data-core-timeline-track]"
+  ].join(",");
   const wired = new WeakSet();
   const wiredSeeks = new WeakSet();
   const wiredPlayButtons = new WeakSet();
@@ -39,20 +49,34 @@
       String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value);
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function setStyle(node, property, value, priority) {
+    if (!(node instanceof HTMLElement)) return;
+    const current = node.style.getPropertyValue(property);
+    const currentPriority = node.style.getPropertyPriority(property);
+    if (current === value && currentPriority === (priority || "")) return;
+    node.style.setProperty(property, value, priority || "");
+  }
+
   function normalizeVideoSurface(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
     if (!(host instanceof HTMLElement)) return;
 
-    video.style.setProperty("object-fit", "contain", "important");
-    video.style.setProperty("object-position", "center center", "important");
-    video.style.setProperty("max-width", "100%", "important");
-    video.style.setProperty("max-height", "100%", "important");
-    video.style.setProperty("width", "100%", "important");
-    video.style.setProperty("height", "100%", "important");
-    video.style.setProperty("transform", "none", "important");
+    setStyle(video, "object-fit", "contain", "important");
+    setStyle(video, "object-position", "center center", "important");
+    setStyle(video, "max-width", "100%", "important");
+    setStyle(video, "max-height", "100%", "important");
+    setStyle(video, "width", "100%", "important");
+    setStyle(video, "height", "100%", "important");
+    setStyle(video, "transform", "none", "important");
 
-    host.dataset.coreMediaFit = "contain";
+    if (host.dataset.coreMediaFit !== "contain") host.dataset.coreMediaFit = "contain";
   }
 
   function syncEditorDock(video, duration, current) {
@@ -71,21 +95,24 @@
 
     if (playhead instanceof HTMLElement) playhead.style.left = String(ratio * 100) + "%";
     if (time instanceof HTMLOutputElement) {
-      time.textContent = duration > 0
+      setText(time, duration > 0
         ? formatClock(current) + " / " + formatClock(duration)
-        : formatClock(current) + " / --:--";
+        : formatClock(current) + " / --:--");
     }
 
     dock.querySelectorAll(".core-bottom-segment").forEach(segment => {
       const start = Number(segment.dataset.start || 0);
       const end = Number(segment.dataset.end || start);
       const active = duration > 0 && current >= start && (current < end || (current === duration && end === duration));
-      segment.classList.toggle("is-active", active);
-      segment.setAttribute("aria-current", active ? "true" : "false");
+      if (segment.classList.contains("is-active") !== active) segment.classList.toggle("is-active", active);
+      const ariaCurrent = active ? "true" : "false";
+      if (segment.getAttribute("aria-current") !== ariaCurrent) segment.setAttribute("aria-current", ariaCurrent);
     });
 
-    dock.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-    dock.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    if (dock.dataset.corePlaybackState !== playbackState) dock.dataset.corePlaybackState = playbackState;
+    if (dock.dataset.coreMediaReady !== mediaReady) dock.dataset.coreMediaReady = mediaReady;
   }
 
   function refresh(video) {
@@ -105,9 +132,9 @@
     const playButton = controls?.querySelector("[data-core-play], [data-core-toggle-play]");
 
     if (time) {
-      time.textContent = duration > 0
+      setText(time, duration > 0
         ? formatClock(current) + " / " + formatClock(duration)
-        : formatClock(current) + " / --:--";
+        : formatClock(current) + " / --:--");
     }
 
     if (seek instanceof HTMLInputElement) {
@@ -122,13 +149,17 @@
     }
 
     if (playButton instanceof HTMLElement) {
-      playButton.dataset.playing = video.paused ? "false" : "true";
-      playButton.setAttribute("aria-pressed", video.paused ? "false" : "true");
+      const playing = video.paused ? "false" : "true";
+      if (playButton.dataset.playing !== playing) playButton.dataset.playing = playing;
+      if (playButton.getAttribute("aria-pressed") !== playing) playButton.setAttribute("aria-pressed", playing);
     }
 
-    host.dataset.coreDurationResolved = duration > 0 ? "true" : "false";
-    host.dataset.corePlaybackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
-    host.dataset.coreMediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    const durationResolved = duration > 0 ? "true" : "false";
+    const playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
+    const mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
+    if (host.dataset.coreDurationResolved !== durationResolved) host.dataset.coreDurationResolved = durationResolved;
+    if (host.dataset.corePlaybackState !== playbackState) host.dataset.corePlaybackState = playbackState;
+    if (host.dataset.coreMediaReady !== mediaReady) host.dataset.coreMediaReady = mediaReady;
     syncEditorDock(video, duration, current);
   }
 
@@ -144,14 +175,6 @@
     });
     observer.observe(host);
     surfaceObservers.set(video, { host, observer });
-  }
-
-  function nudgeCorePlayer(video) {
-    const host = video?.closest?.(".preview");
-    if (!(host instanceof HTMLElement)) return;
-    const marker = document.createComment("core-player-rebind");
-    host.appendChild(marker);
-    marker.remove();
   }
 
   function seekToRatio(video, ratio) {
@@ -254,10 +277,27 @@
     requestAnimationFrame(scan);
   }
 
+  function structuralNode(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches(PLAYER_STRUCTURE_SELECTOR) || Boolean(node.querySelector?.(PLAYER_STRUCTURE_SELECTOR));
+  }
+
+  function mutationNeedsScan(records) {
+    return records.some(record => {
+      if (record.type === "attributes") {
+        return record.target instanceof HTMLVideoElement && (record.attributeName === "src" || record.attributeName === "class");
+      }
+      if (record.type !== "childList") return false;
+      return [...record.addedNodes, ...record.removedNodes].some(structuralNode);
+    });
+  }
+
   const start = () => {
     const page = document.getElementById("page");
     if (page) {
-      new MutationObserver(queue).observe(page, {
+      new MutationObserver(records => {
+        if (mutationNeedsScan(records)) queue();
+      }).observe(page, {
         childList: true,
         subtree: true,
         attributes: true,
@@ -269,7 +309,6 @@
     window.addEventListener("viral-ai:editor-preview-preserved", () => {
       document.querySelectorAll("#page video.preview-video, #page video.core-player-media").forEach(video => {
         if (video instanceof HTMLVideoElement) {
-          nudgeCorePlayer(video);
           wireSurface(video);
           refresh(video);
         }
