@@ -55,26 +55,18 @@
     if (node.textContent !== next) node.textContent = next;
   }
 
-  function setStyle(node, property, value, priority) {
-    if (!(node instanceof HTMLElement)) return;
-    const current = node.style.getPropertyValue(property);
-    const currentPriority = node.style.getPropertyPriority(property);
-    if (current === value && currentPriority === (priority || "")) return;
-    node.style.setProperty(property, value, priority || "");
-  }
-
   function normalizeVideoSurface(video) {
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
     if (!(host instanceof HTMLElement)) return;
 
-    setStyle(video, "object-fit", "contain", "important");
-    setStyle(video, "object-position", "center center", "important");
-    setStyle(video, "max-width", "100%", "important");
-    setStyle(video, "max-height", "100%", "important");
-    setStyle(video, "width", "100%", "important");
-    setStyle(video, "height", "100%", "important");
-    setStyle(video, "transform", "none", "important");
+    video.style.setProperty("object-fit", "contain", "important");
+    video.style.setProperty("object-position", "center center", "important");
+    video.style.setProperty("max-width", "100%", "important");
+    video.style.setProperty("max-height", "100%", "important");
+    video.style.setProperty("width", "100%", "important");
+    video.style.setProperty("height", "100%", "important");
+    video.style.setProperty("transform", "none", "important");
 
     if (host.dataset.coreMediaFit !== "contain") host.dataset.coreMediaFit = "contain";
   }
