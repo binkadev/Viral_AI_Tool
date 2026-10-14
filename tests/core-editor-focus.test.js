@@ -34,11 +34,12 @@ for (const required of [
   "seekableDuration",
   "coreDurationResolved",
   "viral-ai:editor-preview-preserved",
-  "core-player-rebind"
+  "mutationNeedsScan"
 ]) {
   assert(rebindJs.includes(required), "Core player rebind missing: " + required);
 }
 
+assert(!rebindJs.includes('document.createComment("core-player-rebind")'), "Focus/player bridge must not rely on synthetic DOM mutations.");
 assert(index.includes('href="core-editor-focus.css"'), "Focus stylesheet must load in production renderer.");
 assert(index.includes('src="core-player-rebind.js"'), "Player rebind bridge must load in production renderer.");
 assert(index.includes('src="core-editor-focus.js"'), "Focus layout script must load in production renderer.");

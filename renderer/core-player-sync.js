@@ -1,6 +1,7 @@
 (function installCorePlayerSync() {
   "use strict";
 
+  const PLAYER_SELECTOR = "video.preview-video, video.core-player-media";
   const wiredVideos = new WeakSet();
   let queued = false;
 
@@ -48,6 +49,24 @@
     return video instanceof HTMLVideoElement && video.isConnected && currentVideo() === video;
   }
 
+  function setText(node, value) {
+    if (!node) return;
+    const next = String(value);
+    if (node.textContent !== next) node.textContent = next;
+  }
+
+  function playerNodeChanged(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches(PLAYER_SELECTOR) || Boolean(node.querySelector?.(PLAYER_SELECTOR));
+  }
+
+  function playerStructureChanged(records) {
+    return records.some(record => {
+      if (record.type !== "childList") return false;
+      return [...record.addedNodes, ...record.removedNodes].some(playerNodeChanged);
+    });
+  }
+
   function sync(video) {
     if (!isAuthoritativeVideo(video)) return;
     const duration = durationFor(video);
@@ -63,7 +82,7 @@
       if (duration > 0) node.value = String(Math.round(ratio * 1000));
     });
     document.querySelectorAll("#page [data-core-time]").forEach(node => {
-      node.textContent = duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--";
+      setText(node, duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--");
     });
 
     const dock = document.querySelector("#page .core-editor-bottom-dock");
@@ -71,7 +90,7 @@
       const bottomPlayhead = dock.querySelector("[data-bottom-playhead]");
       const bottomTime = dock.querySelector("[data-bottom-time]");
       if (bottomPlayhead instanceof HTMLElement) bottomPlayhead.style.left = (ratio * 100) + "%";
-      if (bottomTime instanceof HTMLElement) bottomTime.textContent = duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--";
+      if (bottomTime instanceof HTMLElement) setText(bottomTime, duration > 0 ? formatClock(current) + " / " + formatClock(duration) : formatClock(current) + " / --:--");
       dock.dataset.playbackState = video.ended ? "ended" : video.paused ? "paused" : "playing";
       dock.dataset.mediaReady = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? "true" : "false";
     }
@@ -113,7 +132,11 @@
 
   function start() {
     const page = document.getElementById("page");
-    if (page) new MutationObserver(queue).observe(page, { childList: true, subtree: true });
+    if (page) {
+      new MutationObserver(records => {
+        if (playerStructureChanged(records)) queue();
+      }).observe(page, { childList: true, subtree: true });
+    }
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:player-seek", event => {
