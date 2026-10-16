@@ -54,6 +54,9 @@ const {
 const { createDiagnosticLogger } = require('./services/diagnostics/logger');
 const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
 
+const { GenerationService } = require('./services/generation/generation-service');
+const { registerGenerationIpc } = require('./services/generation/generation-ipc');
+let generationService;
 let mainWindow;
 let sessionStore;
 let cloudConfigStore;
@@ -139,7 +142,7 @@ function closeCopy() {
 }
 
 function getActiveWorkCount() {
-  return getActiveRenderCount() +
+  return (generationService?.activeCount() || 0) + getActiveRenderCount() +
     activeSpeechCount() +
     activeTranslationCount() +
     activeVoiceCount() +
@@ -441,6 +444,7 @@ function createWindow() {
 
       if (result.response === 1) {
         forceClose = true;
+        await generationService?.shutdown();
         cancelAllRenders();
         await cancelAllSpeech();
         await cancelAllTranslations();
@@ -501,6 +505,7 @@ app.whenReady().then(() => {
       } catch {}
     }
   });
+  try { generationService = new GenerationService({ root: path.join(app.getPath('userData'), 'generation') }); } catch {}
   createWindow();
 
   app.on('activate', () => {
@@ -1705,4 +1710,10 @@ ipcMain.handle('files:select-replacement-video', async () => {
 ipcMain.handle('video:file-url', async (_event, inputPath) => {
   const safePath = assertVideoPath(inputPath);
   return pathToFileURL(safePath).href;
+});
+
+registerGenerationIpc({ ipcMain, getService: () => generationService, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
 });

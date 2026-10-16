@@ -26,121 +26,107 @@
   }
 
   function copy() {
-    return locale() === "en"
-      ? {
-          eyebrow: "AI CREATE · Production workspace",
-          title: "Turn an idea into a production-ready video workflow",
-          body: "Script, scene planning, media discovery, voice, timeline and export stay in one project. Real generation remains locked until an execution provider is connected.",
-          foundation: "Generation foundation restored",
-          sceneReady: "Scene Plan v3 ready",
-          mediaReady: "Media Engine ready",
-          briefLabel: "What do you want to create?",
-          briefPlaceholder: "Example: A 30-second vertical wildlife short where the predator becomes the prey, fast hook, Vietnamese narration...",
-          briefHint: "This brief is saved locally for the current workspace. It is not sent to any provider yet.",
-          sourceTitle: "Current project context",
-          sourceNone: "No source video",
-          sourceReady: "Source video ready",
-          transcript: "Transcript",
-          scenes: "Scenes",
-          strategy: "Model strategy",
-          strategyDesc: "Choose the routing goal. The backend router decides the concrete model only after a provider is actually available.",
-          economy: "Economy",
-          economyBody: "Prefer local and lower-cost routes.",
-          balanced: "Balanced",
-          balancedBody: "Balance speed, quality and estimated cost.",
-          quality: "Quality",
-          qualityBody: "Prefer higher-quality routes when available.",
-          workflow: "Production pipeline",
-          workflowDesc: "This is the target pipeline being connected to the current Studio, not a separate demo flow.",
-          steps: ["Brief & script", "Scene Planner", "Find media", "Generate missing media", "Voice & captions", "Compose in Studio", "Export & publish"],
-          ready: "Ready",
-          foundationOnly: "Foundation",
-          needsProvider: "Needs provider",
-          existing: "Existing workflow",
-          setup: "AI & provider setup",
-          setupDesc: "The app now exposes the pieces that already exist and clearly marks what is not wired yet.",
-          localAi: "Local AI",
-          localAiReady: "Local speech AI is ready on this machine.",
-          localAiNeeds: "Local speech model still needs to be prepared.",
-          manageLocal: "Manage local AI",
-          cloudAi: "Viral AI Cloud",
-          cloudReady: "Cloud account is connected.",
-          cloudNeeds: "Cloud account is not connected yet.",
-          openSettings: "Open settings",
-          mediaEngine: "Media Engine",
-          mediaEngineReady: "Stock discovery is wired through the desktop/backend boundary.",
-          mediaEngineNeeds: "Media search is not available in this build.",
-          videoProvider: "AI video generation",
-          providerBody: "Catalog, routing and cost-estimation foundation are restored. Provider execution is intentionally not faked and remains disabled until the real adapter/job pipeline is connected.",
-          restoredModels: "Restored routing families",
-          restoredModelsBody: "WAN Local / WAN 3.0 · Seedance · Veo · Gen-4.5. Availability is backend-controlled, not hard-coded as usable.",
-          importVideo: "Import video",
-          openStudio: "Open Studio",
-          generationLocked: "Generation provider not connected",
-          generationLockedBody: "The Generate action stays disabled until a real provider adapter, durable job lifecycle and credit settlement are wired.",
-          nextBlock: "Next implementation block",
-          nextBlockBody: "Connect provider status + generation job API, then let Scene Planner request stock or AI-generated assets per scene.",
-          noTranscript: "Not ready",
-          countSegments: "{count} segments",
-          countScenes: "{count} scenes"
+    return window.I18N.messages[locale()].aiCreate;
+  }
+
+  let generationReady = false;
+  let generationState = "checking";
+  let readinessPending = null;
+  let submitting = false;
+  let submissionKey = null;
+  let feedback = "";
+
+  function projectIdentity() {
+    try {
+      const snapshot = window.ViralCoreProjectPersistence?.snapshot?.();
+      const projectId = typeof snapshot?.projectId === "string" ? snapshot.projectId : null;
+      const selectedSceneId = typeof snapshot?.scenePlan?.selectedSceneId === "string"
+        ? snapshot.scenePlan.selectedSceneId
+        : null;
+      return { projectId, sceneId: selectedSceneId };
+    } catch {
+      return { projectId: null, sceneId: null };
+    }
+  }
+
+  function currentBrief() {
+    return String(localStorage.getItem(BRIEF_KEY) || "");
+  }
+
+  function canGenerate() {
+    return generationReady && !submitting && Boolean(projectIdentity().projectId) && Boolean(currentBrief().trim());
+  }
+
+  function updateGenerationControls() {
+    const button = document.querySelector("[data-ai-generate]");
+    if (button) {
+      button.disabled = !canGenerate();
+      button.setAttribute("aria-disabled", String(button.disabled));
+    }
+    const status = document.querySelector("[data-ai-generation-feedback]");
+    if (status) status.textContent = feedback;
+  }
+
+  function refreshReadiness() {
+    if (readinessPending) return readinessPending;
+    generationReady = false;
+    generationState = "checking";
+    updateGenerationControls();
+    readinessPending = Promise.resolve()
+      .then(() => window.desktopAPI?.getGenerationStatus?.())
+      .then(result => {
+        if (result?.ok !== true) {
+          generationState = "unavailable";
+          generationReady = false;
+          return;
         }
-      : {
-          eyebrow: "AI CREATE · Không gian sản xuất",
-          title: "Từ một ý tưởng thành quy trình video hoàn chỉnh",
-          body: "Kịch bản, Scene Planner, tìm tư liệu, giọng đọc, timeline và xuất video nằm trong cùng một dự án. Tạo video AI thật vẫn được khóa cho tới khi provider thực thi được kết nối.",
-          foundation: "Đã khôi phục nền AI Generation",
-          sceneReady: "Scene Plan v3 sẵn sàng",
-          mediaReady: "Media Engine sẵn sàng",
-          briefLabel: "Bạn muốn tạo video gì?",
-          briefPlaceholder: "Ví dụ: video dọc 30 giây về động vật hoang dã, kẻ đi săn trở thành con mồi, hook nhanh, lời dẫn tiếng Việt...",
-          briefHint: "Brief này chỉ được lưu cục bộ trong workspace hiện tại. Chưa có dữ liệu nào được gửi tới provider.",
-          sourceTitle: "Ngữ cảnh dự án hiện tại",
-          sourceNone: "Chưa có video nguồn",
-          sourceReady: "Đã có video nguồn",
-          transcript: "Transcript",
-          scenes: "Cảnh",
-          strategy: "Chiến lược model",
-          strategyDesc: "Chọn mục tiêu định tuyến. Backend chỉ chọn model cụ thể khi provider thật sự khả dụng.",
-          economy: "Tiết kiệm",
-          economyBody: "Ưu tiên local và tuyến có chi phí thấp.",
-          balanced: "Cân bằng",
-          balancedBody: "Cân bằng tốc độ, chất lượng và chi phí ước tính.",
-          quality: "Chất lượng",
-          qualityBody: "Ưu tiên tuyến chất lượng cao khi khả dụng.",
-          workflow: "Pipeline sản xuất",
-          workflowDesc: "Đây là pipeline sẽ nối thẳng vào Studio hiện tại, không phải một luồng demo riêng.",
-          steps: ["Brief & kịch bản", "Scene Planner", "Tìm tư liệu", "Tạo phần còn thiếu", "Giọng & phụ đề", "Ghép trong Studio", "Xuất & đăng"],
-          ready: "Sẵn sàng",
-          foundationOnly: "Đã có nền",
-          needsProvider: "Cần provider",
-          existing: "Đang dùng thật",
-          setup: "Thiết lập AI & provider",
-          setupDesc: "Ứng dụng hiển thị lại những phần đã có và đánh dấu rõ phần nào chưa được nối thật.",
-          localAi: "AI trên máy",
-          localAiReady: "AI nhận diện lời nói local đã sẵn sàng trên máy này.",
-          localAiNeeds: "Model nhận diện local vẫn cần được chuẩn bị.",
-          manageLocal: "Quản lý AI trên máy",
-          cloudAi: "Viral AI Cloud",
-          cloudReady: "Tài khoản Cloud đã được kết nối.",
-          cloudNeeds: "Tài khoản Cloud chưa được kết nối.",
-          openSettings: "Mở cài đặt",
-          mediaEngine: "Media Engine",
-          mediaEngineReady: "Tìm tư liệu stock đã đi qua desktop/backend boundary.",
-          mediaEngineNeeds: "Tìm tư liệu chưa khả dụng trong bản này.",
-          videoProvider: "Tạo video bằng AI",
-          providerBody: "Catalog, Model Router và cost-estimator đã được khôi phục. Phần thực thi provider không được giả lập và vẫn bị khóa cho tới khi adapter/job pipeline thật được nối.",
-          restoredModels: "Nhóm model định tuyến đã khôi phục",
-          restoredModelsBody: "WAN Local / WAN 3.0 · Seedance · Veo · Gen-4.5. Backend mới là nơi xác nhận model nào thực sự khả dụng.",
-          importVideo: "Nhập video",
-          openStudio: "Mở Studio",
-          generationLocked: "Chưa kết nối provider tạo video",
-          generationLockedBody: "Nút Generate được giữ khóa cho tới khi có provider adapter thật, job lifecycle bền vững và cơ chế quyết toán credit.",
-          nextBlock: "Block triển khai tiếp theo",
-          nextBlockBody: "Nối trạng thái provider + Generation Job API, sau đó để Scene Planner tự yêu cầu stock hoặc AI-generated asset theo từng cảnh.",
-          noTranscript: "Chưa sẵn sàng",
-          countSegments: "{count} đoạn",
-          countScenes: "{count} cảnh"
-        };
+        generationState = ["ready", "not_configured", "unavailable", "error"].includes(result.value?.state)
+          ? result.value.state
+          : (result.value?.ready === true ? "ready" : "not_configured");
+        generationReady = result.value?.ready === true && generationState === "ready";
+      })
+      .catch(() => {
+        generationReady = false;
+        generationState = "error";
+      })
+      .finally(() => {
+        readinessPending = null;
+        updateGenerationControls();
+        if (appState()?.page === "ai-create" && typeof render === "function") render();
+      });
+    return readinessPending;
+  }
+
+  async function generate() {
+    const identity = projectIdentity();
+    if (submitting || !generationReady || !identity.projectId || !currentBrief().trim()) return;
+    submitting = true;
+    updateGenerationControls();
+    submissionKey ||= window.crypto?.randomUUID?.();
+    if (!submissionKey) {
+      feedback = copy().generationError;
+      submitting = false;
+      updateGenerationControls();
+      return;
+    }
+    try {
+      const result = await window.desktopAPI.submitGeneration({
+        projectId: identity.projectId,
+        sceneId: identity.sceneId,
+        idempotencyKey: submissionKey,
+        kind: "video",
+        mode: "text-to-video",
+        prompt: currentBrief(),
+        goal: selectedGoal(),
+        aspectRatio: "9:16"
+      });
+      feedback = result?.ok ? copy().submitted : copy().generationError;
+    } catch {
+      feedback = copy().generationError;
+    } finally {
+      submitting = false;
+      updateGenerationControls();
+    }
   }
 
   function format(template, values = {}) {
@@ -150,10 +136,6 @@
   function selectedGoal() {
     const saved = String(localStorage.getItem(GOAL_KEY) || "balanced");
     return VALID_GOALS.has(saved) ? saved : "balanced";
-  }
-
-  function currentBrief() {
-    return String(localStorage.getItem(BRIEF_KEY) || "");
   }
 
   function projectContext() {
@@ -198,11 +180,18 @@
     '</article>';
   }
 
+  function providerStatus(c) {
+    if (generationState === "ready") return { label: c.ready, tone: "ready" };
+    if (generationState === "checking") return { label: c.foundationOnly, tone: "foundation" };
+    return { label: c.needsProvider, tone: "blocked" };
+  }
+
   function page() {
     const c = copy();
     const goal = selectedGoal();
     const project = projectContext();
     const ready = readiness();
+    const provider = providerStatus(c);
     const transcriptLabel = project.transcriptCount > 0 ? format(c.countSegments, { count: project.transcriptCount }) : c.noTranscript;
     const sceneLabel = project.sceneCount > 0 ? format(c.countScenes, { count: project.sceneCount }) : c.noTranscript;
 
@@ -210,7 +199,7 @@
       "foundation",
       ready.sceneReady ? "ready" : "foundation",
       ready.mediaReady ? "ready" : "foundation",
-      "blocked",
+      generationReady ? "ready" : "blocked",
       "ready",
       "ready",
       "foundation"
@@ -219,13 +208,13 @@
       c.foundationOnly,
       ready.sceneReady ? c.ready : c.foundationOnly,
       ready.mediaReady ? c.ready : c.foundationOnly,
-      c.needsProvider,
+      generationReady ? c.ready : c.needsProvider,
       c.existing,
       c.existing,
       c.foundationOnly
     ];
 
-    return '<div class="core-ai-create-workspace" data-generation-execution="not-wired">' +
+    return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
       '<section class="core-ai-create-hero">' +
         '<div class="core-ai-create-hero-copy"><span class="core-ai-kicker">' + esc(c.eyebrow) + '</span><h2>' + esc(c.title) + '</h2><p>' + esc(c.body) + '</p>' +
           '<div class="core-ai-hero-status">' + statusPill(c.foundation, "ready") + statusPill(c.sceneReady, ready.sceneReady ? "ready" : "foundation") + statusPill(c.mediaReady, ready.mediaReady ? "ready" : "foundation") + '</div>' +
@@ -235,9 +224,9 @@
 
       '<section class="core-ai-create-grid">' +
         '<article class="core-ai-create-card core-ai-brief-card"><div class="core-ai-card-head"><div><span class="eyebrow">01 · BRIEF</span><h3>' + esc(c.briefLabel) + '</h3></div></div>' +
-          '<textarea class="core-ai-brief" data-ai-brief rows="6" placeholder="' + esc(c.briefPlaceholder) + '">' + esc(currentBrief()) + '</textarea><p class="core-ai-help">' + esc(c.briefHint) + '</p>' +
+          '<textarea class="core-ai-brief" data-ai-brief maxlength="8000" aria-label="' + esc(c.briefLabel) + '" rows="6" placeholder="' + esc(c.briefPlaceholder) + '">' + esc(currentBrief()) + '</textarea><p class="core-ai-help">' + esc(c.briefHint) + '</p>' +
         '</article>' +
-        '<article class="core-ai-create-card core-ai-project-card"><div class="core-ai-card-head"><div><span class="eyebrow">PROJECT</span><h3>' + esc(c.sourceTitle) + '</h3></div></div>' +
+        '<article class="core-ai-create-card core-ai-project-card"><div class="core-ai-card-head"><div><span class="eyebrow">' + esc(c.projectEyebrow) + '</span><h3>' + esc(c.sourceTitle) + '</h3></div></div>' +
           '<div class="core-ai-project-source"><span class="core-ai-project-icon">▶</span><div><strong>' + esc(project.source?.name || c.sourceNone) + '</strong><span>' + esc(project.source ? c.sourceReady : c.sourceNone) + '</span></div></div>' +
           '<div class="core-ai-project-metrics"><div><span>' + esc(c.transcript) + '</span><strong>' + esc(transcriptLabel) + '</strong></div><div><span>' + esc(c.scenes) + '</span><strong>' + esc(sceneLabel) + '</strong></div></div>' +
         '</article>' +
@@ -260,12 +249,13 @@
           setupCard("◈", c.localAi, ready.localReady ? c.localAiReady : c.localAiNeeds, ready.localReady ? c.ready : c.foundationOnly, ready.localReady ? "ready" : "foundation", "local-ai", c.manageLocal) +
           setupCard("☁", c.cloudAi, ready.cloudReady ? c.cloudReady : c.cloudNeeds, ready.cloudReady ? c.ready : c.foundationOnly, ready.cloudReady ? "ready" : "foundation", "settings", c.openSettings) +
           setupCard("▦", c.mediaEngine, ready.mediaReady ? c.mediaEngineReady : c.mediaEngineNeeds, ready.mediaReady ? c.ready : c.foundationOnly, ready.mediaReady ? "ready" : "foundation", null, "") +
-          setupCard("✦", c.videoProvider, c.providerBody, c.needsProvider, "blocked", "settings", c.openSettings) +
+          setupCard("✦", c.videoProvider, c.providerBody, provider.label, provider.tone, "settings", c.openSettings) +
         '</div>' +
-        '<div class="core-ai-model-note"><div><span class="eyebrow">MODEL ROUTER</span><strong>' + esc(c.restoredModels) + '</strong><p>' + esc(c.restoredModelsBody) + '</p></div></div>' +
+        '<div class="core-ai-model-note"><div><span class="eyebrow">' + esc(c.strategy) + '</span><strong>' + esc(c.restoredModels) + '</strong><p>' + esc(c.restoredModelsBody) + '</p></div></div>' +
       '</section>' +
 
-      '<section class="core-ai-generation-lock"><div><span class="core-ai-lock-icon">✦</span><div><strong>' + esc(c.generationLocked) + '</strong><p>' + esc(c.generationLockedBody) + '</p></div></div><button type="button" class="button primary" disabled aria-disabled="true">Generate</button></section>' +
+      '<section class="core-ai-generation-lock"><div><span class="core-ai-lock-icon">✦</span><div><strong>' + esc(c.generationLocked) + '</strong><p>' + esc(c.generationLockedBody) + '</p></div></div><button type="button" class="button primary" data-ai-generate ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '>' + esc(c.generate) + '</button></section>' +
+      '<p role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p>' +
       '<section class="core-ai-next-block"><span>' + esc(c.nextBlock) + '</span><p>' + esc(c.nextBlockBody) + '</p></section>' +
     '</div>';
   }
@@ -282,10 +272,16 @@
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
 
+    if (target.closest("[data-ai-generate]")) {
+      generate();
+      return;
+    }
+
     const goalButton = target.closest("[data-ai-goal]");
     if (goalButton instanceof HTMLButtonElement) {
       const goal = String(goalButton.dataset.aiGoal || "");
       if (!VALID_GOALS.has(goal)) return;
+      submissionKey = null;
       localStorage.setItem(GOAL_KEY, goal);
       if (appState()?.page === "ai-create" && typeof render === "function") render();
       return;
@@ -310,7 +306,9 @@
   function onInput(event) {
     const target = event.target;
     if (!(target instanceof HTMLTextAreaElement) || target.dataset.aiBrief === undefined) return;
+    submissionKey = null;
     localStorage.setItem(BRIEF_KEY, target.value.slice(0, 8000));
+    updateGenerationControls();
   }
 
   function install() {
@@ -320,15 +318,20 @@
       installed = true;
       pages["ai-create"] = page;
       if (typeof pageMeta !== "undefined" && pageMeta) pageMeta["ai-create"] = ["nav.aiVideo", "aiVideo.breadcrumb"];
+      refreshReadiness();
+      window.addEventListener("focus", refreshReadiness);
       document.addEventListener("click", onClick);
       document.addEventListener("input", onInput);
       window.addEventListener("viral-ai:core-state-changed", () => {
+        refreshReadiness();
         if (appState()?.page === "ai-create" && typeof render === "function") render();
       });
+      window.addEventListener("viral-ai:project-snapshot-saved", updateGenerationControls);
+      window.addEventListener("viral-ai:project-snapshot-restored", updateGenerationControls);
       document.documentElement.dataset.aiCreateWorkspace = "enabled";
       if (appState()?.page === "ai-create" && typeof render === "function") render();
-    } catch (error) {
-      console.warn("[AiCreate] Could not install workspace", error);
+    } catch {
+      console.warn("[AiCreate] Could not install workspace");
     }
   }
 
