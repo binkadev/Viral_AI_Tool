@@ -43,6 +43,19 @@ function safeAttempts(value, createdAt) {
   }));
 }
 
+function safeUsage(value) {
+  if (!value || typeof value !== "object") return null;
+  const providerCredits = value.providerCredits == null ? null : Number(value.providerCredits);
+  const estimatedUsd = value.estimatedUsd == null ? null : Number(value.estimatedUsd);
+  if (providerCredits != null && !Number.isFinite(providerCredits)) return null;
+  if (estimatedUsd != null && !Number.isFinite(estimatedUsd)) return null;
+  return { providerCredits, estimatedUsd };
+}
+
+function safeAsset(value) {
+  return value && /^[a-f0-9-]{36}\.mp4$/i.test(value.fileName) ? { fileName: value.fileName } : null;
+}
+
 class GenerationStore {
   constructor(root) {
     this.root = root;
@@ -70,6 +83,10 @@ class GenerationStore {
         const request = normalizeRequest(job.request);
         const progress = validProgress(job.progress) ? job.progress : 0;
         const estimate = safeEstimate(job.estimate, model.id, request);
+        const asset = safeAsset(job.asset || job.output);
+        const errorCode = ["GENERATION_FAILED", "RECOVERY_REQUIRED", "ASSET_UNAVAILABLE"].includes(job.errorCode)
+          ? job.errorCode
+          : null;
         return {
           version: 1,
           id: job.id,
@@ -86,9 +103,9 @@ class GenerationStore {
           provider: model.provider,
           providerJobId: typeof job.providerJobId === "string" && job.providerJobId.length <= 200 ? job.providerJobId : null,
           estimate,
-          usage: null,
-          output: null,
-          error: null,
+          usage: safeUsage(job.usage),
+          output: asset ? { fileName: asset.fileName } : null,
+          error: errorCode ? { code: errorCode } : null,
           retryOf: validUuid(job.retryOf) ? job.retryOf : null,
           attempts: safeAttempts(job.attempts, job.createdAt),
           createdAt: job.createdAt,
@@ -96,8 +113,8 @@ class GenerationStore {
           startedAt: Number.isFinite(Date.parse(job.startedAt)) ? job.startedAt : null,
           completedAt: Number.isFinite(Date.parse(job.completedAt)) ? job.completedAt : null,
           cancelledAt: Number.isFinite(Date.parse(job.cancelledAt)) ? job.cancelledAt : null,
-          errorCode: ["GENERATION_FAILED", "RECOVERY_REQUIRED", "ASSET_UNAVAILABLE"].includes(job.errorCode) ? job.errorCode : null,
-          asset: job.asset && /^[a-f0-9-]{36}\.mp4$/i.test(job.asset.fileName) ? { fileName: job.asset.fileName } : null
+          errorCode,
+          asset
         };
       });
     } catch (error) {
