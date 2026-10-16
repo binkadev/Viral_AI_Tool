@@ -18,7 +18,6 @@ assert.doesNotThrow(() => new Function(js), "Creator Home JavaScript must parse.
 
 for (const token of [
   "pages.download = creatorHomePage",
-  'current.page = "download"',
   'typeof addFiles !== "function"',
   "sourceSignature() !== before",
   'current.page = "ai-video"',
@@ -120,3 +119,5 @@ for (const locale of ["vi", "en"]) {
 assert(!/FFmpeg|ffmpeg|stack trace|shell command/.test(js), "Creator Home must not expose implementation details.");
 
 console.log("Creator Home tests passed.");
+
+assert(!js.includes('if (current) current.page = "download"'), "Import workspace must not override the Home startup route.");

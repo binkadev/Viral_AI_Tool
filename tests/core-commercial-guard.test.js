@@ -24,8 +24,7 @@ assert(index.indexOf('src="core-bootstrap.js"') < index.indexOf('src="app.js"'),
 assert(bootstrap.includes("const jobs = Array.isArray(saved.jobs) ? saved.jobs : []"), "Bootstrap must materialize an empty real jobs array on fresh installs.");
 assert(bootstrap.includes("saved.jobs = jobs.filter"), "Bootstrap must sanitize persisted jobs before app.js reads them.");
 assert(bootstrap.includes("prototypeNames.has"), "Bootstrap must remove legacy prototype jobs before first paint.");
-assert(bootstrap.includes("hasProjectSource"), "Startup bootstrap must identify persisted source projects.");
-assert(bootstrap.includes('saved.page = hasProjectSource ? "ai-video" : "download"'), "First render must go directly to the workflow route.");
+assert(bootstrap.includes('saved.page = "home"'), "First render must go to Home.");
 assert(bootstrap.includes('root.dataset.coreFirstPaint = "pending"'), "First paint must be gated until production routing settles.");
 assert(bootstrap.includes('visibility:hidden!important'), "First-paint guard must hide only intermediate page content.");
 assert(bootstrap.includes("requestAnimationFrame(() =>"), "Production page must be revealed on the pre-paint frame.");

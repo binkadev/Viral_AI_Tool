@@ -49,10 +49,8 @@
     return Boolean(job.sourcePath || job.outputPath || job.isRenderOutput);
   });
 
-  // A missing source file is still a real project. Start directly in Core Editor
-  // so the relink/recovery UI is available instead of bouncing through Import.
-  const hasProjectSource = saved.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-  saved.page = hasProjectSource ? "ai-video" : "download";
+  // Launch into Home without changing the persisted project or its recovery state.
+  saved.page = "home";
   localStorage.setItem(KEY, JSON.stringify(saved));
 
   function loadProductionOverride(href, kind) {
@@ -75,8 +73,7 @@
     requestAnimationFrame(() => {
       try {
         if (typeof state !== "undefined" && state) {
-          const project = Array.isArray(state.jobs) && state.jobs.some(job => job?.sourcePath && !job?.isRenderOutput);
-          const target = project ? "ai-video" : "download";
+          const target = "home";
           if (state.page !== target) {
             state.page = target;
             if (typeof render === "function") render();
