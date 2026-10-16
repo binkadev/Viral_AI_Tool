@@ -53,16 +53,7 @@
     requestAnimationFrame(syncStatusChips);
   }
 
-  function restoreStartupRoute() {
-    const current = appState();
-    if (!current || current.page !== "download" || !projectSource()) return;
-    current.page = "ai-video";
-    try { if (typeof save === "function") save(); } catch {}
-    try { if (typeof render === "function") render(); } catch {}
-  }
-
   function start() {
-    restoreStartupRoute();
     syncStatusChips();
     const page = document.getElementById("page");
     if (page) new MutationObserver(queueSync).observe(page, { childList:true, subtree:false });

@@ -18,8 +18,6 @@ for (const required of [
   'local.ready === true',
   '"Đang kiểm tra"',
   '"Cần thiết lập"',
-  'current.page = "ai-video"',
-  'current.page !== "download"',
   "syncStatusChips",
   "subtree:false"
 ]) {
@@ -27,9 +25,7 @@ for (const required of [
 }
 assert(!js.includes("Boolean(current?.cloud?.account)"), "Cached account data must not imply an authenticated Cloud connection.");
 assert(!/projectSource\([\s\S]*?fileState\s*!==\s*["']missing/.test(js), "A missing source is still a project and must remain recoverable in Core Editor.");
-assert(creator.includes('if (current) current.page = "download"'), "Legacy startup override stays detectable until the creator module is refactored.");
 assert(bootstrap.includes('core-creator-home-production.js'), "Bootstrap must load the Creator Home production guard.");
-assert(bootstrap.includes("hasProjectSource"), "Bootstrap must preserve Core Editor for persisted source projects.");
 assert(!js.includes("setInterval("), "Creator Home production guard must not poll.");
 
 console.log("core Creator Home production guard tests passed");

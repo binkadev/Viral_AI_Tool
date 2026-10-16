@@ -346,8 +346,6 @@
   function start() {
     if (!installCreatorPage()) return;
 
-    const current = currentState();
-    if (current) current.page = "download";
     try { if (typeof save === "function") save(); } catch {}
     try { if (typeof render === "function") render(); } catch {}
 

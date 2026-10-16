@@ -112,6 +112,7 @@
 
     navItems.splice(0, navItems.length,
       { group: "core-workflow" },
+      { id: "home", icon: "⌂", label: "startHome.nav" },
       { id: "ai-create", icon: "✦", label: "core-ai-create" },
       { id: "download", icon: "⇩", label: "core-import" },
       { id: "ai-video", icon: "◫", label: "core-editor" },
@@ -188,7 +189,7 @@
     if (!current) return;
     if (current.page === "ai-create") return;
 
-    const startupPage = hasSourceVideo() ? "ai-video" : "download";
+    const startupPage = "home";
     if (current.page === startupPage) return;
     current.page = startupPage;
     persist();

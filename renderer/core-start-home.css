@@ -1,0 +1,26 @@
+﻿/* Home shares the commercial shell and its single #page scroll viewport. */
+#page:has(.start-home){padding:24px clamp(32px,4.5vw,80px)!important}
+.start-home{--ai-surface:var(--surface-solid);--ai-muted:var(--text-soft);inline-size:100%;max-inline-size:1480px;margin-inline:auto;display:grid;gap:32px;padding-block:8px 24px;font-size:13px;line-height:1.5}
+html[data-theme="midnight"] .start-home{--ai-surface:#171920;--ai-muted:#a1a5b5}
+.start-heading{display:flex;align-items:start;justify-content:space-between;gap:24px}
+.start-eyebrow{font-size:11px;letter-spacing:.12em;color:var(--ai-muted);font-weight:650}
+.start-heading h2{font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Arial,sans-serif;font-size:34px;line-height:1.25;letter-spacing:-.035em;margin:8px 0 12px;font-weight:650}
+.start-heading p{margin:0;max-inline-size:680px;color:var(--ai-muted);font-size:14px;line-height:1.7}
+.start-status{display:flex;gap:12px;align-items:center;flex-shrink:0;padding:8px 0;background:none;border:0;color:var(--ai-muted);font:inherit;font-size:12px;cursor:pointer}
+.start-actions{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:16px}
+.start-action{position:relative;display:flex;flex-direction:column;align-items:start;text-align:start;gap:8px;padding:24px;border:1px solid transparent;border-radius:12px;background:var(--ai-surface);color:var(--text);font:inherit;cursor:pointer;transition:background-color .16s,border-color .16s}
+.start-action:first-child{background:color-mix(in srgb,var(--ai-surface) 87%,#9482ed);border-color:#a38beb33}
+.start-action-icon{display:grid;place-items:center;inline-size:40px;block-size:40px;border-radius:12px;background:#9683e51a;color:#ac99ed;font-size:22px;margin-block-end:8px}
+.start-action strong{font-size:17px;font-weight:600}.start-action>span:not(.start-action-icon){font-size:13px;color:var(--ai-muted)}.start-action i{position:absolute;inset:24px 24px auto auto;font-style:normal;color:var(--ai-muted)}
+.start-action:disabled{cursor:default;opacity:.55}.start-action:not(:disabled):hover,.start-project:hover{border-color:#9f8ce966;background:color-mix(in srgb,var(--ai-surface) 92%,#9482ed)}
+.start-section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-block-end:16px}.start-section-head h3{margin:0;font-size:16px;font-weight:600}.start-section-head>span{color:var(--ai-muted);font-size:12px}.start-home .button{font-size:13px;min-block-size:36px}
+.start-project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.start-project{display:flex;align-items:center;gap:16px;min-inline-size:0;padding:12px;text-align:start;border:1px solid transparent;border-radius:12px;background:var(--ai-surface);font:inherit;color:var(--text);cursor:pointer}.start-project>span:last-child{margin-inline-start:auto;color:var(--ai-muted)}
+.start-project-thumb{flex:0 0 112px;aspect-ratio:16/10;display:grid;place-items:center;overflow:hidden;border-radius:8px;background:color-mix(in srgb,var(--ai-surface) 85%,var(--text));color:var(--ai-muted);font-size:11px;text-align:center}.start-project-thumb img{inline-size:100%;block-size:100%;object-fit:cover}.start-project-thumb>span{padding:8px}
+.start-project-copy{display:grid;gap:4px;min-inline-size:0}.start-project-copy strong{overflow-wrap:anywhere;font-size:14px}.start-project-copy small{font-size:11px;letter-spacing:.06em;color:#a997e5}.start-project-copy>span{font-size:12px;color:var(--ai-muted)}
+.start-empty{display:flex;align-items:center;gap:24px;padding:24px;background:var(--ai-surface);border-radius:12px}.start-empty>span{font-size:32px;color:#a997e5}.start-empty strong{font-weight:500;font-size:15px}.start-empty p{margin:4px 0 0;color:var(--ai-muted);font-size:13px}
+.start-home :is(button,a):focus-visible{outline:2px solid #b1a2ff;outline-offset:3px}
+@media(max-height:760px){#page:has(.start-home){padding-block:16px!important}.start-home{gap:24px;padding-block:0 16px}.start-heading h2{font-size:28px;margin-block:4px 8px}.start-action{padding:16px;gap:4px}.start-action-icon{margin-block-end:4px;inline-size:32px;block-size:32px}.start-section-head{margin-block-end:12px}.start-empty{padding:16px}.start-home .core-ai-example-art{block-size:56px}}
+@media(max-width:1150px){.start-heading{flex-wrap:wrap;gap:8px}.start-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.start-project-grid{grid-template-columns:1fr}.start-action strong{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.start-home *{transition:none!important}}
+html[data-motion="reduced"] .start-home *{transition:none!important}
