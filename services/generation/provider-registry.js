@@ -1,35 +1,81 @@
 "use strict";
+
 const { getModel, listModels } = require("./model-catalog");
 const { failure } = require("./generation-job");
-// Native-only adapter contract: readiness(), preflight(context), start(context),
-// reconcile(context), cancel(context). Context contains the durable jobId as the
-// provider idempotency key, normalized request, modelId and a private outputDirectory.
-// start/reconcile return {status: completed|failed|cancelled|pending, fileName?}.
-// cancel returns {confirmed: true} only when remote work has stopped AND local
-// partial outputs have been cleaned. No credentials, raw responses or remote IDs
-// cross this contract. Adapters privately own auth and remote job mappings.
-// preflight must check quota, connectivity and relevant resources before submission.
+const { validateProviderAdapter, normalizeProviderStatus } = require("./provider-contract");
+
 class ProviderRegistry {
-  constructor() { this.adapters = new Map(); }
-  register(adapter) {
-    if (!adapter || !["readiness", "preflight", "start", "reconcile", "cancel"].every(k => typeof adapter[k] === "function") ||
-        !Array.isArray(adapter.modelIds) || !adapter.modelIds.length || adapter.modelIds.some(id => getModel(id)?.provider !== adapter.id) ||
-        this.adapters.has(adapter.id)) throw failure("INVALID_PROVIDER");
-    this.adapters.set(adapter.id, adapter);
+  constructor() {
+    this.adapters = new Map();
   }
-  get(id) { return this.adapters.get(id); }
-  async readiness() {
-    const availability = Object.fromEntries(listModels().map(m => [m.provider, false]));
-    const modelIds = [];
+
+  register(adapter) {
+    validateProviderAdapter(adapter);
+    if (
+      adapter.modelIds.some(id => getModel(id)?.provider !== adapter.id) ||
+      this.adapters.has(adapter.id)
+    ) {
+      throw failure("INVALID_PROVIDER");
+    }
+    this.adapters.set(adapter.id, adapter);
+    return adapter.id;
+  }
+
+  registerProvider(adapter) {
+    return this.register(adapter);
+  }
+
+  get(id) {
+    return this.adapters.get(id);
+  }
+
+  getProvider(id) {
+    return this.get(id);
+  }
+
+  hasProvider(id) {
+    return this.adapters.has(id);
+  }
+
+  listProviders() {
+    return Array.from(this.adapters.values()).map(adapter => ({
+      id: adapter.id,
+      modelIds: [...adapter.modelIds]
+    }));
+  }
+
+  async getProviderStatuses() {
+    const statuses = [];
     for (const [id, adapter] of this.adapters) {
       try {
-        if ((await adapter.readiness())?.ready === true) {
-          availability[id] = true;
-          modelIds.push(...adapter.modelIds);
-        }
-      } catch { /* Fail closed; never expose adapter errors. */ }
+        statuses.push(normalizeProviderStatus(await adapter.readiness(), id));
+      } catch {
+        statuses.push({ id, state: "error", ready: false });
+      }
     }
-    return { ready: modelIds.length > 0, availability, modelIds };
+    return statuses;
+  }
+
+  async readiness() {
+    const availability = Object.fromEntries(listModels().map(model => [model.provider, false]));
+    const modelIds = [];
+    const providers = await this.getProviderStatuses();
+
+    for (const status of providers) {
+      if (!status.ready) continue;
+      const adapter = this.adapters.get(status.id);
+      availability[status.id] = true;
+      modelIds.push(...adapter.modelIds);
+    }
+
+    return {
+      ready: modelIds.length > 0,
+      state: modelIds.length > 0 ? "ready" : (providers.length ? "unavailable" : "not_configured"),
+      availability,
+      modelIds,
+      providers
+    };
   }
 }
+
 module.exports = { ProviderRegistry };
