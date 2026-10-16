@@ -20,17 +20,23 @@ assert.doesNotThrow(() => new Function(js), "Create with AI workspace must parse
 for (const required of [
   'pages["ai-create"] = page',
   'data-generation-execution="runtime"',
+  'data-generation-status="',
   'data-ai-generate',
   'getGenerationStatus',
-  '!generationReady || submitting',
+  'function canGenerate()',
+  'ViralCoreProjectPersistence?.snapshot?.()',
+  'projectId: identity.projectId',
+  'sceneId: identity.sceneId',
   'const GOAL_KEY = "viral-ai-generation-goal"',
   'const BRIEF_KEY = "viral-ai-generation-brief"',
   'window.ViralCoreScenePlanModel',
   'window.desktopAPI?.searchMedia',
   'type === "local-ai"',
   'route("settings")',
-  'window.I18N.messages[locale()].aiCreate',
+  'window.I18N.messages[locale()].aiCreate'
 ]) assert(js.includes(required), "Create with AI workspace missing: " + required);
+
+assert(!js.includes('projectId: appState()?.scenePlan?.projectId || "workspace"'), "AI Create must not collapse all jobs into a shared workspace project id.");
 
 for (const required of [
   '{ id: "ai-create", icon: "✦", label: "core-ai-create" }',
