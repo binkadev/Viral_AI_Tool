@@ -19,16 +19,17 @@ assert.doesNotThrow(() => new Function(js), "Create with AI workspace must parse
 
 for (const required of [
   'pages["ai-create"] = page',
-  'data-generation-execution="not-wired"',
-  'disabled aria-disabled="true">Generate',
+  'data-generation-execution="runtime"',
+  'data-ai-generate',
+  'getGenerationStatus',
+  '!generationReady || submitting',
   'const GOAL_KEY = "viral-ai-generation-goal"',
   'const BRIEF_KEY = "viral-ai-generation-brief"',
   'window.ViralCoreScenePlanModel',
   'window.desktopAPI?.searchMedia',
   'type === "local-ai"',
   'route("settings")',
-  'Provider execution is intentionally not faked',
-  'Phần thực thi provider không được giả lập'
+  'window.I18N.messages[locale()].aiCreate',
 ]) assert(js.includes(required), "Create with AI workspace missing: " + required);
 
 for (const required of [

@@ -2,6 +2,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
+  getGenerationStatus: () => ipcRenderer.invoke('generation:status'),
+  submitGeneration: request => ipcRenderer.invoke('generation:submit', request),
+  listGenerationJobs: projectId => ipcRenderer.invoke('generation:list', projectId),
+  getGenerationJob: id => ipcRenderer.invoke('generation:get', id),
+  cancelGeneration: id => ipcRenderer.invoke('generation:cancel', id),
+  recoverGeneration: id => ipcRenderer.invoke('generation:recover', id),
+  retryGeneration: request => ipcRenderer.invoke('generation:retry', request),
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:maximize-toggle'),
   close: () => ipcRenderer.invoke('window:close'),

@@ -1,6 +1,103 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      aiCreate: {
+
+          generationError: "Chưa thể xác nhận yêu cầu. Dự án của bạn vẫn an toàn. Kiểm tra kết nối rồi thử lại.",
+
+          submitted: "Đã lưu yêu cầu tạo video.",
+
+          projectEyebrow: "DỰ ÁN",
+
+          briefEyebrow: "01 · Ý TƯỞNG",
+
+          generate: "Tạo video",
+
+          eyebrow: "TẠO BẰNG AI · Khu làm việc",
+          title: "Từ một ý tưởng thành quy trình video hoàn chỉnh",
+
+          body: "Lên cảnh, tìm tư liệu, thêm giọng đọc và xuất video trong cùng một dự án. Bạn có thể tạo video AI khi dịch vụ tạo video đã được kết nối.",
+
+          foundation: "Khu tạo video AI",
+
+          sceneReady: "Sẵn sàng lên cảnh",
+
+          mediaReady: "Sẵn sàng tìm tư liệu",
+
+          briefLabel: "Bạn muốn tạo video gì?",
+          briefPlaceholder: "Ví dụ: video dọc 30 giây về động vật hoang dã, kẻ đi săn trở thành con mồi, hook nhanh, lời dẫn tiếng Việt...",
+
+          briefHint: "Mô tả được lưu trên máy này. Chọn Tạo video để gửi mô tả đến dịch vụ đã kết nối.",
+          sourceTitle: "Ngữ cảnh dự án hiện tại",
+          sourceNone: "Chưa có video nguồn",
+          sourceReady: "Đã có video nguồn",
+
+          transcript: "Lời thoại",
+          scenes: "Cảnh",
+
+          strategy: "Ưu tiên tạo video",
+
+          strategyDesc: "Chọn cách cân bằng chi phí và chất lượng cho các lựa chọn đang có.",
+          economy: "Tiết kiệm",
+
+          economyBody: "Ưu tiên lựa chọn có chi phí thấp.",
+          balanced: "Cân bằng",
+
+          balancedBody: "Cân bằng tốc độ, chất lượng và chi phí dự kiến.",
+          quality: "Chất lượng",
+          qualityBody: "Ưu tiên tuyến chất lượng cao khi khả dụng.",
+
+          workflow: "Quy trình làm video",
+
+          workflowDesc: "Từ ý tưởng đến video trong cùng một dự án.",
+
+          steps: ["Ý tưởng và kịch bản", "Lên cảnh", "Tìm tư liệu", "Tạo tư liệu còn thiếu", "Giọng đọc và phụ đề", "Ghép trong Studio", "Xuất và đăng"],
+          ready: "Sẵn sàng",
+
+          foundationOnly: "Đang chuẩn bị",
+
+          needsProvider: "Cần kết nối",
+          existing: "Đang dùng thật",
+
+          setup: "Thiết lập AI",
+
+          setupDesc: "Kiểm tra công cụ nào đã sẵn sàng cho khu làm việc này.",
+          localAi: "AI trên máy",
+
+          localAiReady: "Nhận diện lời nói đã sẵn sàng trên máy này.",
+
+          localAiNeeds: "Cần chuẩn bị nhận diện lời nói để dùng trên máy này.",
+          manageLocal: "Quản lý AI trên máy",
+          cloudAi: "Viral AI Cloud",
+          cloudReady: "Tài khoản Cloud đã được kết nối.",
+          cloudNeeds: "Tài khoản Cloud chưa được kết nối.",
+          openSettings: "Mở cài đặt",
+
+          mediaEngine: "Tìm tư liệu",
+
+          mediaEngineReady: "Tìm tư liệu phù hợp cho từng cảnh.",
+          mediaEngineNeeds: "Tìm tư liệu chưa khả dụng trong bản này.",
+          videoProvider: "Tạo video bằng AI",
+
+          providerBody: "Ứng dụng kiểm tra dịch vụ tạo video trước khi cho phép tạo. Chỉ đăng nhập tài khoản chưa đủ để bật tính năng này.",
+
+          restoredModels: "Chọn theo nhu cầu của bạn",
+
+          restoredModelsBody: "Lựa chọn tạo video phụ thuộc vào dịch vụ đã kết nối và thiết lập của bạn.",
+          importVideo: "Nhập video",
+          openStudio: "Mở Studio",
+
+          generationLocked: "Tạo video bằng AI",
+
+          generationLockedBody: "Bạn có thể chọn Tạo video khi dịch vụ đã sẵn sàng và đã nhập mô tả.",
+
+          nextBlock: "Dự án luôn được giữ lại",
+
+          nextBlockBody: "Bạn vẫn có thể dùng danh sách cảnh và tư liệu trong khi chuẩn bị tạo video.",
+          noTranscript: "Chưa sẵn sàng",
+          countSegments: "{count} đoạn",
+          countScenes: "{count} cảnh"
+        },
       mediaWorkbench: {
         assets: "Tài nguyên", project: "Dự án", source: "Video nguồn", transcript: "Transcript", noTranscript: "Cần nhận diện lời nói trước", segments: "{count} đoạn",
         media: "Tư liệu", video: "Video", images: "Hình ảnh", audio: "Âm thanh", discover: "Khám phá", findMedia: "Tìm tư liệu", findMediaHint: "Tìm video và hình ảnh phù hợp với nội dung", generateAi: "Tạo bằng AI", generateAiHint: "Tạo tư liệu mới bằng AI", generated: "Đã tạo", aiVideo: "Video AI", aiImages: "Ảnh AI", aiAudio: "Âm thanh AI", favorites: "Yêu thích", saved: "Đã lưu", items: "{count} mục", collapse: "Thu gọn tài nguyên", expand: "Mở tài nguyên",
@@ -985,6 +1082,95 @@ window.I18N = (() => {
     },
 
     en: {
+      aiCreate: {
+          generationError: "The request could not be confirmed. Your project is safe. Check the connection and try again.",
+          submitted: "Your generation request has been saved.",
+          projectEyebrow: "PROJECT",
+          briefEyebrow: "01 · BRIEF",
+          generate: "Generate",
+
+          eyebrow: "AI CREATE · Production workspace",
+          title: "Turn an idea into a production-ready video workflow",
+
+          body: "Plan scenes, find media, add narration and export in one project. AI generation is available when a generation service is connected.",
+
+          foundation: "Generation workspace",
+
+          sceneReady: "Scene planning ready",
+
+          mediaReady: "Media search ready",
+          briefLabel: "What do you want to create?",
+          briefPlaceholder: "Example: A 30-second vertical wildlife short where the predator becomes the prey, fast hook, Vietnamese narration...",
+
+          briefHint: "Your brief is saved on this device. Choose Generate to send it to a connected generation service.",
+          sourceTitle: "Current project context",
+          sourceNone: "No source video",
+          sourceReady: "Source video ready",
+
+          transcript: "Transcript",
+          scenes: "Scenes",
+
+          strategy: "Generation preference",
+
+          strategyDesc: "Choose how to balance cost and quality for available generation options.",
+          economy: "Economy",
+
+          economyBody: "Prefer lower-cost generation options.",
+          balanced: "Balanced",
+          balancedBody: "Balance speed, quality and estimated cost.",
+          quality: "Quality",
+          qualityBody: "Prefer higher-quality routes when available.",
+          workflow: "Production pipeline",
+
+          workflowDesc: "Move from your idea to a video in the same project.",
+
+          steps: ["Brief & script", "Plan scenes", "Find media", "Generate missing media", "Voice & captions", "Compose in Studio", "Export & publish"],
+          ready: "Ready",
+
+          foundationOnly: "In preparation",
+
+          needsProvider: "Connection needed",
+          existing: "Existing workflow",
+
+          setup: "AI setup",
+
+          setupDesc: "Check which tools are available for this workspace.",
+          localAi: "Local AI",
+
+          localAiReady: "Speech recognition is ready on this device.",
+
+          localAiNeeds: "Prepare speech recognition to use it on this device.",
+          manageLocal: "Manage local AI",
+          cloudAi: "Viral AI Cloud",
+          cloudReady: "Cloud account is connected.",
+          cloudNeeds: "Cloud account is not connected yet.",
+          openSettings: "Open settings",
+
+          mediaEngine: "Media search",
+
+          mediaEngineReady: "Find media for your scenes.",
+          mediaEngineNeeds: "Media search is not available in this build.",
+          videoProvider: "AI video generation",
+
+          providerBody: "Generation availability is checked with the connected service. An account connection alone does not enable generation.",
+
+          restoredModels: "Choose based on your needs",
+
+          restoredModelsBody: "Generation options depend on connected services and the settings you choose.",
+          importVideo: "Import video",
+          openStudio: "Open Studio",
+
+          generationLocked: "AI video generation",
+
+          generationLockedBody: "Generate becomes available when a generation service is ready and your brief is filled in.",
+
+          nextBlock: "Your project stays with you",
+
+          nextBlockBody: "Scene plans and media remain available while generation is being prepared.",
+          noTranscript: "Not ready",
+          countSegments: "{count} segments",
+          countScenes: "{count} scenes"
+        },
       mediaWorkbench: {
         assets: "Assets", project: "Project", source: "Source video", transcript: "Transcript", noTranscript: "Run speech recognition first", segments: "{count} segments",
         media: "Media", video: "Video", images: "Images", audio: "Audio", discover: "Discover", findMedia: "Find media", findMediaHint: "Find video and images that match your content", generateAi: "Generate with AI", generateAiHint: "Create new media with AI", generated: "Generated", aiVideo: "AI video", aiImages: "AI images", aiAudio: "AI audio", favorites: "Favorites", saved: "Saved", items: "{count} items", collapse: "Collapse assets", expand: "Expand assets",
