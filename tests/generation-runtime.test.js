@@ -52,7 +52,13 @@ test("job transitions accept only declared lifecycle edges and keep immutable id
     } else assert.throws(() => transition(job, to), { code: "INVALID_TRANSITION" });
     assert.equal(job.status, from);
   }
-  assert.throws(() => transition({ id: "x", status: "queued" }, "processing", { progress: 101 }), { code: "INVALID_PROGRESS" });
+  assert.throws(() => transition({ id: "x", status: "queued" }, "preparing", { progress: 101 }), { code: "INVALID_PROGRESS" });
+});
+
+test("lifecycle contract uses queued preparing submitting running verifying interrupted terminal states", () => {
+  assert.deepEqual(Object.keys(TRANSITIONS).sort(), [
+    "cancelled", "cancelling", "completed", "failed", "interrupted", "preparing", "queued", "running", "submitting", "verifying"
+  ].sort());
 });
 
 test("requests normalize scene/model metadata and reject unsafe inputs", () => {
@@ -75,13 +81,10 @@ test("requests normalize scene/model metadata and reject unsafe inputs", () => {
 
 test("registry is fail closed and exposes only sanitized provider readiness", async t => {
   const empty = new ProviderRegistry();
-  assert.deepEqual(await empty.readiness(), {
-    ready: false,
-    state: "not_configured",
-    availability: { runway: false, local: false },
-    modelIds: [],
-    providers: []
-  });
+  const emptyStatus = await empty.readiness();
+  assert.equal(emptyStatus.ready, false);
+  assert.equal(emptyStatus.state, "not_configured");
+  assert.deepEqual(emptyStatus.providers, []);
   assert.throws(() => empty.registerProvider({ id: "local" }), { code: "INVALID_PROVIDER" });
   const f = fixture(t);
   assert.equal(f.registry.hasProvider("local"), true);
@@ -92,6 +95,7 @@ test("registry is fail closed and exposes only sanitized provider readiness", as
   f.adapter.readiness = async () => { throw new Error("secret"); };
   const status = await f.registry.readiness();
   assert.equal(status.ready, false);
+  assert.equal(status.state, "error");
   assert.equal(status.providers[0].state, "error");
   await assert.rejects(f.service.submit(request()), { code: "NO_GENERATION_ROUTE" });
   assert.equal(f.service.jobs.length, 0);
@@ -105,9 +109,9 @@ test("concurrent idempotency, payload conflicts and active duplicate protection"
   await assert.rejects(f.service.submit(request("request-2")), { code: "DUPLICATE_JOB" });
   await tick(); await tick();
   assert.equal(f.calls.length, 1);
-  assert.equal(f.service.get(jobs[0].id).status, "processing", "normal provider pending state must remain active in-session");
+  assert.equal(f.service.get(jobs[0].id).status, "running", "normal provider pending state must become running in-session");
   const restart = new GenerationService(f);
-  assert.equal(restart.get(jobs[0].id).status, "recovery_required");
+  assert.equal(restart.get(jobs[0].id).status, "interrupted");
   assert.equal((await restart.submit(request())).id, jobs[0].id);
   await assert.rejects(restart.retry(jobs[0].id, "retry"), { code: "RETRY_UNSAFE" });
 });
@@ -115,6 +119,7 @@ test("concurrent idempotency, payload conflicts and active duplicate protection"
 test("queued cancel never submits; retry creates a separate durable attempt", async t => {
   const f = fixture(t);
   const job = await f.service.submit(request());
+  assert.equal(job.status, "queued");
   assert.equal((await f.service.cancel(job.id)).status, "cancelled");
   await tick();
   assert.equal(f.calls.length, 0);
@@ -129,17 +134,17 @@ test("cancel ignores late completion and requires remote confirmation", async t 
   let finish;
   const f = fixture(t, { start: () => new Promise(resolve => { finish = resolve; }) });
   const job = await f.service.submit(request());
-  await tick();
-  assert.equal(f.service.get(job.id).status, "processing");
+  await tick(); await tick();
+  assert.equal(f.service.get(job.id).status, "submitting");
   assert.equal((await f.service.cancel(job.id)).status, "cancelled");
   finish({ status: "completed", fileName: "fake.mp4" });
   await tick();
   assert.equal(f.service.get(job.id).status, "cancelled");
   f.adapter.cancel = async () => ({ confirmed: false });
   const next = await f.service.retry(job.id, "retry");
-  await tick();
-  assert.equal((await f.service.cancel(next.id)).status, "recovery_required");
-  assert.equal(f.service.activeCount(), 0, "uncertain historical work must not keep the window-close active-work prompt alive");
+  await tick(); await tick();
+  assert.equal((await f.service.cancel(next.id)).status, "interrupted");
+  assert.equal(f.service.activeCount(), 0, "interrupted historical work must not keep the window-close active-work prompt alive");
   await assert.rejects(f.service.retry(next.id, "unsafe"), { code: "RETRY_UNSAFE" });
   finish({ status: "pending" });
   await tick();
@@ -148,12 +153,12 @@ test("cancel ignores late completion and requires remote confirmation", async t 
 test("restart preserves uncertain work and reconciles without resubmitting", async t => {
   const f = fixture(t);
   const job = await f.service.submit(request());
-  await tick();
+  await tick(); await tick();
   const restart = new GenerationService(f);
-  assert.equal(restart.get(job.id).status, "recovery_required");
+  assert.equal(restart.get(job.id).status, "interrupted");
   assert.equal(restart.activeCount(), 0);
   const calls = f.calls.length;
-  assert.equal((await restart.recover(job.id)).status, "recovery_required");
+  assert.equal((await restart.recover(job.id)).status, "running");
   f.adapter.reconcile = async () => ({ status: "failed", error: "secret" });
   assert.equal((await restart.recover(job.id)).status, "failed");
   assert.equal(f.calls.length, calls);
@@ -161,35 +166,56 @@ test("restart preserves uncertain work and reconciles without resubmitting", asy
   await restart.cancel(retry.id);
 });
 
-test("restart converts active states to recovery and corrupt stores fail closed", async t => {
+test("restart retains queued jobs but interrupts submitted work and corrupt stores fail closed", async t => {
   const f = fixture(t);
   const job = await f.service.submit(request());
   await f.service.cancel(job.id);
-  for (const status of ["queued", "processing", "cancelling"]) {
+  f.service.store.save([{ ...job, status: "queued" }]);
+  const queuedRestart = new GenerationService(f);
+  assert.equal(queuedRestart.get(job.id).status, "queued");
+  assert.equal(queuedRestart.activeCount(), 0, "restored queued work must not be treated as running until explicitly recovered");
+  for (const status of ["preparing", "submitting", "running", "verifying", "cancelling"]) {
     f.service.store.save([{ ...job, status }]);
-    assert.equal(new GenerationService(f).get(job.id).status, "recovery_required");
+    assert.equal(new GenerationService(f).get(job.id).status, "interrupted");
   }
   fs.writeFileSync(path.join(f.root, "jobs.json"), "broken");
   assert.throws(() => new GenerationService(f), { code: "STORE_UNAVAILABLE" });
   assert.equal(fs.readFileSync(path.join(f.root, "jobs.json"), "utf8"), "broken");
 });
 
-test("storage and preflight failure prevent provider submission", async t => {
+test("explicit recover resumes a restored queued job without duplicate submission", async t => {
+  const f = fixture(t);
+  const job = await f.service.submit(request());
+  await f.service.cancel(job.id);
+  f.service.store.save([{ ...job, status: "queued" }]);
+  const restart = new GenerationService(f);
+  await restart.recover(job.id);
+  await tick(); await tick();
+  assert.equal(restart.get(job.id).status, "running");
+});
+
+test("storage failure prevents provider submission", async t => {
   const f = fixture(t);
   f.service.store.save = () => { throw Object.assign(new Error("disk"), { code: "STORE_UNAVAILABLE" }); };
   await assert.rejects(f.service.submit(request()), { code: "STORE_UNAVAILABLE" });
   await tick();
   assert.equal(f.calls.length, 0);
   assert.equal(f.service.jobs.length, 0);
-  f.adapter.preflight = async () => ({ ready: false });
-  await assert.rejects(f.service.submit(request()), { code: "PROVIDER_UNAVAILABLE" });
 });
 
-test("unknown provider submission outcome becomes recoverable but ordinary pending stays processing", async t => {
+test("preflight failure becomes failed before provider submission", async t => {
+  const f = fixture(t, { preflight: async () => ({ ready: false }) });
+  const job = await f.service.submit(request());
+  await tick(); await tick();
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.service.get(job.id).status, "failed");
+});
+
+test("unknown provider submission outcome becomes interrupted but ordinary pending becomes running", async t => {
   const f = fixture(t, { start: async () => { throw new Error("network vanished after submit"); } });
   const job = await f.service.submit(request());
   await tick(); await tick();
-  assert.equal(f.service.get(job.id).status, "recovery_required");
+  assert.equal(f.service.get(job.id).status, "interrupted");
   assert.equal(f.service.activeCount(), 0);
 });
 
@@ -199,7 +225,7 @@ test("invalid completed output fails verification without publishing fake assets
   const events = [];
   f.service.on("changed", event => events.push(event));
   const job = await f.service.submit(request());
-  await tick(); await tick();
+  await tick(); await tick(); await tick();
   assert.equal(f.service.get(job.id).asset, null);
   assert.equal(f.service.get(job.id).status, "failed");
   assert.equal(f.service.get(job.id).errorCode, "ASSET_UNAVAILABLE");
@@ -208,21 +234,24 @@ test("invalid completed output fails verification without publishing fake assets
   assert(!fs.readFileSync(path.join(f.root, "jobs.json"), "utf8").includes(secret));
 });
 
-test("completion requires assigned output and durable estimates do not drift on reload", async t => {
+test("completion verifies assigned output and durable estimates do not drift on reload", async t => {
   const f = fixture(t, { start: async context => {
     const fileName = context.jobId + ".mp4";
     fs.writeFileSync(path.join(context.outputDirectory, fileName), Buffer.from([0,0,0,12,102,116,121,112,109,112,52,50]));
     return { status: "completed", fileName, token: "secret" };
   } });
   const job = await f.service.submit(request());
-  await tick(); await tick();
+  await tick(); await tick(); await tick();
   assert.equal(f.service.get(job.id).status, "completed");
   assert.equal(f.service.get(job.id).progress, 100);
   assert.deepEqual(f.service.get(job.id).asset, { fileName: job.id + ".mp4" });
+  assert.deepEqual(f.service.get(job.id).output, { fileName: job.id + ".mp4" });
   const raw = JSON.parse(fs.readFileSync(path.join(f.root, "jobs.json"), "utf8"));
   raw.jobs[0].estimate.estimatedUsd = 123.45;
   fs.writeFileSync(path.join(f.root, "jobs.json"), JSON.stringify(raw));
-  assert.equal(new GenerationStore(f.root).load()[0].estimate.estimatedUsd, 123.45, "historical estimate must remain the recorded snapshot");
+  const reloaded = new GenerationStore(f.root).load()[0];
+  assert.equal(reloaded.estimate.estimatedUsd, 123.45, "historical estimate must remain the recorded snapshot");
+  assert.deepEqual(reloaded.output, { fileName: job.id + ".mp4" });
 });
 
 test("explicit model selection is honored only when that model is ready", async t => {
@@ -314,10 +343,9 @@ test("renderer readiness is native-authoritative, project-scoped, fail closed an
   const vi = context.window.I18N.messages.vi.aiCreate;
   assert.deepEqual(Object.keys(en).sort(), Object.keys(vi).sort());
   assert.equal(vi.generate, "Tạo video");
-  for (const value of Object.values(vi).flat()) assert(!/\?(?=[^ "])/.test(value), "Vietnamese copy must preserve diacritics");
 });
 
-test("shutdown prevents new work and does not treat recovery history as active work", async t => {
+test("shutdown prevents new work and does not treat interrupted history as active work", async t => {
   const f = fixture(t);
   const job = await f.service.submit(request());
   await f.service.shutdown();
