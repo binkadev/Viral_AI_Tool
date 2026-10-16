@@ -118,7 +118,8 @@
         mode: "text-to-video",
         prompt: currentBrief(),
         goal: selectedGoal(),
-        aspectRatio: "9:16"
+        aspectRatio: selectedOption("aspect", ["9:16", "16:9", "1:1"], "9:16"),
+        durationSeconds: Number(selectedOption("duration", ["5", "10"], "5"))
       });
       feedback = result?.ok ? copy().submitted : copy().generationError;
     } catch {
@@ -186,78 +187,34 @@
     return { label: c.needsProvider, tone: "blocked" };
   }
 
+  function selectedOption(name, values, fallback) {
+    const value = localStorage.getItem('viral-ai-generation-' + name);
+    return values.includes(value) ? value : fallback;
+  }
+
+  function setting(name, label, options, value) {
+    return '<label class="core-ai-setting"><span>' + esc(label) + '</span><select data-ai-setting="' + name + '">' + options.map(([id, title]) => '<option value="' + id + '"' + (id === value ? ' selected' : '') + '>' + esc(title) + '</option>').join('') + '</select></label>';
+  }
+
   function page() {
     const c = copy();
-    const goal = selectedGoal();
-    const project = projectContext();
-    const ready = readiness();
     const provider = providerStatus(c);
-    const transcriptLabel = project.transcriptCount > 0 ? format(c.countSegments, { count: project.transcriptCount }) : c.noTranscript;
-    const sceneLabel = project.sceneCount > 0 ? format(c.countScenes, { count: project.sceneCount }) : c.noTranscript;
-
-    const workflowTones = [
-      "foundation",
-      ready.sceneReady ? "ready" : "foundation",
-      ready.mediaReady ? "ready" : "foundation",
-      generationReady ? "ready" : "blocked",
-      "ready",
-      "ready",
-      "foundation"
-    ];
-    const workflowStatuses = [
-      c.foundationOnly,
-      ready.sceneReady ? c.ready : c.foundationOnly,
-      ready.mediaReady ? c.ready : c.foundationOnly,
-      generationReady ? c.ready : c.needsProvider,
-      c.existing,
-      c.existing,
-      c.foundationOnly
-    ];
-
+    const project = projectContext();
+    const samples = c.examples;
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
-      '<section class="core-ai-create-hero">' +
-        '<div class="core-ai-create-hero-copy"><span class="core-ai-kicker">' + esc(c.eyebrow) + '</span><h2>' + esc(c.title) + '</h2><p>' + esc(c.body) + '</p>' +
-          '<div class="core-ai-hero-status">' + statusPill(c.foundation, "ready") + statusPill(c.sceneReady, ready.sceneReady ? "ready" : "foundation") + statusPill(c.mediaReady, ready.mediaReady ? "ready" : "foundation") + '</div>' +
-        '</div>' +
-        '<div class="core-ai-create-hero-actions"><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + '</button><button type="button" class="button primary" data-ai-route="ai-video">' + esc(c.openStudio) + '</button></div>' +
-      '</section>' +
-
-      '<section class="core-ai-create-grid">' +
-        '<article class="core-ai-create-card core-ai-brief-card"><div class="core-ai-card-head"><div><span class="eyebrow">01 · BRIEF</span><h3>' + esc(c.briefLabel) + '</h3></div></div>' +
-          '<textarea class="core-ai-brief" data-ai-brief maxlength="8000" aria-label="' + esc(c.briefLabel) + '" rows="6" placeholder="' + esc(c.briefPlaceholder) + '">' + esc(currentBrief()) + '</textarea><p class="core-ai-help">' + esc(c.briefHint) + '</p>' +
-        '</article>' +
-        '<article class="core-ai-create-card core-ai-project-card"><div class="core-ai-card-head"><div><span class="eyebrow">' + esc(c.projectEyebrow) + '</span><h3>' + esc(c.sourceTitle) + '</h3></div></div>' +
-          '<div class="core-ai-project-source"><span class="core-ai-project-icon">▶</span><div><strong>' + esc(project.source?.name || c.sourceNone) + '</strong><span>' + esc(project.source ? c.sourceReady : c.sourceNone) + '</span></div></div>' +
-          '<div class="core-ai-project-metrics"><div><span>' + esc(c.transcript) + '</span><strong>' + esc(transcriptLabel) + '</strong></div><div><span>' + esc(c.scenes) + '</span><strong>' + esc(sceneLabel) + '</strong></div></div>' +
-        '</article>' +
-      '</section>' +
-
-      '<section class="core-ai-create-section"><div class="section-head"><div><h3>' + esc(c.strategy) + '</h3><p>' + esc(c.strategyDesc) + '</p></div></div>' +
-        '<div class="core-ai-strategy-grid">' +
-          strategyCard("economy", c.economy, c.economyBody, goal === "economy") +
-          strategyCard("balanced", c.balanced, c.balancedBody, goal === "balanced") +
-          strategyCard("quality", c.quality, c.qualityBody, goal === "quality") +
-        '</div>' +
-      '</section>' +
-
-      '<section class="core-ai-create-section"><div class="section-head"><div><h3>' + esc(c.workflow) + '</h3><p>' + esc(c.workflowDesc) + '</p></div></div>' +
-        '<div class="core-ai-pipeline">' + c.steps.map((step, index) => '<div class="core-ai-pipeline-step"><span class="core-ai-step-index">' + String(index + 1).padStart(2, "0") + '</span><div><strong>' + esc(step) + '</strong>' + statusPill(workflowStatuses[index], workflowTones[index]) + '</div></div>').join("") + '</div>' +
-      '</section>' +
-
-      '<section class="core-ai-create-section"><div class="section-head"><div><h3>' + esc(c.setup) + '</h3><p>' + esc(c.setupDesc) + '</p></div></div>' +
-        '<div class="core-ai-setup-grid">' +
-          setupCard("◈", c.localAi, ready.localReady ? c.localAiReady : c.localAiNeeds, ready.localReady ? c.ready : c.foundationOnly, ready.localReady ? "ready" : "foundation", "local-ai", c.manageLocal) +
-          setupCard("☁", c.cloudAi, ready.cloudReady ? c.cloudReady : c.cloudNeeds, ready.cloudReady ? c.ready : c.foundationOnly, ready.cloudReady ? "ready" : "foundation", "settings", c.openSettings) +
-          setupCard("▦", c.mediaEngine, ready.mediaReady ? c.mediaEngineReady : c.mediaEngineNeeds, ready.mediaReady ? c.ready : c.foundationOnly, ready.mediaReady ? "ready" : "foundation", null, "") +
-          setupCard("✦", c.videoProvider, c.providerBody, provider.label, provider.tone, "settings", c.openSettings) +
-        '</div>' +
-        '<div class="core-ai-model-note"><div><span class="eyebrow">' + esc(c.strategy) + '</span><strong>' + esc(c.restoredModels) + '</strong><p>' + esc(c.restoredModelsBody) + '</p></div></div>' +
-      '</section>' +
-
-      '<section class="core-ai-generation-lock"><div><span class="core-ai-lock-icon">✦</span><div><strong>' + esc(c.generationLocked) + '</strong><p>' + esc(c.generationLockedBody) + '</p></div></div><button type="button" class="button primary" data-ai-generate ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '>' + esc(c.generate) + '</button></section>' +
-      '<p role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p>' +
-      '<section class="core-ai-next-block"><span>' + esc(c.nextBlock) + '</span><p>' + esc(c.nextBlockBody) + '</p></section>' +
-    '</div>';
+      '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></header>' +
+      '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
+      '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
+      '<div class="core-ai-controls core-ai-strategy-grid">' +
+      setting('aspect', c.aspectLabel, [['9:16', c.portrait], ['16:9', c.landscape], ['1:1', c.square]], selectedOption('aspect', ['9:16','16:9','1:1'], '9:16')) +
+      setting('duration', c.durationLabel, [['5', c.fiveSeconds], ['10', c.tenSeconds]], selectedOption('duration', ['5','10'], '5')) +
+      setting('goal', c.qualityLabel, [['economy', c.economy], ['balanced', c.balanced], ['quality', c.quality]], selectedGoal()) +
+      '<div class="core-ai-provider"><span>' + esc(c.providerLabel) + '</span><button class="core-ai-provider-button" type="button" data-ai-action="settings">' + esc(c.automaticProvider) + '<span aria-hidden="true">↗</span></button></div></div>' +
+      '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note">' + statusPill(provider.label, provider.tone) + '<span>' + esc(generationReady ? c.briefHint : c.connectionHint) + '</span></div><button type="button" class="button primary" data-ai-generate ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '><span aria-hidden="true">✦</span> ' + esc(c.generate) + '</button></div>' +
+      '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
+      '<section class="core-ai-examples" aria-labelledby="ai-examples-title"><div class="core-ai-section-heading"><h3 id="ai-examples-title">' + esc(c.examplesTitle) + '</h3><span>' + esc(c.examplesHint) + '</span></div><div class="core-ai-example-row">' + samples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '"><span class="core-ai-example-art art-' + i + '" aria-hidden="true"><i></i><b></b><em></em></span><span class="core-ai-example-copy"><strong>' + esc(sample.title) + '</strong><span>' + esc(sample.detail) + '</span></span><span class="core-ai-example-arrow" aria-hidden="true">↗</span></button>').join('') + '</div></section>' +
+      '<section class="core-ai-recent"><div class="core-ai-section-heading"><h3>' + esc(c.recentTitle) + '</h3><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">↗</span></button></div>' +
+      (project.source ? '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong>' + esc(project.source.name) + '</strong><span>' + esc(c.currentProject) + '</span></div><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' ↗</button></div>' : '<div class="core-ai-recent-empty"><span aria-hidden="true">↗</span><div><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div></div>') + '</section></div>';
   }
 
   function route(pageId) {
@@ -274,6 +231,18 @@
 
     if (target.closest("[data-ai-generate]")) {
       generate();
+      return;
+    }
+
+    const example = target.closest('[data-ai-example]');
+    if (example) {
+      const sample = copy().examples[Number(example.dataset.aiExample)];
+      const input = document.querySelector('[data-ai-brief]');
+      if (sample && input) {
+        input.value = sample.prompt;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      }
       return;
     }
 
@@ -322,6 +291,16 @@
       window.addEventListener("focus", refreshReadiness);
       document.addEventListener("click", onClick);
       document.addEventListener("input", onInput);
+      document.addEventListener('change', event => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement) || !target.dataset.aiSetting) return;
+        const name = target.dataset.aiSetting;
+        const choices = { aspect: ['9:16', '16:9', '1:1'], duration: ['5', '10'], goal: [...VALID_GOALS] };
+        if (!choices[name]?.includes(target.value)) return;
+        localStorage.setItem('viral-ai-generation-' + name, target.value);
+        submissionKey = null;
+        updateGenerationControls();
+      });
       window.addEventListener("viral-ai:core-state-changed", () => {
         refreshReadiness();
         if (appState()?.page === "ai-create" && typeof render === "function") render();

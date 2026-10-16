@@ -2,6 +2,29 @@ window.I18N = (() => {
   const messages = {
     vi: {
       aiCreate: {
+composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
+        composerTitle: "Ý tưởng của bạn. Thước phim tiếp theo.",
+        composerBody: "Bắt đầu bằng một mô tả, biến điều bạn hình dung thành video.",
+        composerPlaceholder: "Mô tả chủ thể, bối cảnh, ánh sáng và chuyển động máy quay…",
+        aspectLabel: "Khung hình",
+        portrait: "9:16 · Dọc",
+        landscape: "16:9 · Ngang",
+        square: "1:1 · Vuông",
+        durationLabel: "Thời lượng",
+        fiveSeconds: "5 giây",
+        tenSeconds: "10 giây",
+        qualityLabel: "Chất lượng",
+        providerLabel: "Dịch vụ AI",
+        automaticProvider: "Tự động",
+        connectionHint: "Chưa thể tạo video. Mở cài đặt để kết nối dịch vụ AI.",
+        examplesTitle: "Bắt đầu từ một ý tưởng",
+        examplesHint: "Chọn mẫu để điền mô tả",
+        recentTitle: "Dự án gần đây",
+        currentProject: "Dự án hiện tại trên máy này",
+        noProjects: "Thước phim đầu tiên đang chờ bạn",
+        noProjectsHint: "Dự án có video nguồn sẽ xuất hiện ở đây. Nhập video để bắt đầu.",
+        examples: [{"title":"Sản phẩm nổi bật","detail":"Ánh sáng studio · Cận cảnh","prompt":"Cận cảnh chai nước hoa trên khối đá, ánh sáng studio dịu từ bên trái, nền tím trầm, máy quay xoay chậm quanh sản phẩm."},{"title":"Một chuyến đi xa","detail":"Thiên nhiên · Điện ảnh","prompt":"Những lớp núi xanh trong sương sớm, mặt trời vừa ló phía chân trời, máy quay tiến chậm qua thung lũng, phong cách điện ảnh."},{"title":"Nhịp sống thành phố","detail":"Đường phố · Chuyển động","prompt":"Con phố về đêm sau cơn mưa, ánh đèn xanh tím phản chiếu trên mặt đường, máy quay di chuyển sát mặt đất, không khí điện ảnh."}],
+
 
           generationError: "Chưa thể xác nhận yêu cầu. Dự án của bạn vẫn an toàn. Kiểm tra kết nối rồi thử lại.",
 
@@ -1083,6 +1106,29 @@ window.I18N = (() => {
 
     en: {
       aiCreate: {
+        composerEyebrow: "YOUR CREATIVE SPACE",
+        composerTitle: "Your idea. The next great frame.",
+        composerBody: "Start with a description. Turn what you imagine into video.",
+        composerPlaceholder: "Describe your subject, setting, lighting and camera movement…",
+        aspectLabel: "Aspect ratio",
+        portrait: "9:16 · Portrait",
+        landscape: "16:9 · Landscape",
+        square: "1:1 · Square",
+        durationLabel: "Duration",
+        fiveSeconds: "5 seconds",
+        tenSeconds: "10 seconds",
+        qualityLabel: "Quality",
+        providerLabel: "AI provider",
+        automaticProvider: "Automatic",
+        connectionHint: "Video creation is unavailable. Open settings to connect an AI service.",
+        examplesTitle: "Start with an idea",
+        examplesHint: "Choose an example to fill the prompt",
+        recentTitle: "Recent projects",
+        currentProject: "Current project on this device",
+        noProjects: "Your first film starts here",
+        noProjectsHint: "Projects with a source video appear here. Import a video to get started.",
+        examples: [{"title":"Product spotlight","detail":"Studio lighting · Close-up","prompt":"Close-up of a perfume bottle on a stone plinth, soft studio light from the left, muted purple background, camera slowly orbiting the product."},{"title":"Somewhere far away","detail":"Nature · Cinematic","prompt":"Layers of blue mountains in morning mist, sun rising above the horizon, camera slowly moving forward through the valley, cinematic style."},{"title":"City after hours","detail":"Street life · Motion","prompt":"A city street at night after the rain, blue and purple lights reflecting on the road, camera moving close to the ground, cinematic atmosphere."}],
+
           generationError: "The request could not be confirmed. Your project is safe. Check the connection and try again.",
           submitted: "Your generation request has been saved.",
           projectEyebrow: "PROJECT",
