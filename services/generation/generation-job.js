@@ -3,12 +3,13 @@
 const { randomUUID } = require("crypto");
 
 const TRANSITIONS = Object.freeze({
-  idle: ["validating"],
-  validating: ["queued", "failed"],
-  queued: ["processing", "cancelling", "recovery_required"],
-  processing: ["completed", "failed", "cancelling", "recovery_required"],
-  cancelling: ["cancelled", "recovery_required"],
-  recovery_required: ["completed", "failed", "cancelling", "cancelled"],
+  queued: ["preparing", "cancelling", "interrupted"],
+  preparing: ["submitting", "failed", "cancelling", "interrupted"],
+  submitting: ["running", "verifying", "failed", "cancelling", "interrupted"],
+  running: ["verifying", "failed", "cancelling", "interrupted"],
+  verifying: ["completed", "failed", "cancelling", "interrupted"],
+  cancelling: ["cancelled", "interrupted"],
+  interrupted: ["running", "verifying", "failed", "cancelling", "cancelled"],
   completed: [],
   failed: [],
   cancelled: []
@@ -64,7 +65,7 @@ function createJob(request, route, retryOf = null) {
     idempotencyKey: request.idempotencyKey,
     kind: request.kind || "video",
     mode: request.mode,
-    status: "idle",
+    status: "queued",
     progress: 0,
     request,
     modelId: route.model.id,
@@ -75,7 +76,7 @@ function createJob(request, route, retryOf = null) {
     output: null,
     error: null,
     retryOf,
-    attempts: [{ number: 1, status: "created", createdAt: now, startedAt: null, completedAt: null }],
+    attempts: [{ number: 1, status: "queued", createdAt: now, startedAt: null, completedAt: null }],
     createdAt: now,
     updatedAt: now,
     startedAt: null,
