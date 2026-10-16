@@ -25,18 +25,42 @@
     })[char]);
   }
 
-  function copy() { return window.I18N.messages[locale()].aiCreate; }
+  function copy() {
+    return window.I18N.messages[locale()].aiCreate;
+  }
 
   let generationReady = false;
+  let generationState = "checking";
   let readinessPending = null;
   let submitting = false;
   let submissionKey = null;
   let feedback = "";
 
+  function projectIdentity() {
+    try {
+      const snapshot = window.ViralCoreProjectPersistence?.snapshot?.();
+      const projectId = typeof snapshot?.projectId === "string" ? snapshot.projectId : null;
+      const selectedSceneId = typeof snapshot?.scenePlan?.selectedSceneId === "string"
+        ? snapshot.scenePlan.selectedSceneId
+        : null;
+      return { projectId, sceneId: selectedSceneId };
+    } catch {
+      return { projectId: null, sceneId: null };
+    }
+  }
+
+  function currentBrief() {
+    return String(localStorage.getItem(BRIEF_KEY) || "");
+  }
+
+  function canGenerate() {
+    return generationReady && !submitting && Boolean(projectIdentity().projectId) && Boolean(currentBrief().trim());
+  }
+
   function updateGenerationControls() {
     const button = document.querySelector("[data-ai-generate]");
     if (button) {
-      button.disabled = !generationReady || submitting || !currentBrief().trim();
+      button.disabled = !canGenerate();
       button.setAttribute("aria-disabled", String(button.disabled));
     }
     const status = document.querySelector("[data-ai-generation-feedback]");
@@ -46,30 +70,63 @@
   function refreshReadiness() {
     if (readinessPending) return readinessPending;
     generationReady = false;
+    generationState = "checking";
     updateGenerationControls();
-    readinessPending = Promise.resolve().then(() => window.desktopAPI?.getGenerationStatus?.())
-      .then(result => { generationReady = result?.ok === true && result.value?.ready === true; })
-      .catch(() => { generationReady = false; })
+    readinessPending = Promise.resolve()
+      .then(() => window.desktopAPI?.getGenerationStatus?.())
+      .then(result => {
+        if (result?.ok !== true) {
+          generationState = "unavailable";
+          generationReady = false;
+          return;
+        }
+        generationState = ["ready", "not_configured", "unavailable", "error"].includes(result.value?.state)
+          ? result.value.state
+          : (result.value?.ready === true ? "ready" : "not_configured");
+        generationReady = result.value?.ready === true && generationState === "ready";
+      })
+      .catch(() => {
+        generationReady = false;
+        generationState = "error";
+      })
       .finally(() => {
         readinessPending = null;
         updateGenerationControls();
+        if (appState()?.page === "ai-create" && typeof render === "function") render();
       });
     return readinessPending;
   }
 
   async function generate() {
-    if (submitting || !generationReady || !currentBrief().trim()) return;
+    const identity = projectIdentity();
+    if (submitting || !generationReady || !identity.projectId || !currentBrief().trim()) return;
     submitting = true;
     updateGenerationControls();
-    submissionKey ||= crypto.randomUUID();
+    submissionKey ||= window.crypto?.randomUUID?.();
+    if (!submissionKey) {
+      feedback = copy().generationError;
+      submitting = false;
+      updateGenerationControls();
+      return;
+    }
     try {
       const result = await window.desktopAPI.submitGeneration({
-        projectId: appState()?.scenePlan?.projectId || "workspace",
-        idempotencyKey: submissionKey, prompt: currentBrief(), goal: selectedGoal()
+        projectId: identity.projectId,
+        sceneId: identity.sceneId,
+        idempotencyKey: submissionKey,
+        kind: "video",
+        mode: "text-to-video",
+        prompt: currentBrief(),
+        goal: selectedGoal(),
+        aspectRatio: "9:16"
       });
       feedback = result?.ok ? copy().submitted : copy().generationError;
-    } catch { feedback = copy().generationError; }
-    finally { submitting = false; updateGenerationControls(); }
+    } catch {
+      feedback = copy().generationError;
+    } finally {
+      submitting = false;
+      updateGenerationControls();
+    }
   }
 
   function format(template, values = {}) {
@@ -79,10 +136,6 @@
   function selectedGoal() {
     const saved = String(localStorage.getItem(GOAL_KEY) || "balanced");
     return VALID_GOALS.has(saved) ? saved : "balanced";
-  }
-
-  function currentBrief() {
-    return String(localStorage.getItem(BRIEF_KEY) || "");
   }
 
   function projectContext() {
@@ -127,11 +180,18 @@
     '</article>';
   }
 
+  function providerStatus(c) {
+    if (generationState === "ready") return { label: c.ready, tone: "ready" };
+    if (generationState === "checking") return { label: c.foundationOnly, tone: "foundation" };
+    return { label: c.needsProvider, tone: "blocked" };
+  }
+
   function page() {
     const c = copy();
     const goal = selectedGoal();
     const project = projectContext();
     const ready = readiness();
+    const provider = providerStatus(c);
     const transcriptLabel = project.transcriptCount > 0 ? format(c.countSegments, { count: project.transcriptCount }) : c.noTranscript;
     const sceneLabel = project.sceneCount > 0 ? format(c.countScenes, { count: project.sceneCount }) : c.noTranscript;
 
@@ -139,7 +199,7 @@
       "foundation",
       ready.sceneReady ? "ready" : "foundation",
       ready.mediaReady ? "ready" : "foundation",
-      "blocked",
+      generationReady ? "ready" : "blocked",
       "ready",
       "ready",
       "foundation"
@@ -148,13 +208,13 @@
       c.foundationOnly,
       ready.sceneReady ? c.ready : c.foundationOnly,
       ready.mediaReady ? c.ready : c.foundationOnly,
-      c.needsProvider,
+      generationReady ? c.ready : c.needsProvider,
       c.existing,
       c.existing,
       c.foundationOnly
     ];
 
-    return '<div class="core-ai-create-workspace" data-generation-execution="runtime">' +
+    return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
       '<section class="core-ai-create-hero">' +
         '<div class="core-ai-create-hero-copy"><span class="core-ai-kicker">' + esc(c.eyebrow) + '</span><h2>' + esc(c.title) + '</h2><p>' + esc(c.body) + '</p>' +
           '<div class="core-ai-hero-status">' + statusPill(c.foundation, "ready") + statusPill(c.sceneReady, ready.sceneReady ? "ready" : "foundation") + statusPill(c.mediaReady, ready.mediaReady ? "ready" : "foundation") + '</div>' +
@@ -189,12 +249,12 @@
           setupCard("◈", c.localAi, ready.localReady ? c.localAiReady : c.localAiNeeds, ready.localReady ? c.ready : c.foundationOnly, ready.localReady ? "ready" : "foundation", "local-ai", c.manageLocal) +
           setupCard("☁", c.cloudAi, ready.cloudReady ? c.cloudReady : c.cloudNeeds, ready.cloudReady ? c.ready : c.foundationOnly, ready.cloudReady ? "ready" : "foundation", "settings", c.openSettings) +
           setupCard("▦", c.mediaEngine, ready.mediaReady ? c.mediaEngineReady : c.mediaEngineNeeds, ready.mediaReady ? c.ready : c.foundationOnly, ready.mediaReady ? "ready" : "foundation", null, "") +
-          setupCard("✦", c.videoProvider, c.providerBody, c.needsProvider, "blocked", "settings", c.openSettings) +
+          setupCard("✦", c.videoProvider, c.providerBody, provider.label, provider.tone, "settings", c.openSettings) +
         '</div>' +
         '<div class="core-ai-model-note"><div><span class="eyebrow">' + esc(c.strategy) + '</span><strong>' + esc(c.restoredModels) + '</strong><p>' + esc(c.restoredModelsBody) + '</p></div></div>' +
       '</section>' +
 
-      '<section class="core-ai-generation-lock"><div><span class="core-ai-lock-icon">✦</span><div><strong>' + esc(c.generationLocked) + '</strong><p>' + esc(c.generationLockedBody) + '</p></div></div><button type="button" class="button primary" data-ai-generate ' + ((!generationReady || submitting || !currentBrief().trim()) ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '>' + esc(c.generate) + '</button></section>' +
+      '<section class="core-ai-generation-lock"><div><span class="core-ai-lock-icon">✦</span><div><strong>' + esc(c.generationLocked) + '</strong><p>' + esc(c.generationLockedBody) + '</p></div></div><button type="button" class="button primary" data-ai-generate ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '>' + esc(c.generate) + '</button></section>' +
       '<p role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p>' +
       '<section class="core-ai-next-block"><span>' + esc(c.nextBlock) + '</span><p>' + esc(c.nextBlockBody) + '</p></section>' +
     '</div>';
@@ -212,7 +272,10 @@
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
 
-    if (target.closest("[data-ai-generate]")) { generate(); return; }
+    if (target.closest("[data-ai-generate]")) {
+      generate();
+      return;
+    }
 
     const goalButton = target.closest("[data-ai-goal]");
     if (goalButton instanceof HTMLButtonElement) {
@@ -263,9 +326,11 @@
         refreshReadiness();
         if (appState()?.page === "ai-create" && typeof render === "function") render();
       });
+      window.addEventListener("viral-ai:project-snapshot-saved", updateGenerationControls);
+      window.addEventListener("viral-ai:project-snapshot-restored", updateGenerationControls);
       document.documentElement.dataset.aiCreateWorkspace = "enabled";
       if (appState()?.page === "ai-create" && typeof render === "function") render();
-    } catch (error) {
+    } catch {
       console.warn("[AiCreate] Could not install workspace");
     }
   }
