@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
   getGenerationStatus: () => ipcRenderer.invoke('generation:status'),
+  listGenerationProviders: () => ipcRenderer.invoke('generation:providers'),
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),
   listGenerationJobs: projectId => ipcRenderer.invoke('generation:list', projectId),
   getGenerationJob: id => ipcRenderer.invoke('generation:get', id),
