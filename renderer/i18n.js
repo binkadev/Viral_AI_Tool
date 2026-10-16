@@ -2,6 +2,7 @@ window.I18N = (() => {
   const messages = {
     vi: {
       startHome: {
+"activityDetails": "Chi tiết hoạt động",
   "nav": "Trang chủ",
   "breadcrumb": "Khu làm việc / Trang chủ",
   "eyebrow": "KHÔNG GIAN SÁNG TẠO",
@@ -1136,6 +1137,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
     en: {
       startHome: {
+"activityDetails": "Activity details",
   "nav": "Home",
   "breadcrumb": "Workspace / Home",
   "eyebrow": "YOUR CREATIVE WORKSPACE",
