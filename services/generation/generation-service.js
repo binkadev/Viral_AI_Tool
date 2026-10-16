@@ -192,6 +192,10 @@ class GenerationService extends EventEmitter {
     let job = this.get(id);
     if (!["submitting", "running", "verifying", "interrupted"].includes(job.status)) return job;
 
+    // Once a job is interrupted, an old in-flight submit callback must not revive
+    // it. Only explicit provider reconciliation is authoritative after interruption.
+    if (job.status === "interrupted" && options.reconciled !== true) return job;
+
     if (options.uncertain === true) {
       if (job.status === "interrupted") return job;
       return this.commit(transition(job, "interrupted", {
@@ -290,7 +294,7 @@ class GenerationService extends EventEmitter {
       if (TERMINAL.has(current.status) || current.status === "cancelling") {
         return { job: current, remoteRequired: false };
       }
-      if (![...BLOCKING].includes(current.status)) return { job: current, remoteRequired: false };
+      if (!BLOCKING.has(current.status)) return { job: current, remoteRequired: false };
 
       const remoteRequired = ["submitting", "running", "verifying", "interrupted"].includes(current.status);
       const cancelling = this.commit(transition(current, "cancelling"));
@@ -367,7 +371,7 @@ class GenerationService extends EventEmitter {
     if (initial.status === "interrupted" && (result?.status === "pending" || result?.status === "running")) {
       this.runtimeActive.add(id);
     }
-    return this.serial(() => this.finish(id, result));
+    return this.serial(() => this.finish(id, result, { reconciled: true }));
   }
 
   async retry(id, idempotencyKey) {
