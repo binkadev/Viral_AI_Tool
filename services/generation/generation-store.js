@@ -7,6 +7,14 @@ const { normalizeRequest } = require("./generation-request");
 const { getModel } = require("./model-catalog");
 const { estimateGenerationCost } = require("./cost-estimator");
 
+const SAFE_ERROR_CODES = new Set([
+  "GENERATION_FAILED",
+  "RECOVERY_REQUIRED",
+  "ASSET_UNAVAILABLE",
+  "RESOURCE_UNAVAILABLE",
+  "PROVIDER_UNAVAILABLE"
+]);
+
 function validUuid(value) {
   return typeof value === "string" && /^[a-f0-9-]{36}$/i.test(value);
 }
@@ -32,7 +40,7 @@ function safeEstimate(value, modelId, request) {
 
 function safeAttempts(value, createdAt) {
   if (!Array.isArray(value) || value.length === 0) {
-    return [{ number: 1, status: "created", createdAt, startedAt: null, completedAt: null }];
+    return [{ number: 1, status: "queued", createdAt, startedAt: null, completedAt: null }];
   }
   return value.slice(0, 32).map((attempt, index) => ({
     number: Number.isInteger(attempt?.number) && attempt.number > 0 ? attempt.number : index + 1,
@@ -84,9 +92,7 @@ class GenerationStore {
         const progress = validProgress(job.progress) ? job.progress : 0;
         const estimate = safeEstimate(job.estimate, model.id, request);
         const asset = safeAsset(job.asset || job.output);
-        const errorCode = ["GENERATION_FAILED", "RECOVERY_REQUIRED", "ASSET_UNAVAILABLE"].includes(job.errorCode)
-          ? job.errorCode
-          : null;
+        const errorCode = SAFE_ERROR_CODES.has(job.errorCode) ? job.errorCode : null;
         return {
           version: 1,
           id: job.id,
