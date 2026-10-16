@@ -68,9 +68,15 @@ class ProviderRegistry {
       modelIds.push(...adapter.modelIds);
     }
 
+    let state = "not_configured";
+    if (modelIds.length > 0) state = "ready";
+    else if (providers.some(provider => provider.state === "error")) state = "error";
+    else if (providers.some(provider => provider.state === "unavailable")) state = "unavailable";
+    else if (providers.length && providers.every(provider => provider.state === "not_configured")) state = "not_configured";
+
     return {
       ready: modelIds.length > 0,
-      state: modelIds.length > 0 ? "ready" : (providers.length ? "unavailable" : "not_configured"),
+      state,
       availability,
       modelIds,
       providers
