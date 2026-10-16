@@ -56,7 +56,8 @@ function chooseModel(request = {}, options = {}) {
   const allow = Array.isArray(options.allow) ? new Set(options.allow) : null;
   const deny = new Set(Array.isArray(options.deny) ? options.deny : []);
   const ceiling = Number(options.maxEstimatedUsd);
-  const candidates = ROUTE_ORDER[goal] || ROUTE_ORDER.balanced;
+  const explicitModelId = typeof request.modelId === "string" && request.modelId ? request.modelId : null;
+  const candidates = explicitModelId ? [explicitModelId] : (ROUTE_ORDER[goal] || ROUTE_ORDER.balanced);
 
   for (const id of candidates) {
     if (allow && !allow.has(id)) continue;
@@ -80,9 +81,11 @@ function chooseModel(request = {}, options = {}) {
       goal,
       model,
       estimate,
-      reason: model.provider === "local"
-        ? "local-first"
-        : goal + "-priority"
+      reason: explicitModelId
+        ? "explicit-model"
+        : model.provider === "local"
+          ? "local-first"
+          : goal + "-priority"
     };
   }
 
