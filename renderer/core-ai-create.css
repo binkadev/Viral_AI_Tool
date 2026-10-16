@@ -1,7 +1,7 @@
 ﻿/* Create with AI: one focused composer, with examples and real project context. */
-.core-ai-create-workspace{--ai-surface:var(--surface-solid,#151821);--ai-muted:var(--text-soft,#a0a4b6);display:grid;gap:24px;max-inline-size:1120px;margin-inline:auto;padding-block:8px 24px;font-size:13px;line-height:1.5}
+.core-ai-create-workspace{--ai-surface:var(--surface-solid,#151821);--ai-muted:var(--text-soft,#a0a4b6);display:grid;gap:24px;inline-size:100%;min-inline-size:0;max-inline-size:1480px;margin-inline:auto;padding-block:8px 24px;font-size:13px;line-height:1.5}
 html[data-theme="midnight"] .core-ai-create-workspace{--ai-surface:#171920;--ai-muted:#a1a5b5;color:#f1f1f6}
-#page:has(.core-ai-create-workspace){padding:24px 40px!important;min-height:0!important;background:none!important}
+#page:has(.core-ai-create-workspace){padding:24px clamp(32px, 4.5vw, 80px)!important;min-height:0!important;background:none!important}
 .core-ai-create-hero{display:flex;align-items:center;justify-content:space-between;gap:24px}
 .core-ai-kicker{display:block;color:var(--ai-muted);font-size:11px;font-weight:650;letter-spacing:.12em;margin-block-end:8px}
 .core-ai-create-hero h2{font-family:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Arial,sans-serif;font-size:30px;line-height:1.25;font-weight:650;letter-spacing:-.035em;margin:0}
@@ -11,7 +11,7 @@ html[data-theme="midnight"] .core-ai-create-workspace{--ai-surface:#171920;--ai-
 .core-ai-composer:focus-within{border-color:#8b83d6}
 .core-ai-prompt-label{display:flex;gap:8px;align-items:center;font-size:15px;font-weight:600}
 .core-ai-prompt-label>span{color:#a89bf2;font-size:20px}
-.core-ai-brief{display:block;box-sizing:border-box;inline-size:100%;min-block-size:112px;max-block-size:320px;resize:vertical;padding:16px 0;margin:0;border:0!important;border-radius:4px;background:transparent!important;color:inherit;font:inherit;font-size:16px;line-height:1.65;box-shadow:none!important}
+.core-ai-brief{display:block;box-sizing:border-box;inline-size:100%;min-block-size:112px;resize:vertical;padding:16px 0;margin:0;border:0!important;border-radius:4px;background:transparent!important;color:inherit;font:inherit;font-size:16px;line-height:1.65;box-shadow:none!important}
 .core-ai-brief::placeholder{color:var(--ai-muted);opacity:.8}
 .core-ai-brief:focus{outline:none}
 .core-ai-brief:focus-visible{outline:2px solid #9a90ee;outline-offset:4px}
@@ -54,7 +54,7 @@ html[data-theme="midnight"] .core-ai-setting select,html[data-theme="midnight"] 
 html[data-motion="reduced"] .core-ai-create-workspace *{transition:none!important}
 @media(max-height:760px){
   .core-ai-create-workspace{gap:12px}
-  .core-ai-kicker{display:none}
+  .core-ai-kicker{margin-block-end:4px}
   .core-ai-create-hero p{margin-block-start:4px}
   .core-ai-brief{block-size:80px;min-block-size:80px;padding-block:8px}
   .core-ai-controls.core-ai-strategy-grid{padding-block:0 8px}

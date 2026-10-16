@@ -199,3 +199,74 @@ html.core-left-collapsed .sidebar{inline-size:70px!important;padding-inline:8px!
 html[data-theme="midnight"] #nav{align-content:start}
 html[data-theme="midnight"] .nav-group{padding-block:0!important}
 @media(max-height:760px){html[data-theme="midnight"] .credit-card{padding:8px!important}html[data-theme="midnight"] .brand{margin-block-end:8px;padding-block-end:8px!important}html[data-theme="midnight"] .workspace{padding:8px!important;min-height:48px}html[data-theme="midnight"] .nav-group{margin-block:12px 4px}html[data-theme="midnight"] .sidebar-bottom{padding-block-start:8px}.sidebar-bottom .bar{margin-block:4px}}
+
+/* Desktop layout foundation: chrome never participates in workspace scrolling.
+   Keep #page as the single page scroller; editor lists/timelines retain their
+   intentional local scrolling. Logical sizing also supports UI text expansion. */
+html, body {
+  inline-size:100%;
+  block-size:100%;
+  min-inline-size:0;
+  min-block-size:0;
+  margin:0;
+  overflow:hidden;
+}
+html .titlebar {
+  position:fixed;
+  inset:0 0 auto;
+  block-size:var(--titlebar);
+}
+html .shell {
+  position:fixed;
+  inset:var(--titlebar) 0 0;
+  inline-size:100%;
+  block-size:auto;
+  height:auto;
+  margin:0;
+  min-inline-size:0;
+  min-block-size:0;
+  overflow:hidden;
+}
+html .sidebar {
+  min-block-size:0;
+  overflow:hidden;
+}
+html .sidebar > :not(#nav) { flex-shrink:0; }
+html .sidebar #nav {
+  min-block-size:0;
+  overflow-y:auto;
+  scrollbar-width:thin;
+}
+html .main {
+  display:flex;
+  flex-direction:column;
+  flex:1 1 0;
+  min-inline-size:0;
+  min-block-size:0;
+  block-size:100%;
+  overflow:hidden;
+}
+html .main > .topbar {
+  position:relative;
+  inset:auto;
+  flex:0 0 auto;
+  min-inline-size:0;
+}
+html .main > #page {
+  flex:1 1 0;
+  align-self:stretch;
+  inline-size:100%;
+  max-inline-size:none;
+  min-inline-size:0;
+  min-block-size:0!important;
+  block-size:auto;
+  max-block-size:none;
+  margin:0;
+  box-sizing:border-box;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-gutter:stable;
+  scrollbar-width:auto;
+  scrollbar-color:color-mix(in srgb,var(--text) 28%,transparent) transparent;
+  scroll-padding-block:16px;
+}
