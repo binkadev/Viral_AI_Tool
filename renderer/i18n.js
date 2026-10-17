@@ -1,6 +1,32 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      videoProviders: {
+  "title": "Dịch vụ video AI",
+  "description": "Quản lý kết nối để tạo video trong khu làm việc.",
+  "muse": "Muse",
+  "museDescription": "Tạo video AI từ nội dung cảnh.",
+  "enable": "Bật Muse",
+  "check": "Kiểm tra kết nối",
+  "foundationNote": "Kết nối Muse chưa được triển khai. Bật tùy chọn này chỉ lưu lựa chọn của bạn; hiện chưa thể đăng nhập hoặc tạo video bằng Muse. Kiểm tra kết nối chỉ kiểm tra cấu hình hiện tại, chưa liên hệ với Muse.",
+  "checkError": "Chưa kiểm tra hoặc lưu được kết nối. Chưa thể xác nhận thay đổi. Kiểm tra lại trước khi tiếp tục.",
+  "states": {
+    "unconfigured": "Chưa kết nối",
+    "not_configured": "Chưa kết nối",
+    "checking": "Đang kiểm tra…",
+    "ready": "Sẵn sàng",
+    "authentication_required": "Cần đăng nhập",
+    "unavailable": "Không thể kết nối",
+    "error": "Lỗi cấu hình"
+  },
+  "messages": {
+    "NOT_CONFIGURED": "Muse chưa được cấu hình. Bật Muse để lưu lựa chọn sử dụng dịch vụ.",
+    "DISABLED": "Muse đang tắt. Bật Muse khi bạn muốn sử dụng dịch vụ.",
+    "AUTHENTICATION_NOT_CONNECTED": "Chưa kết nối đăng nhập. Muse chưa sẵn sàng để tạo video.",
+    "CONFIG_ERROR": "Không đọc được cấu hình Muse. Chưa thể tạo video. Kiểm tra lại hoặc lưu lại lựa chọn bật Muse.",
+    "CONNECTION_UNAVAILABLE": "Chưa thể kết nối Muse. Chưa thể tạo video. Hãy kiểm tra lại sau."
+  }
+},
       generationProgress: {
         "workflowCopy": [
   {
@@ -1352,6 +1378,32 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      videoProviders: {
+  "title": "AI Video Providers",
+  "description": "Manage connections for video creation in your workspace.",
+  "muse": "Muse",
+  "museDescription": "Create AI video from scene content.",
+  "enable": "Enable Muse",
+  "check": "Check connection",
+  "foundationNote": "Muse connectivity is not implemented yet. Enabling this option only saves your preference; signing in and generating video with Muse are not available. Check connection examines the current configuration only and does not contact Muse.",
+  "checkError": "The connection could not be checked or saved. Changes could not be confirmed. Check again before continuing.",
+  "states": {
+    "unconfigured": "Not connected",
+    "not_configured": "Not connected",
+    "checking": "Checking…",
+    "ready": "Ready",
+    "authentication_required": "Authentication required",
+    "unavailable": "Unavailable",
+    "error": "Configuration error"
+  },
+  "messages": {
+    "NOT_CONFIGURED": "Muse is not configured. Enable Muse to save your preference.",
+    "DISABLED": "Muse is disabled. Enable Muse when you want to use the service.",
+    "AUTHENTICATION_NOT_CONNECTED": "Authentication not connected. Muse is not ready to generate video.",
+    "CONFIG_ERROR": "Muse configuration could not be read. Video generation is unavailable. Check again or save the enable preference again.",
+    "CONNECTION_UNAVAILABLE": "Muse cannot be connected. Video generation is unavailable. Check again later."
+  }
+},
       generationProgress: {
         "workflowCopy": [
   {

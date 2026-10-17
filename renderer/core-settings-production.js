@@ -16,7 +16,7 @@
         // The legacy 1080p/4K selector is not connected to render configuration.
         html = html.replace(/<div style="margin-top:14px"><label class="label">[\s\S]*?<select class="select"><option>1080p<\/option><option>4K<\/option><\/select><\/div>/g, "");
 
-        return html;
+        return (window.ViralVideoProviderSettings?.html() || "") + html;
       };
 
       production.__coreProductionSettings = true;

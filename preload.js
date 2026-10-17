@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     return () => ipcRenderer.removeListener('generation:changed', listener);
   },
   getGenerationStatus: () => ipcRenderer.invoke('generation:status'),
+  checkGenerationProvider: id => ipcRenderer.invoke('generation:provider-check', id),
+  configureGenerationProvider: config => ipcRenderer.invoke('generation:provider-configure', config),
   listGenerationProviders: () => ipcRenderer.invoke('generation:providers'),
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),
   listGenerationJobs: projectId => ipcRenderer.invoke('generation:list', projectId),
