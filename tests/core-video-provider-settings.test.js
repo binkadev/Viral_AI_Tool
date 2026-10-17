@@ -41,3 +41,20 @@ test("Settings uses native status, prevents duplicate checks, handles failures, 
   const markup=context.window.ViralVideoProviderSettings.html();
   assert(markup.includes('aria-labelledby="video-providers-title"'));
 });
+test("ready status does not render the not-configured fallback message",async()=>{
+  const root={innerHTML:"",setAttribute(){},querySelector:()=>null};
+  const context={
+    state:{locale:"en",page:"settings"},
+    document:{readyState:"complete",activeElement:null,getElementById:()=>root,addEventListener(){}},
+    window:{addEventListener(){},desktopAPI:{
+      checkGenerationProvider:async()=>({ok:true,value:{id:"muse",enabled:true,state:"ready",ready:true}}),
+      configureGenerationProvider:async()=>({ok:false,errorCode:"UNAVAILABLE"})
+    }}
+  };
+  vm.runInNewContext(fs.readFileSync("renderer/i18n.js","utf8"),context);
+  vm.runInNewContext(fs.readFileSync("renderer/core-video-provider-settings.js","utf8"),context);
+  await tick();
+  const copy=context.window.I18N.messages.en.videoProviders;
+  assert(root.innerHTML.includes(copy.states.ready));
+  assert(!root.innerHTML.includes(copy.messages.NOT_CONFIGURED));
+});
