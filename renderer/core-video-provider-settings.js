@@ -6,11 +6,12 @@
   function content() {
     const c = copy();
     const current = pending ? "checking" : failed ? "error" : status?.state || "unconfigured";
-    const message = failed ? c.checkError : c.messages[status?.messageCode] || c.messages.NOT_CONFIGURED;
+    const message = failed ? c.checkError : (status?.messageCode ? c.messages[status.messageCode] || "" : "");
+    const messageMarkup = message ? '<p class="video-provider-message"'+(failed?' role="alert"':'')+'>'+esc(message)+'</p>' : "";
     return '<header><div><h3 id="video-providers-title">'+esc(c.title)+'</h3><p>'+esc(c.description)+'</p></div></header>'+
       '<div class="video-provider-row"><div><h4>'+esc(c.muse)+'</h4><p>'+esc(c.museDescription)+'</p></div>'+
       '<span class="video-provider-status" role="status" data-provider-state="'+esc(current)+'">'+esc(c.states[current] || c.states.unavailable)+'</span></div>'+
-      '<p class="video-provider-message"'+(failed?' role="alert"':'')+'>'+esc(message)+'</p>'+
+      messageMarkup+
       '<p class="video-provider-note">'+esc(c.foundationNote)+'</p>'+
       '<div class="video-provider-controls"><label><input type="checkbox" data-video-provider-enable'+
       (status?.enabled===true?' checked':'')+(pending||!status?' disabled':'')+'><span>'+esc(c.enable)+'</span></label>'+
