@@ -44,16 +44,24 @@ class ProviderRegistry {
     }));
   }
 
-  async getProviderStatuses() {
-    const statuses = [];
-    for (const [id, adapter] of this.adapters) {
-      try {
-        statuses.push(normalizeProviderStatus(await adapter.readiness(), id));
-      } catch {
-        statuses.push({ id, state: "error", ready: false });
+  async getProviderStatus(id) {
+    const adapter = this.adapters.get(id);
+    if (!adapter) throw failure("INVALID_REQUEST");
+    try {
+      const status = normalizeProviderStatus(await adapter.readiness(), id);
+      // A connection-only foundation cannot be a runnable generation provider.
+      if (!adapter.modelIds.length && status.ready) {
+        status.ready = false;
+        status.state = "unavailable";
       }
+      return { ...status, id };
+    } catch {
+      return { id, state: "error", ready: false };
     }
-    return statuses;
+  }
+
+  async getProviderStatuses() {
+    return Promise.all([...this.adapters.keys()].map(id => this.getProviderStatus(id)));
   }
 
   async readiness() {
@@ -71,7 +79,7 @@ class ProviderRegistry {
     let state = "not_configured";
     if (modelIds.length > 0) state = "ready";
     else if (providers.some(provider => provider.state === "error")) state = "error";
-    else if (providers.some(provider => provider.state === "unavailable")) state = "unavailable";
+    else if (providers.some(provider => ["unavailable", "authentication_required", "checking"].includes(provider.state))) state = "unavailable";
     else if (providers.length && providers.every(provider => provider.state === "not_configured")) state = "not_configured";
 
     return {

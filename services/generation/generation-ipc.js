@@ -4,6 +4,7 @@ const { identifier } = require("./generation-request");
 
 const SAFE_CODES = new Set([
   "INVALID_REQUEST",
+  "PROVIDER_CONFIG_ERROR",
   "NO_GENERATION_ROUTE",
   "PROVIDER_UNAVAILABLE",
   "RESOURCE_UNAVAILABLE",
@@ -32,6 +33,16 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
         modelIds: Array.isArray(status.modelIds) ? status.modelIds : []
       };
     }),
+    "provider-check": (service, payload) => {
+      if (!identifier(payload)) throw 0;
+      return service.checkProvider(payload);
+    },
+    "provider-configure": (service, payload) => {
+      if (!payload || Object.getPrototypeOf(payload) !== Object.prototype ||
+          Object.keys(payload).length !== 2 || !identifier(payload.id) ||
+          typeof payload.enabled !== "boolean") throw 0;
+      return service.configureProvider(payload.id, { enabled: payload.enabled });
+    },
     submit: (service, payload) => service.submit(payload),
     list: (service, payload) => {
       if (!identifier(payload)) throw 0;

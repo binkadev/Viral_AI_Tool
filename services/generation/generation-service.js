@@ -29,10 +29,11 @@ function updateAttempt(job, patch) {
 }
 
 class GenerationService extends EventEmitter {
-  constructor({ root, registry = new ProviderRegistry(), store = new GenerationStore(root) }) {
+  constructor({ root, registry = new ProviderRegistry(), store = new GenerationStore(root), providerConfigStore = null }) {
     super();
     this.root = root;
     this.registry = registry;
+    this.providerConfigStore = providerConfigStore;
     this.store = store;
     this.jobs = store.load();
     this.tail = Promise.resolve();
@@ -87,6 +88,21 @@ class GenerationService extends EventEmitter {
   async readiness() {
     if (this.stopping) return { ready: false, state: "unavailable", modelIds: [], availability: {}, providers: [] };
     return this.registry.readiness();
+  }
+
+  async checkProvider(id) {
+    if (this.stopping) throw failure("UNAVAILABLE");
+    if (!identifier(id)) throw failure("INVALID_REQUEST");
+    return this.registry.getProviderStatus(id);
+  }
+
+  async configureProvider(id, config) {
+    if (!identifier(id) || !this.registry.hasProvider(id) || !this.providerConfigStore) throw failure("INVALID_REQUEST");
+    return this.serial(async () => {
+      if (this.stopping) throw failure("UNAVAILABLE");
+      this.providerConfigStore.write(id, config);
+      return this.registry.getProviderStatus(id);
+    });
   }
 
   context(job) {

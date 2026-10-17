@@ -1,0 +1,11 @@
+.video-provider-settings { margin-block-end: 20px; }
+.video-provider-settings header h3, .video-provider-settings h4 { margin-block: 0 8px; }
+.video-provider-settings h4 { font-size: 16px; }
+.video-provider-settings p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; margin-block: 6px 12px; }
+.video-provider-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-block-start: 20px; }
+.video-provider-status { font-size: 13px; font-weight: 600; border: 1px solid currentColor; border-radius: 8px; padding: 8px 12px; }
+.video-provider-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-block-start: 16px; }
+.video-provider-controls label { display: inline-flex; align-items: center; gap: 10px; min-block-size: 40px; cursor: pointer; font-size: 13px; }
+.video-provider-controls input { inline-size: 20px; block-size: 20px; margin: 0; }
+.video-provider-controls button { min-block-size: 40px; white-space: normal; }
+.video-provider-controls :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }

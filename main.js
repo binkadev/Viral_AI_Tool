@@ -56,6 +56,9 @@ const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
 
 const { GenerationService } = require('./services/generation/generation-service');
 const { registerGenerationIpc } = require('./services/generation/generation-ipc');
+const { ProviderRegistry } = require('./services/generation/provider-registry');
+const { ProviderConfigStore } = require('./services/generation/provider-config-store');
+const { createMuseProvider } = require('./services/generation/providers/muse-provider');
 let generationService;
 let mainWindow;
 let sessionStore;
@@ -505,7 +508,13 @@ app.whenReady().then(() => {
       } catch {}
     }
   });
-  try { generationService = new GenerationService({ root: path.join(app.getPath('userData'), 'generation') }); } catch {}
+  try {
+    const root = path.join(app.getPath('userData'), 'generation');
+    const providerConfigStore = new ProviderConfigStore(path.join(root, 'provider-config'));
+    const registry = new ProviderRegistry();
+    registry.register(createMuseProvider({ configStore: providerConfigStore }));
+    generationService = new GenerationService({ root, registry, providerConfigStore });
+  } catch {}
   // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.
   generationService?.on('changed', ({ id, status }) => {
     if (typeof id !== 'string' || typeof status !== 'string') return;
