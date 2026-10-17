@@ -4,9 +4,12 @@ on:
   push:
     branches: [master]
     paths:
+      - "startup-main.js"
       - "main.js"
       - "preload.js"
       - "renderer/**"
+      - "dev/generation-visual-harness.js"
+      - "services/generation/**"
       - "services/media/**"
       - "dev-backend/server.js"
       - "dev-backend/media-search.js"
@@ -20,9 +23,12 @@ on:
   pull_request:
     branches: [master]
     paths:
+      - "startup-main.js"
       - "main.js"
       - "preload.js"
       - "renderer/**"
+      - "dev/generation-visual-harness.js"
+      - "services/generation/**"
       - "services/media/**"
       - "dev-backend/server.js"
       - "dev-backend/media-search.js"

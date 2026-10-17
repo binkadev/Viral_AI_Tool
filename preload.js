@@ -2,6 +2,15 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
+  getDevGenerationFixture: () => ipcRenderer.invoke('dev:generation-fixture'),
+  onGenerationChanged: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => {
+      if (typeof payload?.id === 'string' && typeof payload?.status === 'string') callback({ id: payload.id, status: payload.status });
+    };
+    ipcRenderer.on('generation:changed', listener);
+    return () => ipcRenderer.removeListener('generation:changed', listener);
+  },
   getGenerationStatus: () => ipcRenderer.invoke('generation:status'),
   listGenerationProviders: () => ipcRenderer.invoke('generation:providers'),
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),

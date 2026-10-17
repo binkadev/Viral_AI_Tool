@@ -506,6 +506,13 @@ app.whenReady().then(() => {
     }
   });
   try { generationService = new GenerationService({ root: path.join(app.getPath('userData'), 'generation') }); } catch {}
+  // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.
+  generationService?.on('changed', ({ id, status }) => {
+    if (typeof id !== 'string' || typeof status !== 'string') return;
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('generation:changed', { id, status });
+    } catch {}
+  });
   createWindow();
 
   app.on('activate', () => {

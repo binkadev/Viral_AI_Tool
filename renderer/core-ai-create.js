@@ -122,6 +122,9 @@
         durationSeconds: Number(selectedOption("duration", ["5", "10"], "5"))
       });
       feedback = result?.ok ? copy().submitted : copy().generationError;
+      if (result?.ok && result.value?.id && result.value.projectId === identity.projectId) {
+        await window.ViralGenerationProgress?.open(result.value.id);
+      }
     } catch {
       feedback = copy().generationError;
     } finally {
