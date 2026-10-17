@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
+  getDevGenerationFixture: () => ipcRenderer.invoke('dev:generation-fixture'),
   onGenerationChanged: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => {

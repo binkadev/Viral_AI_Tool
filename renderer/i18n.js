@@ -2,6 +2,10 @@ window.I18N = (() => {
   const messages = {
     vi: {
       generationProgress: {
+        "visualNotice": "Chế độ xem thử dành cho phát triển. Dữ liệu minh họa, không tạo hay lưu tư liệu thật.",
+        "visualPrompt": "Một buổi sáng ở quán cà phê Sài Gòn",
+        "visualScenes": [["Phố vừa thức giấc", "Nắng sớm chiếu qua hàng cây, một chiếc xe đạp lướt qua quán cà phê nhỏ."], ["Chuẩn bị cà phê", "Cận cảnh bàn tay đong cà phê vào phin trên chiếc bàn gỗ cạnh cửa sổ."], ["Giọt cà phê đầu tiên", "Từng giọt cà phê rơi xuống lớp sữa đặc trong ly thủy tinh, ánh sáng ấm."], ["Khoảnh khắc thư giãn", "Một người khách nâng ly cà phê đá, nhìn dòng người qua ô cửa."]],
+
   "nav": "Tiến trình tạo video",
   "breadcrumb": "Khu làm việc / Tiến trình",
   "eyebrow": "TỪ Ý TƯỞNG ĐẾN THƯỚC PHIM",
@@ -1212,6 +1216,10 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
     en: {
       generationProgress: {
+        "visualNotice": "Development visual preview. Sample data only; no real media is generated or saved.",
+        "visualPrompt": "A morning at a Saigon coffee shop",
+        "visualScenes": [["The street wakes up", "Morning sunlight filters through trees as a bicycle passes a small coffee shop."], ["Preparing the coffee", "Close-up of hands filling a coffee filter on a wooden table beside the window."], ["The first drops", "Coffee drips onto condensed milk in a glass, lit by warm morning light."], ["A quiet moment", "A guest lifts an iced coffee while watching the street through the window."]],
+
   "nav": "Generation progress",
   "breadcrumb": "Workspace / Progress",
   "eyebrow": "FROM IDEA TO FILM",

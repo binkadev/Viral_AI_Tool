@@ -2,6 +2,21 @@
 
 const { app, BrowserWindow } = require("electron");
 
+// The fixture module is excluded from release files and never loaded in production.
+let devGenerationFixture = null;
+if (app.isPackaged === false && process.env.NODE_ENV !== "production" &&
+    ["running", "failed", "interrupted", "completed"].includes(process.env.VIRAL_AI_DEV_GENERATION_STATE)) {
+  devGenerationFixture = require("./dev/generation-visual-harness").setup(app, process.env);
+}
+require("electron").ipcMain.handle("dev:generation-fixture", event => {
+  const { pathToFileURL } = require("url");
+  const path = require("path");
+  if (app.isPackaged !== false || process.env.NODE_ENV === "production" || !devGenerationFixture) return null;
+  if (event.senderFrame !== event.sender.mainFrame ||
+      event.senderFrame.url !== pathToFileURL(path.join(__dirname, "renderer", "index.html")).href) return null;
+  return devGenerationFixture;
+});
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 function ownerWindow(contents) {

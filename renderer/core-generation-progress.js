@@ -3,11 +3,18 @@
   const model = window.ViralGenerationProgressModel;
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const copy = () => window.I18N.messages[state.locale === 'en' ? 'en' : 'vi'].generationProgress;
-  const identity = () => window.ViralCoreProjectPersistence?.snapshot?.()?.projectId || null;
+  let visualFixture = null;
+  const identity = () => visualFixture?.projectId || window.ViralCoreProjectPersistence?.snapshot?.()?.projectId || null;
   let jobs = [], projectId = null, selectedId = null, ready = false, loading = false, error = '', busy = false;
   let requestVersion = 0, outputPath = null, retryKey = null, retryJobId = null, unsubscribe;
   function selected() { return jobs.find(j=>j.id === selectedId) || jobs[0] || null; }
-  function plan() { return window.ViralCoreScenePlanModel.normalizePlan(state.scenePlan || {}); }
+  function plan() {
+    const input = visualFixture ? {sourceType:'script', scenes:copy().visualScenes.map((scene,i)=>({
+      id:'dev-scene-'+i, start:i*6, end:(i+1)*6, title:scene[0], sourceText:scene[1], visualIntent:scene[1],
+      generationPrompt:scene[1], orientation:'portrait', targetKinds:['video']
+    }))} : state.scenePlan || {};
+    return window.ViralCoreScenePlanModel.normalizePlan(input);
+  }
   function paint() {
     if (state.page !== 'generation-progress') return;
     const viewport = document.getElementById('page'), top = viewport.scrollTop;
@@ -17,6 +24,10 @@
     if (focus) viewport.querySelector('[data-generation-action="'+focus+'"]')?.focus({preventScroll:true});
   }
   async function refresh() {
+    if (visualFixture) {
+      jobs=visualFixture.jobs.map(j=>({...j,request:{...j.request,prompt:copy().visualPrompt}}));
+      projectId=visualFixture.projectId; ready=false; loading=false; outputPath=null; paint(); return;
+    }
     const id = identity(), version = ++requestVersion;
     if (id !== projectId) { jobs=[]; selectedId=null; outputPath=null; retryKey=null; projectId=id; }
     if (!id) { loading=false; paint(); return; }
@@ -39,13 +50,14 @@
     } catch { if (version===requestVersion) { error='loadError'; ready=false; outputPath=null; } }
     finally { if (version===requestVersion) { loading=false; paint(); } }
   }
-  function button(action,label) { return '<button type="button" class="button ghost" data-generation-action="'+action+'"'+(busy?' disabled':'')+'>'+esc(label)+'</button>'; }
+  function button(action,label) { return '<button type="button" class="button ghost" data-generation-action="'+action+'"'+(busy || (visualFixture && action!=='refresh' && action!=='create')?' disabled':'')+'>'+esc(label)+'</button>'; }
   function page() {
     const c=copy(), job=projectId===identity()?selected():null, p=plan(), info=model.describe(job,ready,jobs.some(j=>j.id!==job?.id && [...model.active,'interrupted'].includes(j.status)));
-    const stageStates=model.stages(job,p,state);
+    const stageStates=model.stages(job,p,visualFixture?{}:state);
     const rows=model.scenes(p,projectId===identity()?jobs:[]);
     return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(c.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button('create',c.create)+'</header>'+
       '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(c.currentStage)+'</span><h3>'+esc(c.stages[3])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.outputCandidate(job,state)===outputPath?button('studio',c.studio):'')+'</div></section>'+
+      (visualFixture?'<p class="generation-notice" role="status">'+esc(c.visualNotice)+'</p>':'')+
       (error?'<p class="generation-notice" role="alert">'+esc(c[error])+'</p>':'')+
       (job&&['failed','interrupted','cancelled','cancelling'].includes(job.status)?'<p class="generation-notice tone-'+info.tone+'">'+esc(c.help[job.status])+'</p>':'')+
       '<ol class="generation-stages" aria-label="'+esc(c.workflow)+'">'+c.stages.map((label,i)=>'<li data-stage-state="'+stageStates[i]+'"'+(i===3?' aria-current="step"':'')+'><span aria-hidden="true">'+(stageStates[i]==='done'?'✓':i+1)+'</span><strong>'+esc(label)+'</strong><small>'+esc(c.stageStates[stageStates[i]])+'</small></li>').join('')+'</ol>'+
@@ -61,6 +73,7 @@
       if (outputPath && model.outputCandidate(selected(),state)===outputPath) {state.page='ai-video';render();}
       return;
     }
+    if (visualFixture) return;
     const job=selected(), id=identity();
     if (busy || !job || job.projectId!==id || !['cancel','retry','recover'].includes(name)) return;
     busy=true; paint();
@@ -96,6 +109,11 @@
     window.addEventListener('focus',changed);
     for(const event of ['viral-ai:core-state-changed','viral-ai:project-snapshot-restored']) window.addEventListener(event,changed);
     window.addEventListener('beforeunload',()=>unsubscribe?.(),{once:true});
+    window.desktopAPI?.getDevGenerationFixture?.().then(fixture=>{
+      if (!fixture) return;
+      visualFixture=fixture;
+      return window.ViralGenerationProgress.open(fixture.selectedId);
+    }).catch(()=>{});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
