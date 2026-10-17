@@ -2,6 +2,141 @@ window.I18N = (() => {
   const messages = {
     vi: {
       generationProgress: {
+        "workflowCopy": [
+  {
+    "title": "Ý tưởng",
+    "body": "Đang xác định chủ đề và hướng kể chuyện cho ý tưởng.",
+    "jobProgress": "Tiến trình phát triển ý tưởng",
+    "jobLabel": "Tiến trình phát triển ý tưởng",
+    "progressNote": "Đang xác định chủ đề và hướng kể chuyện cho ý tưởng.",
+    "mediaComplete": "Ý tưởng đã sẵn sàng để viết kịch bản.",
+    "empty": "Chưa có kết quả ý tưởng",
+    "states": {
+      "running": "Đang phát triển ý tưởng",
+      "failed": "Chưa phát triển được ý tưởng",
+      "interrupted": "Phát triển ý tưởng bị gián đoạn",
+      "completed": "Đã xong ý tưởng"
+    },
+    "help": {
+      "failed": "Chưa phát triển được ý tưởng nên chưa thể viết kịch bản. Kiểm tra mô tả rồi thử lại.",
+      "interrupted": "Chưa xác nhận được ý tưởng. Kiểm tra yêu cầu hiện tại trước khi thử lại."
+    }
+  },
+  {
+    "title": "Kịch bản",
+    "body": "Đang phát triển lời dẫn và nội dung kịch bản.",
+    "jobProgress": "Tiến trình viết kịch bản",
+    "jobLabel": "Tiến trình viết kịch bản",
+    "progressNote": "Đang phát triển lời dẫn và nội dung kịch bản.",
+    "mediaComplete": "Kịch bản đã sẵn sàng để chia cảnh.",
+    "empty": "Chưa có kết quả kịch bản",
+    "states": {
+      "running": "Đang viết kịch bản",
+      "failed": "Chưa viết được kịch bản",
+      "interrupted": "Viết kịch bản bị gián đoạn",
+      "completed": "Đã xong kịch bản"
+    },
+    "help": {
+      "failed": "Chưa viết được kịch bản nên chưa thể chia cảnh. Kiểm tra ý tưởng rồi thử lại.",
+      "interrupted": "Chưa xác nhận được kịch bản. Kiểm tra yêu cầu viết hiện tại trước khi thử lại."
+    }
+  },
+  {
+    "title": "Cảnh",
+    "body": "Đang chia kịch bản thành các cảnh và xác định hình ảnh cho từng cảnh.",
+    "jobProgress": "Tiến trình lập kế hoạch cảnh",
+    "jobLabel": "Tiến trình lập kế hoạch cảnh",
+    "progressNote": "Đang chia kịch bản thành các cảnh và xác định hình ảnh cho từng cảnh.",
+    "mediaComplete": "Kế hoạch cảnh đã sẵn sàng để tạo tư liệu.",
+    "empty": "Chưa có kết quả kế hoạch cảnh",
+    "states": {
+      "running": "Đang lập kế hoạch cảnh",
+      "failed": "Chưa lập được kế hoạch cảnh",
+      "interrupted": "Lập kế hoạch cảnh bị gián đoạn",
+      "completed": "Đã xong kế hoạch cảnh"
+    },
+    "help": {
+      "failed": "Chưa lập được kế hoạch cảnh nên chưa thể chuẩn bị hình ảnh cho từng cảnh. Kiểm tra kịch bản rồi thử lại.",
+      "interrupted": "Chưa xác nhận được kế hoạch cảnh. Kiểm tra yêu cầu chia cảnh hiện tại trước khi thử lại."
+    }
+  },
+  {
+    "title": "Tư liệu AI",
+    "body": "Đang tạo hình ảnh và video theo kế hoạch cảnh.",
+    "jobProgress": "Tiến trình tạo tư liệu AI",
+    "jobLabel": "Tiến trình tạo tư liệu AI",
+    "progressNote": "Đang tạo hình ảnh và video theo kế hoạch cảnh.",
+    "mediaComplete": "Tư liệu AI đã sẵn sàng cho các bước tiếp theo.",
+    "empty": "Chưa có kết quả tư liệu AI",
+    "states": {
+      "running": "Đang tạo tư liệu AI",
+      "failed": "Chưa tạo được tư liệu AI",
+      "interrupted": "Tạo tư liệu AI bị gián đoạn",
+      "completed": "Đã xong tư liệu AI"
+    },
+    "help": {
+      "failed": "Chưa tạo được tư liệu AI nên cảnh chưa có hình ảnh mới. Kiểm tra yêu cầu rồi thử lại khi dịch vụ sẵn sàng.",
+      "interrupted": "Chưa xác nhận được tư liệu AI. Kiểm tra yêu cầu hiện tại trước khi tạo lại để tránh trùng lặp."
+    }
+  },
+  {
+    "title": "Giọng đọc",
+    "body": "Đang tạo giọng đọc theo lời dẫn và giọng đã chọn.",
+    "jobProgress": "Tiến trình tạo giọng đọc",
+    "jobLabel": "Tiến trình tạo giọng đọc",
+    "progressNote": "Đang tạo giọng đọc theo lời dẫn và giọng đã chọn.",
+    "mediaComplete": "Giọng đọc đã sẵn sàng để ghép vào video.",
+    "empty": "Chưa có kết quả giọng đọc",
+    "states": {
+      "running": "Đang tạo giọng đọc",
+      "failed": "Chưa tạo được giọng đọc",
+      "interrupted": "Tạo giọng đọc bị gián đoạn",
+      "completed": "Đã xong giọng đọc"
+    },
+    "help": {
+      "failed": "Chưa tạo được giọng đọc nên video chưa có lời dẫn mới. Kiểm tra lời dẫn và giọng đã chọn rồi thử lại.",
+      "interrupted": "Chưa xác nhận được giọng đọc. Kiểm tra yêu cầu tạo giọng hiện tại trước khi thử lại."
+    }
+  },
+  {
+    "title": "Dựng video",
+    "body": "Đang ghép các cảnh, giọng đọc và phụ đề thành video.",
+    "jobProgress": "Tiến trình dựng video",
+    "jobLabel": "Tiến trình dựng video",
+    "progressNote": "Đang ghép các cảnh, giọng đọc và phụ đề thành video.",
+    "mediaComplete": "Video đã dựng xong và sẵn sàng để xuất.",
+    "empty": "Chưa có kết quả dựng video",
+    "states": {
+      "running": "Đang dựng video",
+      "failed": "Chưa dựng được video",
+      "interrupted": "Dựng video bị gián đoạn",
+      "completed": "Đã xong dựng video"
+    },
+    "help": {
+      "failed": "Chưa dựng được video nên chưa có bản dựng để xuất. Kiểm tra các cảnh, giọng đọc và phụ đề rồi thử lại.",
+      "interrupted": "Chưa xác nhận được bản dựng video. Kiểm tra lần dựng hiện tại trước khi thử lại."
+    }
+  },
+  {
+    "title": "Xuất",
+    "body": "Đang xuất bản dựng theo định dạng và chất lượng đã chọn.",
+    "jobProgress": "Tiến trình xuất video",
+    "jobLabel": "Tiến trình xuất video",
+    "progressNote": "Đang xuất bản dựng theo định dạng và chất lượng đã chọn.",
+    "mediaComplete": "Đã xuất xong video. Quy trình sáng tạo đã xong.",
+    "empty": "Chưa có kết quả xuất video",
+    "states": {
+      "running": "Đang xuất video",
+      "failed": "Chưa xuất được video",
+      "interrupted": "Xuất video bị gián đoạn",
+      "completed": "Đã xuất xong video"
+    },
+    "help": {
+      "failed": "Chưa xuất được video nên chưa có tệp xuất mới. Kiểm tra thư mục lưu và dung lượng trống rồi thử lại.",
+      "interrupted": "Chưa xác nhận được video xuất. Kiểm tra lần xuất hiện tại trước khi thử lại."
+    }
+  }
+],
         "visualNotice": "Chế độ xem thử dành cho phát triển. Dữ liệu minh họa, không tạo hay lưu tư liệu thật.",
         "visualPrompt": "Một buổi sáng ở quán cà phê Sài Gòn",
         "visualScenes": [["Phố vừa thức giấc", "Nắng sớm chiếu qua hàng cây, một chiếc xe đạp lướt qua quán cà phê nhỏ."], ["Chuẩn bị cà phê", "Cận cảnh bàn tay đong cà phê vào phin trên chiếc bàn gỗ cạnh cửa sổ."], ["Giọt cà phê đầu tiên", "Từng giọt cà phê rơi xuống lớp sữa đặc trong ly thủy tinh, ánh sáng ấm."], ["Khoảnh khắc thư giãn", "Một người khách nâng ly cà phê đá, nhìn dòng người qua ô cửa."]],
@@ -10,6 +145,7 @@ window.I18N = (() => {
   "breadcrumb": "Khu làm việc / Tiến trình",
   "eyebrow": "TỪ Ý TƯỞNG ĐẾN THƯỚC PHIM",
   "title": "Theo dõi từng bước sáng tạo",
+  "cancel": "Dừng phát triển ý tưởng",
   "body": "Tiến trình tạo tư liệu AI và các cảnh trong dự án hiện tại.",
   "currentStage": "BƯỚC TẠO TƯ LIỆU",
   "stages": [
@@ -86,6 +222,7 @@ window.I18N = (() => {
   "breadcrumb": "Khu làm việc / Trang chủ",
   "eyebrow": "KHÔNG GIAN SÁNG TẠO",
   "title": "Bạn muốn tạo gì hôm nay?",
+  "cancel": "Dừng viết kịch bản",
   "body": "Biến ý tưởng thành video với AI, hoặc bắt đầu từ video có sẵn. Mọi bước sáng tạo trong cùng một khu làm việc.",
   "ai": "Tạo video bằng AI",
   "aiBody": "Từ một mô tả đến thước phim của bạn.",
@@ -1216,6 +1353,141 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
     en: {
       generationProgress: {
+        "workflowCopy": [
+  {
+    "title": "Idea",
+    "body": "Defining the topic and storytelling direction for the idea.",
+    "jobProgress": "Idea development progress",
+    "jobLabel": "Idea development progress",
+    "progressNote": "Defining the topic and storytelling direction for the idea.",
+    "mediaComplete": "The idea is ready for script writing.",
+    "empty": "No idea result yet",
+    "states": {
+      "running": "Developing idea",
+      "failed": "Idea development failed",
+      "interrupted": "Idea development interrupted",
+      "completed": "Idea completed"
+    },
+    "help": {
+      "failed": "Idea development failed, so script writing cannot begin. Check the description and try again.",
+      "interrupted": "The idea could not be confirmed. Check the existing request before trying again."
+    }
+  },
+  {
+    "title": "Script",
+    "body": "Developing the narration and script content.",
+    "jobProgress": "Script writing progress",
+    "jobLabel": "Script writing progress",
+    "progressNote": "Developing the narration and script content.",
+    "mediaComplete": "The script is ready for scene planning.",
+    "empty": "No script result yet",
+    "states": {
+      "running": "Writing script",
+      "failed": "Script writing failed",
+      "interrupted": "Script writing interrupted",
+      "completed": "Script completed"
+    },
+    "help": {
+      "failed": "Script writing failed, so scene planning cannot begin. Check the idea and try again.",
+      "interrupted": "The script could not be confirmed. Check the existing writing request before trying again."
+    }
+  },
+  {
+    "title": "Scenes",
+    "body": "Dividing the script into scenes and defining their visuals.",
+    "jobProgress": "Scene planning progress",
+    "jobLabel": "Scene planning progress",
+    "progressNote": "Dividing the script into scenes and defining their visuals.",
+    "mediaComplete": "The scene plan is ready for media creation.",
+    "empty": "No scene plan result yet",
+    "states": {
+      "running": "Planning scenes",
+      "failed": "Scene planning failed",
+      "interrupted": "Scene planning interrupted",
+      "completed": "Scene plan completed"
+    },
+    "help": {
+      "failed": "Scene planning failed, so scene visuals cannot be prepared. Check the script and try again.",
+      "interrupted": "The scene plan could not be confirmed. Check the existing planning request before trying again."
+    }
+  },
+  {
+    "title": "AI Media",
+    "body": "Creating images and video from the scene plan.",
+    "jobProgress": "AI media generation progress",
+    "jobLabel": "AI media generation progress",
+    "progressNote": "Creating images and video from the scene plan.",
+    "mediaComplete": "AI media is ready for the following steps.",
+    "empty": "No AI media result yet",
+    "states": {
+      "running": "Generating AI media",
+      "failed": "AI media generation failed",
+      "interrupted": "AI media generation interrupted",
+      "completed": "AI media completed"
+    },
+    "help": {
+      "failed": "AI media generation failed, so scenes have no new visuals. Check the request and retry when the service is ready.",
+      "interrupted": "AI media could not be confirmed. Check the existing request before generating again to avoid duplicates."
+    }
+  },
+  {
+    "title": "Voice",
+    "body": "Creating the voice track from the narration and selected voice.",
+    "jobProgress": "Voice generation progress",
+    "jobLabel": "Voice generation progress",
+    "progressNote": "Creating the voice track from the narration and selected voice.",
+    "mediaComplete": "The voice track is ready to assemble with the video.",
+    "empty": "No voice result yet",
+    "states": {
+      "running": "Generating voice",
+      "failed": "Voice generation failed",
+      "interrupted": "Voice generation interrupted",
+      "completed": "Voice completed"
+    },
+    "help": {
+      "failed": "Voice generation failed, so the video has no new narration. Check the narration and selected voice, then try again.",
+      "interrupted": "The voice track could not be confirmed. Check the existing voice request before trying again."
+    }
+  },
+  {
+    "title": "Assemble",
+    "body": "Combining scenes, voice and subtitles into the video.",
+    "jobProgress": "Video assembly progress",
+    "jobLabel": "Video assembly progress",
+    "progressNote": "Combining scenes, voice and subtitles into the video.",
+    "mediaComplete": "The assembled video is ready to export.",
+    "empty": "No video assembly result yet",
+    "states": {
+      "running": "Assembling video",
+      "failed": "Video assembly failed",
+      "interrupted": "Video assembly interrupted",
+      "completed": "Video assembly completed"
+    },
+    "help": {
+      "failed": "Video assembly failed, so no assembled video is ready to export. Check the scenes, voice and subtitles, then try again.",
+      "interrupted": "The assembled video could not be confirmed. Check the existing assembly attempt before trying again."
+    }
+  },
+  {
+    "title": "Export",
+    "body": "Exporting the assembled video with the selected format and quality.",
+    "jobProgress": "Video export progress",
+    "jobLabel": "Video export progress",
+    "progressNote": "Exporting the assembled video with the selected format and quality.",
+    "mediaComplete": "Video export is complete. The creative workflow is complete.",
+    "empty": "No video export result yet",
+    "states": {
+      "running": "Exporting video",
+      "failed": "Video export failed",
+      "interrupted": "Video export interrupted",
+      "completed": "Video export completed"
+    },
+    "help": {
+      "failed": "Video export failed, so no new export file is available. Check the destination folder and free space, then try again.",
+      "interrupted": "The exported video could not be confirmed. Check the existing export attempt before trying again."
+    }
+  }
+],
         "visualNotice": "Development visual preview. Sample data only; no real media is generated or saved.",
         "visualPrompt": "A morning at a Saigon coffee shop",
         "visualScenes": [["The street wakes up", "Morning sunlight filters through trees as a bicycle passes a small coffee shop."], ["Preparing the coffee", "Close-up of hands filling a coffee filter on a wooden table beside the window."], ["The first drops", "Coffee drips onto condensed milk in a glass, lit by warm morning light."], ["A quiet moment", "A guest lifts an iced coffee while watching the street through the window."]],
@@ -1224,6 +1496,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "breadcrumb": "Workspace / Progress",
   "eyebrow": "FROM IDEA TO FILM",
   "title": "Follow every creative step",
+  "cancel": "Dừng lập kế hoạch cảnh",
   "body": "Track AI media generation alongside your current project scenes.",
   "currentStage": "MEDIA GENERATION",
   "stages": [
@@ -1300,6 +1573,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "breadcrumb": "Workspace / Home",
   "eyebrow": "YOUR CREATIVE WORKSPACE",
   "title": "What will you create today?",
+  "cancel": "Dừng tạo tư liệu AI",
   "body": "Turn an idea into video with AI, or start with footage you already have. Your creative process, all in one workspace.",
   "ai": "Create video with AI",
   "aiBody": "From a description to your next film.",

@@ -70,9 +70,23 @@ test("all 28 stage/state combinations render in VI/EN without runtime reads, wri
     for(const frame of frames) frame();
     const c=locale.window.I18N.messages[language].generationProgress;
     assert.equal(sandbox.state.page,"generation-progress");
-    assert(markup.includes(c.states[status]));
+    const stageCopy=c.workflowCopy[stage-1];
+    const summary=markup.match(/<section class="generation-summary"[\s\S]*?<\/section>/)[0];
+    assert(summary.includes(stageCopy.states[status]));
+    assert(summary.includes(stageCopy.jobProgress));
+    assert(summary.includes('aria-label="'+stageCopy.jobProgress+'"'));
+    const helper=status==='completed'?stageCopy.mediaComplete:stageCopy.help[status]||stageCopy.progressNote;
+    assert(summary.includes(helper));
+    if(status==='failed'||status==='interrupted') assert(markup.includes(stageCopy.help[status]));
+    for(const stale of [c.jobProgress,c.progressNote,c.mediaComplete,c.help.failed]) assert(!markup.includes(stale));
+    for(const other of c.workflowCopy) if(other!==stageCopy) {
+      assert(!summary.includes(other.jobProgress));
+      assert(!summary.includes(other.mediaComplete));
+    }
+    assert(!JSON.stringify(stageCopy).includes('?'));
+    if(stage===7&&status==='completed') assert(!/require their own|still need/.test(summary));
     assert(markup.includes(c.visualNotice));
-    assert(markup.includes('<h3>'+c.stages[stage-1]+'</h3>'));
+    assert(markup.includes('<h3>'+stageCopy.title+'</h3>'));
     const steps=[...markup.matchAll(/<li data-stage-state="([^"]+)"( aria-current="step")?>/g)];
     assert.equal(steps.length,7);
     for(let index=0;index<7;index++) {
