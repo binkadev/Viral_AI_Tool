@@ -114,6 +114,7 @@
       { group: "core-workflow" },
       { id: "home", icon: "⌂", label: "startHome.nav" },
       { id: "ai-create", icon: "✦", label: "core-ai-create" },
+      { id: "generation-progress", icon: "◷", label: "generationProgress.nav" },
       { id: "download", icon: "⇩", label: "core-import" },
       { id: "ai-video", icon: "◫", label: "core-editor" },
       { group: "core-manage" },
