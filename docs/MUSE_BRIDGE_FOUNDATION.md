@@ -26,3 +26,5 @@ No browser automation, external network checks, model discovery, output creation
 Run `npm run test:muse-foundation` and `npm run test:core-commercial`. The new tests are included in the commercial gate.
 
 Local validation for this block: the full commercial regression gate passed, including 10 new tests. Isolated Electron runs exercised Settings, native mouse clicks on Muse enable/check/disable, VI/EN, keyboard focus, scrolling, Home-card navigation, sidebar navigation, and native minimize/maximize/restore/close. Native status remained not ready and Generate remained disabled. A second run used production mode with attempted dev-ready flags and 40% larger Settings text. No packaged installer or real Muse connection was tested.
+
+Browser session support is now described in MUSE_BROWSER_BRIDGE.md (2B-2). Its Chrome-only connection does not change the readiness restrictions documented above.

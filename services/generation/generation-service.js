@@ -96,6 +96,16 @@ class GenerationService extends EventEmitter {
     return this.registry.getProviderStatus(id);
   }
 
+  async providerSession(id, open = false) {
+    if (this.stopping) throw failure("UNAVAILABLE");
+    if (!identifier(id)) throw failure("INVALID_REQUEST");
+    const adapter = this.registry.getProvider(id);
+    const method = open ? "openSession" : "checkSession";
+    if (!adapter || typeof adapter[method] !== "function") throw failure("INVALID_REQUEST");
+    const { sanitizeSession } = require("./browser/session-status");
+    return sanitizeSession(await adapter[method](), id);
+  }
+
   async configureProvider(id, config) {
     if (!identifier(id) || !this.registry.hasProvider(id) || !this.providerConfigStore) throw failure("INVALID_REQUEST");
     return this.serial(async () => {

@@ -59,6 +59,8 @@ const { registerGenerationIpc } = require('./services/generation/generation-ipc'
 const { ProviderRegistry } = require('./services/generation/provider-registry');
 const { ProviderConfigStore } = require('./services/generation/provider-config-store');
 const { createMuseProvider } = require('./services/generation/providers/muse-provider');
+const { MuseBrowserBridge } = require('./services/generation/browser/muse-browser-bridge');
+let museBrowserBridge;
 let generationService;
 let mainWindow;
 let sessionStore;
@@ -512,7 +514,8 @@ app.whenReady().then(() => {
     const root = path.join(app.getPath('userData'), 'generation');
     const providerConfigStore = new ProviderConfigStore(path.join(root, 'provider-config'));
     const registry = new ProviderRegistry();
-    registry.register(createMuseProvider({ configStore: providerConfigStore }));
+    museBrowserBridge = new MuseBrowserBridge({ userDataPath: app.getPath('userData') });
+    registry.register(createMuseProvider({ configStore: providerConfigStore, browserBridge: museBrowserBridge }));
     generationService = new GenerationService({ root, registry, providerConfigStore });
   } catch {}
   // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.
@@ -534,6 +537,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  museBrowserBridge?.detach();
   try { mediaDesktopController?.cancelAll(); } catch {}
   try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
   try { removeDiagnosticProcessHandlers?.(); } catch {}
