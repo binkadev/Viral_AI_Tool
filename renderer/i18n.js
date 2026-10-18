@@ -7,8 +7,8 @@ window.I18N = (() => {
   "muse": "Muse",
   "museDescription": "Tạo video AI từ nội dung cảnh.",
   "enable": "Bật Muse",
-  "check": "Kiểm tra kết nối",
-  "foundationNote": "Muse yêu cầu Google Chrome và mở trong cửa sổ Chrome riêng. Hãy tự đăng nhập tại đó. Kết nối trình duyệt không xác nhận đăng nhập hoặc khả năng tạo video. Khi đóng ứng dụng, cửa sổ Muse và dữ liệu đăng nhập do Chrome quản lý vẫn được giữ lại.",
+  "check": "Làm mới",
+  "foundationNote": "Đăng nhập Muse trong hồ sơ Chrome bạn đang dùng. Dù đã xác nhận đăng nhập, tính năng tạo video với Muse vẫn chưa sẵn sàng.",
   "checkError": "Chưa kiểm tra hoặc lưu được kết nối. Chưa thể xác nhận thay đổi. Kiểm tra lại trước khi tiếp tục.",
   "states": {
     "unconfigured": "Chưa kết nối",
@@ -16,7 +16,7 @@ window.I18N = (() => {
     "checking": "Đang kiểm tra…",
     "ready": "Sẵn sàng",
     "authentication_required": "Cần đăng nhập",
-    "unavailable": "Không thể kết nối",
+    "unavailable": "Chưa thể tạo video",
     "error": "Lỗi cấu hình"
   },
   "messages": {
@@ -24,19 +24,37 @@ window.I18N = (() => {
     "DISABLED": "Muse đang tắt. Bật Muse khi bạn muốn sử dụng dịch vụ.",
     "AUTHENTICATION_NOT_CONNECTED": "Chưa kết nối đăng nhập. Muse chưa sẵn sàng để tạo video.",
     "CONFIG_ERROR": "Không đọc được cấu hình Muse. Chưa thể tạo video. Kiểm tra lại hoặc lưu lại lựa chọn bật Muse.",
-    "CONNECTION_UNAVAILABLE": "Chưa thể kết nối Muse. Chưa thể tạo video. Hãy kiểm tra lại sau."
+    "CONNECTION_UNAVAILABLE": "Chưa thể kết nối Muse. Chưa thể tạo video. Hãy kiểm tra lại sau.",
+    "GENERATION_NOT_IMPLEMENTED": "Tính năng tạo video với Muse chưa sẵn sàng."
   },
   "openMuse": "Mở Muse",
-  "browserStates": {
-    "browser_unavailable": "Google Chrome chưa được cài đặt",
-    "browser_closed": "Trình duyệt đã đóng",
-    "browser_starting": "Đang mở trình duyệt…",
-    "browser_connected": "Đã kết nối trình duyệt"
+  "extensionConnected": "Tiện ích: Đã kết nối",
+  "extensionOffline": "Tiện ích: Chưa kết nối",
+  "profile": "Hồ sơ Chrome / phiên Muse",
+  "profileFallback": "Hồ sơ Chrome {number}",
+  "sessionOption": "{profile} · Muse {number} — {state}",
+  "chooseSession": "Chọn hồ sơ và tab Muse",
+  "showExtension": "Mở thư mục tiện ích",
+  "setup": "Trong Chrome, mở Quản lý tiện ích → bật Chế độ dành cho nhà phát triển → Tải tiện ích đã giải nén từ thư mục bên dưới. Nếu đã cài, tải lại tiện ích rồi làm mới tab Muse. Đặt tên hồ sơ trong cửa sổ tiện ích để dễ phân biệt.",
+  "sessionStates": {
+    "extension_offline": "Chưa kết nối tiện ích Muse",
+    "muse_tab_missing": "Chưa mở tab Muse",
+    "selection_required": "Chọn hồ sơ và tab Muse để tiếp tục",
+    "authentication_required": "Cần đăng nhập Muse",
+    "authenticated": "Đã xác nhận đăng nhập Muse",
+    "unknown": "Chưa xác minh được đăng nhập"
   },
-  "browserMessages": {
-    "BROWSER_PROFILE_UNAVAILABLE": "Chưa mở được dữ liệu trình duyệt riêng. Muse chưa kết nối. Kiểm tra quyền ghi rồi thử lại.",
-    "BROWSER_LAUNCH_FAILED": "Chưa mở được trình duyệt. Muse chưa kết nối. Kiểm tra Google Chrome rồi thử lại.",
-    "BROWSER_CONNECTION_FAILED": "Chưa xác nhận được kết nối trình duyệt. Tạo video vẫn chưa khả dụng. Đóng cửa sổ Muse riêng rồi chọn Mở Muse để thử lại."
+  "extensionPopup": {
+    "title": "Kết nối Muse",
+    "profile": "Tên hồ sơ Chrome",
+    "save": "Lưu tên",
+    "open": "Mở Muse",
+    "refresh": "Kết nối lại",
+    "connected": "Đã kết nối Viral AI Tool",
+    "offline": "Chưa kết nối. Mở Viral AI Tool rồi thử lại.",
+    "failed": "Chưa thực hiện được. Mở ứng dụng rồi thử lại.",
+    "note": "Dùng tab Muse trong hồ sơ Chrome này. Tạo video chưa khả dụng.",
+    "saved": "Đã lưu tên hồ sơ"
   }
 },
       generationProgress: {
@@ -1396,8 +1414,8 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "muse": "Muse",
   "museDescription": "Create AI video from scene content.",
   "enable": "Enable Muse",
-  "check": "Check connection",
-  "foundationNote": "Muse requires Google Chrome and opens in a dedicated Chrome window. Sign in there manually. Browser connection does not confirm login or video generation support. Closing this app leaves the Muse window and its Chrome-managed sign-in data in place.",
+  "check": "Refresh",
+  "foundationNote": "Sign in to Muse in your existing Chrome profile. Confirmed login does not enable video generation; Muse generation integration is not ready yet.",
   "checkError": "The connection could not be checked or saved. Changes could not be confirmed. Check again before continuing.",
   "states": {
     "unconfigured": "Not connected",
@@ -1405,7 +1423,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     "checking": "Checking…",
     "ready": "Ready",
     "authentication_required": "Authentication required",
-    "unavailable": "Unavailable",
+    "unavailable": "Generation unavailable",
     "error": "Configuration error"
   },
   "messages": {
@@ -1413,19 +1431,37 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     "DISABLED": "Muse is disabled. Enable Muse when you want to use the service.",
     "AUTHENTICATION_NOT_CONNECTED": "Authentication not connected. Muse is not ready to generate video.",
     "CONFIG_ERROR": "Muse configuration could not be read. Video generation is unavailable. Check again or save the enable preference again.",
-    "CONNECTION_UNAVAILABLE": "Muse cannot be connected. Video generation is unavailable. Check again later."
+    "CONNECTION_UNAVAILABLE": "Muse cannot be connected. Video generation is unavailable. Check again later.",
+    "GENERATION_NOT_IMPLEMENTED": "Generation integration is not ready yet."
   },
   "openMuse": "Open Muse",
-  "browserStates": {
-    "browser_unavailable": "Google Chrome not found",
-    "browser_closed": "Browser closed",
-    "browser_starting": "Opening browser…",
-    "browser_connected": "Browser connected"
+  "extensionConnected": "Extension: Connected",
+  "extensionOffline": "Extension: Not connected",
+  "profile": "Chrome profile / Muse session",
+  "profileFallback": "Chrome profile {number}",
+  "sessionOption": "{profile} · Muse {number} — {state}",
+  "chooseSession": "Choose a profile and Muse tab",
+  "showExtension": "Open extension folder",
+  "setup": "In Chrome, open Manage extensions → enable Developer mode → Load unpacked from the folder below. If already installed, reload the extension and refresh the Muse tab. Name your profile in the extension popup to distinguish sessions.",
+  "sessionStates": {
+    "extension_offline": "Muse extension not connected",
+    "muse_tab_missing": "Muse tab missing",
+    "selection_required": "Choose a profile and Muse tab to continue",
+    "authentication_required": "Muse login required",
+    "authenticated": "Muse login confirmed",
+    "unknown": "Unable to verify login"
   },
-  "browserMessages": {
-    "BROWSER_PROFILE_UNAVAILABLE": "The dedicated browser data could not be opened. Muse is not connected. Check write permissions and try again.",
-    "BROWSER_LAUNCH_FAILED": "The browser could not be opened. Muse is not connected. Check Google Chrome and try again.",
-    "BROWSER_CONNECTION_FAILED": "The browser connection could not be confirmed. Video generation remains unavailable. Close the dedicated Muse window, then choose Open Muse to retry."
+  "extensionPopup": {
+    "title": "Muse connection",
+    "profile": "Chrome profile name",
+    "save": "Save name",
+    "open": "Open Muse",
+    "refresh": "Reconnect",
+    "connected": "Connected to Viral AI Tool",
+    "offline": "Not connected. Open Viral AI Tool and retry.",
+    "failed": "Action unavailable. Open the app and retry.",
+    "note": "Use the Muse tab in this Chrome profile. Video generation is unavailable.",
+    "saved": "Profile name saved"
   }
 },
       generationProgress: {

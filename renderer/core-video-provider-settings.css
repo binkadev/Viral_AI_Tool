@@ -9,3 +9,6 @@
 .video-provider-controls input { inline-size: 20px; block-size: 20px; margin: 0; }
 .video-provider-controls button { min-block-size: 40px; white-space: normal; }
 .video-provider-controls :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.video-provider-session-label { display: grid; gap: 8px; margin-block: 16px; font-size: 13px; }
+.video-provider-session-label select { min-block-size: 44px; inline-size: 100%; max-inline-size: 100%; font: inherit; color: inherit; background: var(--panel, #18212e); border: 1px solid var(--border, #536074); border-radius: 8px; padding: 10px; }
+.video-provider-session-label select:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

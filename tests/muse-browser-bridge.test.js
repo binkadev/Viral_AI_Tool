@@ -89,27 +89,13 @@ test("pending startup can detach without killing its own or unrelated processes"
  const pending=f.bridge.open();await new Promise(r=>setImmediate(r));f.bridge.detach();await pending;
  assert.equal((await f.bridge.check()).state,"browser_closed");assert.equal(f.calls.length,1);
 });
-test("fixed IPC sanitizes session metadata; browser connectivity never enables generation",async t=>{
- const f=fixture(t),config=new ProviderConfigStore(path.join(f.root,"config")),registry=new ProviderRegistry();
- registry.register(createMuseProvider({configStore:config,browserBridge:f.bridge}));
- const service=new GenerationService({root:f.root,registry,providerConfigStore:config}),handlers={};
- registerGenerationIpc({ipcMain:{handle:(key,fn)=>handlers[key]=fn},getService:()=>service,trusted:e=>e.trusted===true});
- for(const channel of ["provider-session-open","provider-session-check"]){
-  const handler=handlers["generation:"+channel];
-  assert.equal((await handler({},"muse")).ok,false);
-  for(const payload of [null,{},"../muse","unknown",{id:"muse",url:"https://evil"}]) assert.equal((await handler({trusted:true},payload)).ok,false);
- }
- await assert.rejects(service.providerSession("muse",true),{code:"PROVIDER_UNAVAILABLE"});
- config.write("muse",{enabled:true});
- const result=await handlers["generation:provider-session-open"]({trusted:true},"muse");
- assert.equal(result.value.state,"browser_connected");
- assert.equal((await service.checkProvider("muse")).state,"authentication_required");
- assert.equal((await service.readiness()).ready,false);
- await assert.rejects(service.submit({projectId:"p",idempotencyKey:"k",prompt:"hello"}),{code:"NO_GENERATION_ROUTE"});
- assert.deepEqual(service.list("p"),[]);
+test("legacy browser bridge remains isolated and its status remains sanitized",async t=>{
+ const f=fixture(t);assert.equal((await f.bridge.open()).state,"browser_connected");
  const sanitized=sanitizeSession({state:"browser_connected",browser:"chrome",port:1234,cookie:"secret",profile:"secret",url:"secret",messageCode:"secret"});
  assert(!JSON.stringify(sanitized).includes("secret"));assert(!("port" in sanitized));
+ assert(!fs.readFileSync("main.js","utf8").includes("MuseBrowserBridge"));
 });
+
 test("preload fixes both session channels and never exports a generic browser command",()=>{
  let api;const calls=[];
  vm.runInNewContext(fs.readFileSync("preload.js","utf8"),{require:()=>({contextBridge:{exposeInMainWorld:(_,value)=>api=value},ipcRenderer:{invoke:(...args)=>calls.push(args)}})});
@@ -123,7 +109,7 @@ test("production transport has no dev activation, page evaluation, storage or cr
   for(const forbidden of ["process.env","Runtime.evaluate","Network.getCookies","Storage.get","password","--remote-allow-origins","taskkill",".kill("])assert(!source.includes(forbidden),file+" "+forbidden);
  }
  const pkg=require("../package.json");assert(pkg.scripts["test:core-commercial"].includes("test:muse-browser"));
- const main=fs.readFileSync("main.js","utf8");assert(main.includes("museBrowserBridge?.detach()"));
+ const main=fs.readFileSync("main.js","utf8");assert(main.includes("museExtensionBridge?.close()"));
 });
 
 test("an Edge discovery result can never launch or reuse a Muse session",async t=>{

@@ -27,8 +27,8 @@ test("Muse registers without invented models; absent, disabled and enabled confi
   assert.equal((await f.service.checkProvider("muse")).state,"unconfigured");
   assert.equal((await f.service.configureProvider("muse",{enabled:false})).messageCode,"DISABLED");
   const enabled=await f.service.configureProvider("muse",{enabled:true});
-  assert.equal(enabled.state,"authentication_required");
-  assert.equal(enabled.messageCode,"AUTHENTICATION_NOT_CONNECTED");
+  assert.equal(enabled.state,"unavailable");
+  assert.equal(enabled.messageCode,"GENERATION_NOT_IMPLEMENTED");
   assert.equal(enabled.ready,false);
   assert(Number.isFinite(Date.parse(enabled.checkedAt)));
   const restarted=new ProviderConfigStore(f.config.root);
@@ -80,7 +80,7 @@ test("IPC validates both new channels, blocks untrusted frames and returns statu
   const saved=await f.handlers["generation:provider-configure"](event,{id:"muse",enabled:true});
   assert(saved.ok); assert.equal(saved.value.ready,false);
   assert.deepEqual(Object.keys(saved.value).sort(),["capabilities","checkedAt","enabled","id","messageCode","ready","state"].sort());
-  assert.equal((await f.handlers["generation:providers"](event)).value.providers[0].state,"authentication_required");
+  assert.equal((await f.handlers["generation:providers"](event)).value.providers[0].state,"unavailable");
   f.service.checkProvider=async()=>{throw Error("secret stack");};
   assert.deepEqual(await f.handlers["generation:provider-check"](event,"muse"),{ok:false,errorCode:"UNAVAILABLE"});
 });
@@ -114,7 +114,7 @@ test("production ignores all attempted dev Muse readiness and authentication ove
     env:{...process.env,NODE_ENV:"production",VIRAL_AI_DEV_MODE:"1",VIRAL_AI_DEV_MUSE_STATE:"ready",
       VIRAL_AI_MUSE_READY:"1",VIRAL_AI_MUSE_TOKEN:"secret",VIRAL_AI_DEV_GENERATION_STATE:"completed"}});
   const status=JSON.parse(output);
-  assert.equal(status.ready,false);assert.equal(status.state,"authentication_required");
+  assert.equal(status.ready,false);assert.equal(status.state,"unavailable");
   assert(!output.includes("secret"));
   const sourceText=fs.readFileSync("services/generation/providers/muse-provider.js","utf8");
   assert(!sourceText.includes("process.env"));

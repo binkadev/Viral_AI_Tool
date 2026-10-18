@@ -102,8 +102,29 @@ class GenerationService extends EventEmitter {
     const adapter = this.registry.getProvider(id);
     const method = open ? "openSession" : "checkSession";
     if (!adapter || typeof adapter[method] !== "function") throw failure("INVALID_REQUEST");
-    const { sanitizeSession } = require("./browser/session-status");
+    const { sanitizeSession } = require("./bridge/session-status");
     return sanitizeSession(await adapter[method](), id);
+  }
+
+  async selectProviderSession(id, selection) {
+    if (this.stopping) throw failure("UNAVAILABLE");
+    if (!identifier(id)) throw failure("INVALID_REQUEST");
+    const adapter = this.registry.getProvider(id);
+    if (typeof adapter?.selectSession !== "function") throw failure("INVALID_REQUEST");
+    const { sanitizeSession } = require("./bridge/session-status");
+    return this.serial(async () => {
+      if (this.stopping) throw failure("UNAVAILABLE");
+      return sanitizeSession(await adapter.selectSession(selection), id);
+    });
+  }
+
+  async revealProviderExtension(id) {
+    if (this.stopping) throw failure("UNAVAILABLE");
+    if (!identifier(id)) throw failure("INVALID_REQUEST");
+    const adapter = this.registry.getProvider(id);
+    if (typeof adapter?.revealExtension !== "function") throw failure("INVALID_REQUEST");
+    await adapter.revealExtension();
+    return {id, installed:true};
   }
 
   async configureProvider(id, config) {

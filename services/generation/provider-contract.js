@@ -26,7 +26,7 @@ function normalizeProviderStatus(input, fallbackId = null) {
   const metadata = {};
   if (typeof input?.enabled === "boolean") metadata.enabled = input.enabled;
   if (Array.isArray(input?.capabilities)) metadata.capabilities = [...new Set(input.capabilities.filter(value => ["text-to-video", "image-to-video"].includes(value)))];
-  if (["NOT_CONFIGURED", "DISABLED", "AUTHENTICATION_NOT_CONNECTED", "CONFIG_ERROR", "CONNECTION_UNAVAILABLE"].includes(input?.messageCode)) metadata.messageCode = input.messageCode;
+  if (["NOT_CONFIGURED", "DISABLED", "AUTHENTICATION_NOT_CONNECTED", "CONFIG_ERROR", "CONNECTION_UNAVAILABLE", "GENERATION_NOT_IMPLEMENTED"].includes(input?.messageCode)) metadata.messageCode = input.messageCode;
   if (typeof input?.checkedAt === "string" && Number.isFinite(Date.parse(input.checkedAt))) metadata.checkedAt = new Date(input.checkedAt).toISOString();
   return {
     ...metadata,
