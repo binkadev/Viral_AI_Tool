@@ -276,7 +276,7 @@ test('production packaging includes complete extension with matching version con
 
 test('packaging guard fails if a production archive loses an extension file',async t=>{
  const stage=fs.mkdtempSync(path.join(os.tmpdir(),'muse-package-test-'));
- t.after(()=>fs.rmSync(stage,{recursive:true,force:true,maxRetries:5,retryDelay:100}));
+ t.after(()=>{try{fs.rmSync(stage,{recursive:true,force:true,maxRetries:5,retryDelay:100});}catch{}});
  const source=path.join(stage,'source');fs.mkdirSync(source);
  fs.cpSync('extensions',path.join(source,'extensions'),{recursive:true});
  const configDir=path.join(source,'services/generation/bridge');fs.mkdirSync(configDir,{recursive:true});
