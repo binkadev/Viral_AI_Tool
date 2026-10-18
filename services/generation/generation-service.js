@@ -118,13 +118,22 @@ class GenerationService extends EventEmitter {
     });
   }
 
+  async openProviderExtensionStore(id) {
+    if (this.stopping) throw failure("UNAVAILABLE");
+    if (!identifier(id)) throw failure("INVALID_REQUEST");
+    const adapter = this.registry.getProvider(id);
+    if (typeof adapter?.openExtensionStore !== "function") throw failure("INVALID_REQUEST");
+    await adapter.openExtensionStore();
+    return {id, opened:true};
+  }
+
   async revealProviderExtension(id) {
     if (this.stopping) throw failure("UNAVAILABLE");
     if (!identifier(id)) throw failure("INVALID_REQUEST");
     const adapter = this.registry.getProvider(id);
     if (typeof adapter?.revealExtension !== "function") throw failure("INVALID_REQUEST");
     await adapter.revealExtension();
-    return {id, installed:true};
+    return {id, folderRevealed:true};
   }
 
   async configureProvider(id, config) {

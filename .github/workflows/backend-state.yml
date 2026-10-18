@@ -21,6 +21,12 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install packaging test dependency
+        run: |
+          ASAR_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@electron/asar'].version")
+          npm install --prefix "$RUNNER_TEMP/muse-ci" --no-save "@electron/asar@$ASAR_VERSION"
+          echo "NODE_PATH=$RUNNER_TEMP/muse-ci/node_modules" >> "$GITHUB_ENV"
+
       - name: Test durable backend state
         run: node dev-backend/tests/state-persistence.test.js
 

@@ -37,6 +37,10 @@ function createMuseProvider({ configStore, extensionBridge = null }) {
       if (!extensionBridge) throw failure("PROVIDER_UNAVAILABLE");
       return extensionBridge.selectSession(selection);
     },
+    openExtensionStore: async () => {
+      if (!extensionBridge) throw failure("PROVIDER_UNAVAILABLE");
+      return extensionBridge.openStore();
+    },
     revealExtension: async () => {
       if (!extensionBridge) throw failure("PROVIDER_UNAVAILABLE");
       return extensionBridge.revealExtension();

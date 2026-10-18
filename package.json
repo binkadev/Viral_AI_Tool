@@ -91,6 +91,7 @@
   },
   "build": {
     "appId": "com.viralai.tool",
+    "afterPack": "scripts/verify-muse-package.js",
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": { "output": "release" },

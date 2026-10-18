@@ -2,6 +2,20 @@ window.I18N = (() => {
   const messages = {
     vi: {
       videoProviders: {
+  "installExtension": "C?i ti?n ?ch Chrome",
+  "updateExtension": "C?p nh?t ti?n ?ch",
+  "manualInstallation": "C?i th? c?ng (h? tr?)",
+  "manualFolder": "M? th? m?c c?i th? c?ng",
+  "storeUnavailable": "Ch?a thi?t l?p ph?n ph?i qua C?a h?ng Chrome. Ch?a th? c?i t? c?a h?ng. Li?n h? h? tr? ho?c xem c?ch c?i th? c?ng.",
+  "connectionHint": "Ch?a th?y k?t n?i kh?ng c? ngh?a l? ch?a c?i. N?u ?? c?i ti?n ?ch, h?y m? Chrome r?i l?m m?i.",
+  "manualSteps": "M? chrome://extensions ? b?t Ch? ?? d?nh cho nh? ph?t tri?n ? T?i ti?n ?ch ?? gi?i n?n ? ch?n th? m?c meta-muse-extension v?a m?. Sau khi c?p nh?t, t?i l?i ti?n ?ch r?i l?m m?i tab Muse.",
+  "distributionStates": {
+    "extension_connected": "Ti?n ?ch ?? k?t n?i",
+    "extension_install_required": "Ch?a k?t n?i ti?n ?ch ? c?i n?u ch?a c?",
+    "extension_outdated": "Ti?n ?ch c?n c?p nh?t",
+    "extension_update_required": "Ti?n ?ch c?n c?p nh?t ?? k?t n?i",
+    "extension_error": "Phi?n b?n ti?n ?ch ch?a ???c h? tr?. Ch?a th? k?t n?i. H?y c?p nh?t ?ng d?ng ho?c li?n h? h? tr?."
+  },
   "title": "Dịch vụ video AI",
   "description": "Quản lý kết nối để tạo video trong khu làm việc.",
   "muse": "Muse",
@@ -1409,6 +1423,20 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
     en: {
       videoProviders: {
+  "installExtension": "Install Chrome Extension",
+  "updateExtension": "Update Extension",
+  "manualInstallation": "Manual installation (support)",
+  "manualFolder": "Open manual installation folder",
+  "storeUnavailable": "Chrome Web Store distribution is not configured. Store installation is unavailable. Contact support or see manual installation.",
+  "connectionHint": "No connection does not mean the extension is not installed. If already installed, open Chrome and refresh.",
+  "manualSteps": "Open chrome://extensions ? enable Developer mode ? Load unpacked ? select the meta-muse-extension folder just opened. After updating, reload the extension and refresh the Muse tab.",
+  "distributionStates": {
+    "extension_connected": "Extension connected",
+    "extension_install_required": "Extension not connected ? install if missing",
+    "extension_outdated": "Extension needs update",
+    "extension_update_required": "Extension needs update to connect",
+    "extension_error": "Extension version unsupported. Connection is unavailable. Update the app or contact support."
+  },
   "title": "AI Video Providers",
   "description": "Manage connections for video creation in your workspace.",
   "muse": "Muse",

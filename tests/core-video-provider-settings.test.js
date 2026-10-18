@@ -65,7 +65,7 @@ test("extension states, explicit selection and Open Muse remain separate from ge
   const listeners={},focus=[];let sessionState="extension_offline",opens=0,selected=null,installed=0;
   const root={innerHTML:"",setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
   const provider={id:"muse",enabled:true,state:"unavailable",ready:false,messageCode:"GENERATION_NOT_IMPLEMENTED"};
-  const session=()=>({id:"muse",state:sessionState,sessions:sessionState==="extension_offline"?[]:[{instanceId:"profile-one",profileLabel:"Work <script>",tabs:[{tabId:1,authState:sessionState}]}],selectedInstanceId:selected?.instanceId,selectedTabId:selected?.tabId});
+  const session=()=>({id:"muse",extensionState:sessionState==="extension_offline"?"extension_install_required":"extension_connected",state:sessionState,sessions:sessionState==="extension_offline"?[]:[{instanceId:"profile-one",profileLabel:"Work <script>",tabs:[{tabId:1,authState:sessionState}]}],selectedInstanceId:selected?.instanceId,selectedTabId:selected?.tabId});
   const context={state:{locale:language,page:"settings"},
    document:{readyState:"complete",activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},
    window:{addEventListener(){},desktopAPI:{
@@ -78,7 +78,9 @@ test("extension states, explicit selection and Open Muse remain separate from ge
   vm.runInNewContext(fs.readFileSync("renderer/i18n.js","utf8"),context);
   vm.runInNewContext(fs.readFileSync("renderer/core-video-provider-settings.js","utf8"),context);
   await tick();const c=context.window.I18N.messages[language].videoProviders;
-  assert(root.innerHTML.includes(c.setup));
+  assert(root.innerHTML.includes(c.manualSteps));
+  assert(root.innerHTML.includes(c.storeUnavailable));
+  assert(root.innerHTML.includes(c.installExtension));
   const click=kind=>listeners.click({target:{closest:selector=>selector==='[data-video-provider-'+kind+']'?{}:null}});
   click("setup");await tick();assert.equal(installed,1);
   for(const next of ["muse_tab_missing","selection_required","authentication_required","authenticated","unknown"]){

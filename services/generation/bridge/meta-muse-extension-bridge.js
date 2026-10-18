@@ -1,5 +1,6 @@
 "use strict";
 // Readiness-only adaptation of feat/meta-muse-extension-bridge. No browser process access.
+const {configuration, compatibility} = require("./extension-distribution");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -20,8 +21,9 @@ async function body(req) {
   try {return JSON.parse(Buffer.concat(chunks).toString("utf8"));} catch {throw failure("INVALID_REQUEST");}
 }
 class MetaMuseExtensionBridge {
-  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000}) {
+  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000, distribution}) {
     if(!path.isAbsolute(userDataPath)) throw failure("PROVIDER_CONFIG_ERROR");
+    this.distribution=configuration(distribution);
     this.root=userDataPath;this.source=extensionSourceDir;this.shell=shell;this.now=now;this.commandTimeoutMs=commandTimeoutMs;
     this.selectionFile=path.join(userDataPath,"meta-muse-extension-selection.json");
     this.installDir=path.join(userDataPath,"meta-muse-extension");
@@ -69,7 +71,7 @@ class MetaMuseExtensionBridge {
   }
   async handle(req,res) {
     const origin=String(req.headers.origin||"");
-    if(req.socket.remoteAddress!=="127.0.0.1" || req.headers.host!=="127.0.0.1:"+this.port || (origin ? !validOrigin(origin) : req.method!=="GET")) return this.reply(res,403,{ok:false,error:"forbidden"});
+    if(req.socket.remoteAddress!=="127.0.0.1" || req.headers.host!=="127.0.0.1:"+this.port || (origin ? (!validOrigin(origin) || (this.distribution.distributionMode==="production" && this.distribution.chromeWebStoreExtensionId && origin!=="chrome-extension://"+this.distribution.chromeWebStoreExtensionId)) : req.method!=="GET")) return this.reply(res,403,{ok:false,error:"forbidden"});
     if(origin)res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Vary","Origin");
     if(req.method==="OPTIONS") {
       res.setHeader("Access-Control-Allow-Headers","Content-Type, X-Viral-Muse-Token, Cache-Control");
@@ -80,12 +82,12 @@ class MetaMuseExtensionBridge {
     if(req.method==="GET" && url.pathname==="/v1/ping") return this.reply(res,200,{ok:true,bridge:"meta-muse-extension",serverId:this.serverId});
     if(req.method==="POST" && url.pathname==="/v1/register") {
       const b=await body(req);
-      check(exact(b,["instanceId","profileLabel","browserName","extensionVersion"]) && instanceId(b.instanceId) && text(b.profileLabel,120) && b.browserName==="Chrome" && text(b.extensionVersion,40));
+      check(exact(b,["instanceId","profileLabel","browserName","extensionVersion","protocolVersion"]) && instanceId(b.instanceId) && text(b.profileLabel,120) && b.browserName==="Chrome" && text(b.extensionVersion,40));
       const old=this.sessions.get(b.instanceId);
       if(old && (old.origin!==origin || req.headers["x-viral-muse-token"]!==old.token)) return this.reply(res,409,{ok:false,error:"instance-in-use"});
       check(old || this.sessions.size<16);this.finish(b.instanceId,false);
       const token=crypto.randomBytes(32).toString("hex");
-      this.sessions.set(b.instanceId,{instanceId:b.instanceId,profileLabel:label(b.profileLabel),token,origin,tabs:[],lastSeen:this.now()});
+      this.sessions.set(b.instanceId,{instanceId:b.instanceId,profileLabel:label(b.profileLabel),extensionState:compatibility(b.extensionVersion,b.protocolVersion,this.distribution),token,origin,tabs:[],lastSeen:this.now()});
       return this.reply(res,200,{ok:true,token,serverId:this.serverId,pollIntervalMs:900});
     }
     check([...url.searchParams.keys()].every(k=>k==="instanceId") && url.searchParams.getAll("instanceId").length===1);
@@ -108,6 +110,7 @@ class MetaMuseExtensionBridge {
       return this.reply(res,200,{ok:true});
     }
     if(req.method==="GET" && url.pathname==="/v1/poll") {
+      if(s.extensionState!=="extension_connected") return this.reply(res,200,{ok:true,command:null});
       const p=this.pending.get(s.instanceId);
       const command=p&&!p.sent ? {id:p.id,type:"openMuse",payload:p.tabId?{tabId:p.tabId}:{}} : null;
       if(command)p.sent=true;
@@ -130,8 +133,9 @@ class MetaMuseExtensionBridge {
     if(!selected && !this.selectedInstanceId && sessions.length===1)selected=sessions[0];
     let tab=selected?.tabs.find(t=>t.tabId===this.selectedTabId);
     if(!tab && selected?.tabs.length===1)tab=selected.tabs[0];
-    const state=!sessions.length?"extension_offline":!selected?"selection_required":!selected.tabs.length?"muse_tab_missing":!tab?"selection_required":tab.authState;
-    return sanitizeSession({state,sessions,selectedInstanceId:selected?.instanceId || this.selectedInstanceId,selectedTabId:tab?.tabId});
+    const extensionState=(selected || sessions.find(s=>s.extensionState!=="extension_connected"))?.extensionState || (sessions.length ? "extension_connected" : "extension_install_required");
+    const state=extensionState!=="extension_connected"?"extension_offline":!sessions.length?"extension_offline":!selected?"selection_required":!selected.tabs.length?"muse_tab_missing":!tab?"selection_required":tab.authState;
+    return sanitizeSession({state,extensionState,storeConfigured:this.distribution.storeConfigured,sessions,selectedInstanceId:selected?.instanceId || this.selectedInstanceId,selectedTabId:tab?.tabId});
   }
   async check() {await this.start();return this.snapshot();}
   async selectSession(selection) {
@@ -155,6 +159,11 @@ class MetaMuseExtensionBridge {
     }
     await this.pending.get(id).promise;return this.snapshot();
   }
+  async openStore() {
+    if(!this.distribution.storeConfigured || !this.shell?.openExternal) throw failure("PROVIDER_CONFIG_ERROR");
+    if(!this.storeOpening) this.storeOpening=Promise.resolve().then(()=>this.shell.openExternal(this.distribution.chromeWebStoreUrl)).finally(()=>{this.storeOpening=null;});
+    await this.storeOpening;return {id:"muse",opened:true};
+  }
   async revealExtension() {
     check(typeof this.source==="string");
     // Read the complete bundle before touching the installed extension. Stage
@@ -176,7 +185,7 @@ class MetaMuseExtensionBridge {
       for(const {temp,file} of staged)fs.renameSync(temp,path.join(this.installDir,file));
     } finally {for(const {temp} of staged) {try {fs.unlinkSync(temp);} catch {}}}
     this.shell?.showItemInFolder(path.join(this.installDir,"manifest.json"));
-    return {id:"muse",installed:true};
+    return {id:"muse",folderRevealed:true};
   }
   close() {
     this.stopped=true;for(const id of this.pending.keys())this.finish(id,false);
