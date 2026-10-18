@@ -8,7 +8,7 @@ test("Settings labels are bilingual and preserve the same status/message contrac
   for(const group of ["states","messages"]) assert.deepEqual(Object.keys(vi.videoProviders[group]),Object.keys(en.videoProviders[group]));
   for(const state of ["unconfigured","checking","ready","authentication_required","unavailable","error"]) assert(en.videoProviders.states[state]&&vi.videoProviders.states[state]);
   assert.equal(vi.videoProviders.states.authentication_required,"Cần đăng nhập");
-  assert(en.videoProviders.foundationNote.includes("Sign in there manually"));
+  assert(en.videoProviders.foundationNote.includes("existing Chrome profile"));
 });
 test("Settings uses native status, prevents duplicate checks, handles failures, and preserves focus",async()=>{
   const listeners={},calls=[],focus=[];
@@ -60,29 +60,35 @@ test("ready status does not render the not-configured fallback message",async()=
 });
 
 
-test("browser states and Open Muse stay separate from provider readiness in VI/EN",async()=>{
+test("extension states, explicit selection and Open Muse remain separate from generation in VI/EN",async()=>{
  for(const language of ["vi","en"]){
-  const listeners={},focus=[];let browserState="browser_closed",opens=0;
+  const listeners={},focus=[];let sessionState="extension_offline",opens=0,selected=null,installed=0;
   const root={innerHTML:"",setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
-  const provider={id:"muse",enabled:true,state:"authentication_required",ready:false,messageCode:"AUTHENTICATION_NOT_CONNECTED"};
+  const provider={id:"muse",enabled:true,state:"unavailable",ready:false,messageCode:"GENERATION_NOT_IMPLEMENTED"};
+  const session=()=>({id:"muse",state:sessionState,sessions:sessionState==="extension_offline"?[]:[{instanceId:"profile-one",profileLabel:"Work <script>",tabs:[{tabId:1,authState:sessionState}]}],selectedInstanceId:selected?.instanceId,selectedTabId:selected?.tabId});
   const context={state:{locale:language,page:"settings"},
    document:{readyState:"complete",activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},
    window:{addEventListener(){},desktopAPI:{
     checkGenerationProvider:async()=>({ok:true,value:provider}),
-    checkGenerationProviderSession:async()=>({ok:true,value:{id:"muse",state:browserState,browser:"chrome"}}),
-    openGenerationProviderSession:async id=>{assert.equal(id,"muse");opens++;browserState="browser_connected";return {ok:true,value:{id:"muse",state:browserState,browser:"chrome"}};}
+    checkGenerationProviderSession:async()=>({ok:true,value:session()}),
+    openGenerationProviderSession:async id=>{assert.equal(id,"muse");opens++;return {ok:true,value:session()};},
+    selectGenerationProviderSession:async value=>{selected=value;sessionState="authenticated";return {ok:true,value:session()};},
+    revealGenerationProviderExtension:async()=>{installed++;return {ok:true,value:{id:"muse",installed:true}};}
    }}};
   vm.runInNewContext(fs.readFileSync("renderer/i18n.js","utf8"),context);
   vm.runInNewContext(fs.readFileSync("renderer/core-video-provider-settings.js","utf8"),context);
   await tick();const c=context.window.I18N.messages[language].videoProviders;
-  assert(root.innerHTML.includes(c.browserStates.browser_closed));
+  assert(root.innerHTML.includes(c.setup));
   const click=kind=>listeners.click({target:{closest:selector=>selector==='[data-video-provider-'+kind+']'?{}:null}});
-  click("open");assert(root.innerHTML.includes(c.browserStates.browser_starting));click("open");await tick();
-  assert.equal(opens,1);assert(root.innerHTML.includes(c.browserStates.browser_connected));
-  assert(root.innerHTML.includes(c.states.authentication_required));assert(!root.innerHTML.includes('data-provider-state="ready"'));
-  assert(focus.includes("[data-video-provider-open]"));
-  browserState="browser_closed";click("check");await tick();assert(root.innerHTML.includes(c.browserStates.browser_closed));
-  browserState="browser_unavailable";click("check");await tick();assert(root.innerHTML.includes(c.browserStates.browser_unavailable));
+  click("setup");await tick();assert.equal(installed,1);
+  for(const next of ["muse_tab_missing","selection_required","authentication_required","authenticated","unknown"]){
+   sessionState=next;click("check");await tick();assert(root.innerHTML.includes(c.sessionStates[next]));
+   assert(!root.innerHTML.includes('data-provider-state="ready"'));assert(root.innerHTML.includes(c.messages.GENERATION_NOT_IMPLEMENTED));
+  }
+  listeners.change({target:{matches:s=>s==='[data-video-provider-session]',value:JSON.stringify({instanceId:"profile-one",tabId:1})}});await tick();
+  assert.equal(selected.instanceId,"profile-one");assert.equal(selected.tabId,1);assert(focus.includes("[data-video-provider-session]"));
+  assert(!root.innerHTML.includes("Work <script>"));assert(root.innerHTML.includes("Work &lt;script&gt;"));
+  click("open");click("open");await tick();assert.equal(opens,1);
   for(const forbidden of ["DevTools","CDP","127.0.0.1","user-data-dir"])assert(!root.innerHTML.includes(forbidden));
  }
 });

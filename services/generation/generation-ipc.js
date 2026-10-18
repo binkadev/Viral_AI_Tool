@@ -45,6 +45,17 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
       if (!identifier(payload)) throw 0;
       return service.providerSession(payload);
     },
+    "provider-session-select": (service, payload) => {
+      const {instanceId, tabId} = require("./bridge/session-status");
+      if (!payload || Object.getPrototypeOf(payload) !== Object.prototype ||
+          Object.keys(payload).length !== 3 || !identifier(payload.id) ||
+          !instanceId(payload.instanceId) || !(payload.tabId === null || tabId(payload.tabId))) throw 0;
+      return service.selectProviderSession(payload.id, {instanceId:payload.instanceId, tabId:payload.tabId});
+    },
+    "provider-extension-reveal": (service, payload) => {
+      if (!identifier(payload)) throw 0;
+      return service.revealProviderExtension(payload);
+    },
     "provider-configure": (service, payload) => {
       if (!payload || Object.getPrototypeOf(payload) !== Object.prototype ||
           Object.keys(payload).length !== 2 || !identifier(payload.id) ||

@@ -59,8 +59,8 @@ const { registerGenerationIpc } = require('./services/generation/generation-ipc'
 const { ProviderRegistry } = require('./services/generation/provider-registry');
 const { ProviderConfigStore } = require('./services/generation/provider-config-store');
 const { createMuseProvider } = require('./services/generation/providers/muse-provider');
-const { MuseBrowserBridge } = require('./services/generation/browser/muse-browser-bridge');
-let museBrowserBridge;
+const { MetaMuseExtensionBridge } = require('./services/generation/bridge/meta-muse-extension-bridge');
+let museExtensionBridge;
 let generationService;
 let mainWindow;
 let sessionStore;
@@ -514,8 +514,10 @@ app.whenReady().then(() => {
     const root = path.join(app.getPath('userData'), 'generation');
     const providerConfigStore = new ProviderConfigStore(path.join(root, 'provider-config'));
     const registry = new ProviderRegistry();
-    museBrowserBridge = new MuseBrowserBridge({ userDataPath: app.getPath('userData') });
-    registry.register(createMuseProvider({ configStore: providerConfigStore, browserBridge: museBrowserBridge }));
+    museExtensionBridge = new MetaMuseExtensionBridge({ userDataPath: app.getPath('userData'),
+      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'), shell });
+    museExtensionBridge.start().catch(() => {});
+    registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge }));
     generationService = new GenerationService({ root, registry, providerConfigStore });
   } catch {}
   // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.
@@ -537,7 +539,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  museBrowserBridge?.detach();
+  museExtensionBridge?.close();
   try { mediaDesktopController?.cancelAll(); } catch {}
   try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
   try { removeDiagnosticProcessHandlers?.(); } catch {}

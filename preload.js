@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   },
   getGenerationStatus: () => ipcRenderer.invoke('generation:status'),
   openGenerationProviderSession: id => ipcRenderer.invoke('generation:provider-session-open', id),
+  selectGenerationProviderSession: selection => ipcRenderer.invoke('generation:provider-session-select', selection),
+  revealGenerationProviderExtension: id => ipcRenderer.invoke('generation:provider-extension-reveal', id),
   checkGenerationProviderSession: id => ipcRenderer.invoke('generation:provider-session-check', id),
   checkGenerationProvider: id => ipcRenderer.invoke('generation:provider-check', id),
   configureGenerationProvider: config => ipcRenderer.invoke('generation:provider-configure', config),
