@@ -57,7 +57,7 @@ test('registration rotates random tokens, binds origin, rejects unauthorized req
 test('strict bounded payloads reject unsupported fields, non-Muse tabs, malformed JSON and non-Chrome instances',async t=>{
  const f=await fixture(t),token=await f.register();
  for(const tabs of [[{...tab(),url:'https://muse.ai.evil.example/'}],[{...tab(),dom:'secret'}],[tab(),tab()],Array.from({length:21},(_,i)=>tab(i+1))])assert.equal((await f.beat(token,tabs)).status,400);
- assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{"x":"'+'a'.repeat(33000)+'"}'})).status,400);
+ assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{\"x\":\"'+'a'.repeat(33000)+'\"}'})).status,400);
  assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{'})).status,400);
  assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-edge',profileLabel:'Edge',browserName:'Edge',extensionVersion:'0.2.0'}})).status,400);
  assert.equal((await f.request('/v1/event?instanceId=profile-one',{method:'POST',token,body:{}})).status,404);
@@ -276,7 +276,7 @@ test('production packaging includes complete extension with matching version con
 
 test('packaging guard fails if a production archive loses an extension file',async t=>{
  const stage=fs.mkdtempSync(path.join(os.tmpdir(),'muse-package-test-'));
- t.after(()=>fs.rmSync(stage,{recursive:true,force:true}));
+ t.after(()=>fs.rmSync(stage,{recursive:true,force:true,maxRetries:5,retryDelay:100}));
  const source=path.join(stage,'source');fs.mkdirSync(source);
  fs.cpSync('extensions',path.join(source,'extensions'),{recursive:true});
  const configDir=path.join(source,'services/generation/bridge');fs.mkdirSync(configDir,{recursive:true});
