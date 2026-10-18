@@ -8,7 +8,7 @@ window.I18N = (() => {
   "museDescription": "Tạo video AI từ nội dung cảnh.",
   "enable": "Bật Muse",
   "check": "Kiểm tra kết nối",
-  "foundationNote": "Kết nối Muse chưa được triển khai. Bật tùy chọn này chỉ lưu lựa chọn của bạn; hiện chưa thể đăng nhập hoặc tạo video bằng Muse. Kiểm tra kết nối chỉ kiểm tra cấu hình hiện tại, chưa liên hệ với Muse.",
+  "foundationNote": "Muse yêu cầu Google Chrome và mở trong cửa sổ Chrome riêng. Hãy tự đăng nhập tại đó. Kết nối trình duyệt không xác nhận đăng nhập hoặc khả năng tạo video. Khi đóng ứng dụng, cửa sổ Muse và dữ liệu đăng nhập do Chrome quản lý vẫn được giữ lại.",
   "checkError": "Chưa kiểm tra hoặc lưu được kết nối. Chưa thể xác nhận thay đổi. Kiểm tra lại trước khi tiếp tục.",
   "states": {
     "unconfigured": "Chưa kết nối",
@@ -25,6 +25,18 @@ window.I18N = (() => {
     "AUTHENTICATION_NOT_CONNECTED": "Chưa kết nối đăng nhập. Muse chưa sẵn sàng để tạo video.",
     "CONFIG_ERROR": "Không đọc được cấu hình Muse. Chưa thể tạo video. Kiểm tra lại hoặc lưu lại lựa chọn bật Muse.",
     "CONNECTION_UNAVAILABLE": "Chưa thể kết nối Muse. Chưa thể tạo video. Hãy kiểm tra lại sau."
+  },
+  "openMuse": "Mở Muse",
+  "browserStates": {
+    "browser_unavailable": "Google Chrome chưa được cài đặt",
+    "browser_closed": "Trình duyệt đã đóng",
+    "browser_starting": "Đang mở trình duyệt…",
+    "browser_connected": "Đã kết nối trình duyệt"
+  },
+  "browserMessages": {
+    "BROWSER_PROFILE_UNAVAILABLE": "Chưa mở được dữ liệu trình duyệt riêng. Muse chưa kết nối. Kiểm tra quyền ghi rồi thử lại.",
+    "BROWSER_LAUNCH_FAILED": "Chưa mở được trình duyệt. Muse chưa kết nối. Kiểm tra Google Chrome rồi thử lại.",
+    "BROWSER_CONNECTION_FAILED": "Chưa xác nhận được kết nối trình duyệt. Tạo video vẫn chưa khả dụng. Đóng cửa sổ Muse riêng rồi chọn Mở Muse để thử lại."
   }
 },
       generationProgress: {
@@ -1385,7 +1397,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "museDescription": "Create AI video from scene content.",
   "enable": "Enable Muse",
   "check": "Check connection",
-  "foundationNote": "Muse connectivity is not implemented yet. Enabling this option only saves your preference; signing in and generating video with Muse are not available. Check connection examines the current configuration only and does not contact Muse.",
+  "foundationNote": "Muse requires Google Chrome and opens in a dedicated Chrome window. Sign in there manually. Browser connection does not confirm login or video generation support. Closing this app leaves the Muse window and its Chrome-managed sign-in data in place.",
   "checkError": "The connection could not be checked or saved. Changes could not be confirmed. Check again before continuing.",
   "states": {
     "unconfigured": "Not connected",
@@ -1402,6 +1414,18 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     "AUTHENTICATION_NOT_CONNECTED": "Authentication not connected. Muse is not ready to generate video.",
     "CONFIG_ERROR": "Muse configuration could not be read. Video generation is unavailable. Check again or save the enable preference again.",
     "CONNECTION_UNAVAILABLE": "Muse cannot be connected. Video generation is unavailable. Check again later."
+  },
+  "openMuse": "Open Muse",
+  "browserStates": {
+    "browser_unavailable": "Google Chrome not found",
+    "browser_closed": "Browser closed",
+    "browser_starting": "Opening browser…",
+    "browser_connected": "Browser connected"
+  },
+  "browserMessages": {
+    "BROWSER_PROFILE_UNAVAILABLE": "The dedicated browser data could not be opened. Muse is not connected. Check write permissions and try again.",
+    "BROWSER_LAUNCH_FAILED": "The browser could not be opened. Muse is not connected. Check Google Chrome and try again.",
+    "BROWSER_CONNECTION_FAILED": "The browser connection could not be confirmed. Video generation remains unavailable. Close the dedicated Muse window, then choose Open Muse to retry."
   }
 },
       generationProgress: {

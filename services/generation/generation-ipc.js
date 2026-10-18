@@ -37,6 +37,14 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
       if (!identifier(payload)) throw 0;
       return service.checkProvider(payload);
     },
+    "provider-session-open": (service, payload) => {
+      if (!identifier(payload)) throw 0;
+      return service.providerSession(payload, true);
+    },
+    "provider-session-check": (service, payload) => {
+      if (!identifier(payload)) throw 0;
+      return service.providerSession(payload);
+    },
     "provider-configure": (service, payload) => {
       if (!payload || Object.getPrototypeOf(payload) !== Object.prototype ||
           Object.keys(payload).length !== 2 || !identifier(payload.id) ||

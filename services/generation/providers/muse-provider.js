@@ -1,13 +1,13 @@
 "use strict";
 const { failure } = require("../generation-job");
 
-function createMuseProvider({ configStore }) {
+function createMuseProvider({ configStore, browserBridge = null }) {
   const validateConfig = () => {
     const config = configStore.read("muse");
     if (config === null) return { enabled: false, state: "unconfigured", messageCode: "NOT_CONFIGURED" };
     if (!config || typeof config.enabled !== "boolean") throw failure("PROVIDER_CONFIG_ERROR");
     if (!config.enabled) return { enabled: false, state: "unavailable", messageCode: "DISABLED" };
-    // No authentication or generation transport exists in 2B-1. Enabling is not evidence.
+    // Browser connectivity is not proof of authentication or generation support.
     return { enabled: true, state: "authentication_required", messageCode: "AUTHENTICATION_NOT_CONNECTED" };
   };
   async function readiness() {
@@ -25,6 +25,14 @@ function createMuseProvider({ configStore }) {
     // Intended generation category only. No validated models or executable routes yet.
     capabilities: Object.freeze(["text-to-video"]), modelIds: Object.freeze([]),
     validateConfig, readiness,
+    openSession: async () => {
+      if (!browserBridge || !validateConfig().enabled) throw failure("PROVIDER_UNAVAILABLE");
+      return browserBridge.open();
+    },
+    checkSession: async () => {
+      if (!browserBridge) throw failure("PROVIDER_UNAVAILABLE");
+      return browserBridge.check();
+    },
     preflight: readiness, start: unsupported, reconcile: unsupported, cancel: unsupported
   });
 }
