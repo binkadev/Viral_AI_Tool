@@ -21,6 +21,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install locked dependencies
+        run: npm ci
+
       - name: Test durable backend state
         run: node dev-backend/tests/state-persistence.test.js
 
