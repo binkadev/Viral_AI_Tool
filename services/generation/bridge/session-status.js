@@ -10,7 +10,8 @@ function sanitizeSession(input, id = "muse") {
     .filter(s => instanceId(s?.instanceId)).map(s => ({instanceId:s.instanceId, profileLabel:label(s.profileLabel),
       tabs:(Array.isArray(s.tabs) ? s.tabs : []).slice(0, 20).filter(t => tabId(t?.tabId))
         .map(t => ({tabId:t.tabId, authState:["authenticated","authentication_required"].includes(t.authState) ? t.authState : "unknown"}))}));
-  return {id, state:STATES.has(input?.state) ? input.state : "extension_offline", sessions,
+  const extensionStates = ["extension_connected","extension_install_required","extension_outdated","extension_update_required","extension_error"];
+  return {id, extensionState:extensionStates.includes(input?.extensionState) ? input.extensionState : "extension_install_required", storeConfigured:input?.storeConfigured === true, state:STATES.has(input?.state) ? input.state : "extension_offline", sessions,
     selectedInstanceId:instanceId(input?.selectedInstanceId) ? input.selectedInstanceId : null,
     selectedTabId:tabId(input?.selectedTabId) ? input.selectedTabId : null,
     checkedAt:new Date().toISOString()};

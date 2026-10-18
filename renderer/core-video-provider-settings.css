@@ -12,3 +12,6 @@
 .video-provider-session-label { display: grid; gap: 8px; margin-block: 16px; font-size: 13px; }
 .video-provider-session-label select { min-block-size: 44px; inline-size: 100%; max-inline-size: 100%; font: inherit; color: inherit; background: var(--panel, #18212e); border: 1px solid var(--border, #536074); border-radius: 8px; padding: 10px; }
 .video-provider-session-label select:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+.video-provider-settings summary { cursor: pointer; padding-block: 12px; font-size: 13px; }
+.video-provider-settings summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

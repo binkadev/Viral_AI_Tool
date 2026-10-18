@@ -52,6 +52,10 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
           !instanceId(payload.instanceId) || !(payload.tabId === null || tabId(payload.tabId))) throw 0;
       return service.selectProviderSession(payload.id, {instanceId:payload.instanceId, tabId:payload.tabId});
     },
+    "provider-extension-store": (service, payload) => {
+      if (!identifier(payload)) throw 0;
+      return service.openProviderExtensionStore(payload);
+    },
     "provider-extension-reveal": (service, payload) => {
       if (!identifier(payload)) throw 0;
       return service.revealProviderExtension(payload);

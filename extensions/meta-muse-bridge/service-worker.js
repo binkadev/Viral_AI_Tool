@@ -26,7 +26,7 @@ async function connect() {
     try {
       const ping=await request(port,"/v1/ping",{timeout:500});
       if(ping.bridge!=="meta-muse-extension" || typeof ping.serverId!=="string")continue;
-      const registered=await request(port,"/v1/register",{body:{...await identity(),browserName:"Chrome",extensionVersion:chrome.runtime.getManifest().version}});
+      const registered=await request(port,"/v1/register",{body:{...await identity(),browserName:"Chrome",extensionVersion:chrome.runtime.getManifest().version,protocolVersion:1}});
       if(!/^[a-f0-9]{64}$/.test(registered.token))continue;
       bridge={port,token:registered.token,serverId:registered.serverId};return bridge;
     } catch {}

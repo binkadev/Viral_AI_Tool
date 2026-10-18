@@ -20,7 +20,7 @@ async function fixture(t,options={}) {
   });
  }
  const register=async(instanceId='profile-one',extra={})=>{
-  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.1.0'},...extra});
+  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.2.0'},...extra});
   assert.equal(r.status,200);return r.value.token;
  };
  const beat=(token,tabs=[],id='profile-one',extra={})=>request('/v1/heartbeat?instanceId='+id,{method:'POST',token,body:{profileLabel:'Work',browserName:'Chrome',tabs},...extra});
@@ -49,7 +49,7 @@ test('registration rotates random tokens, binds origin, rejects unauthorized req
  assert.equal((await f.beat(token2,[tab()])).status,401);
  assert.equal((await f.beat(token,[tab()],'profile-one',{requestOrigin:otherOrigin})).status,401);
  assert.equal((await f.beat(token,[tab()])).status,200);
- assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-one',profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.1.0'}})).status,409);
+ assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-one',profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.2.0'}})).status,409);
  const rotated=await f.register('profile-one',{token});assert.notEqual(rotated,token);
  assert.equal((await f.beat(token,[tab()])).status,401);
 });
@@ -59,7 +59,7 @@ test('strict bounded payloads reject unsupported fields, non-Muse tabs, malforme
  for(const tabs of [[{...tab(),url:'https://muse.ai.evil.example/'}],[{...tab(),dom:'secret'}],[tab(),tab()],Array.from({length:21},(_,i)=>tab(i+1))])assert.equal((await f.beat(token,tabs)).status,400);
  assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{"x":"'+'a'.repeat(33000)+'"}'})).status,400);
  assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{'})).status,400);
- assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-edge',profileLabel:'Edge',browserName:'Edge',extensionVersion:'0.1.0'}})).status,400);
+ assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-edge',profileLabel:'Edge',browserName:'Edge',extensionVersion:'0.2.0'}})).status,400);
  assert.equal((await f.request('/v1/event?instanceId=profile-one',{method:'POST',token,body:{}})).status,404);
 });
 
@@ -217,4 +217,72 @@ test('an incomplete extension bundle leaves installed files untouched',async t=>
  await assert.rejects(f.bridge.revealExtension());
  assert.equal(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'),'utf8'),before);
  assert(!fs.readdirSync(f.bridge.installDir).some(f=>f.endsWith('.tmp')));
+});
+
+
+test('distribution compatibility, missing evidence and legacy 0.2.0 session preservation',async t=>{
+ const f=await fixture(t);assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
+ const token=await f.register();await f.beat(token,[tab()]);
+ assert.equal(f.bridge.snapshot().extensionState,'extension_connected');assert.equal(f.bridge.snapshot().state,'authenticated');
+ f.advance();assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
+ for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.2.0',2,'extension_error'],['0.2.0',0,'extension_error'],['0.2.0',1,'extension_connected']]) {
+  const r=await f.request('/v1/register',{method:'POST',body:{instanceId:'version-test',profileLabel:'',browserName:'Chrome',extensionVersion,protocolVersion}});
+  assert.equal(r.status,200);await f.beat(r.value.token,[tab()],'version-test');
+  assert.equal(f.bridge.snapshot().extensionState,expected);
+  if(expected!=='extension_connected')await assert.rejects(f.bridge.open());
+  f.advance();f.bridge.snapshot();
+ }
+ const {compatibility,configuration}=require('../services/generation/bridge/extension-distribution');
+ assert.equal(compatibility('0.2.0',1,configuration({protocolVersion:2})),'extension_update_required');
+});
+
+test('production official identity is enforced; support and development accept unpacked origins',async t=>{
+ for(const distributionMode of ['production','support','development']) {
+  const f=await fixture(t,{distribution:{distributionMode,chromeWebStoreExtensionId:'a'.repeat(32)}});
+  const result=await f.request('/v1/register',{method:'POST',requestOrigin:otherOrigin,body:{instanceId:'other-profile',profileLabel:'',browserName:'Chrome',extensionVersion:'0.2.0',protocolVersion:1}});
+  assert.equal(result.status,distributionMode==='production'?403:200);
+  await f.register();
+ }
+});
+
+test('store configuration opens only a validated official store page and coalesces clicks',async t=>{
+ const opened=[],shell={openExternal:async url=>opened.push(url)};
+ const f=await fixture(t,{shell});await assert.rejects(f.bridge.openStore());assert.deepEqual(opened,[]);
+ const {configuration}=require('../services/generation/bridge/extension-distribution');
+ const id='a'.repeat(32),url='https://chromewebstore.google.com/detail/muse/'+id;
+ for(const chromeWebStoreUrl of ['https://evil.example/detail/'+id,'javascript:alert(1)',url+'?redirect=evil',url.replace(id,'b'.repeat(32))])assert.throws(()=>configuration({chromeWebStoreExtensionId:id,chromeWebStoreUrl}));
+ f.bridge.distribution=configuration({chromeWebStoreExtensionId:id,chromeWebStoreUrl:url});
+ await Promise.all([f.bridge.openStore(),f.bridge.openStore()]);assert.deepEqual(opened,[url]);
+ assert.equal(f.bridge.snapshot().storeConfigured,true);
+});
+
+test('manual support action reveals only the managed manifest and never reports installed',async t=>{
+ const shown=[];const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),shell:{showItemInFolder:file=>shown.push(file)}});
+ assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true});
+ assert.deepEqual(shown,[path.join(f.root,'meta-muse-extension','manifest.json')]);
+ assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
+});
+
+test('production packaging includes complete extension with matching version contract',()=>{
+ const pkg=require('../package.json'),config=require('../services/generation/bridge/extension-distribution.json');
+ assert(pkg.build.files.includes('extensions/**/*'));assert(pkg.build.files.includes('services/**/*'));
+ assert.equal(pkg.build.afterPack,'scripts/verify-muse-package.js');
+ const root='extensions/meta-muse-bridge',manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
+ assert.equal(manifest.version,config.expectedExtensionVersion);
+ for(const file of ['manifest.json',manifest.background.service_worker,manifest.action.default_popup,'popup.js','popup.css','strings.js',...manifest.content_scripts.flatMap(s=>s.js)])assert(fs.statSync(path.join(root,file)).isFile());
+ assert(fs.readFileSync(path.join(root,manifest.background.service_worker),'utf8').includes('protocolVersion:'+config.protocolVersion));
+});
+
+
+test('packaging guard fails if a production archive loses an extension file',async t=>{
+ const stage=fs.mkdtempSync(path.join(os.tmpdir(),'muse-package-test-'));
+ t.after(()=>fs.rmSync(stage,{recursive:true,force:true}));
+ const source=path.join(stage,'source');fs.mkdirSync(source);
+ fs.cpSync('extensions',path.join(source,'extensions'),{recursive:true});
+ const configDir=path.join(source,'services/generation/bridge');fs.mkdirSync(configDir,{recursive:true});
+ fs.copyFileSync('services/generation/bridge/extension-distribution.json',path.join(configDir,'extension-distribution.json'));
+ const asar=require('@electron/asar'),{verify}=require('../scripts/verify-muse-package');
+ const good=path.join(stage,'good.asar');await asar.createPackage(source,good);assert.doesNotThrow(()=>verify(good));
+ fs.unlinkSync(path.join(source,'extensions/meta-muse-bridge/service-worker.js'));
+ const bad=path.join(stage,'bad.asar');await asar.createPackage(source,bad);assert.throws(()=>verify(bad));
 });
