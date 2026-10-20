@@ -33,7 +33,7 @@ function failure(code) {
 }
 
 function validProgress(value) {
-  return Number.isFinite(value) && value >= 0 && value <= 100;
+  return value===null || Number.isFinite(value) && value >= 0 && value <= 100;
 }
 
 function transition(job, status, patch = {}) {
@@ -66,7 +66,7 @@ function createJob(request, route, retryOf = null) {
     kind: request.kind || "video",
     mode: request.mode,
     status: "queued",
-    progress: 0,
+    progress: route.model.provider==='muse'?null:0,
     request,
     modelId: route.model.id,
     provider: route.model.provider,

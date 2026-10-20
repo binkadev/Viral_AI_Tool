@@ -39,6 +39,9 @@ class GenerationService extends EventEmitter {
     this.tail = Promise.resolve();
     this.stopping = false;
     this.runtimeActive = new Set();
+    this.monitors=new Map();
+    this.recovering=new Map();
+    this.epochs=new Map();
 
     const recovered = this.jobs.map(job => RESTART_INTERRUPTED.has(job.status)
       ? {
@@ -65,7 +68,9 @@ class GenerationService extends EventEmitter {
     const jobs = this.jobs.filter(item => item.id !== job.id).concat(job);
     this.store.save(jobs);
     this.jobs = jobs;
-    if (TERMINAL.has(job.status) || job.status === "interrupted") this.runtimeActive.delete(job.id);
+    if (TERMINAL.has(job.status) || job.status === "interrupted") {
+      this.runtimeActive.delete(job.id);clearTimeout(this.monitors.get(job.id));this.monitors.delete(job.id);
+    }
     try { this.emit("changed", { id: job.id, status: job.status }); } catch {}
     return clone(job);
   }
@@ -81,8 +86,30 @@ class GenerationService extends EventEmitter {
     return this.jobs.filter(job => job.projectId === projectId).map(clone);
   }
 
+  output(id) {
+    const job=this.get(id),fileName=job.id+'.mp4';
+    if(job.status!=='completed' || job.output?.fileName!==fileName || job.asset?.fileName!==fileName)throw failure('ASSET_UNAVAILABLE');
+    const directory=this.context(job).outputDirectory,filePath=path.join(directory,fileName);
+    if(fs.lstatSync(filePath).isSymbolicLink() || !fs.statSync(filePath).isFile() || fs.statSync(filePath).size<12 || fs.realpathSync(directory)!==path.resolve(directory))throw failure('ASSET_UNAVAILABLE');
+    return {jobId:job.id,projectId:job.projectId,sceneId:job.sceneId,fileName,path:filePath};
+  }
+
   activeCount() {
     return this.jobs.filter(job => this.runtimeActive.has(job.id) && ACTIVE.has(job.status)).length;
+  }
+
+  hasActiveMuseJob(exceptId = null) {
+    // Interrupted history remains reconcilable, but does not occupy an active
+    // execution slot. Use the existing lifecycle set, not a second state list.
+    return this.jobs.some(job => job.id !== exceptId && job.provider === 'muse' && ACTIVE.has(job.status));
+  }
+
+  async museAdmission() {
+    // Read-only advisory check; submit rechecks atomically before persisting.
+    return this.serial(async () => ({
+      admissible: !this.stopping && !this.hasActiveMuseJob() &&
+        (await this.readiness()).providers.some(provider => provider.id === 'muse' && provider.ready)
+    }));
   }
 
   async readiness() {
@@ -167,7 +194,7 @@ class GenerationService extends EventEmitter {
         if (fingerprint(prior.request) !== fingerprint(request)) throw failure("IDEMPOTENCY_CONFLICT");
         return clone(prior);
       }
-      if (this.jobs.some(job => BLOCKING.has(job.status) && fingerprint(job.request) === fingerprint(request))) {
+      if (this.jobs.some(job => (request.providerId === 'muse' ? ACTIVE : BLOCKING).has(job.status) && fingerprint(job.request) === fingerprint(request))) {
         throw failure("DUPLICATE_JOB");
       }
 
@@ -175,7 +202,12 @@ class GenerationService extends EventEmitter {
       const allow = request.modelId
         ? ready.modelIds.filter(id => id === request.modelId)
         : ready.modelIds;
-      const route = chooseModel(request, { availability: ready.availability, allow });
+      let route;
+      if(request.providerId==='muse') {
+        if(!ready.providers.some(p=>p.id==='muse' && p.ready))throw failure('PROVIDER_UNAVAILABLE');
+        if(this.hasActiveMuseJob())throw failure('DUPLICATE_JOB');
+        route={model:{id:null,provider:'muse'},estimate:{modelId:null,provider:'muse',known:false,providerCredits:null,estimatedUsd:null,pricingKind:'unknown',durationSeconds:null,resolution:null}};
+      } else route = chooseModel(request, { availability: ready.availability, allow });
       if (!this.registry.getProvider(route.model.provider)) throw failure("PROVIDER_UNAVAILABLE");
 
       const job = createJob(request, route, retryOf);
@@ -193,7 +225,7 @@ class GenerationService extends EventEmitter {
       if (this.stopping || current.status !== "queued") return null;
       const startedAt = current.startedAt || new Date().toISOString();
       return this.commit(transition(current, "preparing", {
-        progress: Math.max(1, Number(current.progress || 0)),
+        progress: current.provider==='muse'?null:Math.max(1, Number(current.progress || 0)),
         startedAt,
         attempts: updateAttempt(current, { status: "preparing", startedAt })
       }));
@@ -204,8 +236,9 @@ class GenerationService extends EventEmitter {
     try {
       fs.mkdirSync(context.outputDirectory, { recursive: true });
       fs.accessSync(context.outputDirectory, fs.constants.W_OK);
+      if(fs.realpathSync(context.outputDirectory)!==path.resolve(context.outputDirectory))throw failure('RESOURCE_UNAVAILABLE');
       const fsStats = fs.statfsSync(context.outputDirectory);
-      if (fsStats.bavail * fsStats.bsize < 64 * 1024 * 1024) throw failure("RESOURCE_UNAVAILABLE");
+      if (fsStats.bavail * fsStats.bsize < (preparing.provider==='muse'?512:64) * 1024 * 1024) throw failure("RESOURCE_UNAVAILABLE");
       const adapter = this.registry.getProvider(preparing.provider);
       if (!adapter || (await adapter.preflight(context))?.ready !== true) throw failure("PROVIDER_UNAVAILABLE");
     } catch (error) {
@@ -228,7 +261,7 @@ class GenerationService extends EventEmitter {
       const current = this.get(id);
       if (current.status !== "preparing") return null;
       return this.commit(transition(current, "submitting", {
-        progress: Math.max(2, Number(current.progress || 0)),
+        progress: current.provider==='muse'?null:Math.max(2, Number(current.progress || 0)),
         attempts: updateAttempt(current, { status: "submitting" })
       }));
     });
@@ -242,6 +275,19 @@ class GenerationService extends EventEmitter {
       uncertain = true;
     }
     await this.serial(() => this.finish(id, result, { uncertain }));
+    this.monitor(id);
+  }
+
+  monitor(id) {
+    if(this.stopping || this.monitors.has(id) || this.get(id).status!=='running')return;
+    const interval=this.registry.getProvider(this.get(id).provider)?.pollIntervalMs;
+    if(!Number.isFinite(interval) || interval<500)return;
+    const timer=setTimeout(async()=>{
+      this.monitors.delete(id);
+      try{await this.recover(id);}catch{}
+      this.monitor(id);
+    },interval);
+    timer.unref?.();this.monitors.set(id,timer);
   }
 
   finish(id, result, options = {}) {
@@ -266,7 +312,7 @@ class GenerationService extends EventEmitter {
       if (job.status === "verifying") return job;
       this.runtimeActive.add(job.id);
       return this.commit(transition(job, "running", {
-        progress: Math.max(5, Number(job.progress || 0)),
+        progress: job.provider==='muse'?null:Math.max(5, Number(job.progress || 0)),
         errorCode: null,
         error: null,
         attempts: updateAttempt(job, { status: "running" })
@@ -276,7 +322,7 @@ class GenerationService extends EventEmitter {
     if (result?.status === "completed") {
       if (job.status !== "verifying") {
         job = transition(job, "verifying", {
-          progress: Math.max(95, Number(job.progress || 0)),
+          progress: job.provider==='muse'?null:Math.max(95, Number(job.progress || 0)),
           errorCode: null,
           error: null,
           attempts: updateAttempt(job, { status: "verifying" })
@@ -345,6 +391,7 @@ class GenerationService extends EventEmitter {
   }
 
   async cancel(id) {
+    this.epochs.set(id,(this.epochs.get(id)||0)+1);
     const state = await this.serial(() => {
       const current = this.get(id);
       if (TERMINAL.has(current.status) || current.status === "cancelling") {
@@ -396,6 +443,13 @@ class GenerationService extends EventEmitter {
   }
 
   async recover(id) {
+    if(this.recovering.has(id))return this.recovering.get(id);
+    const task=this.recoverOnce(id).finally(()=>this.recovering.delete(id));
+    this.recovering.set(id,task);return task;
+  }
+
+  async recoverOnce(id) {
+    const epoch=this.epochs.get(id)||0;
     const initial = this.get(id);
     if (initial.status === "queued") {
       if (this.stopping) return initial;
@@ -404,16 +458,24 @@ class GenerationService extends EventEmitter {
       return initial;
     }
     if (!["running", "interrupted"].includes(initial.status)) return initial;
+    if(initial.provider==='muse' && initial.status==='interrupted' && this.hasActiveMuseJob(id))return initial;
 
     if (initial.status === "running") this.runtimeActive.add(id);
     let result;
     try {
-      result = await this.registry.getProvider(initial.provider)?.reconcile(this.context(initial));
+      const context=this.context(initial);
+      if(initial.provider==='muse')context.onVerifying=()=>this.serial(()=>{
+        const current=this.get(id);
+        if(this.stopping || (this.epochs.get(id)||0)!==epoch || !['running','interrupted'].includes(current.status) || this.hasActiveMuseJob(id))throw failure('RECOVERY_REQUIRED');
+        this.runtimeActive.add(id);
+        this.commit(transition(current,'verifying',{progress:null,errorCode:null,error:null,attempts:updateAttempt(current,{status:'verifying'})}));
+      });
+      result = await this.registry.getProvider(initial.provider)?.reconcile(context);
     } catch {
-      if (initial.status === "running") {
+      if (initial.status === "running" || this.get(id).status==='verifying') {
         return this.serial(() => {
           const current = this.get(id);
-          if (current.status !== "running") return current;
+          if (!['running','verifying'].includes(current.status) || (this.epochs.get(id)||0)!==epoch) return current;
           return this.commit(transition(current, "interrupted", {
             errorCode: "RECOVERY_REQUIRED",
             error: { code: "RECOVERY_REQUIRED" },
@@ -424,14 +486,19 @@ class GenerationService extends EventEmitter {
       return initial;
     }
 
-    if (initial.status === "interrupted" && (result?.status === "pending" || result?.status === "running")) {
-      this.runtimeActive.add(id);
-    }
-    return this.serial(() => this.finish(id, result, { reconciled: true }));
+    const job=await this.serial(() => {
+      if((this.epochs.get(id)||0)!==epoch)return this.get(id);
+      // A read-only reconciliation may finish after another request acquired
+      // the slot. Do not revive historical Muse work alongside that job.
+      if(initial.provider==='muse' && initial.status==='interrupted' && this.hasActiveMuseJob(id))return this.get(id);
+      return this.finish(id, result, { reconciled: true });
+    });
+    this.monitor(id);return job;
   }
 
   async retry(id, idempotencyKey) {
     const job = this.get(id);
+    if(job.provider==='muse' && fs.existsSync(path.join(this.context(job).outputDirectory,'muse-operation.json')))throw failure('RETRY_UNSAFE');
     if (!["failed", "cancelled"].includes(job.status) || idempotencyKey === job.idempotencyKey) {
       throw failure("RETRY_UNSAFE");
     }
@@ -440,6 +507,7 @@ class GenerationService extends EventEmitter {
 
   async shutdown() {
     this.stopping = true;
+    for(const timer of this.monitors.values())clearTimeout(timer);this.monitors.clear();
     const ids = Array.from(this.runtimeActive);
     await Promise.all(ids.map(id => this.cancel(id).catch(() => {})));
   }

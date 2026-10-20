@@ -1,3 +1,5 @@
+> Historical foundation document. For the current production contract see [Muse generation execution](MUSE_GENERATION_EXECUTION.md). Earlier readiness-only and browser-process approaches below are not the current execution path.
+
 # Muse extension readiness
 
 This block connects the existing Chrome profile's Muse extension to the current

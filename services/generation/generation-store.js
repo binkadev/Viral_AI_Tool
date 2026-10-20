@@ -20,6 +20,7 @@ function validUuid(value) {
 }
 
 function safeEstimate(value, modelId, request) {
+  if(request.providerId==='muse')return {modelId:null,provider:'muse',known:false,providerCredits:null,estimatedUsd:null,pricingKind:'unknown',durationSeconds:null,resolution:null};
   if (!value || typeof value !== "object") return estimateGenerationCost(modelId, request);
   const estimate = {
     modelId,
@@ -76,7 +77,7 @@ class GenerationStore {
       if (data.version !== 1 || !Array.isArray(data.jobs)) throw failure("STORE_UNAVAILABLE");
       const ids = new Set();
       return data.jobs.map(job => {
-        const model = getModel(job.modelId);
+        const model = job.modelId===null && job.provider==='muse' && job.request?.providerId==='muse' ? {id:null,provider:'muse'} : getModel(job.modelId);
         if (
           !validUuid(job.id) ||
           ids.has(job.id) ||

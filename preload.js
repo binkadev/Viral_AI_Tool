@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),
   listGenerationJobs: projectId => ipcRenderer.invoke('generation:list', projectId),
   getGenerationJob: id => ipcRenderer.invoke('generation:get', id),
+  getGenerationOutput: id => ipcRenderer.invoke('generation:output', id),
   cancelGeneration: id => ipcRenderer.invoke('generation:cancel', id),
   recoverGeneration: id => ipcRenderer.invoke('generation:recover', id),
   retryGeneration: request => ipcRenderer.invoke('generation:retry', request),

@@ -6,9 +6,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const {failure} = require("../generation-job");
+const {validPayload, validResult} = require("./execution-contract");
+const {validDiagnostic}=require('./connection-diagnostics');
 const {sanitizeSession, instanceId, tabId, label} = require("./session-status");
 const PORT_START = 32147, PORT_END = 32157, SESSION_TTL_MS = 12000;
-const FILES = ["manifest.json","service-worker.js","content-script.js","popup.html","popup.js","popup.css","strings.js"];
+const FILES = ["manifest.json","receipt-v2.js","service-worker.js","content-script.js","popup.html","popup.js","popup.css","strings.js"];
 const validOrigin = origin => /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
 const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).every(k => keys.includes(k));
 const text = (value, max) => typeof value === "string" && value.length <= max;
@@ -17,13 +19,14 @@ function check(ok) {if(!ok) throw failure("INVALID_REQUEST");}
 async function body(req) {
   check(req.headers["content-type"]?.split(";")[0] === "application/json");
   const chunks=[];let size=0;
-  for await(const chunk of req) {size+=chunk.length;check(size<=32768);chunks.push(chunk);}
+  for await(const chunk of req) {size+=chunk.length;check(size<=300000);chunks.push(chunk);}
   try {return JSON.parse(Buffer.concat(chunks).toString("utf8"));} catch {throw failure("INVALID_REQUEST");}
 }
 class MetaMuseExtensionBridge {
-  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000, distribution}) {
+  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000, distribution, developmentDiagnostics=false}) {
     if(!path.isAbsolute(userDataPath)) throw failure("PROVIDER_CONFIG_ERROR");
     this.distribution=configuration(distribution);
+    this.developmentDiagnostics=developmentDiagnostics===true;this.evidenceExpired=false;
     this.root=userDataPath;this.source=extensionSourceDir;this.shell=shell;this.now=now;this.commandTimeoutMs=commandTimeoutMs;
     this.selectionFile=path.join(userDataPath,"meta-muse-extension-selection.json");
     this.installDir=path.join(userDataPath,"meta-muse-extension");
@@ -62,12 +65,13 @@ class MetaMuseExtensionBridge {
   prune() {
     for(const [id,s] of this.sessions) if(this.now()-s.lastSeen>SESSION_TTL_MS) {
       this.sessions.delete(id);this.finish(id,false);
+      this.evidenceExpired=true;
     }
   }
-  finish(instance,ok) {
+  finish(instance,ok,result) {
     const pending=this.pending.get(instance);if(!pending)return;
     this.pending.delete(instance);clearTimeout(pending.timer);
-    ok ? pending.resolve() : pending.reject(failure("PROVIDER_UNAVAILABLE"));
+    ok ? pending.resolve(result) : pending.reject(failure("PROVIDER_UNAVAILABLE"));
   }
   async handle(req,res) {
     const origin=String(req.headers.origin||"");
@@ -100,29 +104,33 @@ class MetaMuseExtensionBridge {
       const ids=new Set();
       const tabs=b.tabs.map(t=>{
         // Legacy 0.1.0 metadata is bounded then discarded, never stored or returned.
-        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
+        check(t.canSubmit===undefined || typeof t.canSubmit==='boolean');
+        if(this.developmentDiagnostics && t.devEvidence && exact(t.devEvidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) && Object.values(t.devEvidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128)))this.devEvidence=t.devEvidence;
+        check(t.executionContract===undefined || t.executionContract===null || [1,2,3].includes(t.executionContract));
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {tabId:t.tabId,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required"};
+        return {ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection,generationActive:typeof t.devEvidence?.generationActive==='boolean'?t.devEvidence.generationActive:null}:{})};
       });
-      s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();
+      s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();s.heartbeatSeen=true;this.evidenceExpired=false;
       return this.reply(res,200,{ok:true});
     }
     if(req.method==="GET" && url.pathname==="/v1/poll") {
       if(s.extensionState!=="extension_connected") return this.reply(res,200,{ok:true,command:null});
       const p=this.pending.get(s.instanceId);
-      const command=p&&!p.sent ? {id:p.id,type:"openMuse",payload:p.tabId?{tabId:p.tabId}:{}} : null;
+      const command=p&&!p.sent ? {id:p.id,type:p.type || "openMuse",payload:p.payload || (p.tabId?{tabId:p.tabId}:{})} : null;
       if(command)p.sent=true;
       return this.reply(res,200,{ok:true,command});
     }
     if(req.method==="POST" && url.pathname==="/v1/result") {
       const b=await body(req);
       check(exact(b,["commandId","ok","result","error"]) && text(b.commandId,80) && typeof b.ok==="boolean");
-      check(b.result==null || (exact(b.result,["tabId","url"]) && tabId(b.result.tabId) && (b.result.url===undefined || (text(b.result.url,3000)&&museUrl(b.result.url)))));
-      check(b.error==null || (exact(b.error,["code","message"]) && text(b.error.code,80) && text(b.error.message,800)));
       const p=this.pending.get(s.instanceId);check(p && p.sent && p.id===b.commandId);
-      this.finish(s.instanceId,b.ok);return this.reply(res,200,{ok:true});
+      check(p.type ? (b.ok ? validResult(p.type,b.result,p.payload) : b.result==null) : b.result==null || (exact(b.result,["tabId","url"]) && tabId(b.result.tabId) && (b.result.url===undefined || (text(b.result.url,3000)&&museUrl(b.result.url)))));
+      check(b.error==null || (exact(b.error,["code","message"]) && text(b.error.code,80) && text(b.error.message,800)));
+      this.finish(s.instanceId,b.ok,b.result);return this.reply(res,200,{ok:true});
     }
     return this.reply(res,404,{ok:false,error:"unsupported"});
   }
@@ -138,6 +146,61 @@ class MetaMuseExtensionBridge {
     return sanitizeSession({state,extensionState,storeConfigured:this.distribution.storeConfigured,sessions,selectedInstanceId:selected?.instanceId || this.selectedInstanceId,selectedTabId:tab?.tabId});
   }
   async check() {await this.start();return this.snapshot();}
+  connectionDiagnosis() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const state=this.snapshot(),s=this.sessions.get(state.selectedInstanceId),tab=s?.tabs.find(t=>t.tabId===state.selectedTabId),d=tab?.diagnostic;
+    let reason='READY';
+    if(!s)reason=this.evidenceExpired?'BRIDGE_HEARTBEAT_EXPIRED':this.selectedInstanceId?'SELECTED_INSTANCE_MISSING':'INSTANCE_MISSING';
+    else if(!s.heartbeatSeen)reason='HEARTBEAT_MISSING';
+    else if(!tab)reason=s.tabs.length?'TAB_SELECTION_REQUIRED':'MUSE_TAB_MISSING';
+    else if(!d)reason='DIAGNOSTICS_UNAVAILABLE';
+    else if(d.lastContentScriptErrorCode!=='NONE')reason=d.lastContentScriptErrorCode;
+    else if(!d.museContentScriptHeartbeatSeen)reason='CONTENT_EVIDENCE_MISSING';
+    else if(d.museTabEvidenceAgeBucket==='stale')reason='CONTENT_EVIDENCE_STALE';
+    else if(d.museContentScriptContractVersion!==3)reason='CONTRACT_INCOMPATIBLE';
+    else if(!d.museTabEvidenceFresh)reason='CONTENT_TIMESTAMP_MISSING';
+    else if(tab.executionContract!==3)reason='STATUS_CONTRACT_MISSING';
+    else if(tab.authState!=='authenticated')reason='COMPOSER_UNREADY';
+    return {extensionInstanceRegistered:!!s,localhostBridgeConnected:!!s?.heartbeatSeen,registrationCompatible:s?.extensionState==='extension_connected',reason,...(d||{})};
+  }
+  receiverDiagnosis() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const selected=this.snapshot(),sessions=[...this.sessions.values()];
+    const receivers=sessions.flatMap((s,sessionIndex)=>s.tabs.map((t,receiverIndex)=>{
+      const d=t.diagnostic;
+      return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
+        reachable:!!d && (d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen),
+        contract:d?.museContentScriptContractVersion??null,workerBuild:d?.workerBuild||'unreported',contentBuild:d?.contentBuild||'unreported',
+        freshness:d?.museTabEvidenceAgeBucket||'absent',authenticated:d?.authenticatedEvidencePresent===true,composerDetected:d?.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
+    }));
+    return {selectionState:selected.state,selectionReason:selected.state==='selection_required'?'AMBIGUOUS':receivers.some(r=>r.selected)?'EXISTING_SELECTION_OR_SOLE_TAB':'NO_SELECTED_RECEIVER',
+      enumerationMayBeTruncated:sessions.some(s=>s.tabs.length===20),receivers};
+  }
+  async executionReady() {
+    await this.start();const state=this.snapshot();
+    const session=this.sessions.get(state.selectedInstanceId);
+    const tab=session?.tabs.find(t=>t.tabId===state.selectedTabId);
+    return state.extensionState==="extension_connected" && state.state==="authenticated" && tab?.executionContract===3 && tab.canSubmit===true;
+  }
+  async executionTarget() {
+    if(!await this.executionReady())throw failure("PROVIDER_UNAVAILABLE");
+    const s=this.snapshot();return {instanceId:s.selectedInstanceId,tabId:s.selectedTabId};
+  }
+  async receiptV2Ready() {
+    if(!await this.executionReady())return false;
+    const s=this.snapshot();return this.sessions.get(s.selectedInstanceId)?.tabs.find(t=>t.tabId===s.selectedTabId)?.ownershipReceiptVersion===2;
+  }
+  async command(type,payload,target) {
+    if((payload?.diagnoseAcquisition!==undefined || payload?.diagnoseOwnership!==undefined) && !this.developmentDiagnostics)throw failure('INVALID_REQUEST');
+    await this.start();this.prune();
+    const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
+    check(validPayload(type,payload) && payload.tabId===target?.tabId);
+    if(s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");
+    let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});
+    const timer=setTimeout(()=>this.finish(s.instanceId,false),type==='acquireGenerationResult'?70000:this.commandTimeoutMs);
+    this.pending.set(s.instanceId,{id:crypto.randomUUID(),type,payload,promise,resolve,reject,timer,sent:false});
+    return promise;
+  }
   async selectSession(selection) {
     check(exact(selection,["instanceId","tabId"]) && instanceId(selection.instanceId) && (selection.tabId===null || tabId(selection.tabId)));
     await this.start();this.prune();const s=this.sessions.get(selection.instanceId);

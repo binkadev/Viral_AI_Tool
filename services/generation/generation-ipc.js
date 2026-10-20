@@ -75,6 +75,10 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
       if (!identifier(payload)) throw 0;
       return service.get(payload);
     },
+    output: (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.output(payload);
+    },
     cancel: (service, payload) => {
       if (!identifier(payload)) throw 0;
       return service.cancel(payload);

@@ -50,7 +50,7 @@ class ProviderRegistry {
     try {
       const status = normalizeProviderStatus(await adapter.readiness(), id);
       // A connection-only foundation cannot be a runnable generation provider.
-      if (!adapter.modelIds.length && status.ready) {
+      if (!adapter.modelIds.length && adapter.executionMode!=='single-scene-session' && status.ready) {
         status.ready = false;
         status.state = "unavailable";
       }
@@ -77,13 +77,14 @@ class ProviderRegistry {
     }
 
     let state = "not_configured";
-    if (modelIds.length > 0) state = "ready";
+    const sessionReady=providers.some(p=>p.ready && this.adapters.get(p.id)?.executionMode==='single-scene-session');
+    if (modelIds.length > 0 || sessionReady) state = "ready";
     else if (providers.some(provider => provider.state === "error")) state = "error";
     else if (providers.some(provider => ["unavailable", "authentication_required", "checking"].includes(provider.state))) state = "unavailable";
     else if (providers.length && providers.every(provider => provider.state === "not_configured")) state = "not_configured";
 
     return {
-      ready: modelIds.length > 0,
+      ready: modelIds.length > 0 || sessionReady,
       state,
       availability,
       modelIds,

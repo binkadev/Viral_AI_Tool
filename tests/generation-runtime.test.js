@@ -68,7 +68,7 @@ test("requests normalize scene/model metadata and reject unsafe inputs", () => {
   assert.equal(normalized.mode, "text-to-video");
   assert.equal(normalized.aspectRatio, "9:16");
   assert.equal(normalized.sceneId, "scene-1");
-  assert.equal(normalizeRequest({ ...request(), prompt: " hello " }).prompt, "hello");
+  assert.equal(normalizeRequest({ ...request(), prompt: " hello " }).prompt, " hello ");
   assert.equal(normalizeRequest(request("x", { referenceAssetIds: ["asset-1"] })).referenceAssetIds[0], "asset-1");
   for (const change of [
     { apiKey: "secret" }, { prompt: " " }, { prompt: "x".repeat(8001) }, { goal: "other" },

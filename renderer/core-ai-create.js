@@ -30,6 +30,7 @@
   }
 
   let generationReady = false;
+  let museSession=false;
   let generationState = "checking";
   let readinessPending = null;
   let submitting = false;
@@ -54,7 +55,7 @@
   }
 
   function canGenerate() {
-    return generationReady && !submitting && Boolean(projectIdentity().projectId) && Boolean(currentBrief().trim());
+    return generationReady && !submitting && Boolean(projectIdentity().projectId) && (!museSession || Boolean(projectIdentity().sceneId)) && Boolean(currentBrief().trim());
   }
 
   function updateGenerationControls() {
@@ -84,6 +85,7 @@
           ? result.value.state
           : (result.value?.ready === true ? "ready" : "not_configured");
         generationReady = result.value?.ready === true && generationState === "ready";
+        museSession=generationReady && result.value?.providers?.some(p=>p.id==='muse' && p.ready) && !result.value?.modelIds?.length;
       })
       .catch(() => {
         generationReady = false;
@@ -99,7 +101,7 @@
 
   async function generate() {
     const identity = projectIdentity();
-    if (submitting || !generationReady || !identity.projectId || !currentBrief().trim()) return;
+    if (!canGenerate()) return;
     submitting = true;
     updateGenerationControls();
     submissionKey ||= window.crypto?.randomUUID?.();
@@ -118,8 +120,9 @@
         mode: "text-to-video",
         prompt: currentBrief(),
         goal: selectedGoal(),
-        aspectRatio: selectedOption("aspect", ["9:16", "16:9", "1:1"], "9:16"),
-        durationSeconds: Number(selectedOption("duration", ["5", "10"], "5"))
+        ...(museSession?{providerId:'muse'}:{
+          aspectRatio: selectedOption("aspect", ["9:16", "16:9", "1:1"], "9:16"),
+          durationSeconds: Number(selectedOption("duration", ["5", "10"], "5"))})
       });
       feedback = result?.ok ? copy().submitted : copy().generationError;
       if (result?.ok && result.value?.id && result.value.projectId === identity.projectId) {
@@ -196,6 +199,7 @@
   }
 
   function setting(name, label, options, value) {
+    if(museSession && ['aspect','duration','goal'].includes(name))return '';
     return '<label class="core-ai-setting"><span>' + esc(label) + '</span><select data-ai-setting="' + name + '">' + options.map(([id, title]) => '<option value="' + id + '"' + (id === value ? ' selected' : '') + '>' + esc(title) + '</option>').join('') + '</select></label>';
   }
 
@@ -209,6 +213,7 @@
       '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
       '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
       '<div class="core-ai-controls core-ai-strategy-grid">' +
+      (museSession?'<p>'+esc(c.museSessionSettings)+'</p>':'') +
       setting('aspect', c.aspectLabel, [['9:16', c.portrait], ['16:9', c.landscape], ['1:1', c.square]], selectedOption('aspect', ['9:16','16:9','1:1'], '9:16')) +
       setting('duration', c.durationLabel, [['5', c.fiveSeconds], ['10', c.tenSeconds]], selectedOption('duration', ['5','10'], '5')) +
       setting('goal', c.qualityLabel, [['economy', c.economy], ['balanced', c.balanced], ['quality', c.quality]], selectedGoal()) +

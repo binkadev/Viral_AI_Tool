@@ -1,3 +1,5 @@
+> Historical foundation document. For the current production contract see [Muse generation execution](MUSE_GENERATION_EXECUTION.md). Earlier readiness-only and browser-process approaches below are not the current execution path.
+
 # AI Create 2B-2: Muse browser session bridge
 
 Muse uses Google Chrome only on Windows. There is no Edge or system-default-browser fallback. The launch URL is fixed in main-process code to https://muse.ai/ and cannot be supplied by IPC, configuration, or environment variables.

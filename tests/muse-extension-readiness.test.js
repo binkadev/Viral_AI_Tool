@@ -20,13 +20,97 @@ async function fixture(t,options={}) {
   });
  }
  const register=async(instanceId='profile-one',extra={})=>{
-  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.2.0'},...extra});
+  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1},...extra});
   assert.equal(r.status,200);return r.value.token;
  };
  const beat=(token,tabs=[],id='profile-one',extra={})=>request('/v1/heartbeat?instanceId='+id,{method:'POST',token,body:{profileLabel:'Work',browserName:'Chrome',tabs},...extra});
  return {root,bridge,request,register,beat,advance:()=>now+=SESSION_TTL_MS+1};
 }
 const tab=(id=1,ready=true)=>({tabId:id,url:'https://muse.ai/',composerReady:ready});
+
+function diagnosticWorker({missing=false,version=3,stale=false,statusError=false,development=true}={}) {
+ const calls=[],events={},alarms=[];
+ const chrome={runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(development?{version_name:'development-diagnostics'}:{})}),onConnect:{addListener:f=>events.connect=f},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener:f=>events.startup=f}},storage:{local:{get:async()=>({instanceId:'profile-one',profileLabel:''}),set:async()=>{}}},
+  tabs:{onUpdated:{addListener:f=>events.updated=f},query:async()=>[{id:1}],sendMessage:async(id,m)=>{calls.push(m.type);if(missing)throw Error('Could not establish connection. Receiving end does not exist.');if(m.type==='viral-ai:muse-handshake')return {contractVersion:version};return {sampledAt:Date.now()-(stale?13000:0),composerReady:!statusError,inspectionComplete:!statusError,executionContract:statusError?null:version,canSubmit:true,devEvidence:{generationActive:false},...(statusError?{contentError:'STATUS_EXCEPTION'}:{})};}},
+  alarms:{create:(...a)=>alarms.push(a),onAlarm:{addListener:f=>events.alarm=f}}};
+ const context={chrome,navigator:{userAgent:'Edg/1'},setTimeout,clearTimeout,Date,AbortController,crypto:require('node:crypto').webcrypto,TextEncoder};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),context);
+ return {context,calls,events,alarms,tabs:()=>vm.runInContext('museTabs()',context)};
+}
+test('diagnostic v3 handshake and fresh content evidence cross the actual worker without execution',async()=>{
+ const f=diagnosticWorker(),[t]=await f.tabs();
+ assert.equal(t.executionContract,3);assert.equal(t.devConnection.museContentScriptHandshakeSeen,true);assert.equal(t.devConnection.museTabEvidenceFresh,true);
+ assert.deepEqual(f.calls,['viral-ai:muse-handshake','viral-ai:muse-status']);
+ assert(!JSON.stringify(t.devConnection).includes('https:'));
+ const production=diagnosticWorker({development:false});assert.equal((await production.tabs())[0].devConnection,undefined);
+});
+
+test('executing worker reports its own build and each receiver handshake build separately',async()=>{
+ const f=diagnosticWorker();
+ f.context.chrome.tabs.query=async()=>[{id:1},{id:2}];
+ f.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?{contractVersion:3,...(id===2?{buildMarker:'muse-content-20261019-receivers-1'}:{})}:{sampledAt:Date.now(),composerReady:true,executionContract:3,devEvidence:{generationActive:id===2}};
+ const tabs=await f.tabs();
+ assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-0-contract3-receipt2');
+ assert.equal(tabs[0].devConnection.contentBuild,'unreported');
+ assert.equal(tabs[1].devConnection.contentBuild,'muse-content-20261019-receivers-1');
+ assert.equal(tabs[0].devConnection.generationActive,false);assert.equal(tabs[1].devConnection.generationActive,true);
+});
+
+test('receiver census retains per-tab evidence, reports ambiguity and never chooses first authenticated tab',async t=>{
+ const f=await fixture(t,{developmentDiagnostics:true}),token=await f.register();
+ const d=JSON.parse(JSON.stringify((await diagnosticWorker().tabs())[0].devConnection));
+ await f.beat(token,[{...tab(1),devConnection:{...d,contentBuild:'unreported',generationActive:false}},{...tab(2),devConnection:{...d,contentBuild:'muse-content-20261019-receivers-1',generationActive:true}}]);
+ const report=f.bridge.receiverDiagnosis();
+ assert.equal(report.selectionReason,'AMBIGUOUS');assert.equal(report.receivers.length,2);assert(report.receivers.every(r=>!r.selected));
+ assert.equal(report.receivers[0].generationActive,false);assert.equal(report.receivers[1].generationActive,true);
+ const serialized=JSON.stringify(report);
+ for(const secret of ['https:','profile-one','tabId','profileLabel','token'])assert(!serialized.includes(secret));
+ assert(!JSON.stringify(f.bridge.snapshot()).includes('workerBuild'));
+ f.advance();assert.equal(f.bridge.receiverDiagnosis().receivers.length,0);
+});
+test('missing receiver, stale status, old contract and status exception have separate bounded diagnostics',async()=>{
+ for(const [options,error,age] of [[{missing:true},'NO_RECEIVER','absent'],[{stale:true},'NONE','stale'],[{version:2},'NONE','fresh'],[{statusError:true},'STATUS_EXCEPTION','fresh']]) {
+  const [t]=await diagnosticWorker(options).tabs();assert.equal(t.executionContract,null);assert.equal(t.canSubmit,false);
+  assert.equal(t.devConnection.lastContentScriptErrorCode,error);assert.equal(t.devConnection.museTabEvidenceAgeBucket,age);
+ }
+});
+test('worker restart rebuilds evidence; extension reload with an open tab reports missing receiver without injection',async()=>{
+ const first=diagnosticWorker();assert.equal((await first.tabs())[0].executionContract,3);
+ const restarted=diagnosticWorker();assert.equal((await restarted.tabs())[0].executionContract,3);assert.equal(restarted.alarms.length,1);
+ const reload=diagnosticWorker({missing:true});assert.equal((await reload.tabs())[0].devConnection.lastContentScriptErrorCode,'NO_RECEIVER');
+ assert.equal(typeof reload.events.updated,'function');assert.equal(typeof reload.events.startup,'function');
+ assert(reload.calls.every(c=>c==='viral-ai:muse-handshake'||c==='viral-ai:muse-status'));
+});
+test('local bridge restart rendezvous uses a new registration without executing a job',async()=>{
+ const f=diagnosticWorker();let registrations=0;
+ f.context.fetch=async(url)=>({ok:true,json:async()=>String(url).endsWith('/v1/ping')?{bridge:'meta-muse-extension',serverId:'new-server'}:(registrations++,{token:'a'.repeat(64)})});
+ await vm.runInContext('connect()',f.context);assert.equal(registrations,1);
+ await vm.runInContext('bridge=null; connect()',f.context);assert.equal(registrations,2);assert.equal(f.calls.length,0);
+});
+test('development diagnosis differentiates normalization, expiration and stale selected instance; renderer stays sanitized',async t=>{
+ const f=await fixture(t,{developmentDiagnostics:true}),token=await f.register();
+ const d=(await diagnosticWorker().tabs())[0].devConnection;
+ const diagnostic=JSON.parse(JSON.stringify(d));
+ assert.equal(f.bridge.connectionDiagnosis().reason,'HEARTBEAT_MISSING');
+ await f.beat(token,[{...tab(),inspectionComplete:true,executionContract:3,devConnection:diagnostic}]);
+ assert.equal(f.bridge.connectionDiagnosis().reason,'READY');
+ assert(!JSON.stringify(f.bridge.snapshot()).includes('devConnection'));assert(!JSON.stringify(f.bridge.snapshot()).includes('serviceWorkerAlive'));
+ await f.beat(token,[{...tab(),inspectionComplete:false,executionContract:null,devConnection:{...diagnostic,museContentScriptContractVersion:2}}]);
+ assert.equal(f.bridge.connectionDiagnosis().reason,'CONTRACT_INCOMPATIBLE');
+ await f.beat(token,[{...tab(),inspectionComplete:false,executionContract:null,devConnection:{...diagnostic,museTabEvidenceFresh:false,museTabEvidenceAgeBucket:'stale'}}]);
+ assert.equal(f.bridge.connectionDiagnosis().reason,'CONTENT_EVIDENCE_STALE');
+ await f.beat(token,[{...tab(),inspectionComplete:false,executionContract:null,devConnection:{...diagnostic,lastContentScriptErrorCode:'NO_RECEIVER'}}]);
+ assert.equal(f.bridge.connectionDiagnosis().reason,'NO_RECEIVER');
+ f.bridge.selectedInstanceId='absent-profile';assert.equal(f.bridge.connectionDiagnosis().reason,'SELECTED_INSTANCE_MISSING');
+ f.bridge.selectedInstanceId=null;f.advance();assert.equal(f.bridge.connectionDiagnosis().reason,'BRIDGE_HEARTBEAT_EXPIRED');
+ assert.equal(f.bridge.pending.size,0);assert.equal(fs.existsSync(path.join(f.root,'generation','jobs.json')),false);
+ const production=await fixture(t);assert.throws(()=>production.bridge.connectionDiagnosis(),{code:'UNAVAILABLE'});
+});
+test('diagnostic schema rejects private or arbitrary data before storing it',async t=>{
+ const f=await fixture(t,{developmentDiagnostics:true}),token=await f.register();
+ const d=JSON.parse(JSON.stringify((await diagnosticWorker().tabs())[0].devConnection));
+ for(const patch of [{pageText:'private'},{lastContentScriptErrorCode:'raw error'},{museContentScriptContractVersion:999}])assert.equal((await f.beat(token,[{...tab(),devConnection:{...d,...patch}}])).status,400);
+});
 
 test('loopback binding and compatible discovery range; originless GET ping is safe',async t=>{
  const f=await fixture(t);assert.equal(f.bridge.server.address().address,'127.0.0.1');
@@ -49,7 +133,7 @@ test('registration rotates random tokens, binds origin, rejects unauthorized req
  assert.equal((await f.beat(token2,[tab()])).status,401);
  assert.equal((await f.beat(token,[tab()],'profile-one',{requestOrigin:otherOrigin})).status,401);
  assert.equal((await f.beat(token,[tab()])).status,200);
- assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-one',profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.2.0'}})).status,409);
+ assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-one',profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.0'}})).status,409);
  const rotated=await f.register('profile-one',{token});assert.notEqual(rotated,token);
  assert.equal((await f.beat(token,[tab()])).status,401);
 });
@@ -59,7 +143,7 @@ test('strict bounded payloads reject unsupported fields, non-Muse tabs, malforme
  for(const tabs of [[{...tab(),url:'https://muse.ai.evil.example/'}],[{...tab(),dom:'secret'}],[tab(),tab()],Array.from({length:21},(_,i)=>tab(i+1))])assert.equal((await f.beat(token,tabs)).status,400);
  assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{\"x\":\"'+'a'.repeat(33000)+'\"}'})).status,400);
  assert.equal((await f.request('/v1/heartbeat?instanceId=profile-one',{method:'POST',token,raw:'{'})).status,400);
- assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-edge',profileLabel:'Edge',browserName:'Edge',extensionVersion:'0.2.0'}})).status,400);
+ assert.equal((await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-edge',profileLabel:'Edge',browserName:'Edge',extensionVersion:'0.3.0'}})).status,400);
  assert.equal((await f.request('/v1/event?instanceId=profile-one',{method:'POST',token,body:{}})).status,404);
 });
 
@@ -137,23 +221,12 @@ test('canonical Muse integration has no browser process access or legacy automat
  const pkg=require('../package.json');assert(pkg.scripts['test:core-commercial'].includes('test:muse-extension'));assert(pkg.build.files.includes('extensions/**/*'));
 });
 
-test('content script proves visible editable composer presence without reading text or account details',()=>{
+test('content script uses structural identity and exposes no message/draft strings',()=>{
  const source=fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8');
- for(const forbidden of ['textContent','innerHTML','innerText','value','cookie','localStorage','sessionStorage','accountLabel','fetch(','XMLHttpRequest','viral-ai:muse-generate'])assert(!source.includes(forbidden));
- let listener,visible=true,rootPresent=true,disabled=false,editable=true;
- const editor={tagName:'DIV',get disabled(){return disabled},readOnly:false,get isContentEditable(){return editable},getAttribute:()=>null,closest:()=>null,getClientRects:()=>visible?[{}]:[]};
- const root={querySelector:()=>editor,closest:()=>null,getClientRects:()=>visible?[{}]:[]};
- const window={};window.top=window;
- const context={window,location:{origin:'https://muse.ai'},document:{readyState:'complete',querySelector:()=>rootPresent?root:null},getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'test',onMessage:{addListener:fn=>listener=fn},connect:()=>({onDisconnect:{addListener(){}}})}}};
- vm.runInNewContext(source,context);
- const status=()=>{let result;listener({type:'viral-ai:muse-status'},{id:'test'},v=>result=v);return result;};
- assert.equal(status().composerReady,true);assert.deepEqual(Object.keys(status()).sort(),['composerReady','inspectionComplete']);
- visible=false;assert.equal(status().composerReady,false);visible=true;
- disabled=true;assert.equal(status().composerReady,false);disabled=false;
- editable=false;assert.equal(status().composerReady,false);editable=true;
- rootPresent=false;assert.equal(status().composerReady,false);rootPresent=true;
- context.location.origin='https://www.instagram.com';assert.equal(status().inspectionComplete,false);
- let called=false;listener({type:'viral-ai:muse-status'},{id:'other'},()=>called=true);assert.equal(called,false);
+ for(const forbidden of ['.textContent','.innerHTML','.innerText','.nodeValue','document.cookie','localStorage','sessionStorage','accountLabel','editor.value'])assert(!source.includes(forbidden),forbidden);
+ assert(source.includes('data-message-id'));assert(source.includes('textLength'));
+ assert(source.includes('sendControlTransition'));assert(source.includes('generationControlObserved'));
+ assert(source.includes('sendButtons(c)'));assert(!source.includes('KeyboardEvent'));
 });
 
 test('popup strings derive from VI/EN product i18n and all runtime imports resolve',()=>{
@@ -174,7 +247,7 @@ test('popup strings derive from VI/EN product i18n and all runtime imports resol
 
 test('extension setup copies only app-managed source files without creating browser profiles',async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
- await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.2.0');
+ await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.0');
  assert(!fs.existsSync(path.join(f.root,'browser-sessions')));assert(!fs.existsSync(path.join(f.root,'meta-muse-profile')));
 });
 
@@ -189,7 +262,7 @@ test('extension setup refuses a redirected installation directory',async t=>{
 
 test('extension worker keeps credentials transient, reuses a selected Muse tab and rejects unsupported commands',async()=>{
  const calls=[],stored=[],opened=[];let command=null;
- const chrome={runtime:{id:'extension',getManifest:()=>({version:'0.2.0'}),getURL:p=>'chrome-extension://extension/'+p,onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+ const chrome={runtime:{id:'extension',getManifest:()=>({version:'0.3.0'}),getURL:p=>'chrome-extension://extension/'+p,onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
   storage:{local:{get:async keys=>{assert.deepEqual(Array.from(keys),['instanceId','profileLabel']);return {instanceId:'profile-one',profileLabel:'Work'};},set:async data=>stored.push(data),remove(){}}},
   tabs:{query:async()=>[{id:5}],sendMessage:async()=>({composerReady:true,inspectionComplete:true}),update:async(id,options)=>{opened.push({id,options});return {id,windowId:7};},create:async options=>{opened.push(options);return {id:6,windowId:7};}},
   windows:{update:async()=>{}},alarms:{onAlarm:{addListener(){}},create(){}}};
@@ -200,14 +273,16 @@ test('extension worker keeps credentials transient, reuses a selected Muse tab a
   else if(url.includes('/v1/poll'))result={command};else result={ok:true};
   return {ok:true,json:async()=>result};
  }};
- vm.createContext(context);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),context);
+ vm.createContext(context);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),context);
  await new Promise(r=>setImmediate(r));assert.equal(calls.length,0);
  context.navigator.userAgent='Chrome/140';command={id:'cmd',type:'openMuse',payload:{tabId:5}};
  assert.equal(await vm.runInContext('poll()',context),true);assert.equal(opened.length,1);assert.equal(opened[0].id,5);
  assert.equal(stored.length,0);assert(calls.filter(c=>c.url.includes('/v1/heartbeat')).every(c=>c.options.headers['X-Viral-Muse-Token']==='a'.repeat(64)));
  assert(!calls.some(c=>c.url.includes('generate')));
- command={id:'bad',type:'generate',payload:{}};assert.equal(await vm.runInContext('poll()',context),false);assert.equal(opened.length,1);
- command={id:'bad',type:'openMuse',payload:{url:'https://evil.example'}};assert.equal(await vm.runInContext('poll()',context),false);assert.equal(opened.length,1);
+ command={id:'bad',type:'generate',payload:{}};await vm.runInContext('poll()',context);await new Promise(r=>setImmediate(r));assert.equal(opened.length,1);
+ assert.equal(JSON.parse(calls.filter(c=>c.url.includes('/v1/result')).at(-1).options.body).ok,false);
+ command={id:'bad',type:'openMuse',payload:{url:'https://evil.example'}};await vm.runInContext('poll()',context);assert.equal(opened.length,1);
+ assert.equal(JSON.parse(calls.filter(c=>c.url.includes('/v1/result')).at(-1).options.body).ok,false);
 });
 
 test('an incomplete extension bundle leaves installed files untouched',async t=>{
@@ -225,7 +300,7 @@ test('distribution compatibility, missing evidence and legacy 0.2.0 session pres
  const token=await f.register();await f.beat(token,[tab()]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_connected');assert.equal(f.bridge.snapshot().state,'authenticated');
  f.advance();assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
- for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.2.0',2,'extension_error'],['0.2.0',0,'extension_error'],['0.2.0',1,'extension_connected']]) {
+ for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_connected']]) {
   const r=await f.request('/v1/register',{method:'POST',body:{instanceId:'version-test',profileLabel:'',browserName:'Chrome',extensionVersion,protocolVersion}});
   assert.equal(r.status,200);await f.beat(r.value.token,[tab()],'version-test');
   assert.equal(f.bridge.snapshot().extensionState,expected);
@@ -233,13 +308,13 @@ test('distribution compatibility, missing evidence and legacy 0.2.0 session pres
   f.advance();f.bridge.snapshot();
  }
  const {compatibility,configuration}=require('../services/generation/bridge/extension-distribution');
- assert.equal(compatibility('0.2.0',1,configuration({protocolVersion:2})),'extension_update_required');
+ assert.equal(compatibility('0.3.0',1,configuration({protocolVersion:2})),'extension_update_required');
 });
 
 test('production official identity is enforced; support and development accept unpacked origins',async t=>{
  for(const distributionMode of ['production','support','development']) {
   const f=await fixture(t,{distribution:{distributionMode,chromeWebStoreExtensionId:'a'.repeat(32)}});
-  const result=await f.request('/v1/register',{method:'POST',requestOrigin:otherOrigin,body:{instanceId:'other-profile',profileLabel:'',browserName:'Chrome',extensionVersion:'0.2.0',protocolVersion:1}});
+  const result=await f.request('/v1/register',{method:'POST',requestOrigin:otherOrigin,body:{instanceId:'other-profile',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1}});
   assert.equal(result.status,distributionMode==='production'?403:200);
   await f.register();
  }

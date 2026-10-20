@@ -3739,6 +3739,11 @@ async function addFiles() {
   const files = await window.desktopAPI.selectVideos();
   if (!files.length) return [];
 
+  return addSourceFiles(files);
+}
+
+function addSourceFiles(files) {
+
   const jobs = files.map((file) => ({
     id: makeJobId("source"),
     name: file.name,
@@ -3756,6 +3761,7 @@ async function addFiles() {
   toast(t("download.added", { count: files.length }));
 
   jobs.forEach(enrichJob);
+  save();
   return jobs;
 }
 

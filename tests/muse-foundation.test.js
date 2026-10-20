@@ -28,7 +28,7 @@ test("Muse registers without invented models; absent, disabled and enabled confi
   assert.equal((await f.service.configureProvider("muse",{enabled:false})).messageCode,"DISABLED");
   const enabled=await f.service.configureProvider("muse",{enabled:true});
   assert.equal(enabled.state,"unavailable");
-  assert.equal(enabled.messageCode,"GENERATION_NOT_IMPLEMENTED");
+  assert.equal(enabled.messageCode,"EXECUTION_UNAVAILABLE");
   assert.equal(enabled.ready,false);
   assert(Number.isFinite(Date.parse(enabled.checkedAt)));
   const restarted=new ProviderConfigStore(f.config.root);

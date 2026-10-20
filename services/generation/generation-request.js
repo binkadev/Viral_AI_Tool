@@ -6,6 +6,7 @@ const { supports } = require("./model-router");
 
 const FIELDS = new Set([
   "projectId",
+  "providerId",
   "sceneId",
   "idempotencyKey",
   "kind",
@@ -53,7 +54,7 @@ function normalizeRequest(input) {
     idempotencyKey: input.idempotencyKey,
     kind: input.kind ?? "video",
     mode: input.mode ?? "text-to-video",
-    prompt: input.prompt.trim(),
+    prompt: input.prompt,
     goal: input.goal ?? "balanced",
     modelId: input.modelId || null,
     resolution: input.resolution ?? "720p",
@@ -63,16 +64,22 @@ function normalizeRequest(input) {
     sourceAssetId: input.sourceAssetId || null,
     referenceAssetIds: [...referenceAssetIds]
   };
+  if(input.providerId!==undefined) {
+    if(input.providerId!=='muse' || !identifier(input.sceneId) || input.modelId || input.sourceAssetId || referenceAssetIds.length || ['resolution','durationSeconds','aspectRatio','withAudio'].some(key=>input[key]!=null))throw failure('INVALID_REQUEST');
+    request.providerId='muse';
+    // The selected Muse tab owns these settings. No invented model or specs.
+    request.resolution=null;request.durationSeconds=null;request.aspectRatio=null;request.withAudio=null;
+  }
 
   if (
     request.kind !== "video" ||
     request.mode !== "text-to-video" ||
     !["economy", "balanced", "quality"].includes(request.goal) ||
-    !ASPECT_RATIOS.has(request.aspectRatio) ||
+    (!request.providerId && (!ASPECT_RATIOS.has(request.aspectRatio) ||
     typeof request.durationSeconds !== "number" ||
     !Number.isFinite(request.durationSeconds) ||
     request.durationSeconds <= 0 ||
-    typeof request.withAudio !== "boolean" ||
+    typeof request.withAudio !== "boolean")) ||
     !optionalIdentifier(request.sourceAssetId)
   ) {
     throw failure("INVALID_REQUEST");

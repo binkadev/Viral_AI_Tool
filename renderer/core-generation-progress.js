@@ -1,4 +1,4 @@
-﻿(function installGenerationProgress() {
+(function installGenerationProgress() {
   'use strict';
   const model = window.ViralGenerationProgressModel;
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -40,7 +40,12 @@
       ready=status?.ok === true && status.value?.ready === true && status.value?.state === 'ready';
       selectedId=jobs.some(j=>j.id===selectedId) ? selectedId : jobs[0]?.id || null;
       outputPath=null;
-      const candidate=model.outputCandidate(selected(),state);
+      let candidate=model.outputCandidate(selected(),state);
+      if(model.verified(selected()) && window.desktopAPI.getGenerationOutput) {
+        const output=await window.desktopAPI.getGenerationOutput(selected().id);
+        if(version!==requestVersion || identity()!==id)return;
+        if(output?.ok && output.value?.projectId===id && output.value?.jobId===selected().id)candidate=output.value.path;
+      }
       if (candidate) {
         const probe=await window.desktopAPI.probeVideo(candidate);
         if (version !== requestVersion || identity() !== id) return;
@@ -61,9 +66,10 @@
     const stageStates=visualFixture ? visualFixture.stageStates : model.stages(job,p,state);
     const rows=model.scenes(p,projectId===identity()?jobs:[]);
     return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(base.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button('create',c.create)+'</header>'+
-      '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.outputCandidate(job,state)===outputPath?button('studio',c.studio):'')+'</div></section>'+
+      '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.verified(job)?button('studio',c.studio):'')+'</div></section>'+
       (visualFixture?'<p class="generation-notice" role="status">'+esc(c.visualNotice)+'</p>':'')+
       (error?'<p class="generation-notice" role="alert">'+esc(c[error])+'</p>':'')+
+      (job?.provider==='muse' && job.status==='interrupted'?'<p class="generation-notice" role="status">'+esc(c.museInterrupted)+'</p>':'')+
       (job&&['failed','interrupted','cancelled','cancelling'].includes(job.status)?'<p class="generation-notice tone-'+info.tone+'">'+esc(c.help[job.status])+'</p>':'')+
       '<ol class="generation-stages" aria-label="'+esc(c.workflow)+'">'+c.stages.map((label,i)=>'<li data-stage-state="'+stageStates[i]+'"'+(i===currentStage?' aria-current="step"':'')+'><span aria-hidden="true">'+(stageStates[i]==='done'?'✓':i+1)+'</span><strong>'+esc(visualFixture?base.workflowCopy[i].title:label)+'</strong><small>'+esc(c.stageStates[stageStates[i]])+'</small></li>').join('')+'</ol>'+
       '<div class="generation-story-head"><div><h3>'+esc(c.storyboard)+'</h3><p>'+esc(c.sceneNote)+'</p></div><span class="generation-provider">'+esc(ready?c.providerReady:c.providerUnavailable)+'</span></div>'+
@@ -75,7 +81,12 @@
     if (name==='refresh') { if(!busy) await refresh();return; }
     if (name==='studio') {
       await refresh();
-      if (outputPath && model.outputCandidate(selected(),state)===outputPath) {state.page='ai-video';render();}
+      if (outputPath && model.verified(selected())) {
+        const existing=state.jobs.find(j=>j.sourcePath===outputPath);
+        if(!existing && typeof addSourceFiles==='function')addSourceFiles([{name:selected().output.fileName,path:outputPath}]);
+        else if(existing)state.jobs=[existing,...state.jobs.filter(j=>j!==existing)];
+        save();state.page='ai-video';render();
+      }
       return;
     }
     if (visualFixture) return;
