@@ -106,6 +106,14 @@ stops writes immediately; typed abort delivery is best effort when transport is 
 This does not claim remote Muse cancellation. An uncertain remote outcome remains
 interrupted; no generation is automatically resubmitted.
 
+The typed cancel command invalidates local V2 observation, disconnects its observer,
+releases its active reservation and aborts matching operation/scene transfers.
+It retains the operation record and all receipts. A separate durable worker
+localCancelled flag blocks submission of a cancelled preparation even after
+restart; it does not mean Muse stopped. The response remains unsupported with
+confirmed:false. A new independent operation still needs normal service admission
+and live readiness checks.
+
 ## Files, verification and restart
 
 Main controls the app-managed outputs/<jobId>/<jobId>.mp4 path. Directory realpath,
@@ -149,8 +157,10 @@ test:muse-execution, test:muse-extension, test:generation-runtime, test:media-lo
 Also run media-acquisition-manager, media-acquisition-path-windows and
 media-runtime-integration tests. The extension suite creates temporary ASAR archives,
 checks exact source bytes, and proves missing-file packaging fails. No installed
-browser session is used by those tests; MP4 verification uses locally generated
-fixtures. Packaging checks are not a signed installer or a desktop E2E run.
+browser session is used by those tests. Muse unit tests inject a verifier and
+assert exact fixture bytes before output publication; they do not load the native
+media runtime or require its packages. Production still uses the existing native
+video probe. Packaging checks are not a signed installer or a desktop E2E run.
 
 Read-only live research found one blob-backed video inside an assistant and other
 videos outside assistants. This supports scoped lookup structurally, not operation

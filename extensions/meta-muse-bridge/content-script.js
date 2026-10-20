@@ -284,7 +284,7 @@ async function prepareV2(p) {
   operations.set(p.operationId,op);
   const stable=await waitForStableConversation();
   if(stable)stableKey=stable.key;
-  if(!stable || !status().canSubmit){op.invalid=true;return answer(p,'interrupted');}
+  if(op.invalid || !stable || !status().canSubmit){op.invalid=true;return answer(p,'interrupted');}
   op.baseline=stable.rows.map(({id,role})=>({id,role}));op.createdAt=Date.now();op.lastContact=Date.now();
   op.newUsers=new Set();op.newAssistants=new Set();
   const sample=(mutations=[])=>{
@@ -369,6 +369,16 @@ async function acquire(p) {
 // One bounded browser stream. Only the receipt-owned element can supply a URL;
 // neither the worker nor desktop can inject one. No whole-video buffering.
 const transfers=new Map(),closedTransfers=new Set();
+function cancelLocal(p) {
+  const op=operations.get(p.operationId);
+  if(op?.sceneId===p.sceneId && op.v2Reserved!==undefined) {
+    // Keep the reservation record and receipts as exact-once evidence. Only
+    // local observation/transfer resources are released; Muse may still run.
+    op.invalid=true;op.localCancelled=true;op.v2Reserved=false;op.cleanup?.();
+  }
+  for(const t of transfers.values())if(t.operationId===p.operationId && t.sceneId===p.sceneId)closeTransfer(t);
+  return answer(p,'unsupported',{confirmed:false});
+}
 function closeTransfer(t) {
   clearTimeout(t.timer);t.controller.abort();
   try{Promise.resolve(t.reader?.cancel()).catch(()=>{});}catch{}
@@ -394,6 +404,7 @@ async function acquireV2(p) {
     if(!t) {
       if(p.offset!==0 || p.sequence!==0 || transfers.size || closedTransfers.has(p.transferId) || closedTransfers.size>=64)return answer(p,'interrupted');
       const video=await ownedVideo(p),source=video.currentSrc;
+      if(operations.get(p.operationId)?.localCancelled)return answer(p,'interrupted');
       if(transfers.size || closedTransfers.has(p.transferId))return answer(p,'interrupted');
       t={id:p.transferId,operationId:p.operationId,sceneId:p.sceneId,receipt:p.receipt,video,source,offset:0,sequence:0,
         started:Date.now(),controller:new AbortController(),pending:new Uint8Array(0),ended:false};
@@ -456,7 +467,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(type==='submitGeneration' && !developmentDiagnostics && p.receipt?.version!==2)return false;
   if(type!=='submitGeneration' && p.prompt!==undefined)return false;
   if(type==='acquireGenerationResult' && (!Number.isSafeInteger(p.offset) || p.offset<0 || p.offset>268435456))return false;
-  Promise.resolve().then(()=>type==='prepareGeneration'?prepareV2(p):type==='submitGeneration'?submit(p):type==='inspectGeneration'?inspect(p):type==='acquireGenerationResult'?acquire(p):answer(p,'unsupported',{confirmed:false}))
+  Promise.resolve().then(()=>type==='prepareGeneration'?prepareV2(p):type==='submitGeneration'?submit(p):type==='inspectGeneration'?inspect(p):type==='acquireGenerationResult'?acquire(p):cancelLocal(p))
     .then(reply,()=>reply(answer(p,'interrupted')));return true;
 });
 let reconnectAttempts=0,reconnectTimer=null,activePort=null;

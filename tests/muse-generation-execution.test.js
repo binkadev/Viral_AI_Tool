@@ -1,13 +1,11 @@
 "use strict";
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
-const {spawnSync}=require('node:child_process');
 const {GenerationService}=require('../services/generation/generation-service');
 const {ProviderRegistry}=require('../services/generation/provider-registry');
 const {createMuseProvider}=require('../services/generation/providers/muse-provider');
 const {normalizeRequest}=require('../services/generation/generation-request');
 const {validPayload,validResult,validReceipt,COMMANDS}=require('../services/generation/bridge/execution-contract');
-const {probeVideo}=require('../services/ffmpeg');
 const {MetaMuseExtensionBridge}=require('../services/generation/bridge/meta-muse-extension-bridge');
 const request=extra=>({projectId:'project',sceneId:'scene',providerId:'muse',idempotencyKey:'single',prompt:'  A red ball rolls slowly.  ',...extra});
 // Synthetic receipts for native-service tests only; DOM acceptance is tested separately.
@@ -168,23 +166,21 @@ test('worker durable intent deduplicates submit across worker restart',async()=>
  assert.equal(commands.filter(v=>v==='submitGeneration').length,1);assert(commands.includes('inspectGeneration'));
  assert(!JSON.stringify(stored).includes('exact'));
 });
-test('legacy receipt cannot acquire or publish even a valid real media fixture',async t=>{
- let bytes;
- const f=fixture(t,{verifyVideo:async file=>{const p=await probeVideo(file);assert(p.duration>0 && p.width>0 && p.height>0);},command:async(type,p)=>{
+test('legacy receipt cannot acquire or publish even a candidate media fixture',async t=>{
+ const bytes=Buffer.concat([Buffer.from([0,0,0,20]),Buffer.from('ftyp'),Buffer.alloc(32)]);
+ const f=fixture(t,{verifyVideo:async()=>{throw Error('LEGACY_VERIFIER_MUST_NOT_RUN');},command:async(type,p)=>{
    const base={operationId:p.operationId,sceneId:p.sceneId};
    if(type==='submitGeneration')return {...base,state:'running'};
    if(type==='inspectGeneration')return {...base,state:'result'};
    if(type==='acquireGenerationResult')return {...base,state:'result',offset:p.offset,total:bytes.length,data:bytes.subarray(p.offset).toString('base64')};
  }});
- const sample=path.join(f.root,'unit-fixture.mp4');
- const generated=spawnSync(require('ffmpeg-static'),['-v','error','-f','lavfi','-i','color=c=red:s=64x64:d=0.2','-an','-c:v','libx264','-pix_fmt','yuv420p',sample],{windowsHide:true});assert.equal(generated.status,0,String(generated.stderr));bytes=fs.readFileSync(sample);
  const job=await f.service.submit(request());await until(f.service,job.id,'running');const completed=await f.service.recover(job.id);
  assert.equal(completed.status,'interrupted');assert.equal(completed.output,null);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
  const next=new GenerationService({root:f.root,registry:f.registry});assert.equal(next.get(job.id).status,'interrupted');assert.throws(()=>next.output(job.id));
 });
 test('invalid, missing or unrelated acquisition never publishes an asset',async t=>{
  for(const kind of ['missing','invalid','unrelated']) {
-   const f=fixture(t,{verifyVideo:async file=>{await probeVideo(file);},command:async(type,p)=>{
+   const f=fixture(t,{verifyVideo:async()=>{throw Error('INVALID_MEDIA');},command:async(type,p)=>{
     const base={operationId:kind==='unrelated' && type!=='submitGeneration'?'foreign':p.operationId,sceneId:p.sceneId};
     if(type==='submitGeneration')return {...base,state:'running'};
     if(type==='inspectGeneration')return {...base,state:'result'};
@@ -311,12 +307,11 @@ async function acquisitionFixture(t,options={}) {
  fs.writeFileSync(path.join(context.outputDirectory,'muse-operation.json'),JSON.stringify(intent));
  return {...f,job,context,bytes,intent};
 }
-test('v2 real video fixture transfer publishes existing output and reuses verified record offline',async t=>{
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'muse-real-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
- const sample=path.join(dir,'fixture.mp4'),generated=spawnSync(require('ffmpeg-static'),['-v','error','-f','lavfi','-i','color=c=red:s=64x64:d=0.2','-an','-c:v','libx264','-pix_fmt','yuv420p',sample],{windowsHide:true});
- assert.equal(generated.status,0,String(generated.stderr));
- let probes=0;const f=await acquisitionFixture(t,{bytes:fs.readFileSync(sample),verifyVideo:async file=>{const p=await probeVideo(file);assert(p.duration>0 && p.width>0 && p.height>0);probes++;}});
- const states=[];f.service.on?.('change',v=>states.push(v));
+test('v2 fixture bytes require injected verification before publication and offline reuse',async t=>{
+ const bytes=Buffer.concat([Buffer.from([0,0,0,20]),Buffer.from('ftyp'),Buffer.alloc(210000,7)]);
+ let probes=0;const f=await acquisitionFixture(t,{bytes,verifyVideo:async file=>{
+   assert.deepEqual(fs.readFileSync(file),bytes);if(probes===0)assert.equal(f.service.get(f.job.id).asset,null);probes++;
+ }});
  const completed=await f.service.recover(f.job.id);assert.equal(completed.status,'completed');assert.deepEqual(completed.asset,{fileName:f.job.id+'.mp4'});
  assert.deepEqual(fs.readFileSync(f.service.output(f.job.id).path),f.bytes);
  const saved=JSON.parse(fs.readFileSync(path.join(f.context.outputDirectory,'muse-operation.json')));assert.equal(saved.verifiedOutput.sha256,shaBytes(f.bytes));
@@ -386,6 +381,43 @@ test('v2 transfer payload rejects missing anchors, legacy receipt, URL, selector
  for(const patch of [{receipt:{...p.receipt,assistantStableIdHash:undefined}},{receipt:receiptFor(p)},{url:'https://muse.ai/private'},{selector:'video'},{mediaKind:'audio'},{transferId:undefined}])assert(!validPayload('acquireGenerationResult',{...p,...patch}));
 });
 const v2Payload={...inspectPayload,observationToken:'worker-bridge-epoch'};
+for(const phase of ['prepared','accepted','anchored']) {
+ test('v2 local cancel releases reservation and preserves durable evidence: '+phase,async()=>{
+   const content=contentFixture({noAssistant:phase==='accepted'}),stored={},worker=workerV2Harness(stored,content);
+   const prepared=await worker.run('prepareGeneration',inspectPayload);
+   let receipt=prepared.receipt;
+   if(phase!=='prepared')receipt=(await worker.run('submitGeneration',{...operation,receipt})).receipt;
+   if(phase==='anchored')receipt=(await worker.run('inspectGeneration',{...inspectPayload,receipt})).receipt;
+   const before=JSON.stringify(stored),disconnects=content.disconnected,clicks=content.clicks;
+   const result=await worker.run('cancelGeneration',inspectPayload);
+   assert.equal(result.state,'unsupported');assert.equal(result.confirmed,false);
+   assert(content.disconnected>disconnects);
+   const expected=JSON.parse(before);expected['generation-intent:op'].localCancelled=true;
+   assert.equal(JSON.stringify(stored),JSON.stringify(expected));
+   assert.equal((await worker.run('submitGeneration',{...operation,receipt:prepared.receipt})).state,'interrupted');
+   assert.equal((await worker.run('prepareGeneration',inspectPayload)).state,'interrupted');
+   assert.equal(content.clicks,clicks);
+   assert.equal((await worker.run('prepareGeneration',{...inspectPayload,operationId:'independent'})).state,'prepared');
+   assert.equal(JSON.stringify(stored['generation-intent:op']),JSON.stringify(expected['generation-intent:op']));
+   const restarted=workerV2Harness(stored,contentFixture());
+   assert.equal((await restarted.run('submitGeneration',{...operation,receipt:prepared.receipt})).state,'interrupted');
+   assert.equal(restarted.calls.length,0);
+   await worker.run('cancelGeneration',{...inspectPayload,operationId:'independent'});
+ });
+}
+test('v2 cancel aborts active browser transfer without deleting anchored receipt or submitting',async()=>{
+ let started,aborted=false;
+ const content=contentFixture({fetch:(url,{signal})=>{started=true;return new Promise((_,reject)=>signal.addEventListener('abort',()=>{aborted=true;reject(Error('aborted'));}));}});
+ const receipt=await bindV2(content);content.replace([content.node('assistant','new-assistant',media())]);
+ const candidate=await content.send('inspectGeneration',{...v2Payload,receipt});
+ const stored={'generation-intent:op':{tabId:5,sceneId:'scene',receipt:candidate.receipt}},worker=workerV2Harness(stored,content),before=JSON.stringify(stored);
+ const pending=worker.run('acquireGenerationResult',{...inspectPayload,receipt:candidate.receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'});
+ while(!started)await new Promise(r=>setImmediate(r));
+ const result=await worker.run('cancelGeneration',inspectPayload);
+ assert.equal(result.confirmed,false);assert(aborted);assert.equal((await pending).state,'interrupted');
+ const expected=JSON.parse(before);expected['generation-intent:op'].localCancelled=true;
+ assert.equal(JSON.stringify(stored),JSON.stringify(expected));assert(!worker.calls.includes('submitGeneration'));
+});
 async function acceptV2(f) {
  const prepared=await f.send('prepareGeneration',v2Payload);
  assert.equal(prepared.state,'prepared');assert(receiptV2.valid(JSON.parse(JSON.stringify(prepared.receipt)),'op'));

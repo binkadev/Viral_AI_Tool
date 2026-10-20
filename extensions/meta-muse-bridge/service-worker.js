@@ -159,6 +159,15 @@ async function execute(c) {
   if((p.diagnoseAcquisition!==undefined || p.diagnoseOwnership!==undefined) && !developmentDiagnostics)throw Error('DIAGNOSTICS_DISABLED');
   const tabs=await chrome.tabs.query({url:[MUSE_URL+'*']});
   if(!tabs.some(t=>t.id===p.tabId))throw Error('UNAVAILABLE');
+  if(c.type==='cancelGeneration') {
+    const key='generation-intent:'+p.operationId,saved=(await chrome.storage.local.get(key))[key];
+    if(saved?.version===2 || saved?.receipt?.version===2) {
+      if(saved.tabId!==p.tabId || saved.sceneId!==p.sceneId)throw Error('CONFLICT');
+      // A separate monotonic tombstone prevents a cancelled preparation from
+      // submitting after page/worker restart. Never rewrite receipt anchors.
+      await chrome.storage.local.set({[key]:{...saved,localCancelled:true}});
+    }
+  }
   if(p.diagnoseAcquisition!==undefined) {
     if(!MuseReceiptV2.capabilityRequest(c.type,p))throw Error('INVALID');
     const r=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload:p});
@@ -224,7 +233,7 @@ async function executeV2(c) {
     if(!saved || saved.tabId!==p.tabId || saved.sceneId!==p.sceneId || !MuseReceiptV2.valid(saved.receipt,p.operationId))return interrupted();
     if(!MuseReceiptV2.extendsReceipt(p.receipt,saved.receipt) && !MuseReceiptV2.extendsReceipt(saved.receipt,p.receipt))return interrupted();
     if(c.type==='submitGeneration') {
-      if(saved.invoked || saved.receipt.userStableIdHash || p.receipt.userStableIdHash)return interrupted();
+      if(saved.localCancelled || saved.invoked || saved.receipt.userStableIdHash || p.receipt.userStableIdHash)return interrupted();
       saved={...saved,invoked:true};await chrome.storage.local.set({[key]:saved});
     } else if(!saved.receipt.userStableIdHash)return interrupted();
   }
@@ -242,7 +251,8 @@ async function executeV2(c) {
     if(result.state==='result' && !result.receipt.result)return interrupted();
     // Worker durable before main receives; a lost reply can recover this exact
     // monotonic receipt without replaying submit or inventing a delta.
-    saved={...saved,receipt:result.receipt};await chrome.storage.local.set({[key]:saved});
+    const latest=(await chrome.storage.local.get(key))[key];
+    saved={...saved,receipt:result.receipt,...(latest?.localCancelled?{localCancelled:true}:{})};await chrome.storage.local.set({[key]:saved});
   }
   return result;
 }
