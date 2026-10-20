@@ -348,6 +348,68 @@ test('production heartbeat proves executing builds privately without enabling in
  assert.equal(f.bridge.pending.size,0);
 });
 
+for(const scenario of ['disabled','missing','old worker','old content','stale','contract','receipt','authentication','composer','active','unknown generation','provider disabled','current'])test('read-only provider runtime preflight: '+scenario,async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),developmentDiagnostics:scenario!=='disabled'});
+ await f.bridge.revealExtension();
+ const config=f.bridge.distribution;
+ if(scenario!=='missing'){
+   const token=await f.register();
+   const payload={...tab(),inspectionComplete:true,executionContract:scenario==='contract'?2:3,ownershipReceiptVersion:scenario==='receipt'?1:2,canSubmit:true,
+     runtimeBuild:{workerBuild:scenario==='old worker'?'muse-worker-old':config.expectedWorkerBuild,contentBuild:scenario==='old content'?'muse-content-old':config.expectedContentBuild},
+     devEvidence:{root:scenario!=='composer',editor:true,actionSlot:true,actionableButtons:0,composerEmpty:true,generationActive:scenario==='active',userMessageCount:8,assistantMessageCount:32,messageIdentityValid:true,assistantVideoPresent:false}};
+   if(scenario==='authentication')payload.composerReady=false;
+   if(scenario==='unknown generation')delete payload.devEvidence;
+   assert.equal((await f.beat(token,[payload])).status,200);
+ }
+ const registry=new ProviderRegistry();registry.register(createMuseProvider({configStore:{read:()=>({enabled:scenario!=='provider disabled'})},extensionBridge:f.bridge,verifyVideo:async()=>{throw Error('not called');}}));
+ const service=new GenerationService({root:path.join(f.root,'generation'),registry});
+ if(scenario==='stale')f.advance();
+ const before=JSON.stringify([...f.bridge.sessions]),selection=[f.bridge.selectedInstanceId,f.bridge.selectedTabId],files=fs.readdirSync(f.root);
+ let mutations=0;
+ for(const key of ['command','start','revealExtension','selectSession','open','prune'])f.bridge[key]=()=>{mutations++;throw Error('must stay read-only');};
+ const pending={};f.bridge.pending.set('sentinel',pending);
+ const expiredBefore=f.bridge.evidenceExpired;
+ if(scenario==='disabled')await assert.rejects(service.providerRuntimeDiagnosis('muse'),{code:'UNAVAILABLE'});
+ else {
+   const report=await service.providerRuntimeDiagnosis('muse');
+   assert.equal(report.readyForControlledE2E,scenario==='current');
+   assert.equal(report.mismatches.length===0,scenario==='current');
+   assert.equal(report.expected.extensionVersion,'0.3.1');
+   if(scenario==='current')assert.equal(report.runtime.generationActive,false);
+   for(const secret of ['profile-one','token','tabId','instanceId','http:','https:','port','prompt',f.root])assert(!JSON.stringify(report).includes(secret));
+ }
+ assert.equal(mutations,0);assert.equal(JSON.stringify([...f.bridge.sessions]),before);
+ assert.deepEqual([f.bridge.selectedInstanceId,f.bridge.selectedTabId],selection);
+ assert.equal(f.bridge.pending.get('sentinel'),pending);assert.equal(f.bridge.evidenceExpired,expiredBefore);
+ f.bridge.pending.delete('sentinel');
+ assert.deepEqual(fs.readdirSync(f.root),files);assert.equal(service.jobs.length,0);
+});
+
+test('runtime diagnostic service and trusted IPC validate ids, sanitize adapter output, and preload is narrow',async t=>{
+ const f=await fixture(t,{developmentDiagnostics:true});
+ const registry=new ProviderRegistry(),adapter=createMuseProvider({configStore:{read:()=>({enabled:true})},extensionBridge:f.bridge,verifyVideo:async()=>{}});
+ let report=await adapter.runtimeDiagnosis();
+ registry.register({...adapter,runtimeDiagnosis:async()=>({...report,token:'secret',url:'private',runtime:{...report.runtime,tabId:9}})});
+ const service=new GenerationService({root:path.join(f.root,'generation'),registry});
+ const safe=await service.providerRuntimeDiagnosis('muse');assert(!JSON.stringify(safe).includes('secret'));assert(!JSON.stringify(safe).includes('tabId'));
+ report={...report,runtime:{...report.runtime,workerBuild:'https://private'}};
+ await assert.rejects(service.providerRuntimeDiagnosis('muse'),{code:'UNAVAILABLE'});
+ await assert.rejects(service.providerRuntimeDiagnosis('../muse'),{code:'INVALID_REQUEST'});
+ await assert.rejects(service.providerRuntimeDiagnosis('other'),{code:'UNAVAILABLE'});
+ const handlers={};registerGenerationIpc({ipcMain:{handle:(name,fn)=>handlers[name]=fn},getService:()=>service,trusted:e=>e.trusted});
+ const action=handlers['generation:provider-runtime-diagnosis'];
+ assert.deepEqual(await action({trusted:false},'muse'),{ok:false,errorCode:'UNAVAILABLE'});
+ assert.deepEqual(await action({trusted:true},{id:'muse'}),{ok:false,errorCode:'INVALID_REQUEST'});
+ assert.deepEqual(await action({trusted:true},'muse'),{ok:false,errorCode:'UNAVAILABLE'});
+ report=await adapter.runtimeDiagnosis();assert.equal((await action({trusted:true},'muse')).ok,true);
+ let api;const calls=[];
+ vm.runInNewContext(fs.readFileSync('preload.js','utf8'),{require:name=>{assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(_,value)=>api=value},ipcRenderer:{invoke:(...args)=>calls.push(args)}};}});
+ api.diagnoseGenerationProviderRuntime('muse');assert.deepEqual(calls,[['generation:provider-runtime-diagnosis','muse']]);
+ assert.equal(api.invoke,undefined);assert.equal(api.ipcRenderer,undefined);
+ assert.equal(service.jobs.length,0);assert.equal(f.bridge.pending.size,0);
+ const main=fs.readFileSync('main.js','utf8');assert.match(main,/developmentDiagnostics: !app\.isPackaged/);
+});
+
 
 test('extension setup refuses a redirected installation directory',async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});

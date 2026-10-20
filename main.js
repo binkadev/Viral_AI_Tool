@@ -515,7 +515,8 @@ app.whenReady().then(() => {
     const providerConfigStore = new ProviderConfigStore(path.join(root, 'provider-config'));
     const registry = new ProviderRegistry();
     museExtensionBridge = new MetaMuseExtensionBridge({ userDataPath: app.getPath('userData'),
-      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'), shell });
+      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'), shell,
+      developmentDiagnostics: !app.isPackaged });
     museExtensionBridge.start().catch(() => {});
     registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge,
       verifyVideo:async file=>{const media=await probeVideo(file);if(!(media.duration>0 && media.width>0 && media.height>0))throw Error('ASSET_UNAVAILABLE');} }));

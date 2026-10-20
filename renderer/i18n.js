@@ -2,6 +2,7 @@ window.I18N = (() => {
   const messages = {
     vi: {
       videoProviders: {
+  "runtimeDiagnostic": {"title":"Kiểm tra kết nối khi phát triển", "checking":"Đang đọc trạng thái kết nối", "unavailable":"Chưa đọc được trạng thái. Hãy kiểm tra lại.", "ready":"Sẵn sàng cho bước kiểm tra có kiểm soát", "notReady":"Chưa đủ bằng chứng để tiếp tục", "worker":"Tiện ích nền", "content":"Kết nối trong tab", "session":"Phiên Muse", "current":"Đã xác nhận", "unproven":"Chưa xác nhận", "details":"Chi tiết hỗ trợ", "check":"Đọc lại trạng thái"},
   "installExtension": "Cài tiện ích Chrome",
   "updateExtension": "Cập nhật tiện ích",
   "manualInstallation": "Cài thủ công (hỗ trợ)",
@@ -1437,6 +1438,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
     en: {
       videoProviders: {
+  "runtimeDiagnostic": {"title":"Development connection check", "checking":"Reading connection evidence", "unavailable":"Connection evidence is unavailable. Check again.", "ready":"Ready for controlled validation", "notReady":"More evidence is needed to continue", "worker":"Background extension", "content":"Tab connection", "session":"Muse session", "current":"Confirmed", "unproven":"Unproven", "details":"Support details", "check":"Read current evidence"},
   "installExtension": "Install Chrome Extension",
   "updateExtension": "Update Extension",
   "manualInstallation": "Manual installation (support)",

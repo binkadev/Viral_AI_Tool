@@ -28,6 +28,15 @@ function createMuseProvider({ configStore, extensionBridge = null, verifyVideo =
     // Uses the selected tab's settings; do not fabricate a model identifier.
     capabilities: Object.freeze(["text-to-video"]), modelIds: Object.freeze([]),
     validateConfig, readiness,
+    runtimeDiagnosis: async () => {
+      // Cached heartbeat/files only: never start a bridge or call execution.
+      if(!extensionBridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
+      const connection=extensionBridge.connectionDiagnosis(),census=extensionBridge.receiverDiagnosis(),build=extensionBridge.runtimeBuildPreflight();
+      const receiver=census.receivers.find(r=>r.selected);
+      const providerReady=validateConfig().enabled && typeof verifyVideo==='function' && extensionBridge.cachedExecutionReady() && receiver?.receiptVersion===2;
+      const {createReport}=require('../bridge/runtime-preflight');
+      return createReport({connection,build,receiver,providerReady});
+    },
     openSession: async () => {
       if (!extensionBridge || !validateConfig().enabled) throw failure("PROVIDER_UNAVAILABLE");
       return extensionBridge.open();

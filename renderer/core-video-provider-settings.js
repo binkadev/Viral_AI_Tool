@@ -3,6 +3,16 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const copy = () => window.I18N.messages[state.locale === "en" ? "en" : "vi"].videoProviders;
   let status = null, session = null, pending = false, failed = false, supportOpen = false;
+  let runtimeReport=null,diagnosticAvailable=false,diagnosticPending=false,diagnosticFailed=false;
+  function runtimeContent() {
+    if(!diagnosticAvailable)return '';
+    const c=copy().runtimeDiagnostic,r=runtimeReport;
+    return '<section aria-labelledby="muse-runtime-title" data-muse-runtime-diagnostic><h4 id="muse-runtime-title">'+esc(c.title)+'</h4>'+
+      '<p role="status">'+esc(diagnosticPending?c.checking:diagnosticFailed?c.unavailable:r?.readyForControlledE2E?c.ready:c.notReady)+'</p>'+
+      (r?'<dl><dt>'+esc(c.worker)+'</dt><dd>'+esc(r.runtime.workerBuild===r.expected.workerBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.content)+'</dt><dd>'+esc(r.runtime.contentBuild===r.expected.contentBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.session)+'</dt><dd>'+esc(r.runtime.heartbeatFresh && r.runtime.authenticated && r.runtime.composerReady?c.current:c.unproven)+'</dd></dl>'+
+      '<details><summary>'+esc(c.details)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(r,null,2))+'</pre></details>':'')+
+      '<button type="button" class="button ghost" data-video-provider-diagnose'+(diagnosticPending||pending?' disabled':'')+'>'+esc(c.check)+'</button></section>';
+  }
   function content() {
     const c = copy();
     const current = pending ? "checking" : failed ? "error" : status?.state || "unconfigured";
@@ -34,7 +44,7 @@
       esc(pending?c.states.checking:c.check)+'</button>'+
       (distributionState !== 'extension_connected' ? '<button type="button" class="button ghost" data-video-provider-store'+(pending||!session?.storeConfigured?' disabled':'')+'>'+esc(['extension_outdated','extension_update_required'].includes(distributionState)?c.updateExtension:c.installExtension)+'</button>' : '')+'</div>'+
       '<details data-video-provider-support'+(supportOpen?' open':'')+'><summary>'+esc(c.manualInstallation)+'</summary><p>'+esc(c.manualSteps)+'</p>'+
-      '<button type="button" class="button ghost" data-video-provider-setup'+(pending?' disabled':'')+'>'+esc(c.manualFolder)+'</button></details>';
+      '<button type="button" class="button ghost" data-video-provider-setup'+(pending?' disabled':'')+'>'+esc(c.manualFolder)+'</button></details>'+runtimeContent();
   }
   function html() {
     return '<section id="video-provider-settings" class="card card-pad video-provider-settings" aria-labelledby="video-providers-title" aria-busy="'+pending+'">'+content()+'</section>';
@@ -50,8 +60,8 @@
     if (keepFocus) root.querySelector("[data-video-provider-"+keepFocus+"]")?.focus({preventScroll:true});
   }
   async function refresh(enabled, focus, open = false, selection = null, setup = false, store = false) {
-    if (pending) return;
-    pending = true; failed = false; paint();
+    if (pending || diagnosticPending) return;
+    pending = true; failed = false; runtimeReport=null; paint();
     try {
       const result = typeof enabled === "boolean"
         ? await window.desktopAPI.configureGenerationProvider({id:"muse", enabled})
@@ -74,12 +84,23 @@
       if (sessionResult && (!sessionResult.ok || sessionResult.value?.id !== "muse")) throw new Error("unavailable");
       session = sessionResult?.value || null;
     } catch { failed = true; session = null; }
-    finally { pending = false; paint(focus); }
+    finally { pending = false; paint(focus); await diagnose(); }
+  }
+  async function diagnose(focus) {
+    if(diagnosticPending || pending || typeof window.desktopAPI.diagnoseGenerationProviderRuntime!=='function')return;
+    diagnosticPending=true;diagnosticFailed=false;runtimeReport=null;paint();
+    try {
+      const result=await window.desktopAPI.diagnoseGenerationProviderRuntime('muse');
+      if(!result?.ok){if(result?.errorCode!=='UNAVAILABLE' || diagnosticAvailable)diagnosticFailed=true;return;}
+      diagnosticAvailable=true;runtimeReport=result.value;
+    } catch {diagnosticFailed=true;}
+    finally {diagnosticPending=false;paint(focus);}
   }
   window.ViralVideoProviderSettings = {html};
   function install() {
     document.addEventListener("click", event => {
-      if (event.target?.closest?.("[data-video-provider-open]")) refresh(undefined,"open",true);
+      if (event.target?.closest?.("[data-video-provider-diagnose]")) diagnose('diagnose');
+      else if (event.target?.closest?.("[data-video-provider-open]")) refresh(undefined,"open",true);
       else if (event.target?.closest?.("[data-video-provider-check]")) refresh(undefined,"check");
       else if (event.target?.closest?.("[data-video-provider-store]")) refresh(undefined,"store",false,null,false,true);
       else if (event.target?.closest?.("[data-video-provider-setup]")) refresh(undefined,"setup",false,null,true);

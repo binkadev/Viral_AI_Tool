@@ -107,6 +107,9 @@ class MetaMuseExtensionBridge {
         check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
         if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
         if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
+        const evidence=t.devEvidence;
+        const validEvidence=evidence && exact(evidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) &&
+          ['root','editor','actionSlot','generationActive'].every(k=>typeof evidence[k]==='boolean') && Object.values(evidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128));
         check(t.canSubmit===undefined || typeof t.canSubmit==='boolean');
         if(this.developmentDiagnostics && t.devEvidence && exact(t.devEvidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) && Object.values(t.devEvidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128)))this.devEvidence=t.devEvidence;
         check(t.executionContract===undefined || t.executionContract===null || [1,2,3].includes(t.executionContract));
@@ -114,7 +117,8 @@ class MetaMuseExtensionBridge {
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
         return {ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
-          ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection,generationActive:typeof t.devEvidence?.generationActive==='boolean'?t.devEvidence.generationActive:null}:{})};
+          ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),contentFresh:!!validEvidence,composerDetected:validEvidence?evidence.root && evidence.editor && evidence.actionSlot:null,
+          generationActive:validEvidence?evidence.generationActive:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection}:{})};
       });
       s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();s.heartbeatSeen=true;this.evidenceExpired=false;
       return this.reply(res,200,{ok:true});
@@ -136,8 +140,9 @@ class MetaMuseExtensionBridge {
     }
     return this.reply(res,404,{ok:false,error:"unsupported"});
   }
-  snapshot() {
-    this.prune();const sessions=[...this.sessions.values()];
+  snapshot({readOnly=false}={}) {
+    if(!readOnly)this.prune();
+    const sessions=[...this.sessions.values()].filter(s=>this.now()-s.lastSeen<=SESSION_TTL_MS);
     let selected=sessions.find(s=>s.instanceId===this.selectedInstanceId);
     // A remembered but absent profile must never silently fall back to another.
     if(!selected && !this.selectedInstanceId && sessions.length===1)selected=sessions[0];
@@ -150,12 +155,13 @@ class MetaMuseExtensionBridge {
   async check() {await this.start();return this.snapshot();}
   connectionDiagnosis() {
     if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
-    const state=this.snapshot(),s=this.sessions.get(state.selectedInstanceId),tab=s?.tabs.find(t=>t.tabId===state.selectedTabId),d=tab?.diagnostic;
+    const state=this.snapshot({readOnly:true}),s=state.sessions.some(s=>s.instanceId===state.selectedInstanceId)?this.sessions.get(state.selectedInstanceId):null,tab=s?.tabs.find(t=>t.tabId===state.selectedTabId),d=tab?.diagnostic;
     let reason='READY';
-    if(!s)reason=this.evidenceExpired?'BRIDGE_HEARTBEAT_EXPIRED':this.selectedInstanceId?'SELECTED_INSTANCE_MISSING':'INSTANCE_MISSING';
+    if(!s)reason=this.evidenceExpired || [...this.sessions.values()].some(s=>this.now()-s.lastSeen>SESSION_TTL_MS)?'BRIDGE_HEARTBEAT_EXPIRED':this.selectedInstanceId?'SELECTED_INSTANCE_MISSING':'INSTANCE_MISSING';
     else if(!s.heartbeatSeen)reason='HEARTBEAT_MISSING';
     else if(!tab)reason=s.tabs.length?'TAB_SELECTION_REQUIRED':'MUSE_TAB_MISSING';
-    else if(!d)reason='DIAGNOSTICS_UNAVAILABLE';
+    else if(!d && (!tab.contentFresh || !tab.runtimeBuild))reason='DIAGNOSTICS_UNAVAILABLE';
+    else if(!d)reason=tab.executionContract!==3?'CONTRACT_INCOMPATIBLE':tab.authState!=='authenticated'?'COMPOSER_UNREADY':'READY';
     else if(d.lastContentScriptErrorCode!=='NONE')reason=d.lastContentScriptErrorCode;
     else if(!d.museContentScriptHeartbeatSeen)reason='CONTENT_EVIDENCE_MISSING';
     else if(d.museTabEvidenceAgeBucket==='stale')reason='CONTENT_EVIDENCE_STALE';
@@ -167,19 +173,22 @@ class MetaMuseExtensionBridge {
   }
   receiverDiagnosis() {
     if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
-    const selected=this.snapshot(),sessions=[...this.sessions.values()];
+    const selected=this.snapshot({readOnly:true}),sessions=[...this.sessions.values()].filter(s=>this.now()-s.lastSeen<=SESSION_TTL_MS);
     const receivers=sessions.flatMap((s,sessionIndex)=>s.tabs.map((t,receiverIndex)=>{
       const d=t.diagnostic;
       return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
-        reachable:!!d && (d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen),
-        contract:d?.museContentScriptContractVersion??null,workerBuild:d?.workerBuild||'unreported',contentBuild:d?.contentBuild||'unreported',
-        freshness:d?.museTabEvidenceAgeBucket||'absent',authenticated:d?.authenticatedEvidencePresent===true,composerDetected:d?.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
+        reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
+        contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
+        freshness:d?.museTabEvidenceAgeBucket||(t.contentFresh?'fresh':'absent'),authenticated:d?d.authenticatedEvidencePresent===true:t.authState==='authenticated',composerDetected:d?d.composerDetected===true:t.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
     }));
     return {selectionState:selected.state,selectionReason:selected.state==='selection_required'?'AMBIGUOUS':receivers.some(r=>r.selected)?'EXISTING_SELECTION_OR_SOLE_TAB':'NO_SELECTED_RECEIVER',
       enumerationMayBeTruncated:sessions.some(s=>s.tabs.length===20),receivers};
   }
   async executionReady() {
-    await this.start();const state=this.snapshot();
+    await this.start();this.prune();return this.cachedExecutionReady();
+  }
+  cachedExecutionReady() {
+    const state=this.snapshot({readOnly:true});
     const session=this.sessions.get(state.selectedInstanceId);
     const tab=session?.tabs.find(t=>t.tabId===state.selectedTabId);
     return state.extensionState==="extension_connected" && state.state==="authenticated" && tab?.executionContract===3 && tab.canSubmit===true &&
@@ -190,7 +199,7 @@ class MetaMuseExtensionBridge {
   }
   runtimeBuildPreflight() {
     if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
-    const selected=this.snapshot(),s=this.sessions.get(selected.selectedInstanceId),tab=s?.tabs.find(t=>t.tabId===selected.selectedTabId),d=tab?.diagnostic;
+    const selected=this.snapshot({readOnly:true}),s=selected.sessions.some(s=>s.instanceId===selected.selectedInstanceId)?this.sessions.get(selected.selectedInstanceId):null,tab=s?.tabs.find(t=>t.tabId===selected.selectedTabId),d=tab?.diagnostic;
     const expected=this.distribution,build=tab?.runtimeBuild||d;
     let sourceBuild=null;
     try{sourceBuild=readBundle(this.source,expected).summary;}catch{}

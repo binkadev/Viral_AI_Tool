@@ -53,6 +53,26 @@ markers fail this controlled preflight even when the manifest version matches.
 The heartbeat-only `dev/muse-receiver-inspect.js` reports this preflight without
 browser commands; run it only when no desktop bridge instance is running.
 
+For controlled validation alongside the running desktop app, unpackaged
+`npm start` enables the bridge's diagnostic mode (`!app.isPackaged`). Settings >
+Muse then shows a compact development connection check with expandable bounded
+JSON evidence and an explicit read-again action. Packaged production disables
+this diagnostic access; the support block is absent. No environment override
+enables it in a packaged stable app.
+
+The narrow route is `diagnoseGenerationProviderRuntime('muse')` -> trusted
+`generation:provider-runtime-diagnosis` -> `providerRuntimeDiagnosis()` -> Muse
+`runtimeDiagnosis()`. It reuses connection/receiver/build diagnoses and reads
+cached heartbeat state with no session pruning, bridge startup, execution command,
+job creation, selection change, staging, tab navigation or reload. The service
+rebuilds an allowlisted report, excluding instance/tab IDs, paths, ports, tokens,
+URLs and content. All missing evidence fails closed. Controlled readiness also
+requires normal provider readiness, verified staging, both exact executing builds,
+fresh selected receipt-2/contract-3 authentication and composer evidence, and an
+explicitly inactive generation control. An earlier successful report is cleared
+while checking again or changing the session; it is a point-in-time observation,
+not permission to submit or proof of future readiness.
+
 ## Submission and ownership
 
 The existing lifecycle is queued -> preparing -> submitting -> running ->

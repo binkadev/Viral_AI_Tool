@@ -77,6 +77,34 @@ test("ready status does not render the not-configured fallback message",async()=
   assert(!root.innerHTML.includes(copy.messages.NOT_CONFIGURED));
 });
 
+test('runtime support block is development-only, bilingual, read-only, and handles duplicate checks and failure',async()=>{
+ for(const locale of ['vi','en'])for(const enabled of [false,true]){
+   const listeners={},focus=[],calls=[];let complete;
+   const root={innerHTML:'',setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
+   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.1',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
+   const context={state:{locale,page:'settings'},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},window:{addEventListener(){},desktopAPI:{
+     checkGenerationProvider:async()=>{calls.push('provider');return {ok:true,value:{id:'muse',enabled:true,ready:true,state:'ready'}};},
+     diagnoseGenerationProviderRuntime:async id=>{assert.equal(id,'muse');calls.push('diagnose');return enabled?{ok:true,value:report}:{ok:false,errorCode:'UNAVAILABLE'};}
+   }}};
+   vm.runInNewContext(fs.readFileSync('renderer/i18n.js','utf8'),context);
+   vm.runInNewContext(fs.readFileSync('renderer/core-video-provider-settings.js','utf8'),context);await tick();
+   const c=context.window.I18N.messages[locale].videoProviders.runtimeDiagnostic;
+   assert.equal(root.innerHTML.includes('data-muse-runtime-diagnostic'),enabled);
+   if(!enabled){assert(!root.innerHTML.includes('muse-worker-current'));continue;}
+   assert(root.innerHTML.includes(c.ready));assert(root.innerHTML.includes(c.details));assert(root.innerHTML.includes('muse-content-current'));
+   assert(!root.innerHTML.includes('undefined'));assert(root.innerHTML.includes('white-space:pre-wrap'));
+   calls.length=0;
+   context.window.desktopAPI.diagnoseGenerationProviderRuntime=()=>{calls.push('diagnose');return new Promise(resolve=>complete=resolve);};
+   const click=()=>listeners.click({target:{closest:selector=>selector==='[data-video-provider-diagnose]'?{}:null}});
+   click();click();assert.deepEqual(calls,['diagnose']);assert(root.innerHTML.includes(c.checking));assert(!root.innerHTML.includes('muse-worker-current'));
+   complete({ok:false,errorCode:'UNAVAILABLE'});await tick();assert(root.innerHTML.includes(c.unavailable));assert(!root.innerHTML.includes('muse-worker-current'));
+   assert(focus.includes('[data-video-provider-diagnose]'));
+   context.window.desktopAPI.diagnoseGenerationProviderRuntime=async()=>({ok:true,value:{...report,readyForControlledE2E:false,runtime:{...report.runtime,contentBuild:null}}});
+   click();await tick();assert(root.innerHTML.includes(c.notReady));assert(root.innerHTML.includes(c.unproven));
+   assert.deepEqual(calls,['diagnose']);
+ }
+});
+
 
 test("extension states, explicit selection and Open Muse remain separate from generation in VI/EN",async()=>{
  for(const language of ["vi","en"]){

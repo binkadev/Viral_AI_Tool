@@ -132,6 +132,15 @@ class GenerationService extends EventEmitter {
     return this.registry.getProviderStatus(id);
   }
 
+  async providerRuntimeDiagnosis(id) {
+    if(this.stopping)throw failure('UNAVAILABLE');
+    if(!identifier(id))throw failure('INVALID_REQUEST');
+    const adapter=this.registry.getProvider(id);
+    if(typeof adapter?.runtimeDiagnosis!=='function')throw failure('UNAVAILABLE');
+    const {sanitizeReport}=require('./bridge/runtime-preflight');
+    return sanitizeReport(await adapter.runtimeDiagnosis());
+  }
+
   async providerSession(id, open = false) {
     if (this.stopping) throw failure("UNAVAILABLE");
     if (!identifier(id)) throw failure("INVALID_REQUEST");
