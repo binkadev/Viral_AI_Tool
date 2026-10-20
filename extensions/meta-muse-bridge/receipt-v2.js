@@ -12,7 +12,12 @@
    if(r.userStableIdHash===undefined)return r.acceptance===undefined && r.assistantStableIdHash===undefined && r.result===undefined;
    if(!hash(r.userStableIdHash) || ids.includes(r.userStableIdHash))return false;
    const a=r.acceptance;
-   if(!exact(a,['composerCleared','sendControlTransition','generationControlObserved']) || a.composerCleared!==true || typeof a.sendControlTransition!=='boolean' || typeof a.generationControlObserved!=='boolean' || !(a.sendControlTransition || a.generationControlObserved))return false;
+   if(!exact(a,['composerCleared','sendControlTransition','generationControlObserved','baselineIntact','uniqueUserTurn']) || ['composerCleared','sendControlTransition','generationControlObserved'].some(k=>typeof a[k]!=='boolean'))return false;
+   // Older V2 receipts remain valid without reinterpretation. New receipts
+   // explicitly attest structural user ownership; UI transitions corroborate it.
+   if(a.baselineIntact!==undefined || a.uniqueUserTurn!==undefined) {
+     if(a.baselineIntact!==true || a.uniqueUserTurn!==true)return false;
+   } else if(!a.composerCleared || !(a.sendControlTransition || a.generationControlObserved))return false;
    if(r.assistantStableIdHash===undefined)return r.result===undefined;
    if(!hash(r.assistantStableIdHash) || ids.includes(r.assistantStableIdHash) || r.assistantStableIdHash===r.userStableIdHash)return false;
    return r.result===undefined || exact(r.result,['kind','ownerAssistantStableIdHash']) && r.result.kind==='video' && r.result.ownerAssistantStableIdHash===r.assistantStableIdHash;

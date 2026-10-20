@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-0-contract3-receipt2';
+const CONTENT_BUILD='muse-content-v0-3-0-contract3-receipt2-acceptance1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -70,11 +70,12 @@ function editorLength(editor) {
 }
 function sendButtons(c) {return c?[...c.slot.querySelectorAll('button')].filter(actionable):[];}
 function generationActive() {return [...document.querySelectorAll(STOP)].some(visible);}
-function structure() {
+function structure(allowPending=false) {
   const rows=[...document.querySelectorAll(MESSAGE)].filter(n=>['user','assistant'].includes(n.getAttribute('data-message-role')))
     .map(node=>({node,id:node.getAttribute('data-message-id'),role:node.getAttribute('data-message-role')}));
   const users=rows.filter(r=>r.role==='user'),assistants=rows.filter(r=>r.role==='assistant');
-  if(users.length>MAX_MESSAGES || assistants.length>MAX_MESSAGES || rows.some(r=>!nativeId(r.id)) || new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('IDENTITY_UNAVAILABLE');
+  const ids=rows.filter(r=>nativeId(r.id)).map(r=>r.id);
+  if(users.length>MAX_MESSAGES || assistants.length>MAX_MESSAGES || rows.some(r=>!nativeId(r.id) && !(allowPending && (r.id===null || r.id===''))) || new Set(ids).size!==ids.length)throw Error('IDENTITY_UNAVAILABLE');
   return rows;
 }
 function status() {
@@ -100,8 +101,8 @@ async function hash(operationId,role,id) {
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(operationId+'\0'+role+'\0'+id));
   return [...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
-function afterBaseline(op) {
-  const rows=structure();
+function afterBaseline(op,allowPending=false) {
+  const rows=structure(allowPending);
   if(rows.length<op.baseline.length || op.baseline.some((r,i)=>r.id!==rows[i].id || r.role!==rows[i].role))throw Error('BASELINE_CHANGED');
   const fresh=rows.slice(op.baseline.length);
   if(fresh.length>2 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw Error('AMBIGUOUS_OPERATION');
@@ -208,6 +209,9 @@ async function submit(p) {
   if(operations.has(p.operationId) && !prepared)return inspect(p);
   const invocation={delivery:'content-script',send:'not-invoked',reason:'baseline-unready'};
   if(p.receipt?.version===2 && (!prepared || prepared.sceneId!==p.sceneId || prepared.invalid || prepared.observationToken!==p.observationToken || !MuseReceiptV2.extendsReceipt(prepared.preparedReceipt,p.receipt) || p.receipt.userStableIdHash))return answer(p,'interrupted',{invocation});
+  // Claim synchronously, before stabilization awaits. A duplicate cannot race
+  // the first command into a second click; worker storage is the durable guard.
+  if(prepared)prepared.submissionStarted=true;
   // Reserve before waiting: duplicate commands must never start another attempt.
   if(operations.size>=32)return answer(p,'interrupted',{invocation});
   const reservation={sceneId:p.sceneId,invalid:true};if(!prepared)operations.set(p.operationId,reservation);
@@ -220,7 +224,7 @@ async function submit(p) {
   if(prepared && structureKey(baseline)!==structureKey(prepared.baseline)){releaseV2(p.operationId,prepared);return answer(p,'interrupted',{invocation});}
   const videos=baseline.flatMap(r=>[...r.node.querySelectorAll('video')]);
   const op=prepared || {sceneId:p.sceneId,baseline:baseline.map(({id,role})=>({id,role})),baselineVideos:new Set(videos),baselineSources:new Set(videos.map(v=>v.currentSrc).filter(Boolean))};
-  if(prepared){op.submissionStarted=true;op.lastContact=Date.now();}
+  if(prepared)op.lastContact=Date.now();
   operations.set(p.operationId,op); // Before composer writes; one attempt forever.
   let inserting=false;
   // insertText can synchronously emit a trusted input event. Only that exact
@@ -250,22 +254,44 @@ async function submit(p) {
     const candidates=[...current.slot.querySelectorAll('button')];
     if(candidates.length!==1 || !actionable(candidates[0]) || !current.slot.contains(candidates[0]))throw Error('NOT_READY');
     const button=candidates[0];
+    if(prepared) {
+      // Survive normal composer remounts, but retain document-wide protection
+      // against manual input until causal assistant ownership is released.
+      for(const type of ['input','click','keydown','pointerdown'])document.addEventListener(type,disturbed,true);
+      const cleanup=op.cleanup;
+      op.cleanup=()=>{cleanup?.();for(const type of ['input','click','keydown','pointerdown'])document.removeEventListener(type,disturbed,true);};
+      op.sendAttempted=true;
+    }
     invocation.send='uncertain';invocation.reason='invocation-uncertain';
     button.click(); // No await between fresh resolution/validation and invocation.
     invocation.send='invoked';invocation.reason='acceptance-unproven';
+    let candidateUser=null,stableUserSamples=0;
     for(let i=0;i<25;i++) {
       await new Promise(r=>setTimeout(r,200));
+      if(prepared) {
+        op.sample();
+        if(op.invalid)throw Error('OBSERVATION_INVALID');
+        const fresh=afterBaseline(op,true),user=fresh[0];
+        if(!user || !nativeId(user.id)){candidateUser=null;stableUserSamples=0;continue;}
+        if(op.newUsers.size!==1 || !op.newUsers.has(user.id))throw Error('AMBIGUOUS_OPERATION');
+        stableUserSamples=candidateUser===user.id?stableUserSamples+1:1;candidateUser=user.id;
+        if(stableUserSamples<2)continue;
+        const userStableIdHash=await hash(p.operationId,'user',user.id);
+        op.sample();
+        if(op.invalid || afterBaseline(op,true)[0]?.id!==user.id)throw Error('USER_CHANGED');
+        op.submittedUserId=user.id;
+        const currentComposer=composer();
+        op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
+          composerCleared:!!currentComposer && editorLength(currentComposer.editor)===0,
+          sendControlTransition:!actionable(button) || !currentComposer?.slot.contains(button),generationControlObserved:generationActive()}};
+        // User only: main/worker must durably echo this before assistant binding.
+        return answer(p,'running',{receipt:op.receipt,invocation:{...invocation,reason:'accepted'}});
+      }
       if(op.invalid || composer()?.editor!==c.editor)throw Error('COMPOSER_CHANGED');
       const fresh=afterBaseline(op),cleared=editorLength(c.editor)===0;
       const transitioned=!actionable(button) || !composer()?.slot.contains(button),active=generationActive();
       if(fresh[0] && cleared && (transitioned || active)) {
         op.submittedUserId=fresh[0].id;op.assistantId=fresh[1]?.id || null;
-        if(prepared) {
-          op.receipt={...op.preparedReceipt,userStableIdHash:await hash(p.operationId,'user',op.submittedUserId),acceptance:{composerCleared:true,sendControlTransition:transitioned,generationControlObserved:active}};
-          // Return user-only evidence first. The next inspect must echo a
-          // durably stored acceptance receipt before an assistant can bind.
-          return answer(p,'running',{receipt:op.receipt,invocation:{...invocation,reason:'accepted'}});
-        }
         op.receipt={version:1,operationId:p.operationId,
           baselineUserMessageIds:await Promise.all(op.baseline.filter(r=>r.role==='user').map(r=>hash(p.operationId,r.role,r.id))),
           baselineAssistantMessageIds:await Promise.all(op.baseline.filter(r=>r.role==='assistant').map(r=>hash(p.operationId,r.role,r.id))),
@@ -303,24 +329,34 @@ async function prepareV2(p) {
       // a manual turn appended and removed in one batch still invalidates.
       for(const mutation of mutations) {
         if(++visited>256)throw Error('OBSERVATION_LIMIT');
-        if(mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
-        for(const node of [...(mutation.addedNodes||[]),...(mutation.removedNodes||[])]) {
+        if(mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
+        const changes=[...[...(mutation.addedNodes||[])].map(node=>({node,removed:false})),
+          ...[...(mutation.removedNodes||[])].map(node=>({node,removed:true}))];
+        for(const {node,removed} of changes) {
           const nodes=[node,...(node.querySelectorAll?.(MESSAGE)||[])];
           for(const candidate of nodes) {
             if(++visited>256)throw Error('OBSERVATION_LIMIT');
             const role=candidate.getAttribute?.('data-message-role'),id=candidate.getAttribute?.('data-message-id');
-            if(['user','assistant'].includes(role)){if(!nativeId(id))throw Error('IDENTITY_UNAVAILABLE');remember({id,role});}
+            if(['user','assistant'].includes(role)){
+              // An initially unassigned ID may hydrate on its mounted row.
+              // A transient unidentified turn cannot disappear from evidence.
+              if(!nativeId(id)){if(op.sendAttempted && !removed && (id===null || id===''))continue;throw Error('IDENTITY_UNAVAILABLE');}
+              remember({id,role});
+            }
           }
         }
       }
-      const rows=structure();
-      for(const row of rows)remember(row);
+      const rows=structure(!!op.sendAttempted);
+      for(const row of rows)if(nativeId(row.id))remember(row);
+      // Prefix and fresh role/order must stay intact until acceptance. Pending
+      // native IDs may hydrate after send, but cannot grant ownership yet.
+      if(!op.receipt?.userStableIdHash)afterBaseline(op,!!op.sendAttempted);
       if(op.newUsers.size>1 || op.newAssistants.size>1)op.invalid=true;
     }catch{op.invalid=true;}
     if(op.invalid)releaseV2(p.operationId,op);
   };
-  op.sample=sample;
   const observer=new MutationObserver(sample);
+  op.sample=()=>sample(observer.takeRecords?.() || []);
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeOldValue:true,attributeFilter:['data-message-id','data-message-role','data-message-item']});
   const deadline=setTimeout(()=>releaseV2(p.operationId,op),20*60*1000);
   op.cleanup=()=>{observer.disconnect();clearTimeout(deadline);};
@@ -333,17 +369,17 @@ async function prepareV2(p) {
 }
 async function inspectV2(p) {
   const receipt=p.receipt;
-  if(!receipt.userStableIdHash || !status().composerReady){releaseV2(p.operationId,operations.get(p.operationId));return answer(p,'interrupted');}
+  if(!receipt.userStableIdHash){releaseV2(p.operationId,operations.get(p.operationId));return answer(p,'interrupted');}
   let op=operations.get(p.operationId),next=receipt;
   if(!receipt.assistantStableIdHash) {
     if(!op || op.sceneId!==p.sceneId || op.invalid || !op.receipt || op.observationToken!==p.observationToken || Date.now()-op.lastContact>10000 || Date.now()-op.createdAt>20*60*1000 || !MuseReceiptV2.extendsReceipt(op.receipt,receipt)) {
       if(op)releaseV2(p.operationId,op);return answer(p,'interrupted');
     }
     op.lastContact=Date.now();op.sample();
-    if(op.invalid || !structure().some(r=>r.role==='user' && r.id===op.submittedUserId) || op.newUsers.size!==1 || !op.newUsers.has(op.submittedUserId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(op.invalid || !structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId) || op.newUsers.size!==1 || !op.newUsers.has(op.submittedUserId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
     if(op.newAssistants.size===0)return answer(p,'running',{receipt});
     const id=[...op.newAssistants][0];
-    if(!structure().some(r=>r.role==='assistant' && r.id===id)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(!structure(true).some(r=>r.role==='assistant' && r.id===id)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
     next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',id)};
     op.sample();
     if(op.invalid || !MuseReceiptV2.valid(next,p.operationId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}

@@ -14,7 +14,7 @@ function harness(data=new Map(),options={}) {
  vm.runInContext(fs.readFileSync('renderer/i18n.js','utf8'),c);
  vm.runInContext(fs.readFileSync('renderer/core-project-persistence.js','utf8'),c);
  // Expose private renderer actions only inside this VM; no production test hooks.
- vm.runInContext(fs.readFileSync('renderer/core-ai-create.js','utf8').replace('  function install() {','  window.actions={generate,canGenerate,refreshReadiness,updateGenerationControls};\n  function install() {'),c);
+ vm.runInContext(fs.readFileSync('renderer/core-ai-create.js','utf8').replace('  function install() {','  window.actions={generate,canGenerate,refreshReadiness,updateGenerationControls,beginNewRequest};\n  function install() {'),c);
  return {window,state,storage,data,button,submissions,get ids(){return ids;},setFail:v=>fail=v,async ready(prompt='fixture prompt'){storage.setItem('viral-ai-generation-brief',prompt);await window.actions.refreshReadiness();}};
 }
 (async()=>{
@@ -22,6 +22,16 @@ function harness(data=new Map(),options={}) {
  await h.window.actions.generate();assert.equal(h.submissions.length,1);const first=h.window.ViralCoreProjectPersistence.snapshot();
  assert.equal(first.schemaVersion,4);assert.equal(first.projectKind,'ai');assert.equal(first.source,null);assert.equal(first.media.assets.length,0);assert(first.projectName);assert.equal(h.ids,3); // idempotency + project + scene
  for(let i=0;i<5;i++)h.window.actions.updateGenerationControls();assert.equal(h.ids,3);
+ const admission=harness();await admission.ready();await admission.window.actions.generate();
+ const admissionProject=admission.window.ViralCoreProjectPersistence.snapshot();
+ const oldKey=admission.submissions[0].idempotencyKey;
+ admission.window.actions.beginNewRequest({detail:{projectId:'unrelated-project'}});
+ await admission.window.actions.generate();assert.equal(admission.submissions[1].idempotencyKey,oldKey);
+ admission.window.actions.beginNewRequest({detail:{projectId:admissionProject.projectId}});
+ assert.equal(admission.submissions.length,2,'Explicit new request prepares identity but never submits');
+ await admission.window.actions.generate();assert.notEqual(admission.submissions[2].idempotencyKey,oldKey);
+ assert.equal(admission.submissions[2].projectId,admissionProject.projectId);
+ assert.equal(admission.submissions[2].sceneId,admissionProject.scenePlan.selectedSceneId);
  h.storage.setItem('viral-ai-generation-brief','edited prompt');assert.equal(h.window.ViralCoreProjectPersistence.ensureProject().projectId,first.projectId);
  const restart=harness(h.data);assert.equal(restart.window.ViralCoreProjectPersistence.snapshot().projectId,first.projectId);assert.equal(restart.ids,0);
  assert.equal(restart.window.ViralCoreProjectPersistence.ensureProject().scenePlan.selectedSceneId,first.scenePlan.selectedSceneId);assert.equal(restart.ids,0);

@@ -207,25 +207,44 @@ function contentFixture(options={}) {
    if(!options.noAssistant)rows.push(node('assistant',options.assistantId||'new-assistant',options.video));
    if(!options.noClear)length=0;
    if(options.active)stop=true;
+   options.afterClick?.(api);
  }};
  if(options.disabled)button.disabled=true;
  if(options.hidden)button.hidden=true;
  if(options.ariaDisabled)button.getAttribute=k=>k==='aria-disabled'?'true':null;
- const slot={...base(),querySelectorAll:()=>length || options.keepButton ? options.twoButtons?[button,{...base()}]:[button]:[],contains:b=>(length>0 || options.keepButton) && b===button};
+ let activeButton=button;
+ const slot={...base(),querySelectorAll:()=>activeButton && (length || options.keepButton) ? options.twoButtons?[activeButton,{...base()}]:[activeButton]:[],contains:b=>(length>0 || options.keepButton) && b===activeButton};
  const events={};
- const root={...base(),querySelectorAll:s=>s==='[data-hatch-composer-action-slot]'?[slot]:[editor],addEventListener:(t,fn)=>events[t]=fn,removeEventListener:t=>delete events[t]};
+ let currentEditor=editor;
+ const root={...base(),querySelectorAll:s=>s==='[data-hatch-composer-action-slot]'?[slot]:[currentEditor],addEventListener:(t,fn)=>events[t]=fn,removeEventListener:t=>delete events[t]};
+ let currentRoot=root,postSendTicks=0;
+ const documentEvents=new Map();
  if(!options.empty)rows=[node('user','history-user'),node('assistant','history-assistant')];
- const document={documentElement:{},readyState:'complete',querySelectorAll:s=>s==='video'?(options.historicalVideos||[]):s==='[data-hatch-composer-root]'?(online?[root]:[]):s==='[data-testid="hatch-composer-stop-button"]'?(stop?[stopNode]:[]):rows,
+ const document={documentElement:{},readyState:'complete',querySelectorAll:s=>s==='video'?(options.historicalVideos||[]):s==='[data-hatch-composer-root]'?(online?[currentRoot]:[]):s==='[data-testid="hatch-composer-stop-button"]'?(stop?[stopNode]:[]):rows,
+   addEventListener:(type,fn)=>{if(!documentEvents.has(type))documentEvents.set(type,new Set());documentEvents.get(type).add(fn);},
+   removeEventListener:(type,fn)=>documentEvents.get(type)?.delete(fn),
    createTreeWalker:()=>({nextNode:()=>null})};
  const window={};window.top=window;
  const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,
-   setTimeout:(fn,ms)=>ms>=15000?setTimeout(fn,options.transferTimeout && ms===15000?20:ms).unref():setTimeout(()=>{if(options.disturb && events.input)events.input({isTrusted:true});if(options.mutating){rows=[node('user','changing-'+Math.random())];observerCallback?.();}fn();},ms===5000?100:1),clearTimeout,
+   setTimeout:(fn,ms)=>ms>=15000?setTimeout(fn,options.transferTimeout && ms===15000?20:ms).unref():setTimeout(()=>{if(options.disturb && events.input)events.input({isTrusted:true});if(options.mutating){rows=[node('user','changing-'+Math.random())];observerCallback?.();}if(clicks)options.onPostSendTick?.(api,++postSendTicks);fn();},ms===5000?100:1),clearTimeout,
    MutationObserver:class {constructor(fn){this.fn=fn;}observe(){observerCallbacks.add(this.fn);}disconnect(){observerCallbacks.delete(this.fn);disconnected++;}},
    getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(options.production?{}:{version_name:'development-diagnostics'})}),onMessage:{addListener:f=>listeners.push(f)},connect:()=>({onDisconnect:{addListener(){}}})}}};
  vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
- return {captureTransferClose:()=>vm.runInNewContext('(()=>{const t=[...transfers.values()][0];return ()=>closeTransfer(t);})()',c),get tombstones(){return Array.from(vm.runInNewContext('[...closedTransfers]',c));},get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true};
+ const api={
+   replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
+   replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
+   replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
+   foreign:type=>{for(const fn of documentEvents.get(type)||[])fn({isTrusted:true,type,target:currentEditor});},
+   get documentListenerCount(){return ['input','click','keydown','pointerdown'].reduce((n,type)=>n+(documentEvents.get(type)?.size||0),0);},
+   get rows(){return rows;},captureTransferClose:()=>vm.runInNewContext('(()=>{const t=[...transfers.values()][0];return ()=>closeTransfer(t);})()',c),
+   get tombstones(){return Array.from(vm.runInNewContext('[...closedTransfers]',c));},get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},
+   send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,
+   mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},
+   inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true
+ };
+ return api;
 }
 const operation={operationId:'op',sceneId:'scene',prompt:'Exact prompt',tabId:5};
 const inspectPayload={operationId:'op',sceneId:'scene',tabId:5};
@@ -482,6 +501,132 @@ test('v2 baseline precedes typing; accepted durable-user echo precedes exactly o
  assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(result)),{...inspectPayload,receipt:JSON.parse(JSON.stringify(user))}));
 });
 
+for(const transition of ['composer root','editor','send removed','send replaced','no UI corroboration']) {
+ test('v2 acceptance survives post-send '+transition+' with one stable structural user',async()=>{
+   const f=contentFixture({noClear:true,keepButton:true,afterClick:f=>{
+     if(transition==='composer root')f.replaceComposer();
+     if(transition==='editor')f.replaceEditor();
+     if(transition==='send removed')f.removeSend();
+     if(transition==='send replaced')f.replaceSend();
+   }});
+   const receipt=await acceptV2(f);
+   assert(receipt.acceptance.baselineIntact);assert(receipt.acceptance.uniqueUserTurn);
+   assert.equal(receipt.acceptance.composerCleared,false);
+   assert.equal(receipt.acceptance.generationControlObserved,false);
+   assert.equal(f.documentListenerCount,4,'Manual activity protection outlives composer replacement and acceptance');
+   const assistant=await f.send('inspectGeneration',{...v2Payload,receipt});
+   assert(assistant.receipt.assistantStableIdHash);assert.equal(f.clicks,1);
+   assert.equal(f.documentListenerCount,0,'Assistant anchoring releases observer and foreign-activity listeners');
+ });
+}
+
+test('v2 delayed stable user ID and late generation control require no composer transition',async()=>{
+ let pending;
+ const f=contentFixture({noNewUser:true,noAssistant:true,noClear:true,keepButton:true,
+   afterClick:f=>{pending=f.node('user',null);f.inject(pending);},
+   onPostSendTick:(f,tick)=>{
+     if(tick===5){pending.id='assigned-user';f.mutate([{type:'attributes',target:pending,attributeName:'data-message-id',oldValue:null}]);}
+   }});
+ const receipt=await acceptV2(f);
+ assert.equal(receipt.acceptance.composerCleared,false);
+ assert.equal(receipt.acceptance.sendControlTransition,false);
+ assert.equal(receipt.acceptance.generationControlObserved,false);
+ f.stop(); // Control mounts after the user receipt was already returned.
+ f.inject(f.node('assistant','late-assistant'));
+ assert((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash);
+ assert.equal(f.clicks,1);
+});
+
+for(const ambiguity of ['zero user','two users','identity mutation','manual input','manual pointer','baseline removal']) {
+ test('v2 post-send ambiguity fails closed without a second send: '+ambiguity,async()=>{
+   const f=contentFixture({noNewUser:ambiguity==='zero user',noAssistant:ambiguity==='zero user',
+     afterClick:f=>{
+       if(ambiguity==='two users')f.inject(f.node('user','foreign-user'));
+       if(ambiguity==='baseline removal')f.replace(f.rows.slice(2));
+     },onPostSendTick:(f,tick)=>{
+       if(tick!==1)return;
+       if(ambiguity==='identity mutation'){
+         const user=f.rows.find(r=>r.id==='new-user');user.id='changed-user';
+         f.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'}]);
+       }
+       if(ambiguity==='manual input' || ambiguity==='manual pointer'){
+         f.replaceComposer();f.foreign(ambiguity==='manual input'?'input':'pointerdown');
+       }
+     }});
+   const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
+   const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+   assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
+   assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
+   assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
+   const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
+   assert.equal((await restarted.run('submitGeneration',{...operation,receipt:prep.receipt})).state,'interrupted');
+   assert.equal((await restarted.run('inspectGeneration',{...inspectPayload,receipt:prep.receipt})).state,'interrupted');
+   assert.deepEqual(restarted.calls,[]);assert.equal(JSON.stringify(stored),before);assert.equal(f.clicks,1);
+ });
+}
+
+test('v2 simultaneous submit commands claim the prepared observation before awaiting',async()=>{
+ const f=contentFixture(),prep=await f.send('prepareGeneration',v2Payload);
+ const payload={...operation,observationToken:v2Payload.observationToken,receipt:prep.receipt};
+ const [a,b]=await Promise.all([f.send('submitGeneration',payload),f.send('submitGeneration',payload)]);
+ assert.equal(a.state,'running');assert.equal(b.state,'interrupted');assert.equal(f.clicks,1);
+ await f.send('cancelGeneration',inspectPayload);assert.equal(f.documentListenerCount,0);
+});
+
+test('v2 manual interference after user acceptance cannot bind an assistant on a replaced composer',async()=>{
+ const f=contentFixture(),receipt=await acceptV2(f);
+ f.replaceComposer();f.replaceEditor();f.foreign('keydown');
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);
+ assert.equal(f.clicks,1);assert.equal(f.documentListenerCount,0);
+});
+
+test('v2 transient unidentified post-send turn fails closed even if removed before a sample',async()=>{
+ const f=contentFixture({noNewUser:true,noAssistant:true,afterClick:f=>{
+   const unassigned=f.node('user',null);
+   f.mutate([{type:'childList',addedNodes:[unassigned],removedNodes:[unassigned]}]);
+ }});
+ const prep=await f.send('prepareGeneration',v2Payload);
+ const result=await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prep.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(f.clicks,1);assert.equal(f.documentListenerCount,0);
+});
+
+test('v2 structural receipts preserve legacy validation, monotonicity and both acquisition anchors',()=>{
+ const p={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)]};
+ const a={baselineIntact:true,uniqueUserTurn:true,composerCleared:false,sendControlTransition:false,generationControlObserved:false};
+ const u={...p,userStableIdHash:'c'.repeat(64),acceptance:a};
+ assert(receiptV2.valid(u,'op'));assert(receiptV2.extendsReceipt(p,u));
+ for(const patch of [{baselineIntact:false},{uniqueUserTurn:false},{baselineIntact:undefined},{uniqueUserTurn:undefined},{rawText:'private'}])assert(!receiptV2.valid({...u,acceptance:{...a,...patch}},'op'));
+ const legacy={...u,acceptance:{composerCleared:true,sendControlTransition:true,generationControlObserved:false}};
+ assert(receiptV2.valid(legacy,'op'));assert(!receiptV2.extendsReceipt(legacy,u));
+ const assistant={...u,assistantStableIdHash:'d'.repeat(64)},result={...assistant,result:{kind:'video',ownerAssistantStableIdHash:'d'.repeat(64)}};
+ assert(receiptV2.extendsReceipt(u,assistant));assert(receiptV2.extendsReceipt(assistant,result));
+ for(const receipt of [p,u,assistant,{...result,userStableIdHash:undefined},{...result,assistantStableIdHash:undefined}]){
+   assert(!validPayload('acquireGenerationResult',{...inspectPayload,receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'}));
+ }
+});
+
+test('v2 historical invoked but unaccepted intent is safely classified through IPC without rewriting or resubmitting',async t=>{
+ const f=fixture(t,{command:async(type,p)=>{
+   if(type==='prepareGeneration')return {operationId:p.operationId,sceneId:p.sceneId,state:'prepared',receipt:{version:2,operationId:p.operationId,baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)]}};
+   assert.equal(type,'submitGeneration');return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',invocation:{delivery:'content-script',send:'invoked',reason:'acceptance-unproven'}};
+ }});
+ f.bridge.receiptV2Ready=async()=>true;
+ const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
+ const file=path.join(f.service.context(job).outputDirectory,'muse-operation.json'),bytes=fs.readFileSync(file),jobs=fs.readFileSync(f.service.store.file);
+ const restarted=new GenerationService({root:f.root,registry:f.registry}),handlers={};
+ require('../services/generation/generation-ipc').registerGenerationIpc({ipcMain:{handle:(name,fn)=>handlers[name]=fn},getService:()=>restarted,trusted:()=>true});
+ const publicJob=(await handlers['generation:get']({},job.id)).value;
+ assert.equal(publicJob.recoveryState,'acceptance_unproven');
+ assert.equal((await handlers['generation:list']({},job.projectId)).value[0].recoveryState,'acceptance_unproven');
+ assert(!JSON.stringify(publicJob).includes('baselineUserMessageIds'));assert(!JSON.stringify(publicJob).includes('profile-one'));
+ assert.equal(restarted.get(job.id).recoveryState,undefined,'Presentation must not rewrite historical jobs');
+ await restarted.recover(job.id);assert.equal((await restarted.submit(request())).id,job.id);
+ assert.equal(f.calls.filter(c=>c.type==='prepareGeneration').length,1);assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);
+ assert.equal(f.calls.filter(c=>c.type==='inspectGeneration').length,0);assert.equal(f.calls.filter(c=>c.type==='acquireGenerationResult').length,0);
+ assert.deepEqual(fs.readFileSync(file),bytes);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
+});
+
 for(const kind of ['two assistants','additional user','temporary additional user','epoch change','user absent']) {
  test('v2 causal capture interrupts on '+kind+' without adopting an assistant',async()=>{
    const f=contentFixture(),user=await acceptV2(f);
@@ -552,14 +697,19 @@ test('v2 scoped candidate rejects unsupported sources without fetching any bytes
 });
 
 test('v2 native service persists baseline, user and assistant; failed recovery acquisition never resubmits',async t=>{
- let phase='assistant',durableUser=false,durableBaseline=false;
+ let phase='assistant',durableUser=false,durableBaseline=false,durableAssistant=false;
  const f=fixture(t,{command:async(type,p)=>{
    const base={operationId:p.operationId,sceneId:p.sceneId};
    const file=path.join(f.root,'outputs',p.operationId,'muse-operation.json');
    if(type==='prepareGeneration')return {...base,state:'prepared',receipt:{version:2,operationId:p.operationId,baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)]}};
    if(type==='submitGeneration'){
      durableBaseline=JSON.parse(fs.readFileSync(file)).receipt.version===2;
-     return {...base,state:'running',receipt:{...p.receipt,userStableIdHash:'c'.repeat(64),acceptance:{composerCleared:true,sendControlTransition:true,generationControlObserved:true}}};
+     return {...base,state:'running',receipt:{...p.receipt,userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:false,sendControlTransition:false,generationControlObserved:false}}};
+   }
+   if(type==='acquireGenerationResult'){
+     const r=JSON.parse(fs.readFileSync(file)).receipt;
+     durableAssistant=!!r.userStableIdHash && !!r.assistantStableIdHash && !!r.result;
+     throw Error('fixture acquisition failure');
    }
    assert.equal(type,'inspectGeneration');
    durableUser=!!JSON.parse(fs.readFileSync(file)).receipt.userStableIdHash;
@@ -578,6 +728,7 @@ test('v2 native service persists baseline, user and assistant; failed recovery a
  await restart.recover(job.id);assert.equal(restart.get(job.id).status,'interrupted');assert.equal(restart.get(job.id).output,null);
  assert(JSON.parse(fs.readFileSync(file)).receipt.result);
  assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(f.calls.some(c=>c.type==='acquireGenerationResult'));
+ assert(durableAssistant,'Both anchors and result must be durable before any acquisition');
 });
 
 test('v2 remembers an added-and-removed manual turn from a single mutation batch',async()=>{

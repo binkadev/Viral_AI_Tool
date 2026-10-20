@@ -69,11 +69,11 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
     submit: (service, payload) => service.submit(payload),
     list: (service, payload) => {
       if (!identifier(payload)) throw 0;
-      return service.list(payload);
+      return service.list(payload).map(job => service.publicJob(job));
     },
     get: (service, payload) => {
       if (!identifier(payload)) throw 0;
-      return service.get(payload);
+      return service.publicJob(service.get(payload));
     },
     output: (service,payload)=>{
       if(!identifier(payload))throw 0;

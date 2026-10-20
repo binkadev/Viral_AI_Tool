@@ -50,7 +50,7 @@ test('executing worker reports its own build and each receiver handshake build s
  f.context.chrome.tabs.query=async()=>[{id:1},{id:2}];
  f.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?{contractVersion:3,...(id===2?{buildMarker:'muse-content-20261019-receivers-1'}:{})}:{sampledAt:Date.now(),composerReady:true,executionContract:3,devEvidence:{generationActive:id===2}};
  const tabs=await f.tabs();
- assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-0-contract3-receipt2');
+ assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-0-contract3-receipt2-acceptance1');
  assert.equal(tabs[0].devConnection.contentBuild,'unreported');
  assert.equal(tabs[1].devConnection.contentBuild,'muse-content-20261019-receivers-1');
  assert.equal(tabs[0].devConnection.generationActive,false);assert.equal(tabs[1].devConnection.generationActive,true);

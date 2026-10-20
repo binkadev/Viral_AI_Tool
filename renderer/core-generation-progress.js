@@ -65,18 +65,24 @@
     const job=projectId===identity()?selected():null, p=plan(), info=model.describe(job,ready,jobs.some(j=>j.id!==job?.id && [...model.active,'interrupted'].includes(j.status)));
     const stageStates=visualFixture ? visualFixture.stageStates : model.stages(job,p,state);
     const rows=model.scenes(p,projectId===identity()?jobs:[]);
-    return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(base.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button('create',c.create)+'</header>'+
+    return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(base.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button(info.recoveryBlocked?'new-request':'create',info.recoveryBlocked?c.newRequest:c.create)+'</header>'+
       '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.verified(job)?button('studio',c.studio):'')+'</div></section>'+
       (visualFixture?'<p class="generation-notice" role="status">'+esc(c.visualNotice)+'</p>':'')+
       (error?'<p class="generation-notice" role="alert">'+esc(c[error])+'</p>':'')+
-      (job?.provider==='muse' && job.status==='interrupted'?'<p class="generation-notice" role="status">'+esc(c.museInterrupted)+'</p>':'')+
-      (job&&['failed','interrupted','cancelled','cancelling'].includes(job.status)?'<p class="generation-notice tone-'+info.tone+'">'+esc(c.help[job.status])+'</p>':'')+
+      (job?.provider==='muse' && job.status==='interrupted'?'<p class="generation-notice" role="status">'+esc(info.recoveryBlocked?c.acceptanceUnproven:c.museInterrupted)+'</p>':'')+
+      (job&&!info.recoveryBlocked&&['failed','interrupted','cancelled','cancelling'].includes(job.status)?'<p class="generation-notice tone-'+info.tone+'">'+esc(c.help[job.status])+'</p>':'')+
       '<ol class="generation-stages" aria-label="'+esc(c.workflow)+'">'+c.stages.map((label,i)=>'<li data-stage-state="'+stageStates[i]+'"'+(i===currentStage?' aria-current="step"':'')+'><span aria-hidden="true">'+(stageStates[i]==='done'?'✓':i+1)+'</span><strong>'+esc(visualFixture?base.workflowCopy[i].title:label)+'</strong><small>'+esc(c.stageStates[stageStates[i]])+'</small></li>').join('')+'</ol>'+
       '<div class="generation-story-head"><div><h3>'+esc(c.storyboard)+'</h3><p>'+esc(c.sceneNote)+'</p></div><span class="generation-provider">'+esc(ready?c.providerReady:c.providerUnavailable)+'</span></div>'+
       (projectId===identity()&&jobs.length>1?'<label class="generation-job-select">'+esc(c.jobLabel)+'<select data-generation-select'+(busy?' disabled':'')+'>'+jobs.map(j=>'<option value="'+esc(j.id)+'"'+(j.id===job?.id?' selected':'')+'>'+esc((j.request?.prompt||c.untitled).slice(0,80))+'</option>').join('')+'</select></label>':'')+
       (rows.length?'<div class="generation-scenes">'+rows.map(({scene,job:sceneJob,state:sceneState,media},i)=>'<article class="generation-scene"><div class="generation-scene-number">'+String(i+1).padStart(2,'0')+'</div><div class="generation-scene-copy"><h4>'+esc(scene.title||c.scene)+' '+(!scene.title?i+1:'')+'</h4><p>'+esc(scene.visualIntent||scene.sourceText||c.noSummary)+'</p><span>'+esc(scene.duration>0?scene.duration.toFixed(1)+' '+c.seconds:c.unknownDuration)+'</span></div><div class="generation-scene-state"><span class="generation-status tone-'+(sceneJob?model.describe(sceneJob).tone:'muted')+'">'+esc(c.states[sceneState])+'</span><small>'+esc(c[media])+'</small></div></article>').join('')+'</div>':'<section class="generation-empty"><span aria-hidden="true">▤</span><h3>'+esc(c.noScenes)+'</h3><p>'+esc(c.noScenesBody)+'</p></section>')+'</div>';
   }
   async function action(name) {
+    if(name==='new-request') {
+      const job=selected();
+      if(busy || !job || job.projectId!==identity() || !model.describe(job).recoveryBlocked)return;
+      window.dispatchEvent(new CustomEvent('viral-ai:generation-new-request',{detail:{projectId:job.projectId}}));
+      state.page='ai-create';render();return;
+    }
     if (name==='create') { state.page='ai-create';render();return; }
     if (name==='refresh') { if(!busy) await refresh();return; }
     if (name==='studio') {

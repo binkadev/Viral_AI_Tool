@@ -25,8 +25,8 @@ protocol versions fail closed. See [distribution](MUSE_EXTENSION_DISTRIBUTION.md
 The store identity and URL stay blank until an actual listing is configured.
 
 Executing JavaScript reports version-specific markers:
-- muse-worker-v0-3-0-contract3-receipt2
-- muse-content-v0-3-0-contract3-receipt2
+- muse-worker-v0-3-0-contract3-receipt2-acceptance1
+- muse-content-v0-3-0-contract3-receipt2-acceptance1
 
 Packaging tests ensure marker versions match the manifest and all eight extension
 files match source in the ASAR. Managed staging copies repository files, never
@@ -49,10 +49,35 @@ seconds with observer cleanup. Native and worker persist this baseline first.
 Submit rechecks readiness and resolves exactly one visible, enabled button inside
 the current composer action slot. Only one invocation is allowed.
 
-Delivery, invocation and acceptance are distinct. Acceptance requires a new user
-identity, cleared composer and a send transition or active-generation control.
+Delivery, invocation and acceptance are distinct. V2 acceptance requires the
+immutable prepared baseline prefix and exactly one new stable user identity,
+with continuous bounded observation and no manual interference. Composer/editor
+replacement, clear, send-control transitions and generation controls are only
+corroborating signals after the one send. The new receipt explicitly requires
+`acceptance.baselineIntact: true` and `acceptance.uniqueUserTurn: true`; all three
+UI booleans remain typed but may be false. Legacy V2 receipts without these two
+fields retain their original clear/control requirements without reinterpretation.
 Uncertain acceptance interrupts and never triggers an automatic submission retry.
 The accepted user anchor is persisted before an assistant can be adopted.
+
+The stable user ID must match across two 200 ms observations within the existing
+five-second post-send deadline. Initially unassigned native IDs may hydrate;
+identity mutation, a transient unidentified removed turn, or ambiguity interrupts.
+Trusted input/click/key/pointer protection moves to document scope after send and
+survives composer replacement through assistant binding. Cancellation,
+invalidation, expiry and assistant anchoring clean up these listeners together
+with the bounded observer. No original composer node is required for V2 inspection.
+
+An interrupted V2 intent with an invoked send but no user anchor cannot resume.
+Main exposes only a derived `recoveryState: acceptance_unproven` to the UI without
+rewriting historical jobs or intents. Progress explains the missing evidence,
+hides resume, and offers an explicit new-request action. That action only resets
+the next admission key; Generate is still required for any new operation.
+No historical result is adopted or automatically retried.
+
+These changes are not staged into the live browser during implementation.
+Deployment requires the complete updated extension bundle, extension reload and
+Muse refresh before a separately authorized controlled E2E.
 
 An observer remembers additions/removals during the continuous acceptance window.
 Exactly one causally new assistant, with no unexpected new user, may bind to the

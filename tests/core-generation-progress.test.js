@@ -17,6 +17,10 @@ for(const status of model.states){
 assert(!model.describe({...job,status:'failed'},false).retry);
 assert(!model.describe({...job,status:'failed'},true,true).retry);
 assert.equal(model.describe({...job,status:'interrupted'}).tone,'warning');
+const unaccepted={...job,provider:'muse',status:'interrupted',recoveryState:'acceptance_unproven'};
+assert(model.describe(unaccepted).recoveryBlocked);
+assert(!model.describe(unaccepted).recover);
+assert(!model.describe({...unaccepted,provider:'other'}).recoveryBlocked);
 assert.equal(model.describe({...job,status:'failed'}).tone,'danger');
 assert.equal(model.describe({...job,progress:100}).percent,99);
 assert(!model.verified({...job,status:'completed',progress:100}));
@@ -41,6 +45,7 @@ vm.runInNewContext(fs.readFileSync('renderer/i18n.js','utf8'),context);
 for(const language of ['vi','en']){
   const c=context.window.I18N.messages[language].generationProgress;
   for(const state of model.states)assert(c.states[state]);
+  assert(c.acceptanceUnproven);assert(c.newRequest);
   assert.equal(c.stages.length,7);
 }
 const js=fs.readFileSync('renderer/core-generation-progress.js','utf8');
@@ -57,9 +62,10 @@ console.log('Generation progress: route, lifecycle, safe actions, no fake comple
 (async function rendererContract() {
   const listeners={};
   let runtimeJobs=[job], currentProject='p1', markup='', probeUsable=false;
+  const emitted=[];
   const viewport={scrollTop:0,querySelector:()=>null};
   const sandbox={
-    window:{I18N:context.window.I18N,ViralGenerationProgressModel:model,ViralCoreScenePlanModel:sceneModel,ViralCoreProjectPersistence:{snapshot:()=>({projectId:currentProject})},addEventListener(){},crypto:{randomUUID:()=> 'new-attempt'},desktopAPI:{
+    window:{I18N:context.window.I18N,ViralGenerationProgressModel:model,ViralCoreScenePlanModel:sceneModel,ViralCoreProjectPersistence:{snapshot:()=>({projectId:currentProject})},addEventListener(){},dispatchEvent:e=>emitted.push(e),crypto:{randomUUID:()=> 'new-attempt'},desktopAPI:{
       listGenerationJobs:async()=>({ok:true,value:runtimeJobs}),
       getGenerationStatus:async()=>({ok:true,value:{ready:true,state:'ready'}}),
       probeVideo:async()=>probeUsable?{duration:2,width:320,height:180}:{duration:0},
@@ -67,7 +73,7 @@ console.log('Generation progress: route, lifecycle, safe actions, no fake comple
     }},
     state:{page:'home',locale:'en',scenePlan:plan,jobs:[]},pages:{},pageMeta:{},
     document:{readyState:'complete',getElementById:()=>viewport,querySelector:()=>null,activeElement:null,addEventListener:(name,fn)=>{listeners[name]=fn;}},
-    render:()=>{markup=sandbox.pages[sandbox.state.page]?.() || '';},Element:class {}
+    render:()=>{markup=sandbox.pages[sandbox.state.page]?.() || '';},Element:class {},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}}
   };
   vm.runInNewContext(js,sandbox);
   await sandbox.window.ViralGenerationProgress.open(job.id);
@@ -81,6 +87,23 @@ console.log('Generation progress: route, lifecycle, safe actions, no fake comple
   assert(markup.includes('Interrupted'));
   assert(!markup.includes('data-generation-action="retry"'));
   assert(markup.includes('data-generation-action="recover"'));
+  runtimeJobs=[unaccepted];
+  for(const locale of ['vi','en']){
+    sandbox.state.locale=locale;
+    await sandbox.window.ViralGenerationProgress.open(job.id);
+    assert(markup.includes(context.window.I18N.messages[locale].generationProgress.acceptanceUnproven));
+    assert(!markup.includes('data-generation-action="recover"'));
+    assert(!markup.includes('data-generation-action="retry"'));
+    assert(!markup.includes(context.window.I18N.messages[locale].generationProgress.museInterrupted));
+    assert(markup.includes('data-generation-action="new-request"'));
+    assert.equal(emitted.length,0,'Rendering a non-recoverable job cannot request a replacement');
+  }
+  const target=new sandbox.Element();target.disabled=false;target.dataset={generationAction:'new-request'};target.closest=()=>target;
+  listeners.click({target});
+  assert.equal(sandbox.state.page,'ai-create');
+  assert.equal(emitted[0].type,'viral-ai:generation-new-request');
+  assert.equal(emitted[0].detail.projectId,'p1');
+  sandbox.state.locale='en';
   runtimeJobs=[{...job,status:'failed'}];
   await sandbox.window.ViralGenerationProgress.open(job.id);
   assert(markup.includes('data-generation-action="retry"'));

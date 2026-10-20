@@ -86,6 +86,15 @@ class GenerationService extends EventEmitter {
     return this.jobs.filter(job => job.projectId === projectId).map(clone);
   }
 
+  publicJob(job) {
+    const result=clone(job);
+    if(job.provider==='muse' && job.status==='interrupted' &&
+      this.registry.getProvider('muse')?.recoveryState?.(this.context(job))==='acceptance_unproven') {
+      result.recoveryState='acceptance_unproven';
+    }
+    return result;
+  }
+
   output(id) {
     const job=this.get(id),fileName=job.id+'.mp4';
     if(job.status!=='completed' || job.output?.fileName!==fileName || job.asset?.fileName!==fileName)throw failure('ASSET_UNAVAILABLE');

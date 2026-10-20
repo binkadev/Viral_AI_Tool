@@ -136,6 +136,14 @@ function createMuseExecution(bridge,verifyVideo) {
     const task=Promise.resolve().then(fn).finally(()=>locks.delete(c.jobId));locks.set(c.jobId,task);return task;
   }
   return {
+    // Read-only presentation classification. Never migrate, infer anchors, or
+    // rewrite historical evidence just to explain why reconciliation is blocked.
+    recoveryState:c=>{
+      try {
+        guard(c);const r=read(c);
+        return r.receipt?.version===2 && !r.receipt.userStableIdHash && r.invocation?.send==='invoked' ? 'acceptance_unproven' : null;
+      } catch {return null;}
+    },
     start:c=>exclusive(c,async()=>{
       if(cancelled.has(c.jobId))throw failure('RECOVERY_REQUIRED');
       if(fs.existsSync(recordPath(c)))return reconcile(c);

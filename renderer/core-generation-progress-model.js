@@ -12,12 +12,13 @@
   function describe(job, ready = false, blocked = false) {
     const status = states.includes(job?.status) ? job.status : 'unknown';
     const complete = verified(job);
+    const recoveryBlocked = job?.provider === 'muse' && status === 'interrupted' && job.recoveryState === 'acceptance_unproven';
     return {
-      status, complete,
+      status, complete, recoveryBlocked,
       percent: typeof job?.progress === 'number' && Number.isFinite(job.progress) ? Math.max(0, Math.min(complete ? 100 : 99, job.progress)) : null,
       cancel: [...active.filter(s=>s !== 'cancelling'),'interrupted'].includes(status),
       retry: ['failed','cancelled'].includes(status) && ready && !blocked,
-      recover: ['queued','running','interrupted'].includes(status),
+      recover: !recoveryBlocked && ['queued','running','interrupted'].includes(status),
       tone: complete ? 'success' : status === 'failed' ? 'danger' : status === 'interrupted' ? 'warning' : ['cancelling','cancelled'].includes(status) ? 'muted' : 'active'
     };
   }

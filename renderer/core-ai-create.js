@@ -55,6 +55,14 @@
     return String(localStorage.getItem(BRIEF_KEY) || "");
   }
 
+  function beginNewRequest(event) {
+    if(submitting || !event.detail?.projectId || event.detail.projectId!==projectIdentity().projectId)return;
+    // An explicit new-request action rotates admission identity, never a rerender
+    // or a check of an uncertain operation. Submission still requires Generate.
+    submissionKey=null;
+    feedback="";
+  }
+
   function canGenerate() {
     return generationReady && !submitting && !projectActionPending && typeof window.ViralCoreProjectPersistence?.ensureProject === "function" && Boolean(currentBrief().trim());
   }
@@ -350,6 +358,7 @@
       if (typeof pageMeta !== "undefined" && pageMeta) pageMeta["ai-create"] = ["nav.aiVideo", "aiVideo.breadcrumb"];
       refreshReadiness();
       window.addEventListener("focus", refreshReadiness);
+      window.addEventListener("viral-ai:generation-new-request", beginNewRequest);
       document.addEventListener("click", onClick);
       document.addEventListener("input", onInput);
       document.addEventListener('change', event => {

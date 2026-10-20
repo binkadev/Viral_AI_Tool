@@ -52,6 +52,7 @@ function createMuseProvider({ configStore, extensionBridge = null, verifyVideo =
     preflight: async context => context && !context.sceneId ? {ready:false} : readiness(),
     start:context=>extensionBridge?execution.start(context):unsupported(),
     reconcile:context=>extensionBridge?execution.reconcile(context):unsupported(),
+    recoveryState:context=>execution.recoveryState(context),
     cancel:context=>extensionBridge?execution.cancel(context):unsupported()
   });
 }
