@@ -81,7 +81,7 @@ test('runtime support block is development-only, bilingual, read-only, and handl
  for(const locale of ['vi','en'])for(const enabled of [false,true]){
    const listeners={},focus=[],calls=[];let complete;
    const root={innerHTML:'',setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
-   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.1',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
+   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.2',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
    const context={state:{locale,page:'settings'},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},window:{addEventListener(){},desktopAPI:{
      checkGenerationProvider:async()=>{calls.push('provider');return {ok:true,value:{id:'muse',enabled:true,ready:true,state:'ready'}};},
      diagnoseGenerationProviderRuntime:async id=>{assert.equal(id,'muse');calls.push('diagnose');return enabled?{ok:true,value:report}:{ok:false,errorCode:'UNAVAILABLE'};}

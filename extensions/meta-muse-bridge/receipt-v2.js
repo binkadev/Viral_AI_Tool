@@ -30,10 +30,14 @@
    return !old.result || !!next.result && old.result.kind===next.result.kind && old.result.ownerAssistantStableIdHash===next.result.ownerAssistantStableIdHash;
  }
  const MAX_BYTES=268435456,CHUNK_BYTES=196608;
- const acceptanceFailureReasons=Object.freeze(['BASELINE_CHANGED','AMBIGUOUS_OPERATION','USER_CHANGED','RESPONSE_CHANGED','IDENTITY_MUTATED','IDENTITY_UNAVAILABLE','OBSERVATION_LIMIT','MANUAL_INTERFERENCE','ACCEPTANCE_UNCERTAIN','OBSERVATION_INVALID','COMPOSER_CHANGED','UNKNOWN']);
+ const acceptanceFailureReasons=Object.freeze(['BASELINE_CHANGED','AMBIGUOUS_OPERATION','USER_CHANGED','RESPONSE_CHANGED','IDENTITY_MUTATED','IDENTITY_UNAVAILABLE','OBSERVATION_LIMIT','MANUAL_INTERFERENCE','ACCEPTANCE_UNCERTAIN','OBSERVATION_INVALID','COMPOSER_CHANGED','REPLACEMENT_AMBIGUOUS','UNKNOWN']);
  function validAcceptanceDiagnostic(d) {
    const bools=['deadlineReached','baselinePrefixValid','stableUserIdentityObserved','manualInterferenceObserved','composerReplaced','editorReplaced','sendControlTransitionObserved','generationControlObserved'];
-   return exact(d,['acceptanceBuild','workerBuild','failureReason','elapsedBucket','freshUserCount','freshAssistantCount',...bools]) &&
+   const lineageCounts=['freshUserIdentityCount','logicalFreshUserTurnCount','maxConcurrentFreshUserRows','replacementCandidateCount'],lineageBools=['identityReplacementObserved','canonicalUserStable','replacementAmbiguous'];
+   const lineage=[...lineageCounts,...lineageBools];
+   // Existing forensic records keep their original diagnostic schema.
+   if(d && lineage.some(k=>d[k]!==undefined) && (!lineageCounts.every(k=>Number.isInteger(d[k]) && d[k]>=0 && d[k]<=128) || !lineageBools.every(k=>typeof d[k]==='boolean')))return false;
+   return exact(d,['acceptanceBuild','workerBuild','failureReason','elapsedBucket','freshUserCount','freshAssistantCount',...bools,...lineage]) &&
      /^muse-content-[a-z0-9-]{1,64}$/.test(d.acceptanceBuild||'') && (d.workerBuild===undefined || /^muse-worker-[a-z0-9-]{1,64}$/.test(d.workerBuild)) &&
      acceptanceFailureReasons.includes(d.failureReason) && ['under_1s','1_to_5s','over_5s'].includes(d.elapsedBucket) &&
      ['freshUserCount','freshAssistantCount'].every(k=>Number.isInteger(d[k]) && d[k]>=0 && d[k]<=128) && bools.every(k=>typeof d[k]==='boolean');

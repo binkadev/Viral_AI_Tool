@@ -12,7 +12,7 @@ The renderer has no generic command, selector, script, remote URL or byte API.
 
 | Layer | Version |
 | --- | --- |
-| Extension manifest and minimum compatible extension | 0.3.1 |
+| Extension manifest and minimum compatible extension | 0.3.2 |
 | Loopback transport protocol | 1 |
 | Execution contract | 3 |
 | Ownership receipt | 2 |
@@ -25,8 +25,8 @@ protocol versions fail closed. See [distribution](MUSE_EXTENSION_DISTRIBUTION.md
 The store identity and URL stay blank until an actual listing is configured.
 
 Executing JavaScript reports version-specific markers:
-- muse-worker-v0-3-1-contract3-receipt2-acceptance1
-- muse-content-v0-3-1-contract3-receipt2-acceptance1
+- muse-worker-v0-3-2-contract3-receipt2-acceptance2
+- muse-content-v0-3-2-contract3-receipt2-acceptance2
 
 Packaging tests ensure marker versions match the manifest and all eight extension
 files match source in the ASAR. Managed staging copies repository files, never
@@ -34,7 +34,7 @@ browser profiles. Staging is not proof Chrome reloaded them: after a bundle upda
 the user must reload the extension and refresh the existing tab once. Receiver
 selection respects the selected session; multiple candidates require selection.
 
-The 0.3.1 distribution rejects 0.3.0 workers as outdated. Managed staging reads
+The 0.3.2 distribution rejects 0.3.1 and older workers as outdated. Managed staging reads
 and validates all eight source files before writing a unique sibling directory,
 writes its manifest last, and verifies every byte before publication. The old
 directory is retained as a rollback backup until the new directory is published
@@ -89,7 +89,7 @@ Submit rechecks readiness and resolves exactly one visible, enabled button insid
 the current composer action slot. Only one invocation is allowed.
 
 Delivery, invocation and acceptance are distinct. V2 acceptance requires the
-immutable prepared baseline prefix and exactly one new stable user identity,
+immutable prepared baseline prefix and exactly one logical fresh user turn with a stable canonical identity,
 with continuous bounded observation and no manual interference. Composer/editor
 replacement, clear, send-control transitions and generation controls are only
 corroborating signals after the one send. The new receipt explicitly requires
@@ -103,14 +103,53 @@ An invoked but unproven V2 submission may persist private failure diagnostics:
 executing content/worker builds, bounded failure reason and elapsed bucket,
 deadline reached, fresh user/assistant counts (0–128), baseline-prefix validity,
 stable user identity observed, manual interference, composer/editor replacement,
-send-control transition and generation-control observation. These fields contain
+send-control transition and generation-control observation. Acceptance2 additionally
+separates historical fresh user identity count, logical fresh user turn count,
+maximum concurrent fresh user rows, observed identity replacement, replacement
+candidate count, canonical user stability and ambiguous replacement. Existing
+diagnostic records without this entire optional field group remain readable.
+These fields contain
 no text, native IDs, URLs, HTML, credentials, account or browser storage. They are
 forensic evidence only: they cannot satisfy Receipt V2 validation or grant ownership,
-and never cause a retry. Existing acceptance decisions remain unchanged.
+and never cause a retry. The Receipt V2 schema and monotonic anchor rules remain unchanged.
 
 The stable user ID must match across two 200 ms observations within the existing
 five-second post-send deadline. Initially unassigned native IDs may hydrate;
 identity mutation, a transient unidentified removed turn, or ambiguity interrupts.
+
+### Logical user-turn lineage (acceptance2)
+
+The old observer remembered every native ID seen in added/removed nodes or in a
+mounted snapshot, then rejected historical ID cardinality above one. Thus A and B
+can be recorded even when A was removed before the snapshot that mounted B. This
+is a testable DOM pattern, not a proven explanation of the historical yellow-car
+failure: that operation contains no mutation transaction evidence and stays interrupted.
+
+The observer now tracks the logical candidate at suffix position `baseline.length`
+separately from its bounded native-ID history. Empty-ID hydration is allowed on
+the same mounted node. A node replacement requires bounded records in the **same
+observer delivery**: removal of the tracked node and addition of its replacement
+as direct message children of the same parent, with identical sibling anchors.
+The predecessor must be the mounted last baseline row and the successor must be
+absent. The old node must be disconnected. A single replaceChild record and a
+remove/add pair within that delivery are supported, including a proven chain of
+replacements. An initial optimistic candidate already removed before the first
+snapshot needs an explicit insertion record at that same anchored slot.
+
+Records preserve order: a second independent user, an assistant between replacements,
+an unproven removal gap, changed parent/slot, wrappers that obscure direct replacement,
+non-empty in-place ID mutation, baseline change, trusted manual input or unknown
+lineage interrupts. No arbitrary later A-disappears/B-appears inference is allowed.
+The final mounted node and canonical ID must match across two 200 ms samples;
+replacement resets stabilization. Historical aliases never leave the content script
+and never grant ownership, including after the canonical anchor is accepted.
+The canonical hash is durably echoed before the unchanged assistant/result flow.
+
+All mutation records remain bounded by the existing 256-visit limit; identity and
+replacement histories are capped by the existing 128-message bound and released
+with observation cleanup. No text, timing-based identity or newest-element rule
+participates. No historical receipt is migrated, recovered or reinterpreted.
+
 Trusted input/click/key/pointer protection moves to document scope after send and
 survives composer replacement through assistant binding. Cancellation,
 invalidation, expiry and assistant anchoring clean up these listeners together

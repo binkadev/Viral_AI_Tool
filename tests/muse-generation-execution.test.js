@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.1',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.2',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -233,6 +233,14 @@ function contentFixture(options={}) {
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
  const api={
+   messageParent:{},
+   transaction:(next,records=[])=>{
+     for(const old of rows)if(!next.includes(old)){old.isConnected=false;old.parentNode=null;old.previousSibling=null;old.nextSibling=null;}
+     rows=next;
+     rows.forEach((n,i)=>{n.isConnected=true;n.parentNode=api.messageParent;n.previousSibling=rows[i-1]||null;n.nextSibling=rows[i+1]||null;});
+     api.mutate(records);
+   },
+   get lineage(){return JSON.parse(vm.runInNewContext('JSON.stringify((()=>{const op=[...operations.values()][0];return op?{identityCount:op.newUsers?.size,logicalCount:op.logicalFreshUserTurnCount,maxConcurrent:op.maxConcurrentFreshUserRows,replacementCount:op.replacementCandidateCount,replacementObserved:!!op.identityReplacementObserved}:null;})())',c));},
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
    replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
    replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
@@ -384,7 +392,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.1',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.2',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -520,6 +528,126 @@ for(const transition of ['composer root','editor','send removed','send replaced'
  });
 }
 
+const userMutation=(f,addedNodes,removedNodes,previousSibling,nextSibling=null,target=f.messageParent)=>({type:'childList',target,addedNodes,removedNodes,previousSibling,nextSibling});
+function replaceOptimisticUser(f,{split=false,chain=false}={}) {
+ const old=f.rows.at(-1),baseline=f.rows.slice(0,-1),tail=baseline.at(-1),canonical=f.node('user','canonical-user');
+ const records=[userMutation(f,[old],[],tail)];
+ if(chain){
+   const intermediate=f.node('user','intermediate-user');intermediate.isConnected=false;
+   records.push(userMutation(f,[intermediate],[old],tail),userMutation(f,[canonical],[intermediate],tail));
+ }else if(split)records.push(userMutation(f,[],[old],tail),userMutation(f,[canonical],[],tail));
+ else records.push(userMutation(f,[canonical],[old],tail));
+ f.transaction([...baseline,canonical],records);
+}
+for(const mode of ['atomic','split same delivery','three identities'])test('v2 proven logical suffix replacement accepts canonical ID: '+mode,async()=>{
+ const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>replaceOptimisticUser(f,{split:mode==='split same delivery',chain:mode==='three identities'})});
+ f.transaction(f.rows);
+ const receipt=await acceptV2(f);
+ assert.equal(receipt.userStableIdHash,shaBytes('op\0user\0canonical-user'));
+ assert.notEqual(receipt.userStableIdHash,shaBytes('op\0user\0optimistic-user'));
+ assert.equal(receipt.assistantStableIdHash,undefined);
+ assert.deepEqual(f.lineage,{identityCount:mode==='three identities'?3:2,logicalCount:1,maxConcurrent:1,replacementCount:mode==='three identities'?2:1,replacementObserved:true});
+ const serialized=JSON.stringify(receipt);assert(!serialized.includes('optimistic'));assert(!serialized.includes('canonical-user'));assert(!serialized.includes('aliases'));
+ f.inject(f.node('assistant','causal-assistant'));
+ const assistant=await f.send('inspectGeneration',{...v2Payload,receipt});
+ assert.equal(assistant.receipt.assistantStableIdHash,shaBytes('op\0assistant\0causal-assistant'));assert.equal(f.clicks,1);
+});
+
+test('v2 replacement of an already sampled optimistic user restarts canonical stabilization',async()=>{
+ let optimistic,canonical;
+ const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>{
+   optimistic=f.rows.at(-1);f.transaction(f.rows,[userMutation(f,[optimistic],[],f.rows.at(-2))]);
+ },onPostSendTick:(f,tick)=>{
+   if(tick===2){canonical=f.node('user','canonical-user');f.transaction([...f.rows.slice(0,-1),canonical],[userMutation(f,[canonical],[optimistic],f.rows.at(-2))]);}
+ }});
+ f.transaction(f.rows);const receipt=await acceptV2(f);
+ assert.equal(receipt.userStableIdHash,shaBytes('op\0user\0canonical-user'));assert.equal(f.lineage.replacementCount,1);
+ assert.equal(f.clicks,1);await f.send('cancelGeneration',inspectPayload);
+});
+
+test('v2 lineage diagnostics distinguish identity history from logical turns and preserve legacy schema',async()=>{
+ const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>replaceOptimisticUser(f),onPostSendTick:(f,tick)=>{if(tick===1)f.foreign('pointerdown');}});
+ f.transaction(f.rows);const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
+ const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt}),d=JSON.parse(JSON.stringify(result.acceptanceDiagnostic));
+ assert.equal(result.state,'interrupted');assert(receiptV2.validAcceptanceDiagnostic(d));
+ assert.equal(d.freshUserIdentityCount,2);assert.equal(d.logicalFreshUserTurnCount,1);assert.equal(d.maxConcurrentFreshUserRows,1);
+ assert.equal(d.identityReplacementObserved,true);assert.equal(d.replacementCandidateCount,1);assert.equal(d.replacementAmbiguous,false);
+ assert.equal(d.canonicalUserStable,false);assert.equal(d.manualInterferenceObserved,true);
+ for(const patch of [{logicalFreshUserTurnCount:129},{replacementCandidateCount:-1},{replacementAliases:['private']},{canonicalUserStable:'yes'},{freshUserIdentityCount:undefined}])assert(!receiptV2.validAcceptanceDiagnostic({...d,...patch}));
+ const legacy={...d};for(const key of ['freshUserIdentityCount','logicalFreshUserTurnCount','maxConcurrentFreshUserRows','replacementCandidateCount','identityReplacementObserved','canonicalUserStable','replacementAmbiguous'])delete legacy[key];
+ assert(receiptV2.validAcceptanceDiagnostic(legacy));assert(!JSON.stringify(d).includes('canonical-user'));assert.equal(f.clicks,1);
+});
+
+test('v2 historical replacement aliases cannot reappear as user authority after canonical anchoring',async()=>{
+ const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>replaceOptimisticUser(f)});f.transaction(f.rows);
+ const receipt=await acceptV2(f);
+ f.inject(f.node('user','optimistic-user'));f.inject(f.node('assistant','unowned-assistant'));
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
+});
+
+for(const failure of ['concurrent','appended','gap','assistant between','manual second','baseline changed','transient baseline removal','ID mutation','wrong parent','wrong slot','no records','nested removal','transient second'])test('v2 logical lineage rejects '+failure,async()=>{
+ let old;
+ const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>{
+   old=f.rows.at(-1);f.transaction(f.rows,[userMutation(f,[old],[],f.rows.at(-2))]);
+ },onPostSendTick:(f,tick)=>{
+   if(tick!==1)return;
+   const second=f.node('user','second-user'),baseline=f.rows.slice(0,-1),tail=baseline.at(-1);
+   if(failure==='concurrent' || failure==='appended')f.transaction([...f.rows,second],[userMutation(f,[second],[],old)]);
+   if(failure==='manual second'){f.foreign('input');f.transaction([...f.rows,second],[userMutation(f,[second],[],old)]);}
+   if(failure==='gap')f.transaction(baseline,[userMutation(f,[],[old],tail)]);
+   if(failure==='assistant between'){
+     const assistant=f.node('assistant','intervening');assistant.isConnected=false;
+     f.transaction([...baseline,second],[userMutation(f,[assistant],[],old),userMutation(f,[],[assistant],old),userMutation(f,[second],[old],tail)]);
+   }
+   if(failure==='baseline changed')f.transaction([...baseline.slice().reverse(),second],[userMutation(f,[second],[old],tail)]);
+   if(failure==='transient baseline removal')f.transaction(f.rows,[userMutation(f,[],[baseline[0]],null,tail),userMutation(f,[baseline[0]],[],null,tail)]);
+   if(failure==='ID mutation'){old.id='mutated';f.mutate([{type:'attributes',target:old,attributeName:'data-message-id',oldValue:'optimistic-user'}]);}
+   if(failure==='wrong parent')f.transaction([...baseline,second],[userMutation(f,[second],[old],tail,null,{})]);
+   if(failure==='wrong slot')f.transaction([...baseline,second],[userMutation(f,[second],[old],null)]);
+   if(failure==='no records')f.transaction([...baseline,second]);
+   if(failure==='nested removal'){
+     const wrapper={querySelectorAll:()=>[old]};f.transaction([...baseline,second],[userMutation(f,[second],[wrapper],tail)]);
+   }
+   if(failure==='transient second'){
+     second.isConnected=false;f.transaction(f.rows,[userMutation(f,[second],[second],old)]);
+   }
+ },});
+ f.transaction(f.rows);
+ const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
+ const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
+ assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
+ if(['concurrent','appended'].includes(failure)){assert.equal(result.acceptanceDiagnostic.maxConcurrentFreshUserRows,2);assert.equal(result.acceptanceDiagnostic.logicalFreshUserTurnCount,2);}
+ if(['gap','wrong parent','wrong slot','no records','nested removal','assistant between','transient second'].includes(failure))assert.equal(result.acceptanceDiagnostic.replacementAmbiguous,true);
+ assert.equal(stored['generation-intent:op'].receipt.userStableIdHash,undefined);
+ const again=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});assert.equal(again.state,'interrupted');assert.equal(f.clicks,1);
+ assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
+});
+
+test('v2 canonical replacement anchor is durable in main before assistant binding and result acquisition',async t=>{
+ const content=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>replaceOptimisticUser(f)});content.transaction(content.rows);
+ const stored={},worker=workerV2Harness(stored,content);
+ let native;
+ const f=fixture(t,{command:async(type,p)=>{
+   if(type==='inspectGeneration'){
+     const persisted=JSON.parse(fs.readFileSync(path.join(native.root,'outputs',p.operationId,'muse-operation.json')));
+     assert.equal(persisted.receipt.userStableIdHash,shaBytes(p.operationId+'\0user\0canonical-user'));
+     assert.equal(persisted.receipt.assistantStableIdHash,undefined);
+     content.inject(content.node('assistant','causal-assistant'));
+   }
+   return JSON.parse(JSON.stringify(await worker.run(type,p)));
+ }});native=f;f.bridge.receiptV2Ready=async()=>true;
+ const job=await f.service.submit(request());await until(f.service,job.id,'running');
+ const file=path.join(f.root,'outputs',job.id,'muse-operation.json');
+ assert.equal(JSON.parse(fs.readFileSync(file)).receipt.userStableIdHash,shaBytes(job.id+'\0user\0canonical-user'));
+ assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,undefined);
+ await f.service.recover(job.id);
+ assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,shaBytes(job.id+'\0assistant\0causal-assistant'));
+ assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));assert.equal(content.clicks,1);
+ assert(!fs.readFileSync(file,'utf8').includes('optimistic-user'));
+});
+
 test('v2 delayed stable user ID and late generation control require no composer transition',async()=>{
  let pending;
  const f=contentFixture({noNewUser:true,noAssistant:true,noClear:true,keepButton:true,
@@ -557,7 +685,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-1-contract3-receipt2-acceptance1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-2-contract3-receipt2-acceptance2');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -635,8 +763,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-1-contract3-receipt2-acceptance1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-1-contract3-receipt2-acceptance1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-2-contract3-receipt2-acceptance2');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-2-contract3-receipt2-acceptance2');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);

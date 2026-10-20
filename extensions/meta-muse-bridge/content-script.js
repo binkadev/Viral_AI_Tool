@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-1-contract3-receipt2-acceptance1';
+const CONTENT_BUILD='muse-content-v0-3-2-contract3-receipt2-acceptance2';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -109,6 +109,69 @@ function afterBaseline(op,allowPending=false) {
   if(op.submittedUserId && fresh[0]?.id!==op.submittedUserId)throw Error('USER_CHANGED');
   if(op.assistantId && fresh[1]?.id!==op.assistantId)throw Error('RESPONSE_CHANGED');
   return fresh;
+}
+function trackFreshUserTurn(op,events,fresh) {
+  // Native IDs are historical evidence, not a count of logical turns. Aliases
+  // stay in this document and never enter Receipt V2 or cross the bridge.
+  const ambiguous=()=>{op.replacementAmbiguous=true;throw Error('REPLACEMENT_AMBIGUOUS');};
+  const independent=()=>{op.logicalFreshUserTurnCount=2;op.maxConcurrentFreshUserRows=Math.max(2,op.maxConcurrentFreshUserRows);throw Error('AMBIGUOUS_OPERATION');};
+  const isFresh=r=>!op.baseline.some(b=>b.role===r.role && b.id===r.id);
+  const slot=(m,node)=>m?.target && m.previousSibling===op.baselineTail && m.nextSibling===null &&
+    op.baselineTail?.parentNode===m.target && [...(m.addedNodes||[])].includes(node);
+  const begin=(row,m)=>{
+    if(op.userTurn)independent();
+    if(op.freshAssistantSeen)ambiguous();
+    // A transient first candidate needs explicit insertion at N; a currently
+    // mounted first candidate can instead be established by the full prefix.
+    if(fresh[0]?.node!==row.node && !slot(m,row.node))ambiguous();
+    op.userTurn={node:row.node,currentNativeId:row.id,logicalPosition:op.baseline.length,mounted:true,
+      parent:m?.target||row.node.parentNode,before:m?m.previousSibling:row.node.previousSibling,
+      after:m?m.nextSibling:row.node.nextSibling,aliases:new Set(nativeId(row.id)?[row.id]:[]),stabilizedSamples:0};
+    op.logicalFreshUserTurnCount=1;
+    op.maxConcurrentFreshUserRows=Math.max(1,op.maxConcurrentFreshUserRows);
+  };
+  let removed=null;
+  for(const {mutation:m,added,removed:removedRows} of events) {
+    if(removedRows.some(r=>!isFresh(r)))throw Error('BASELINE_CHANGED');
+    const add=added.filter(r=>r.role==='user' && isFresh(r)),del=removedRows.filter(r=>r.role==='user' && isFresh(r));
+    if(add.length>1 || del.length>1)independent();
+    if(del.length){
+      const turn=op.userTurn;
+      if(removed || !turn || !turn.mounted || turn.node!==del[0].node || !nativeId(del[0].id) ||
+        ![...(m.removedNodes||[])].includes(turn.node) || turn.parent!==m.target || turn.before!==m.previousSibling || turn.after!==m.nextSibling ||
+        turn.before!==op.baselineTail || turn.after!==null || op.baselineTail?.parentNode!==m.target || op.freshAssistantSeen || op.manualInterferenceObserved)ambiguous();
+      turn.mounted=false;removed={mutation:m,node:turn.node};
+    }
+    if(add.length){
+      const row=add[0],turn=op.userTurn;
+      if(removed){
+        if(!slot(m,row.node) || removed.mutation.target!==m.target || removed.mutation.previousSibling!==m.previousSibling ||
+          removed.mutation.nextSibling!==m.nextSibling || removed.node===row.node || removed.node.isConnected!==false || op.freshAssistantSeen || op.manualInterferenceObserved)ambiguous();
+        if(++op.replacementCandidateCount>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
+        turn.node=row.node;turn.currentNativeId=row.id;turn.mounted=true;turn.stabilizedSamples=0;
+        if(nativeId(row.id))turn.aliases.add(row.id);
+        op.identityReplacementObserved=true;op.stableUserIdentityObserved=false;removed=null;
+      }else if(turn){if(turn.node.isConnected===false)ambiguous();independent();}
+      else begin(row,m);
+    }
+    if([...added,...removedRows].some(r=>r.role==='assistant' && isFresh(r))){
+      if(removed || !op.userTurn)ambiguous();
+      op.freshAssistantSeen=true;
+    }
+  }
+  // A removal cannot carry replacement authority across observer deliveries.
+  if(removed)ambiguous();
+  const row=fresh[0];
+  if(!op.userTurn && row)begin(row);
+  const turn=op.userTurn;
+  if(turn){
+    if(!row || row.node!==turn.node || row.node.isConnected===false)ambiguous();
+    if(nativeId(turn.currentNativeId) && turn.currentNativeId!==row.id)throw Error('IDENTITY_MUTATED');
+    turn.currentNativeId=row.id;
+    if(nativeId(row.id))turn.aliases.add(row.id);
+    if(turn.aliases.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
+  }
+  if(fresh[1])op.freshAssistantSeen=true;
 }
 async function inspect(p) {
   if(p.diagnoseAcquisition===true)return diagnoseAcquisition(p);
@@ -267,7 +330,7 @@ async function submit(p) {
     sendStartedAt=Date.now();
     button.click(); // No await between fresh resolution/validation and invocation.
     invocation.send='invoked';invocation.reason='acceptance-unproven';
-    let candidateUser=null,stableUserSamples=0;
+    let candidateUser=null,candidateNode=null,stableUserSamples=0;
     for(let i=0;i<25;i++) {
       await new Promise(r=>setTimeout(r,200));
       if(prepared) {
@@ -275,13 +338,14 @@ async function submit(p) {
         if(op.invalid)throw Error('OBSERVATION_INVALID');
         const fresh=afterBaseline(op,true),user=fresh[0];
         if(!user || !nativeId(user.id)){candidateUser=null;stableUserSamples=0;continue;}
-        if(op.newUsers.size!==1 || !op.newUsers.has(user.id))throw Error('AMBIGUOUS_OPERATION');
-        stableUserSamples=candidateUser===user.id?stableUserSamples+1:1;candidateUser=user.id;
+        if(op.logicalFreshUserTurnCount!==1 || op.userTurn?.node!==user.node || !op.userTurn.mounted)throw Error('AMBIGUOUS_OPERATION');
+        stableUserSamples=candidateUser===user.id && candidateNode===user.node?stableUserSamples+1:1;candidateUser=user.id;candidateNode=user.node;
+        op.userTurn.stabilizedSamples=stableUserSamples;
         if(stableUserSamples<2)continue;
         op.stableUserIdentityObserved=true;
         const userStableIdHash=await hash(p.operationId,'user',user.id);
         op.sample();
-        if(op.invalid || afterBaseline(op,true)[0]?.id!==user.id)throw Error('USER_CHANGED');
+        if(op.invalid || afterBaseline(op,true)[0]?.id!==user.id || op.userTurn?.node!==user.node)throw Error('USER_CHANGED');
         op.submittedUserId=user.id;
         const currentComposer=composer();
         op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
@@ -321,6 +385,10 @@ function acceptanceFailureDiagnostic(op,original,button,started,error) {
     const d={acceptanceBuild:CONTENT_BUILD,failureReason:MuseReceiptV2.acceptanceFailureReasons.includes(reason)?reason:'UNKNOWN',
       elapsedBucket:elapsed<1000?'under_1s':elapsed<=5000?'1_to_5s':'over_5s',deadlineReached:error?.message==='ACCEPTANCE_UNCERTAIN',
       freshUserCount:Math.min(128,op.newUsers?.size||0),freshAssistantCount:Math.min(128,op.newAssistants?.size||0),baselinePrefixValid,
+      freshUserIdentityCount:Math.min(128,op.newUsers?.size||0),logicalFreshUserTurnCount:Math.min(128,op.logicalFreshUserTurnCount||0),
+      maxConcurrentFreshUserRows:Math.min(128,op.maxConcurrentFreshUserRows||0),identityReplacementObserved:op.identityReplacementObserved===true,
+      replacementCandidateCount:Math.min(128,op.replacementCandidateCount||0),canonicalUserStable:(op.userTurn?.stabilizedSamples||0)>=2,
+      replacementAmbiguous:op.replacementAmbiguous===true,
       stableUserIdentityObserved:op.stableUserIdentityObserved===true,manualInterferenceObserved:op.manualInterferenceObserved===true,
       composerReplaced:c?.root!==original.root,editorReplaced:c?.editor!==original.editor,
       sendControlTransitionObserved:!actionable(button) || !c?.slot.contains(button),generationControlObserved:generationActive()};
@@ -344,15 +412,17 @@ async function prepareV2(p) {
   if(op.invalid || !stable || !status().canSubmit){releaseV2(p.operationId,op);return answer(p,'interrupted');}
   op.baseline=stable.rows.map(({id,role})=>({id,role}));op.createdAt=Date.now();op.lastContact=Date.now();
   op.newUsers=new Set();op.newAssistants=new Set();
+  op.baselineTail=stable.rows.at(-1).node;op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
   const sample=(mutations=[])=>{
     try {
       const remember=row=>{if(!op.baseline.some(b=>b.id===row.id && b.role===row.role))(row.role==='user'?op.newUsers:op.newAssistants).add(row.id);};
-      let visited=0;
+      let visited=0;const events=[];
       // Inspect bounded mutation additions/removals as well as mounted rows:
       // a manual turn appended and removed in one batch still invalidates.
       for(const mutation of mutations) {
         if(++visited>256)throw Error('OBSERVATION_LIMIT');
         if(mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
+        const event={mutation,added:[],removed:[]};events.push(event);
         const changes=[...[...(mutation.addedNodes||[])].map(node=>({node,removed:false})),
           ...[...(mutation.removedNodes||[])].map(node=>({node,removed:true}))];
         for(const {node,removed} of changes) {
@@ -361,6 +431,7 @@ async function prepareV2(p) {
             if(++visited>256)throw Error('OBSERVATION_LIMIT');
             const role=candidate.getAttribute?.('data-message-role'),id=candidate.getAttribute?.('data-message-id');
             if(['user','assistant'].includes(role)){
+              (removed?event.removed:event.added).push({node:candidate,id,role});
               // An initially unassigned ID may hydrate on its mounted row.
               // A transient unidentified turn cannot disappear from evidence.
               if(!nativeId(id)){if(op.sendAttempted && !removed && (id===null || id===''))continue;throw Error('IDENTITY_UNAVAILABLE');}
@@ -371,10 +442,22 @@ async function prepareV2(p) {
       }
       const rows=structure(!!op.sendAttempted);
       for(const row of rows)if(nativeId(row.id))remember(row);
+      const concurrent=rows.slice(op.baseline.length).filter(r=>r.role==='user').length;
+      op.maxConcurrentFreshUserRows=Math.max(op.maxConcurrentFreshUserRows,concurrent);
+      if(concurrent>1)op.logicalFreshUserTurnCount=concurrent;
       // Prefix and fresh role/order must stay intact until acceptance. Pending
       // native IDs may hydrate after send, but cannot grant ownership yet.
-      if(!op.receipt?.userStableIdHash)afterBaseline(op,!!op.sendAttempted);
-      if(op.newUsers.size>1 || op.newAssistants.size>1){op.invalid=true;op.observerInvalidation||='AMBIGUOUS_OPERATION';}
+      if(!op.receipt?.userStableIdHash){
+        const fresh=afterBaseline(op,!!op.sendAttempted);
+        if(op.sendAttempted)trackFreshUserTurn(op,events,fresh);
+      }else {
+        // Once anchored, aliases grant no authority. Even a temporary alias
+        // reappearing as a separate row is another/unproven turn.
+        const unownedUser=r=>r.role==='user' && !op.baseline.some(b=>b.role==='user' && b.id===r.id) && r.id!==op.submittedUserId;
+        if(rows.some(unownedUser) || events.some(e=>[...e.added,...e.removed].some(unownedUser)))throw Error('AMBIGUOUS_OPERATION');
+      }
+      if(op.newUsers.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
+      if(op.newAssistants.size>1){op.invalid=true;op.observerInvalidation||='AMBIGUOUS_OPERATION';}
     }catch(error){op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
     if(op.invalid)releaseV2(p.operationId,op);
   };
@@ -399,7 +482,7 @@ async function inspectV2(p) {
       if(op)releaseV2(p.operationId,op);return answer(p,'interrupted');
     }
     op.lastContact=Date.now();op.sample();
-    if(op.invalid || !structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId) || op.newUsers.size!==1 || !op.newUsers.has(op.submittedUserId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(op.invalid || !structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId) || op.logicalFreshUserTurnCount!==1 || op.userTurn?.currentNativeId!==op.submittedUserId){releaseV2(p.operationId,op);return answer(p,'interrupted');}
     if(op.newAssistants.size===0)return answer(p,'running',{receipt});
     const id=[...op.newAssistants][0];
     if(!structure(true).some(r=>r.role==='assistant' && r.id===id)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
