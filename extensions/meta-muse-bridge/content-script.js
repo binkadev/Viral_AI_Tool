@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-0-contract3-receipt2-acceptance1';
+const CONTENT_BUILD='muse-content-v0-3-1-contract3-receipt2-acceptance1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -226,10 +226,10 @@ async function submit(p) {
   const op=prepared || {sceneId:p.sceneId,baseline:baseline.map(({id,role})=>({id,role})),baselineVideos:new Set(videos),baselineSources:new Set(videos.map(v=>v.currentSrc).filter(Boolean))};
   if(prepared)op.lastContact=Date.now();
   operations.set(p.operationId,op); // Before composer writes; one attempt forever.
-  let inserting=false;
+  let inserting=false,sendButton=null,sendStartedAt=null;
   // insertText can synchronously emit a trusted input event. Only that exact
   // own insertion is exempt; trusted clicks/keys and later input still abort.
-  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor))op.invalid=true;};
+  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor)){op.invalid=true;op.observerInvalidation||='MANUAL_INTERFERENCE';op.manualInterferenceObserved=true;}};
   for(const type of ['input','click','keydown'])c.root.addEventListener(type,disturbed,true);
   try {
     invocation.reason='composer-changed';
@@ -254,6 +254,7 @@ async function submit(p) {
     const candidates=[...current.slot.querySelectorAll('button')];
     if(candidates.length!==1 || !actionable(candidates[0]) || !current.slot.contains(candidates[0]))throw Error('NOT_READY');
     const button=candidates[0];
+    sendButton=button;
     if(prepared) {
       // Survive normal composer remounts, but retain document-wide protection
       // against manual input until causal assistant ownership is released.
@@ -263,6 +264,7 @@ async function submit(p) {
       op.sendAttempted=true;
     }
     invocation.send='uncertain';invocation.reason='invocation-uncertain';
+    sendStartedAt=Date.now();
     button.click(); // No await between fresh resolution/validation and invocation.
     invocation.send='invoked';invocation.reason='acceptance-unproven';
     let candidateUser=null,stableUserSamples=0;
@@ -276,6 +278,7 @@ async function submit(p) {
         if(op.newUsers.size!==1 || !op.newUsers.has(user.id))throw Error('AMBIGUOUS_OPERATION');
         stableUserSamples=candidateUser===user.id?stableUserSamples+1:1;candidateUser=user.id;
         if(stableUserSamples<2)continue;
+        op.stableUserIdentityObserved=true;
         const userStableIdHash=await hash(p.operationId,'user',user.id);
         op.sample();
         if(op.invalid || afterBaseline(op,true)[0]?.id!==user.id)throw Error('USER_CHANGED');
@@ -301,8 +304,28 @@ async function submit(p) {
       }
     }
     throw Error('ACCEPTANCE_UNCERTAIN');
-  } catch {op.invalid=true;releaseV2(p.operationId,op);return answer(p,'interrupted',{invocation});}
+  } catch(error) {
+    let acceptanceDiagnostic;
+    if(prepared && invocation.send==='invoked')acceptanceDiagnostic=acceptanceFailureDiagnostic(op,c,sendButton,sendStartedAt,error);
+    op.invalid=true;releaseV2(p.operationId,op);
+    return answer(p,'interrupted',{invocation,...(acceptanceDiagnostic?{acceptanceDiagnostic}:{})});
+  }
   finally {if(op.invalid)releaseV2(p.operationId,op);for(const type of ['input','click','keydown'])c.root.removeEventListener(type,disturbed,true);}
+}
+function acceptanceFailureDiagnostic(op,original,button,started,error) {
+  // Evidence only. Never used by receipt validation, ownership or reconciliation.
+  try {
+    let baselinePrefixValid=false;
+    try{const rows=structure(true);baselinePrefixValid=rows.length>=op.baseline.length && op.baseline.every((r,i)=>r.id===rows[i].id && r.role===rows[i].role);}catch{}
+    const c=composer(),elapsed=Math.max(0,Date.now()-started),reason=op.observerInvalidation||error?.message;
+    const d={acceptanceBuild:CONTENT_BUILD,failureReason:MuseReceiptV2.acceptanceFailureReasons.includes(reason)?reason:'UNKNOWN',
+      elapsedBucket:elapsed<1000?'under_1s':elapsed<=5000?'1_to_5s':'over_5s',deadlineReached:error?.message==='ACCEPTANCE_UNCERTAIN',
+      freshUserCount:Math.min(128,op.newUsers?.size||0),freshAssistantCount:Math.min(128,op.newAssistants?.size||0),baselinePrefixValid,
+      stableUserIdentityObserved:op.stableUserIdentityObserved===true,manualInterferenceObserved:op.manualInterferenceObserved===true,
+      composerReplaced:c?.root!==original.root,editorReplaced:c?.editor!==original.editor,
+      sendControlTransitionObserved:!actionable(button) || !c?.slot.contains(button),generationControlObserved:generationActive()};
+    return MuseReceiptV2.validAcceptanceDiagnostic(d)?d:null;
+  }catch{return null;}
 }
 // The worker owns durable history. This map owns only live causal observation.
 // Invalidate retained references before deletion so pending awaits fail closed.
@@ -351,8 +374,8 @@ async function prepareV2(p) {
       // Prefix and fresh role/order must stay intact until acceptance. Pending
       // native IDs may hydrate after send, but cannot grant ownership yet.
       if(!op.receipt?.userStableIdHash)afterBaseline(op,!!op.sendAttempted);
-      if(op.newUsers.size>1 || op.newAssistants.size>1)op.invalid=true;
-    }catch{op.invalid=true;}
+      if(op.newUsers.size>1 || op.newAssistants.size>1){op.invalid=true;op.observerInvalidation||='AMBIGUOUS_OPERATION';}
+    }catch(error){op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
     if(op.invalid)releaseV2(p.operationId,op);
   };
   const observer=new MutationObserver(sample);

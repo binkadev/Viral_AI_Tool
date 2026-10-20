@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-0-contract3-receipt2-acceptance1';
+const WORKER_BUILD='muse-worker-v0-3-1-contract3-receipt2-acceptance1';
 if(typeof importScripts==='function')importScripts('receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
@@ -68,7 +68,8 @@ async function museTabs() {
     diagnostic.workerBuild=WORKER_BUILD;
     diagnostic.contentBuild=/^muse-content-[a-z0-9-]{1,64}$/.test(handshake?.buildMarker||'')?handshake.buildMarker:'unreported';
     diagnostic.generationActive=status?.devEvidence?.generationActive===true;
-    return {tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
+    return {tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
+      runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported'},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
   }));
 }
 async function openMuse(tabId) {
@@ -242,6 +243,9 @@ async function executeV2(c) {
   const payload={...p,...(receipt?{receipt}:{}),observationToken:observationEpoch+'_'+(bridge?.serverId||'offline')};
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload});
   if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId)return interrupted();
+  if(c.type==='submitGeneration' && result.state==='interrupted' && result.invocation?.send==='invoked' && MuseReceiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic)) {
+    result.acceptanceDiagnostic={...result.acceptanceDiagnostic,workerBuild:WORKER_BUILD};
+  }
   if(c.type==='acquireGenerationResult' && result.state==='result' && !MuseReceiptV2.transferResult(result,payload))return interrupted();
   if(['prepared','running','result'].includes(result.state)) {
     if(!MuseReceiptV2.valid(result.receipt,p.operationId) || receipt && !MuseReceiptV2.extendsReceipt(receipt,result.receipt))return interrupted();

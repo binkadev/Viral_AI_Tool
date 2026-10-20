@@ -2,7 +2,8 @@
 
 Release configuration lives in `services/generation/bridge/extension-distribution.json` and ships in the application archive. It is build configuration, never a renderer-supplied URL or identity.
 
-- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.0).
+- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.1).
+- `expectedWorkerBuild` / `expectedContentBuild`: version-specific executing markers required by controlled diagnostic preflight; staged bytes alone cannot prove runtime identity.
 - `protocolVersion`: exact supported protocol (currently 1).
 - `chromeWebStoreExtensionId`: official 32-character Chrome ID; blank until assigned.
 - `chromeWebStoreUrl`: HTTPS chromewebstore.google.com detail URL ending in that same ID; blank until available. Credentials, query strings, fragments, other hosts and mismatched IDs are rejected.
@@ -18,7 +19,7 @@ A lower extension version yields `extension_outdated`; a lower explicit protocol
 
 The normal action opens only the validated Web Store listing. Without configuration it is disabled and explanatory VI/EN copy appears. No fake installation or silent installation occurs. A support disclosure contains manual instructions: chrome://extensions ? Developer mode ? Load unpacked ? select the revealed userData/meta-muse-extension folder. An updated unpacked extension must be reloaded by the user, then the Muse tab refreshed.
 
-The reveal action stages only the known bundled files, replaces the manifest last, rejects redirected target directories/files, and leaves Chrome profiles untouched. Incomplete source bundles leave the managed copy untouched. Errors surface through the existing localized connection error; retry is available. Actions are short and do not create jobs or cancellation state. Repeated UI actions are disabled while pending; concurrent store opens coalesce. No installation claim persists: connection evidence expires and is rebuilt after restart. Only the existing selected profile identifier persists.
+The reveal action validates and reads all eight known bundled files first, writes a complete sibling bundle with its manifest last, and verifies every byte before and after directory publication. The old directory is retained for rollback until publication succeeds. Incomplete sources and write failures leave the managed copy untouched; failed publication restores the old bundle or leaves execution safely unavailable. Redirected ancestors/directories/files and unexpected entries are rejected. Chrome profiles remain untouched. A safe result reports extensionVersion and bundleVerified without a private path. Errors surface through the existing localized connection error; retry is available. Actions are short and do not create jobs or cancellation state. Repeated UI actions are disabled while pending; concurrent store opens coalesce. No installation claim persists: connection evidence expires and is rebuilt after restart. Only the existing selected profile identifier persists.
 
 ## Verification
 

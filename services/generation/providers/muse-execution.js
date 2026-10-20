@@ -33,7 +33,7 @@ function createMuseExecution(bridge,verifyVideo) {
     if(result.invocation) {
       // Private evidence only. Transport errors leave invocation unknown.
       const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
-      try {fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({...r,invocation:result.invocation}));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));r.invocation=result.invocation;}
+      try {const evidence={invocation:result.invocation,...(result.acceptanceDiagnostic?{acceptanceDiagnostic:result.acceptanceDiagnostic}:{})};fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({...r,...evidence}));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));Object.assign(r,evidence);}
       finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
     }
     if(['prepared','running','result'].includes(result.state))saveEvidence(c,r,result);

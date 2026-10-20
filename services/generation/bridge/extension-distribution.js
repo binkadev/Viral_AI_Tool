@@ -4,6 +4,8 @@ const version = value => typeof value === "string" && /^(0|[1-9]\d*)\.(0|[1-9]\d
 function configuration(input = defaults) {
   const c = {...defaults, ...input};
   if (!["production", "development", "support"].includes(c.distributionMode) || !version(c.expectedExtensionVersion) || !Number.isSafeInteger(c.protocolVersion) || c.protocolVersion < 1) throw Error("Invalid distribution configuration");
+  const buildVersion=c.expectedExtensionVersion.replaceAll('.', '-');
+  if(c.expectedWorkerBuild!==`muse-worker-v${buildVersion}-contract3-receipt2-acceptance1` || c.expectedContentBuild!==`muse-content-v${buildVersion}-contract3-receipt2-acceptance1`)throw Error("Invalid expected build identity");
   const id = c.chromeWebStoreExtensionId;
   if (id && !/^[a-p]{32}$/.test(id)) throw Error("Invalid extension identity");
   let storeConfigured = false;

@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.1',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -384,7 +384,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.1',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -556,6 +556,8 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
+   assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-1-contract3-receipt2-acceptance1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -625,6 +627,28 @@ test('v2 historical invoked but unaccepted intent is safely classified through I
  assert.equal(f.calls.filter(c=>c.type==='prepareGeneration').length,1);assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);
  assert.equal(f.calls.filter(c=>c.type==='inspectGeneration').length,0);assert.equal(f.calls.filter(c=>c.type==='acquireGenerationResult').length,0);
  assert.deepEqual(fs.readFileSync(file),bytes);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
+});
+
+test('v2 acceptance failure diagnostics persist actual builds and bounded structure without granting ownership',async t=>{
+ const stored={},content=contentFixture({noNewUser:true,noAssistant:true}),worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
+ const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
+ assert(receiptV2.validAcceptanceDiagnostic(d));
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-1-contract3-receipt2-acceptance1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-1-contract3-receipt2-acceptance1');
+ assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
+ assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
+ assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
+ assert(!receiptV2.valid({...record.receipt,acceptanceDiagnostic:d},job.id));
+ assert(!validPayload('inspectGeneration',{...inspectPayload,acceptanceDiagnostic:d}));
+ for(const patch of [{message:'private'},{url:'https://private'},{freshUserCount:129},{failureReason:'arbitrary'},{acceptanceBuild:'raw browser state'}])assert(!receiptV2.validAcceptanceDiagnostic({...d,...patch}));
+ assert(!JSON.stringify(d).includes(request().prompt));assert(!JSON.stringify(d).includes('history-user'));
+ const before=fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'));
+ await f.service.recover(job.id);
+ assert.deepEqual(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json')),before);
+ assert.equal(content.clicks,1);assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);
+ assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
 });
 
 for(const kind of ['two assistants','additional user','temporary additional user','epoch change','user absent']) {

@@ -7,10 +7,10 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const {failure} = require("../generation-job");
 const {validPayload, validResult} = require("./execution-contract");
-const {validDiagnostic}=require('./connection-diagnostics');
+const {validDiagnostic,validRuntimeBuild}=require('./connection-diagnostics');
+const {readBundle,matches,stageBundle,identity:bundleIdentity}=require('./extension-bundle');
 const {sanitizeSession, instanceId, tabId, label} = require("./session-status");
 const PORT_START = 32147, PORT_END = 32157, SESSION_TTL_MS = 12000;
-const FILES = ["manifest.json","receipt-v2.js","service-worker.js","content-script.js","popup.html","popup.js","popup.css","strings.js"];
 const validOrigin = origin => /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
 const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).every(k => keys.includes(k));
 const text = (value, max) => typeof value === "string" && value.length <= max;
@@ -104,15 +104,17 @@ class MetaMuseExtensionBridge {
       const ids=new Set();
       const tabs=b.tabs.map(t=>{
         // Legacy 0.1.0 metadata is bounded then discarded, never stored or returned.
-        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
         if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
+        if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
         check(t.canSubmit===undefined || typeof t.canSubmit==='boolean');
         if(this.developmentDiagnostics && t.devEvidence && exact(t.devEvidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) && Object.values(t.devEvidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128)))this.devEvidence=t.devEvidence;
         check(t.executionContract===undefined || t.executionContract===null || [1,2,3].includes(t.executionContract));
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection,generationActive:typeof t.devEvidence?.generationActive==='boolean'?t.devEvidence.generationActive:null}:{})};
+        return {ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
+          ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection,generationActive:typeof t.devEvidence?.generationActive==='boolean'?t.devEvidence.generationActive:null}:{})};
       });
       s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();s.heartbeatSeen=true;this.evidenceExpired=false;
       return this.reply(res,200,{ok:true});
@@ -141,7 +143,7 @@ class MetaMuseExtensionBridge {
     if(!selected && !this.selectedInstanceId && sessions.length===1)selected=sessions[0];
     let tab=selected?.tabs.find(t=>t.tabId===this.selectedTabId);
     if(!tab && selected?.tabs.length===1)tab=selected.tabs[0];
-    const extensionState=(selected || sessions.find(s=>s.extensionState!=="extension_connected"))?.extensionState || (sessions.length ? "extension_connected" : "extension_install_required");
+    const extensionState=this.stagingFailed?'extension_error':(selected || sessions.find(s=>s.extensionState!=="extension_connected"))?.extensionState || (sessions.length ? "extension_connected" : "extension_install_required");
     const state=extensionState!=="extension_connected"?"extension_offline":!sessions.length?"extension_offline":!selected?"selection_required":!selected.tabs.length?"muse_tab_missing":!tab?"selection_required":tab.authState;
     return sanitizeSession({state,extensionState,storeConfigured:this.distribution.storeConfigured,sessions,selectedInstanceId:selected?.instanceId || this.selectedInstanceId,selectedTabId:tab?.tabId});
   }
@@ -180,7 +182,26 @@ class MetaMuseExtensionBridge {
     await this.start();const state=this.snapshot();
     const session=this.sessions.get(state.selectedInstanceId);
     const tab=session?.tabs.find(t=>t.tabId===state.selectedTabId);
-    return state.extensionState==="extension_connected" && state.state==="authenticated" && tab?.executionContract===3 && tab.canSubmit===true;
+    return state.extensionState==="extension_connected" && state.state==="authenticated" && tab?.executionContract===3 && tab.canSubmit===true &&
+      (!this.source || this.stagedBundleVerified()) && (!this.developmentDiagnostics || this.runtimeBuildPreflight().ready);
+  }
+  stagedBundleVerified() {
+    try{return matches(this.installDir,readBundle(this.source,this.distribution));}catch{return false;}
+  }
+  runtimeBuildPreflight() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const selected=this.snapshot(),s=this.sessions.get(selected.selectedInstanceId),tab=s?.tabs.find(t=>t.tabId===selected.selectedTabId),d=tab?.diagnostic;
+    const expected=this.distribution,build=tab?.runtimeBuild||d;
+    let sourceBuild=null;
+    try{sourceBuild=readBundle(this.source,expected).summary;}catch{}
+    let reason='READY';
+    if(selected.extensionState!=='extension_connected' || selected.state!=='authenticated' || !s?.heartbeatSeen || tab?.executionContract!==3 || tab?.ownershipReceiptVersion!==2 || !tab?.canSubmit)reason='SESSION_UNREADY';
+    else if(!build || (d && (!d.museTabEvidenceFresh || !d.museContentScriptHandshakeSeen || d.lastContentScriptErrorCode!=='NONE' || d.lastBridgeErrorCode!=='NONE')) || !build.workerBuild || !build.contentBuild || build.contentBuild==='unreported')reason='BUILD_EVIDENCE_MISSING';
+    else if(build.workerBuild!==expected.expectedWorkerBuild)reason='WORKER_BUILD_MISMATCH';
+    else if(build.contentBuild!==expected.expectedContentBuild)reason='CONTENT_BUILD_MISMATCH';
+    else if(!sourceBuild || !this.stagedBundleVerified())reason='STAGING_UNVERIFIED';
+    return {ready:reason==='READY',reason,sourceBuild,stagedBuild:bundleIdentity(this.installDir),stagedBundleVerified:this.stagedBundleVerified(),expectedWorkerBuild:expected.expectedWorkerBuild,expectedContentBuild:expected.expectedContentBuild,
+      executingWorkerBuild:build?.workerBuild||'unreported',executingContentBuild:build?.contentBuild||'unreported'};
   }
   async executionTarget() {
     if(!await this.executionReady())throw failure("PROVIDER_UNAVAILABLE");
@@ -195,7 +216,7 @@ class MetaMuseExtensionBridge {
     await this.start();this.prune();
     const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
     check(validPayload(type,payload) && payload.tabId===target?.tabId);
-    if(s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");
+    if(this.stagingFailed || (this.source && !this.stagedBundleVerified()) || s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");
     let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});
     const timer=setTimeout(()=>this.finish(s.instanceId,false),type==='acquireGenerationResult'?70000:this.commandTimeoutMs);
     this.pending.set(s.instanceId,{id:crypto.randomUUID(),type,payload,promise,resolve,reject,timer,sent:false});
@@ -229,26 +250,12 @@ class MetaMuseExtensionBridge {
   }
   async revealExtension() {
     check(typeof this.source==="string");
-    // Read the complete bundle before touching the installed extension. Stage
-    // complete files first; replace the manifest last, only after successful IO.
-    const files=FILES.filter(file=>file!=="manifest.json").concat("manifest.json")
-      .map(file=>({file,data:fs.readFileSync(path.join(this.source,file))}));
-    fs.mkdirSync(this.installDir,{recursive:true});
-    check(!fs.lstatSync(this.installDir).isSymbolicLink());
-    for(const {file} of files) {
-      const destination=path.join(this.installDir,file);
-      if(fs.existsSync(destination))check(!fs.lstatSync(destination).isSymbolicLink());
-    }
-    const staged=[];
+    let summary;
     try {
-      for(const {file,data} of files) {
-        const temp=path.join(this.installDir,file+"."+crypto.randomUUID()+".tmp");
-        staged.push({temp,file});fs.writeFileSync(temp,data,{flag:"wx",mode:0o600});
-      }
-      for(const {temp,file} of staged)fs.renameSync(temp,path.join(this.installDir,file));
-    } finally {for(const {temp} of staged) {try {fs.unlinkSync(temp);} catch {}}}
+      summary=stageBundle(this.source,this.installDir,this.distribution);this.stagingFailed=false;
+    } catch(error) {this.stagingFailed=true;throw error;}
     this.shell?.showItemInFolder(path.join(this.installDir,"manifest.json"));
-    return {id:"muse",folderRevealed:true};
+    return {id:"muse",folderRevealed:true,extensionVersion:summary.extensionVersion,bundleVerified:summary.bundleVerified};
   }
   close() {
     this.stopped=true;for(const id of this.pending.keys())this.finish(id,false);

@@ -12,7 +12,7 @@ The renderer has no generic command, selector, script, remote URL or byte API.
 
 | Layer | Version |
 | --- | --- |
-| Extension manifest and minimum compatible extension | 0.3.0 |
+| Extension manifest and minimum compatible extension | 0.3.1 |
 | Loopback transport protocol | 1 |
 | Execution contract | 3 |
 | Ownership receipt | 2 |
@@ -25,14 +25,33 @@ protocol versions fail closed. See [distribution](MUSE_EXTENSION_DISTRIBUTION.md
 The store identity and URL stay blank until an actual listing is configured.
 
 Executing JavaScript reports version-specific markers:
-- muse-worker-v0-3-0-contract3-receipt2-acceptance1
-- muse-content-v0-3-0-contract3-receipt2-acceptance1
+- muse-worker-v0-3-1-contract3-receipt2-acceptance1
+- muse-content-v0-3-1-contract3-receipt2-acceptance1
 
 Packaging tests ensure marker versions match the manifest and all eight extension
 files match source in the ASAR. Managed staging copies repository files, never
 browser profiles. Staging is not proof Chrome reloaded them: after a bundle update,
 the user must reload the extension and refresh the existing tab once. Receiver
 selection respects the selected session; multiple candidates require selection.
+
+The 0.3.1 distribution rejects 0.3.0 workers as outdated. Managed staging reads
+and validates all eight source files before writing a unique sibling directory,
+writes its manifest last, and verifies every byte before publication. The old
+directory is retained as a rollback backup until the new directory is published
+and byte-verified. Failures block execution; a crash during directory publication
+may leave the managed directory absent, which also blocks execution. Destination
+ancestors and entries must be regular directories/files, never symlinks/junctions.
+No browser profile or unrelated files are copied or removed.
+
+Private heartbeat build evidence comes from the executing worker constant and
+the content handshake constant, including in the normal production extension.
+It is excluded from renderer session IPC. Native opt-in diagnostic
+`runtimeBuildPreflight()` separately reports source, staged, executing worker and
+executing content builds. It requires verified staging, fresh selected authenticated
+contract-3/receipt-2 evidence and both expected executing markers. Missing or mixed
+markers fail this controlled preflight even when the manifest version matches.
+The heartbeat-only `dev/muse-receiver-inspect.js` reports this preflight without
+browser commands; run it only when no desktop bridge instance is running.
 
 ## Submission and ownership
 
@@ -59,6 +78,15 @@ UI booleans remain typed but may be false. Legacy V2 receipts without these two
 fields retain their original clear/control requirements without reinterpretation.
 Uncertain acceptance interrupts and never triggers an automatic submission retry.
 The accepted user anchor is persisted before an assistant can be adopted.
+
+An invoked but unproven V2 submission may persist private failure diagnostics:
+executing content/worker builds, bounded failure reason and elapsed bucket,
+deadline reached, fresh user/assistant counts (0–128), baseline-prefix validity,
+stable user identity observed, manual interference, composer/editor replacement,
+send-control transition and generation-control observation. These fields contain
+no text, native IDs, URLs, HTML, credentials, account or browser storage. They are
+forensic evidence only: they cannot satisfy Receipt V2 validation or grant ownership,
+and never cause a retry. Existing acceptance decisions remain unchanged.
 
 The stable user ID must match across two 200 ms observations within the existing
 five-second post-send deadline. Initially unassigned native IDs may hydrate;

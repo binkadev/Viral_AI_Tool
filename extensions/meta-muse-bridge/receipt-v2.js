@@ -30,6 +30,14 @@
    return !old.result || !!next.result && old.result.kind===next.result.kind && old.result.ownerAssistantStableIdHash===next.result.ownerAssistantStableIdHash;
  }
  const MAX_BYTES=268435456,CHUNK_BYTES=196608;
+ const acceptanceFailureReasons=Object.freeze(['BASELINE_CHANGED','AMBIGUOUS_OPERATION','USER_CHANGED','RESPONSE_CHANGED','IDENTITY_MUTATED','IDENTITY_UNAVAILABLE','OBSERVATION_LIMIT','MANUAL_INTERFERENCE','ACCEPTANCE_UNCERTAIN','OBSERVATION_INVALID','COMPOSER_CHANGED','UNKNOWN']);
+ function validAcceptanceDiagnostic(d) {
+   const bools=['deadlineReached','baselinePrefixValid','stableUserIdentityObserved','manualInterferenceObserved','composerReplaced','editorReplaced','sendControlTransitionObserved','generationControlObserved'];
+   return exact(d,['acceptanceBuild','workerBuild','failureReason','elapsedBucket','freshUserCount','freshAssistantCount',...bools]) &&
+     /^muse-content-[a-z0-9-]{1,64}$/.test(d.acceptanceBuild||'') && (d.workerBuild===undefined || /^muse-worker-[a-z0-9-]{1,64}$/.test(d.workerBuild)) &&
+     acceptanceFailureReasons.includes(d.failureReason) && ['under_1s','1_to_5s','over_5s'].includes(d.elapsedBucket) &&
+     ['freshUserCount','freshAssistantCount'].every(k=>Number.isInteger(d[k]) && d[k]>=0 && d[k]<=128) && bools.every(k=>typeof d[k]==='boolean');
+ }
  function transferRequest(p) {
    return valid(p.receipt,p.operationId) && !!p.receipt.result &&
      typeof p.transferId==='string' && /^[a-zA-Z0-9_-]{1,100}$/.test(p.transferId) && p.mediaKind==='video' &&
@@ -54,6 +62,6 @@
      ['blob','https','other','none'].includes(v.sourceKind) && Number.isInteger(v.sourceChildCount) && v.sourceChildCount>=0 && v.sourceChildCount<=8 &&
      Number.isInteger(v.readyState) && v.readyState>=0 && v.readyState<=4 && Number.isInteger(v.networkState) && v.networkState>=0 && v.networkState<=3);
  }
- const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,MAX_BYTES,CHUNK_BYTES});
+ const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,acceptanceFailureReasons,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

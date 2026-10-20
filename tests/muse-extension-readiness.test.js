@@ -20,7 +20,7 @@ async function fixture(t,options={}) {
   });
  }
  const register=async(instanceId='profile-one',extra={})=>{
-  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1},...extra});
+  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.1',protocolVersion:1},...extra});
   assert.equal(r.status,200);return r.value.token;
  };
  const beat=(token,tabs=[],id='profile-one',extra={})=>request('/v1/heartbeat?instanceId='+id,{method:'POST',token,body:{profileLabel:'Work',browserName:'Chrome',tabs},...extra});
@@ -50,7 +50,7 @@ test('executing worker reports its own build and each receiver handshake build s
  f.context.chrome.tabs.query=async()=>[{id:1},{id:2}];
  f.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?{contractVersion:3,...(id===2?{buildMarker:'muse-content-20261019-receivers-1'}:{})}:{sampledAt:Date.now(),composerReady:true,executionContract:3,devEvidence:{generationActive:id===2}};
  const tabs=await f.tabs();
- assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-0-contract3-receipt2-acceptance1');
+ assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-1-contract3-receipt2-acceptance1');
  assert.equal(tabs[0].devConnection.contentBuild,'unreported');
  assert.equal(tabs[1].devConnection.contentBuild,'muse-content-20261019-receivers-1');
  assert.equal(tabs[0].devConnection.generationActive,false);assert.equal(tabs[1].devConnection.generationActive,true);
@@ -247,8 +247,105 @@ test('popup strings derive from VI/EN product i18n and all runtime imports resol
 
 test('extension setup copies only app-managed source files without creating browser profiles',async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
- await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.0');
+ await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.1');
  assert(!fs.existsSync(path.join(f.root,'browser-sessions')));assert(!fs.existsSync(path.join(f.root,'meta-muse-profile')));
+});
+
+test('current runtime version and all staged source bytes are required for execution readiness',async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
+ const staged=await f.bridge.revealExtension();assert.equal(staged.bundleVerified,true);
+ const names=require('../services/generation/bridge/extension-bundle').FILES;
+ for(const name of names)assert.deepEqual(fs.readFileSync(path.join(f.bridge.installDir,name)),fs.readFileSync(path.join(f.bridge.source,name)));
+ const registered=await f.request('/v1/register',{method:'POST',body:{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.0',protocolVersion:1}});
+ await f.beat(registered.value.token,[{...tab(),executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]);
+ assert.equal(f.bridge.snapshot().extensionState,'extension_outdated');assert.equal(await f.bridge.executionReady(),false);
+ const provider=createMuseProvider({configStore:{read:()=>({enabled:true})},extensionBridge:f.bridge,verifyVideo:async()=>{}});
+ assert.equal((await provider.readiness()).ready,false);
+ f.advance();f.bridge.snapshot();const token=await f.register();
+ await f.beat(token,[{...tab(),executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]);
+ assert.equal(await f.bridge.executionReady(),true);
+ fs.appendFileSync(path.join(f.bridge.installDir,'popup.css'),'/* stale */');
+ assert.equal(await f.bridge.executionReady(),false,'Version alone cannot certify a modified staged bundle');
+ assert.equal(f.bridge.pending.size,0);
+});
+
+for(const failurePoint of ['write','publish'])test('failed bundle '+failurePoint+' keeps old complete bundle and blocks readiness',async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});await f.bridge.revealExtension();
+ const {FILES}=require('../services/generation/bridge/extension-bundle');
+ const before=FILES.map(name=>fs.readFileSync(path.join(f.bridge.installDir,name)));
+ const source=path.join(f.root,'replacement');fs.cpSync(f.bridge.source,source,{recursive:true});
+ fs.appendFileSync(path.join(source,'popup.css'),'/* next complete bundle */');f.bridge.source=source;
+ const method=failurePoint==='write'?'writeFileSync':'renameSync',native=fs[method];
+ try {
+   fs[method]=function(from,...args){if(String(from).includes('.meta-muse-stage-') && (failurePoint==='publish' || String(from).endsWith('popup.js')))throw Error('injected stage failure');return native.call(this,from,...args);};
+   await assert.rejects(f.bridge.revealExtension(),/injected stage failure/);
+ } finally {fs[method]=native;}
+ FILES.forEach((name,i)=>assert.deepEqual(fs.readFileSync(path.join(f.bridge.installDir,name)),before[i]));
+ assert(!fs.readdirSync(f.root).some(name=>name.startsWith('.meta-muse-stage-') || name.startsWith('.meta-muse-backup-')));
+ assert.equal(await f.bridge.executionReady(),false);assert.equal(f.bridge.snapshot().extensionState,'extension_error');
+});
+
+test('bundle source validation rejects unexpected files and publishes manifest last',async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
+ const writes=[],native=fs.writeFileSync;
+ try{fs.writeFileSync=function(file,...args){if(String(file).includes('.meta-muse-stage-'))writes.push(path.basename(file));return native.call(this,file,...args);};await f.bridge.revealExtension();}
+ finally{fs.writeFileSync=native;}
+ assert.equal(writes.length,8);assert.equal(writes.at(-1),'manifest.json');
+ const replacement=path.join(f.root,'unexpected');fs.cpSync(f.bridge.source,replacement,{recursive:true});
+ fs.writeFileSync(path.join(replacement,'unexpected.js'),'unmanaged');f.bridge.source=replacement;
+ await assert.rejects(f.bridge.revealExtension(),{code:'INVALID_REQUEST'});
+});
+
+test('controlled build preflight separates source, staged, executing worker and executing content evidence',async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),developmentDiagnostics:true});
+ await f.bridge.revealExtension();const token=await f.register(),config=f.bridge.distribution;
+ const diagnostic=(await diagnosticWorker().tabs())[0].devConnection;
+ const heartbeat=async(workerBuild,contentBuild)=>f.beat(token,[{...tab(),executionContract:3,ownershipReceiptVersion:2,canSubmit:true,
+   devConnection:{...diagnostic,workerBuild,contentBuild}}]);
+ for(const [worker,content,reason] of [
+   ['muse-worker-v0-3-0-contract3-receipt2',config.expectedContentBuild,'WORKER_BUILD_MISMATCH'],
+   [config.expectedWorkerBuild,'muse-content-v0-3-0-contract3-receipt2','CONTENT_BUILD_MISMATCH'],
+   [config.expectedWorkerBuild,'unreported','BUILD_EVIDENCE_MISSING'],
+   [config.expectedWorkerBuild,config.expectedContentBuild,'READY']]){
+   await heartbeat(worker,content);const report=f.bridge.runtimeBuildPreflight();
+   assert.equal(report.reason,reason);assert.equal(report.ready,reason==='READY');assert.equal(await f.bridge.executionReady(),reason==='READY');
+   assert.equal(report.sourceBuild.workerBuild,config.expectedWorkerBuild);assert.equal(report.stagedBuild.contentBuild,config.expectedContentBuild);
+   assert.equal(report.executingWorkerBuild,worker);assert.equal(report.executingContentBuild,content);
+   assert(!JSON.stringify(report).includes(f.root));
+ }
+ // Fresh manifest/contract/version evidence without executing markers is insufficient.
+ await f.beat(token,[{...tab(),executionContract:3,ownershipReceiptVersion:2,canSubmit:true}]);
+ assert.equal(f.bridge.runtimeBuildPreflight().reason,'BUILD_EVIDENCE_MISSING');assert.equal(await f.bridge.executionReady(),false);
+ assert.equal(f.bridge.pending.size,0);
+});
+
+test('production heartbeat proves executing builds privately without enabling investigative diagnostics',async t=>{
+ const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),developmentDiagnostics:true});
+ await f.bridge.revealExtension();const token=await f.register(),config=f.bridge.distribution;
+ const worker=diagnosticWorker({development:false});
+ worker.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?
+   {contractVersion:3,buildMarker:config.expectedContentBuild}:
+   {sampledAt:Date.now(),composerReady:true,inspectionComplete:true,executionContract:3,ownershipReceiptVersion:2,canSubmit:true};
+ const tabs=JSON.parse(JSON.stringify(await worker.tabs()));
+ assert.equal(tabs[0].devConnection,undefined);
+ assert.deepEqual(tabs[0].runtimeBuild,{workerBuild:config.expectedWorkerBuild,contentBuild:config.expectedContentBuild});
+ assert.equal((await f.beat(token,tabs)).status,200);
+ assert.equal(f.bridge.runtimeBuildPreflight().ready,true);
+ assert.equal(await f.bridge.executionReady(),true);
+ for(const field of ['runtimeBuild','workerBuild','contentBuild','devConnection'])assert(!JSON.stringify(f.bridge.snapshot()).includes(field));
+ for(const runtimeBuild of [
+   {workerBuild:'muse-worker-v0-3-0-contract3-receipt2',contentBuild:config.expectedContentBuild},
+   {workerBuild:config.expectedWorkerBuild,contentBuild:'muse-content-v0-3-0-contract3-receipt2'},
+   {workerBuild:config.expectedWorkerBuild,contentBuild:'unreported'}]){
+   await f.beat(token,[{...tabs[0],runtimeBuild}]);assert.equal(f.bridge.runtimeBuildPreflight().ready,false);
+ }
+ assert.equal((await f.beat(token,[{...tabs[0],runtimeBuild:{...tabs[0].runtimeBuild,pageText:'private'}}])).status,400);
+ assert.equal((await f.beat(token,[{...tabs[0],runtimeBuild:{workerBuild:'raw private error',contentBuild:'unreported'}}])).status,400);
+ for(const options of [{missing:true},{stale:true},{statusError:true},{version:2}]){
+   const [bad]=await diagnosticWorker({...options,development:false}).tabs();assert.equal(bad.runtimeBuild.contentBuild,'unreported');
+ }
+ assert(worker.calls.every(c=>c==='viral-ai:muse-handshake'||c==='viral-ai:muse-status'));
+ assert.equal(f.bridge.pending.size,0);
 });
 
 
@@ -300,7 +397,7 @@ test('distribution compatibility, missing evidence and legacy 0.2.0 session pres
  const token=await f.register();await f.beat(token,[tab()]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_connected');assert.equal(f.bridge.snapshot().state,'authenticated');
  f.advance();assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
- for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_connected']]) {
+ for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_outdated'],['0.3.1',1,'extension_connected']]) {
   const r=await f.request('/v1/register',{method:'POST',body:{instanceId:'version-test',profileLabel:'',browserName:'Chrome',extensionVersion,protocolVersion}});
   assert.equal(r.status,200);await f.beat(r.value.token,[tab()],'version-test');
   assert.equal(f.bridge.snapshot().extensionState,expected);
@@ -333,7 +430,7 @@ test('store configuration opens only a validated official store page and coalesc
 
 test('manual support action reveals only the managed manifest and never reports installed',async t=>{
  const shown=[];const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),shell:{showItemInFolder:file=>shown.push(file)}});
- assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true});
+ assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true,extensionVersion:'0.3.1',bundleVerified:true});
  assert.deepEqual(shown,[path.join(f.root,'meta-muse-extension','manifest.json')]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
 });
