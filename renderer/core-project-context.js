@@ -1,4 +1,4 @@
-(function installProjectContextTopbar() {
+(function installSourceHealthContext() {
   "use strict";
 
   let queued = false;
@@ -14,39 +14,28 @@
     return jobs.find(job => job?.sourcePath && !job?.isRenderOutput) || null;
   }
 
-  function sourceName(job) {
-    const explicit = String(job?.name || "").trim();
-    if (explicit) return explicit;
-    const sourcePath = String(job?.sourcePath || "");
-    return sourcePath.split(/[\\/]/).filter(Boolean).pop() || "";
-  }
-
   function sync() {
     queued = false;
     const current = currentState();
-    const breadcrumb = document.getElementById("breadcrumb");
-    if (!(breadcrumb instanceof HTMLElement) || !current) return;
+    // Source text belongs to editor-assets; this module only annotates its health.
+    const sourceLabel = document.querySelector("#page .core-editor-assets-panel [data-source-name]");
+    if (!(sourceLabel instanceof HTMLElement) || !current) return;
 
     if (current.page !== "ai-video") {
-      delete breadcrumb.dataset.projectContext;
-      delete breadcrumb.dataset.sourceState;
-      breadcrumb.removeAttribute("title");
+      delete sourceLabel.dataset.sourceContext;
+      delete sourceLabel.dataset.sourceState;
       return;
     }
 
     const project = sourceProject();
-    const name = sourceName(project);
-    if (!project || !name) {
-      delete breadcrumb.dataset.projectContext;
-      delete breadcrumb.dataset.sourceState;
-      breadcrumb.removeAttribute("title");
+    if (!project) {
+      delete sourceLabel.dataset.sourceContext;
+      delete sourceLabel.dataset.sourceState;
       return;
     }
 
-    breadcrumb.textContent = name;
-    breadcrumb.title = name;
-    breadcrumb.dataset.projectContext = "true";
-    breadcrumb.dataset.sourceState = project.fileState === "missing" || project.fileState === "trashed"
+    sourceLabel.dataset.sourceContext = "true";
+    sourceLabel.dataset.sourceState = project.fileState === "missing" || project.fileState === "trashed"
       ? "needs-action"
       : "ready";
   }

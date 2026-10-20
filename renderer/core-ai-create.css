@@ -69,6 +69,8 @@ html[data-motion="reduced"] .core-ai-create-workspace *{transition:none!importan
 
 /* Project actions remain explicit and wrap with translated labels. */
 .core-ai-project-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.core-ai-active-project{display:flex;flex-wrap:wrap;gap:4px 16px;min-inline-size:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.core-ai-active-project>span:last-child{color:var(--ai-muted)}
 .core-ai-create-hero,.core-ai-section-heading,.core-ai-recent-project{flex-wrap:wrap}
 .core-ai-recent-project>div{min-inline-size:0;flex:1 1 180px;overflow-wrap:anywhere}
 .core-ai-create-workspace [data-ai-new-project]:focus-visible,.core-ai-create-workspace [data-ai-open-project]:focus-visible{outline:2px solid #9a90ee;outline-offset:3px}

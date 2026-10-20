@@ -38,11 +38,9 @@ for (const required of [
   "pages.download = function coreImportPage()",
   'workflow: "Tạo video"',
   'editor: "Studio video"',
-  'workspaceName: "Studio video"',
   'workflow: "Create video"',
   'editor: "Video studio"',
-  'workspaceName: "Video Studio"',
-  'document.querySelector(".workspace strong")'
+  'editorBreadcrumb: "Create video / Studio"'
 ]) assert(shell.includes(required), "Core product shell missing: " + required);
 
 for (const legacyName of ["Douyin_Product_042.mp4", "UGC_Beauty_118.mp4", "Review_Camera_090.mp4", "Short_Fashion_031.mp4"])
@@ -58,7 +56,8 @@ assert(index.includes('root.dataset.motion = motions.has(saved.motion) ? saved.m
 assert(index.indexOf('localStorage.getItem(stateKey)') < index.indexOf('href="styles.css"'), "Saved theme must resolve before CSS first paint.");
 assert(!index.includes("core-startup-experience"), "Removed startup animation must stay removed.");
 assert(!index.includes("<strong>Core Project</strong>"), "First paint must not expose the internal Core Project label.");
-assert(index.includes("<strong>Studio video</strong>"), "First paint must use the commercial workspace label.");
+assert(!shell.includes('.workspace strong'), "Only the project identity owner may update the workspace name.");
+assert(index.includes('<span id="workspaceLabel">Không gian làm việc</span><strong></strong>'), "First paint reserves the workspace label for project identity.");
 assert(index.includes("<b>Tài khoản Cloud</b>"), "Vietnamese first paint must not flash the English account placeholder.");
 assert(index.includes('id="newProjectLabel">Nhập video</span>'), "First-paint primary action must match the import workflow.");
 assert(index.includes('href="core-shell-stability.css"'));
@@ -149,19 +148,19 @@ for (const required of [
   "function sourceProject()",
   "job?.sourcePath && !job?.isRenderOutput",
   'current.page !== "ai-video"',
-  "breadcrumb.textContent = name",
-  'breadcrumb.dataset.projectContext = "true"',
-  'breadcrumb.dataset.sourceState',
+  'sourceLabel.dataset.sourceContext = "true"',
+  'sourceLabel.dataset.sourceState',
   'project.fileState === "missing" || project.fileState === "trashed"',
   'window.addEventListener("viral-ai:core-state-changed", queue)',
   'new MutationObserver(queue).observe(page, { childList: true, subtree: false })'
 ]) assert(projectContext.includes(required), "Project context behavior missing: " + required);
 for (const required of [
-  '.breadcrumb[data-project-context="true"]',
+  '.core-editor-assets-panel [data-source-name][data-source-context="true"]',
   '[data-source-state="needs-action"]',
   'background:#33c27f',
   'background:#f0b44c'
 ]) assert(projectContextCss.includes(required), "Project context style missing: " + required);
+assert(!projectContext.includes("breadcrumb"), "Source context must not replace navigation breadcrumbs.");
 assert(!projectContext.includes("setInterval("), "Project context must not poll.");
 assert(!projectContextCss.includes("@keyframes"), "Project context must not add decorative animation loops.");
 assert(index.indexOf('src="core-project-context.js"') > index.indexOf('src="core-navigation-stability.js"'), "Project context must run after stable navigation wiring.");
