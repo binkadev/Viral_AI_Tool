@@ -22,7 +22,7 @@ window.I18N = (() => {
   "museDescription": "Tạo video AI từ nội dung cảnh.",
   "enable": "Bật Muse",
   "check": "Làm mới",
-  "foundationNote": "Đăng nhập Muse trong hồ sơ Chrome bạn đang dùng. Dù đã xác nhận đăng nhập, tính năng tạo video với Muse vẫn chưa sẵn sàng.",
+  "foundationNote": "Muse dùng phiên đã đăng nhập trong hồ sơ Chrome bạn đang dùng.",
   "checkError": "Chưa kiểm tra hoặc lưu được kết nối. Chưa thể xác nhận thay đổi. Kiểm tra lại trước khi tiếp tục.",
   "states": {
     "unconfigured": "Chưa kết nối",
@@ -68,7 +68,7 @@ window.I18N = (() => {
     "connected": "Đã kết nối Viral AI Tool",
     "offline": "Chưa kết nối. Mở Viral AI Tool rồi thử lại.",
     "failed": "Chưa thực hiện được. Mở ứng dụng rồi thử lại.",
-    "note": "Dùng tab Muse trong hồ sơ Chrome này. Tạo video chưa khả dụng.",
+    "note": "Dùng tab Muse đã đăng nhập trong hồ sơ Chrome này.",
     "saved": "Đã lưu tên hồ sơ"
   }
 },
@@ -342,7 +342,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         recentTitle: "Dự án gần đây",
         currentProject: "Dự án hiện tại trên máy này",
         noProjects: "Thước phim đầu tiên đang chờ bạn",
-        noProjectsHint: "Dự án có video nguồn sẽ xuất hiện ở đây. Nhập video để bắt đầu.",
+        noProjectsHint: "Bắt đầu bằng mô tả video muốn tạo bằng AI hoặc nhập video có sẵn.",
         examples: [{"title":"Sản phẩm nổi bật","detail":"Ánh sáng studio · Cận cảnh","prompt":"Cận cảnh chai nước hoa trên khối đá, ánh sáng studio dịu từ bên trái, nền tím trầm, máy quay xoay chậm quanh sản phẩm."},{"title":"Một chuyến đi xa","detail":"Thiên nhiên · Điện ảnh","prompt":"Những lớp núi xanh trong sương sớm, mặt trời vừa ló phía chân trời, máy quay tiến chậm qua thung lũng, phong cách điện ảnh."},{"title":"Nhịp sống thành phố","detail":"Đường phố · Chuyển động","prompt":"Con phố về đêm sau cơn mưa, ánh đèn xanh tím phản chiếu trên mặt đường, máy quay di chuyển sát mặt đất, không khí điện ảnh."}],
 
 
@@ -1448,7 +1448,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "museDescription": "Create AI video from scene content.",
   "enable": "Enable Muse",
   "check": "Refresh",
-  "foundationNote": "Sign in to Muse in your existing Chrome profile. Confirmed login does not enable video generation; Muse generation integration is not ready yet.",
+  "foundationNote": "Muse uses the signed-in session in your existing Chrome profile.",
   "checkError": "The connection could not be checked or saved. Changes could not be confirmed. Check again before continuing.",
   "states": {
     "unconfigured": "Not connected",
@@ -1494,7 +1494,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     "connected": "Connected to Viral AI Tool",
     "offline": "Not connected. Open Viral AI Tool and retry.",
     "failed": "Action unavailable. Open the app and retry.",
-    "note": "Use the Muse tab in this Chrome profile. Video generation is unavailable.",
+    "note": "Use the signed-in Muse tab in this Chrome profile.",
     "saved": "Profile name saved"
   }
 },
@@ -1767,7 +1767,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         recentTitle: "Recent projects",
         currentProject: "Current project on this device",
         noProjects: "Your first film starts here",
-        noProjectsHint: "Projects with a source video appear here. Import a video to get started.",
+        noProjectsHint: "Start with an AI prompt or import an existing video.",
         examples: [{"title":"Product spotlight","detail":"Studio lighting · Close-up","prompt":"Close-up of a perfume bottle on a stone plinth, soft studio light from the left, muted purple background, camera slowly orbiting the product."},{"title":"Somewhere far away","detail":"Nature · Cinematic","prompt":"Layers of blue mountains in morning mist, sun rising above the horizon, camera slowly moving forward through the valley, cinematic style."},{"title":"City after hours","detail":"Street life · Motion","prompt":"A city street at night after the rain, blue and purple lights reflecting on the road, camera moving close to the ground, cinematic atmosphere."}],
 
           draftProjectName: "New AI project",

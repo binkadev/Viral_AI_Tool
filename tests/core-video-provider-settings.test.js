@@ -1,6 +1,24 @@
 "use strict";
 const {test}=require("node:test"),assert=require("node:assert/strict"),vm=require("vm"),fs=require("fs");
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test("production guidance describes the Chrome session and both AI-first and import entry paths",()=>{
+  const c={window:{}};vm.runInNewContext(fs.readFileSync("renderer/i18n.js","utf8"),c);
+  for(const [locale,session,prompt,importVideo] of [
+    ["vi",/đã đăng nhập/,/mô tả.*AI/,/hoặc nhập video có sẵn/],
+    ["en",/signed-in/,/AI prompt/,/or import an existing video/]
+  ]){
+    const copy=c.window.I18N.messages[locale];
+    for(const text of [copy.videoProviders.foundationNote,copy.videoProviders.extensionPopup.note]){
+      assert.match(text,session);assert.match(text,/Chrome/);
+      assert.doesNotMatch(text,/chưa sẵn sàng|chưa khả dụng|not ready|unavailable|does not enable/i);
+    }
+    assert.match(copy.aiCreate.noProjectsHint,prompt);
+    assert.match(copy.aiCreate.noProjectsHint,importVideo);
+    assert.doesNotMatch(copy.aiCreate.noProjectsHint,/Dự án có video nguồn|Projects with a source video|Import a video to get started/i);
+    // Retained only for the defensive legacy provider messageCode contract.
+    assert(copy.videoProviders.messages.GENERATION_NOT_IMPLEMENTED);
+  }
+});
 test("Settings labels are bilingual and preserve the same status/message contract",()=>{
   const c={window:{}};vm.runInNewContext(fs.readFileSync("renderer/i18n.js","utf8"),c);
   const {vi,en}=c.window.I18N.messages;

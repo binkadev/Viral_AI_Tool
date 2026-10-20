@@ -9,7 +9,7 @@ window.MuseStrings = {
     "connected": "Đã kết nối Viral AI Tool",
     "offline": "Chưa kết nối. Mở Viral AI Tool rồi thử lại.",
     "failed": "Chưa thực hiện được. Mở ứng dụng rồi thử lại.",
-    "note": "Dùng tab Muse trong hồ sơ Chrome này. Tạo video chưa khả dụng.",
+    "note": "Dùng tab Muse đã đăng nhập trong hồ sơ Chrome này.",
     "saved": "Đã lưu tên hồ sơ"
   },
   "en": {
@@ -21,7 +21,7 @@ window.MuseStrings = {
     "connected": "Connected to Viral AI Tool",
     "offline": "Not connected. Open Viral AI Tool and retry.",
     "failed": "Action unavailable. Open the app and retry.",
-    "note": "Use the Muse tab in this Chrome profile. Video generation is unavailable.",
+    "note": "Use the signed-in Muse tab in this Chrome profile.",
     "saved": "Profile name saved"
   }
 };
