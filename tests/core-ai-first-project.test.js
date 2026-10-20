@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const model=require('../renderer/core-project-scene-plan'),sceneModel=require('../renderer/core-scene-plan-model');
 function harness(data=new Map(),options={}) {
  let fail=false,ids=0,submissions=[];
- class Storage {getItem(k){return data.get(k)??null;}setItem(k,v){if(fail&&k===model.SNAPSHOT_KEY)throw Error('quota');data.set(k,String(v));}removeItem(k){data.delete(k);}}
+ class Storage {getItem(k){return data.get(k)??null;}setItem(k,v){if(fail&&k==="viral-ai-core-project-registry-v1")throw Error('quota');data.set(k,String(v));}removeItem(k){data.delete(k);}}
  const storage=new Storage(),state={page:'ai-create',locale:'en',jobs:[],media:{schemaVersion:1,assets:[],selectedAssetId:null}};
  const button={setAttribute(){}};
  const document={readyState:'loading',addEventListener(){},querySelector:s=>s==='[data-ai-generate]'?button:null,documentElement:{dataset:{}}};

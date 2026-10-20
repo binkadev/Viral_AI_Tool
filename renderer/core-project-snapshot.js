@@ -102,6 +102,7 @@
   function workflowFromState(state) {
     return {
       output: String(state?.output || ""),
+      generationBrief: String(state?.generationBrief || "").slice(0, 8000),
       renderOptions: {
         burnSubtitles: state?.renderOptions?.burnSubtitles !== false,
         mixOriginalAudio: state?.renderOptions?.mixOriginalAudio !== false,
@@ -192,6 +193,7 @@
     if (aiProject && (!/^[a-zA-Z0-9_-]{1,160}$/.test(snapshot.projectId || "") || !String(snapshot.projectName || "").trim())) return null;
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
+      generationBrief: snapshot.workflow?.generationBrief,
       renderOptions: snapshot.workflow?.renderOptions,
       speech: snapshot.workflow?.speech,
       translation: snapshot.workflow?.translation,

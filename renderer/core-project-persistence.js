@@ -11,7 +11,14 @@
   } = model;
   const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1";
   const DEBOUNCE_MS = 320;
-  const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)]);
+  const REGISTRY_KEY = "viral-ai-core-project-registry-v1";
+  const REGISTRY_SCHEMA_VERSION = 1;
+  const BRIEF_KEY = "viral-ai-generation-brief";
+  let registry = { schemaVersion: REGISTRY_SCHEMA_VERSION, activeProjectId: null, projects: [] };
+  let registryError = null;
+  let projectTransition = false;
+  const projectionOverrides = new Map();
+  const observedLegacyKeys = new Set([LEGACY_STATE_KEY, BRIEF_KEY, ...Object.values(LEGACY_UI_KEYS)]);
   const storagePrototype = Storage.prototype;
   const nativeGetItem = storagePrototype.getItem;
   const nativeSetItem = storagePrototype.setItem;
@@ -60,8 +67,27 @@
     } catch {}
   }
 
+  function assertWritable() {
+    if (unsupportedSchemaVersion || registryError) throw Error("PROJECT_STORAGE_PROTECTED");
+  }
+
+  // One atomic localStorage record owns snapshots AND selection. Mirrors never
+  // decide which project is active and cannot replace a newer registry on boot.
+  function writeRegistry(next) {
+    assertWritable();
+    writeNative(REGISTRY_KEY, JSON.stringify(next));
+    registry = next;
+  }
+
+  function saveSnapshot(snapshot) {
+    const projects = registry.projects.filter(p => p.projectId !== snapshot.projectId);
+    projects.push(snapshot);
+    writeRegistry({ schemaVersion: REGISTRY_SCHEMA_VERSION, activeProjectId: snapshot.projectId, projects });
+  }
+
   function writeBootstrapSnapshot(snapshot, reason) {
     try {
+      saveSnapshot(snapshot);
       writeNative(SNAPSHOT_KEY, JSON.stringify(snapshot));
       return true;
     } catch (error) {
@@ -86,31 +112,62 @@
     };
   }
 
-  function projectLegacyProjection(snapshot) {
+  function compatibilityValues(snapshot) {
     const existing = readJson(LEGACY_STATE_KEY, {}) || {};
-    const next = model.toLegacyState(snapshot, existing);
-    writeNative(LEGACY_STATE_KEY, JSON.stringify(next));
-    const ui = model.legacyUiProjection(snapshot);
-    Object.entries(ui).forEach(([key, value]) => {
-      if (value == null) removeNative(key);
-      else writeNative(key, value);
-    });
+    return {
+      [SNAPSHOT_KEY]: JSON.stringify(snapshot),
+      [LEGACY_STATE_KEY]: JSON.stringify(model.toLegacyState(snapshot, existing)),
+      [BRIEF_KEY]: snapshot.workflow.generationBrief || "",
+      ...model.legacyUiProjection(snapshot)
+    };
+  }
+
+  function projectLegacyProjection(snapshot, values = compatibilityValues(snapshot)) {
+    // Projection failures cannot undo an authoritative commit. Reads in this
+    // renderer still see the selected project's values; restart repairs mirrors.
+    for (const [key, value] of Object.entries(values)) {
+      projectionOverrides.set(key, value);
+      try { writeNative(key, value); projectionOverrides.delete(key); }
+      catch (error) { dispatchSaveFailure("project-compatibility-mirror", error); }
+    }
   }
 
   function bootstrapSnapshot() {
-    const raw = readJson(SNAPSHOT_KEY, null);
-    const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
-    unsupportedSchemaVersion = migrated.unsupportedVersion;
-    if (unsupportedSchemaVersion) return;
-
-    currentSnapshot = migrated.snapshot;
-    if (!currentSnapshot) {
-      currentSnapshot = model.fromLegacy(readJson(LEGACY_STATE_KEY, {}) || {}, legacyUiState());
-      if (currentSnapshot) writeBootstrapSnapshot(currentSnapshot, "bootstrap-legacy-migration");
-    } else if (migrated.migrated) {
-      // A bootstrap backfill is best-effort. Keep the normalized snapshot authoritative
-      // in memory even when storage is full/unavailable so persistence still starts.
-      writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill");
+    const storedRegistry = nativeGetItem.call(localStorage, REGISTRY_KEY);
+    if (storedRegistry !== null) {
+      try {
+        const input = JSON.parse(storedRegistry);
+        if (input?.schemaVersion !== REGISTRY_SCHEMA_VERSION || !Array.isArray(input.projects)) throw Error("PROJECT_REGISTRY_UNSUPPORTED");
+        const ids = new Set();
+        const projects = input.projects.map(entry => {
+          const result = model.migrateSnapshot(entry, { restartSafeMedia: true });
+          if (result.unsupportedVersion) unsupportedSchemaVersion = result.unsupportedVersion;
+          if (!result.snapshot || ids.has(result.snapshot.projectId)) throw Error("PROJECT_REGISTRY_INVALID");
+          ids.add(result.snapshot.projectId);
+          return result.snapshot;
+        });
+        if (input.activeProjectId !== null && !ids.has(input.activeProjectId) || projects.length && input.activeProjectId === null) throw Error("PROJECT_REGISTRY_INVALID");
+        registry = { schemaVersion: REGISTRY_SCHEMA_VERSION, activeProjectId: input.activeProjectId, projects };
+        currentSnapshot = projects.find(p => p.projectId === registry.activeProjectId) || null;
+        if (currentSnapshot && JSON.stringify(input) !== JSON.stringify(registry)) writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill");
+      } catch (error) {
+        registryError = error.message || "PROJECT_REGISTRY_INVALID";
+        dispatchSaveFailure("bootstrap-project-registry", error);
+        return;
+      }
+    } else {
+      const raw = readJson(SNAPSHOT_KEY, null);
+      const migrated = model.migrateSnapshot(raw, { restartSafeMedia: true });
+      unsupportedSchemaVersion = migrated.unsupportedVersion;
+      if (unsupportedSchemaVersion) return;
+      currentSnapshot = migrated.snapshot;
+      if (currentSnapshot) currentSnapshot.workflow.generationBrief = nativeGetItem.call(localStorage, BRIEF_KEY) ?? currentSnapshot.workflow.generationBrief;
+      if (!currentSnapshot) {
+        currentSnapshot = model.fromLegacy(readJson(LEGACY_STATE_KEY, {}) || {}, legacyUiState());
+        if (currentSnapshot) writeBootstrapSnapshot(currentSnapshot, "bootstrap-legacy-migration");
+      } else {
+        writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill");
+      }
     }
 
     if (currentSnapshot) {
@@ -222,21 +279,22 @@
       clearTimeout(saveTimer);
       saveTimer = 0;
     }
-    if (unsupportedSchemaVersion) return null;
+    if (unsupportedSchemaVersion || registryError || projectTransition) return null;
     const current = appState();
     if (!current) return null;
     hydrateRetainedState();
     const next = model.buildSnapshot(current, editorState(current), currentSnapshot);
     if (!next) return null;
-    if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return currentSnapshot;
+    next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+    if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot) && registry.activeProjectId === next.projectId) return currentSnapshot;
     try {
-      writeNative(SNAPSHOT_KEY, JSON.stringify(next));
+      saveSnapshot(next);
     } catch (error) {
-      if (currentSnapshot?.projectKind !== "ai") { try { removeNative(SNAPSHOT_KEY); } catch {} }
       dispatchSaveFailure(reason, error);
       return null;
     }
     currentSnapshot = next;
+    projectLegacyProjection(next);
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
       detail: { reason, schemaVersion: next.schemaVersion, projectId: next.projectId }
     }));
@@ -245,7 +303,8 @@
 
   // Synchronous durable write is the admission boundary; rerenders never create projects.
   function ensureProject({ projectName } = {}) {
-    if (unsupportedSchemaVersion) throw Error("UNSUPPORTED_PROJECT_SCHEMA");
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
     const current = appState();
     if (!current) throw Error("PROJECT_STATE_UNAVAILABLE");
     hydrateRetainedState();
@@ -267,14 +326,14 @@
     if (!plan.scenes.some(scene => scene.id === plan.selectedSceneId)) plan.selectedSceneId = plan.scenes[0].id;
     next = { ...next, scenePlan: plan };
     try {
-      const serialized = JSON.stringify(next);
-      writeNative(SNAPSHOT_KEY, serialized);
-      if (nativeGetItem.call(localStorage, SNAPSHOT_KEY) !== serialized) throw Error("PROJECT_WRITE_UNCONFIRMED");
+      next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+      saveSnapshot(next);
     } catch (error) {
       dispatchSaveFailure("ensure-project", error);
       throw error;
     }
     currentSnapshot = next;
+    projectLegacyProjection(next);
     current.scenePlan = model.clone(plan);
     if (!current.media) current.media = model.clone(next.media);
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
@@ -283,14 +342,136 @@
     return model.clone(next);
   }
 
+  function listProjects() {
+    return registry.projects.map(p => ({ projectId: p.projectId, projectName: p.projectName,
+      projectKind: p.projectKind, updatedAt: p.updatedAt, hasSource: !!p.source }));
+  }
+
+  function assertSwitchSafe() {
+    const current = appState();
+    const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
+      ...(current?.jobs || []).filter(j => j.isRenderOutput)];
+    const busy = new Set(["validating", "preparing", "uploading", "queued", "processing", "translating", "generating", "downloading", "rendering", "planning", "cancelling"]);
+    if (workflows.some(job => busy.has(job?.status))) throw Error("PROJECT_WORK_RUNNING");
+    // Scoped GenerationService/media jobs keep their own project identity.
+    // Unscoped legacy workflows must finish before replacing their live state.
+  }
+
+  function prepareActivation(target, current) {
+    const migrated = model.migrateSnapshot(target);
+    const snapshot = migrated.snapshot;
+    if (!snapshot || migrated.unsupportedVersion) throw Error("PROJECT_INVALID");
+    const projected = model.toLegacyState(snapshot, {});
+    const runtime = { projectId: snapshot.projectId, projectName: snapshot.projectName,
+      page: snapshot.source ? "ai-video" : "ai-create" };
+    for (const key of ["output", "renderOptions", "jobs", "media", "scenePlan"]) runtime[key] = model.clone(projected[key]);
+    // Prepare all project-owned state before the registry commit. Global provider
+    // catalogs/configuration survive, while old jobs/results/assignments do not.
+    for (const key of ["speech", "translation", "voice"]) {
+      const global = current[key] || {};
+      const { job, result, staleJob, staleResult, assignments, ...configuration } = global;
+      runtime[key] = { ...configuration, ...model.clone(projected[key]), staleJob: projected[key].staleJob || null, staleResult: projected[key].staleResult || null };
+    }
+    // Runtime state is a normal mutable application object. Reject readonly or
+    // accessor fields before committing so assignment cannot fail afterward.
+    for (const key of Object.keys(runtime)) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    }
+    return { snapshot, current, runtime, mirrors: compatibilityValues(snapshot), result: model.clone(snapshot) };
+  }
+
+  function presentProject(stage, action) {
+    try { action(); }
+    catch {
+      // Presentation errors are distinct from failed durable saves. Ownership
+      // has already changed; never tell the caller the old project was retained.
+      try {
+        window.dispatchEvent(new CustomEvent("viral-ai:project-presentation-failed", {
+          detail: { stage, projectId: currentSnapshot.projectId }
+        }));
+      } catch {}
+    }
+  }
+
+  function activate(prepared) {
+    const { snapshot, current, runtime, mirrors, result } = prepared;
+    currentSnapshot = snapshot;
+    Object.assign(current, runtime);
+    // Durable selection, snapshot, and runtime agree before any fallible DOM,
+    // rendering, compatibility mirror, or observer notification work begins.
+    presentProject("pause", () => currentVideo()?.pause?.());
+    presentProject("mirrors", () => projectLegacyProjection(snapshot, mirrors));
+    presentProject("transcript-reset", () => removeNative(LEGACY_TRANSCRIPT_EDIT_KEY));
+    presentProject("detach", () => document.getElementById?.("page")?.replaceChildren());
+    presentProject("render", () => { if (typeof render === "function") render(); });
+    presentProject("restore-event", () => window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-restored", {
+      detail: { schemaVersion: snapshot.schemaVersion, projectId: snapshot.projectId }
+    })));
+    presentProject("state-event", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", { detail: { reason: "project-switch" } })));
+    presentProject("restore", queueRestore);
+    return result;
+  }
+
+  function transition(makeTarget) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    assertSwitchSafe();
+    const current = appState();
+    if (!current) throw Error("PROJECT_STATE_UNAVAILABLE");
+    const needsSave = !!currentSnapshot || !!model.sourceFromState(current);
+    if (needsSave && !flush("before-project-switch")) throw Error("PROJECT_SAVE_FAILED");
+    projectTransition = true;
+    try {
+      let prepared;
+      try {
+        prepared = prepareActivation(makeTarget(), current);
+        saveSnapshot(prepared.snapshot); // Atomic durable ownership boundary.
+      } catch (error) {
+        dispatchSaveFailure("project-switch", error);
+        throw error;
+      }
+      return activate(prepared);
+    } finally { projectTransition = false; }
+  }
+
+  // A shared pending promise coalesces two clicks in the same event/render turn.
+  let creatingProject = null;
+  function createProject({ kind, projectName } = {}) {
+    if (creatingProject) return creatingProject;
+    creatingProject = Promise.resolve().then(() => {
+      if (kind !== "ai") throw Error("PROJECT_KIND_UNSUPPORTED");
+      return transition(() => {
+        const projectId = window.crypto?.randomUUID?.();
+        if (!projectId || registry.projects.some(p => p.projectId === projectId)) throw Error("PROJECT_ID_UNAVAILABLE");
+        const draft = model.createDraftProject({ projectId, projectName }, {}, {});
+        if (!draft) throw Error("PROJECT_INVALID");
+        const sceneId = window.crypto?.randomUUID?.();
+        if (!sceneId) throw Error("SCENE_ID_UNAVAILABLE");
+        return { ...draft, scenePlan: window.ViralCoreScenePlanModel.normalizePlan({ sourceType: "script",
+          scenes: [{ id: sceneId, sceneState: "draft" }], selectedSceneId: sceneId }) };
+      });
+    }).finally(() => { creatingProject = null; });
+    return creatingProject;
+  }
+
+  function openProject(projectId) {
+    assertWritable();
+    if (registry.activeProjectId === projectId) return model.clone(currentSnapshot);
+    const stored = registry.projects.find(p => p.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    return transition(() => model.migrateSnapshot(stored, { restartSafeMedia: true }).snapshot);
+  }
+
   function schedule(reason = "semantic-change") {
-    if (unsupportedSchemaVersion) return;
+    if (unsupportedSchemaVersion || registryError || projectTransition) return;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => flush(reason), DEBOUNCE_MS);
   }
 
   storagePrototype.getItem = function patchedGetItem(key) {
     const normalizedKey = String(key);
+    if (this === localStorage && projectionOverrides.has(normalizedKey)) return projectionOverrides.get(normalizedKey);
     if (this === localStorage && normalizedKey === LEGACY_TRANSCRIPT_EDIT_KEY && currentSnapshot) return null;
     return nativeGetItem.call(this, key);
   };
@@ -299,8 +480,9 @@
     const normalizedKey = String(key);
     if (this === localStorage && normalizedKey === LEGACY_TRANSCRIPT_EDIT_KEY && currentSnapshot) return;
     nativeSetItem.call(this, key, value);
+    if (this === localStorage) projectionOverrides.delete(normalizedKey);
     if (suppressStorageObservation || this !== localStorage) return;
-    if (normalizedKey === SNAPSHOT_KEY) return;
+    if (normalizedKey === SNAPSHOT_KEY || normalizedKey === REGISTRY_KEY) return;
     if (observedLegacyKeys.has(normalizedKey)) schedule("storage:" + normalizedKey);
   };
 
@@ -417,6 +599,13 @@
     schemaVersion: model.CURRENT_SCHEMA_VERSION,
     snapshot() { return model.clone(currentSnapshot, null); },
     ensureProject,
+    registryKey: REGISTRY_KEY,
+    registrySchemaVersion: REGISTRY_SCHEMA_VERSION,
+    listProjects,
+    activeProjectId() { return registry.activeProjectId; },
+    createProject,
+    openProject,
+    storageError() { return registryError; },
     schedule,
     flush,
     restore: queueRestore,

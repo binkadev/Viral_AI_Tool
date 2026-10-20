@@ -223,7 +223,7 @@ assert.strictEqual(uiProjection["viral-ai-core-timeline-selection"], "subtitle:0
 for (const required of [
   'const LEGACY_TRANSCRIPT_EDIT_KEY = "viral-ai-core-transcript-edits-v1"',
   'const DEBOUNCE_MS = 320',
-  'const observedLegacyKeys = new Set([LEGACY_STATE_KEY, ...Object.values(LEGACY_UI_KEYS)])',
+  'const observedLegacyKeys = new Set([LEGACY_STATE_KEY, BRIEF_KEY, ...Object.values(LEGACY_UI_KEYS)])',
   'function dispatchSaveFailure(reason, error)',
   'function writeBootstrapSnapshot(snapshot, reason)',
   'writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")',
@@ -250,14 +250,14 @@ for (const required of [
   assert(persistence.includes(required), "Project persistence runtime is missing: " + required);
 }
 assert(
-  persistence.indexOf('writeNative(SNAPSHOT_KEY, JSON.stringify(next))') < persistence.indexOf('currentSnapshot = next'),
+  persistence.indexOf('saveSnapshot(next)') < persistence.indexOf('currentSnapshot = next'),
   "in-memory snapshot must advance only after the durable write succeeds"
 );
 assert(
-  persistence.indexOf('currentSnapshot = migrated.snapshot') < persistence.indexOf('writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")'),
+  persistence.indexOf('currentSnapshot = migrated.snapshot') < persistence.lastIndexOf('writeBootstrapSnapshot(currentSnapshot, "bootstrap-schema-backfill")'),
   "bootstrap migration must retain the normalized in-memory snapshot before attempting a best-effort durable backfill"
 );
-assert(persistence.includes('try { removeNative(SNAPSHOT_KEY); } catch {}'), "failed durable writes must remove the stale durable snapshot so startup cannot roll legacy state backward");
+assert(!persistence.includes('removeNative(SNAPSHOT_KEY)'), "failed durable writes must preserve the last durable project; registry is authoritative");
 assert(!persistence.includes("setInterval("), "project autosave must be semantic/debounced, never polling");
 assert(!persistence.includes("video.play("), "reopen must restore position without auto-playing media");
 

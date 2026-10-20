@@ -34,6 +34,7 @@
   let generationState = "checking";
   let readinessPending = null;
   let submitting = false;
+  let projectActionPending = false;
   let submissionKey = null;
   let feedback = "";
 
@@ -55,7 +56,7 @@
   }
 
   function canGenerate() {
-    return generationReady && !submitting && typeof window.ViralCoreProjectPersistence?.ensureProject === "function" && Boolean(currentBrief().trim());
+    return generationReady && !submitting && !projectActionPending && typeof window.ViralCoreProjectPersistence?.ensureProject === "function" && Boolean(currentBrief().trim());
   }
 
   function updateGenerationControls() {
@@ -64,8 +65,17 @@
       button.disabled = !canGenerate();
       button.setAttribute("aria-disabled", String(button.disabled));
     }
+    document.querySelectorAll?.("[data-ai-new-project], [data-ai-open-project]").forEach(control => {
+      control.disabled = submitting || projectActionPending;
+    });
     const status = document.querySelector("[data-ai-generation-feedback]");
     if (status) status.textContent = feedback;
+  }
+
+  function renderWorkspace() {
+    if (appState()?.page !== "ai-create" || typeof render !== "function") return;
+    try { render(); }
+    catch { console.warn("[AiCreate] Workspace presentation could not refresh"); }
   }
 
   function refreshReadiness() {
@@ -94,7 +104,7 @@
       .finally(() => {
         readinessPending = null;
         updateGenerationControls();
-        if (appState()?.page === "ai-create" && typeof render === "function") render();
+        renderWorkspace();
       });
     return readinessPending;
   }
@@ -217,8 +227,11 @@
     const provider = providerStatus(c);
     const project = projectContext();
     const samples = c.examples;
+    const persistence = window.ViralCoreProjectPersistence;
+    const projects = persistence?.listProjects?.() || [];
+    const activeId = persistence?.activeProjectId?.();
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
-      '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></header>' +
+      '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></div></header>' +
       '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
       '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
       '<div class="core-ai-controls core-ai-strategy-grid">' +
@@ -231,7 +244,8 @@
       '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
       '<section class="core-ai-examples" aria-labelledby="ai-examples-title"><div class="core-ai-section-heading"><h3 id="ai-examples-title">' + esc(c.examplesTitle) + '</h3><span>' + esc(c.examplesHint) + '</span></div><div class="core-ai-example-row">' + samples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '"><span class="core-ai-example-art art-' + i + '" aria-hidden="true"><i></i><b></b><em></em></span><span class="core-ai-example-copy"><strong>' + esc(sample.title) + '</strong><span>' + esc(sample.detail) + '</span></span><span class="core-ai-example-arrow" aria-hidden="true">↗</span></button>').join('') + '</div></section>' +
       '<section class="core-ai-recent"><div class="core-ai-section-heading"><h3>' + esc(c.recentTitle) + '</h3><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">↗</span></button></div>' +
-      (project.source ? '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong>' + esc(project.source.name) + '</strong><span>' + esc(c.currentProject) + '</span></div><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' ↗</button></div>' : '<div class="core-ai-recent-empty"><span aria-hidden="true">↗</span><div><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div></div>') + '</section></div>';
+      (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong>' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? c.currentProject : item.hasSource ? c.importedProject : c.aiProject) + '</span></div>' +
+        (item.projectId === activeId ? '' : '<button class="button ghost" type="button" data-ai-open-project="' + esc(item.projectId) + '"' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.openProject) + '</button>') + '</div>').join('') : '<div class="core-ai-recent-empty"><span aria-hidden="true">↗</span><div><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div></div>') + '</section></div>';
   }
 
   function route(pageId) {
@@ -242,9 +256,36 @@
     try { if (typeof render === "function") render(); } catch {}
   }
 
+  async function projectAction(projectId = null) {
+    if (submitting || projectActionPending) return;
+    projectActionPending = true;
+    updateGenerationControls();
+    try {
+      const persistence = window.ViralCoreProjectPersistence;
+      if (projectId) await persistence.openProject(projectId);
+      else await persistence.createProject({ kind: "ai", projectName: copy().draftProjectName });
+      submissionKey = null;
+      feedback = "";
+    } catch (error) {
+      feedback = error?.message === "PROJECT_WORK_RUNNING" ? copy().projectWorkRunning : copy().projectSwitchError;
+    } finally {
+      projectActionPending = false;
+      renderWorkspace();
+      updateGenerationControls();
+    }
+  }
+
   function onClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
+
+    const newProject = target.closest("[data-ai-new-project]");
+    const openProject = target.closest("[data-ai-open-project]");
+    if (newProject || openProject) {
+      if (event.detail > 1) return;
+      projectAction(openProject?.dataset.aiOpenProject || null);
+      return;
+    }
 
     if (target.closest("[data-ai-generate]")) {
       generate();
@@ -320,10 +361,14 @@
       });
       window.addEventListener("viral-ai:core-state-changed", () => {
         refreshReadiness();
-        if (appState()?.page === "ai-create" && typeof render === "function") render();
+        renderWorkspace();
       });
       window.addEventListener("viral-ai:project-snapshot-saved", updateGenerationControls);
-      window.addEventListener("viral-ai:project-snapshot-restored", updateGenerationControls);
+      window.addEventListener("viral-ai:project-snapshot-restored", () => {
+        submissionKey = null;
+        feedback = "";
+        updateGenerationControls();
+      });
       document.documentElement.dataset.aiCreateWorkspace = "enabled";
       if (appState()?.page === "ai-create" && typeof render === "function") render();
     } catch {
