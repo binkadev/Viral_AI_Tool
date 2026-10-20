@@ -379,6 +379,7 @@ async function acquire(p) {
 // One bounded browser stream. Only the receipt-owned element can supply a URL;
 // neither the worker nor desktop can inject one. No whole-video buffering.
 const transfers=new Map(),closedTransfers=new Set();
+const MAX_CLOSED_TRANSFERS=64;
 function cancelLocal(p) {
   const op=operations.get(p.operationId);
   if(op?.sceneId===p.sceneId && op.v2Reserved!==undefined) {
@@ -390,8 +391,13 @@ function cancelLocal(p) {
 function closeTransfer(t) {
   clearTimeout(t.timer);t.controller.abort();
   try{Promise.resolve(t.reader?.cancel()).catch(()=>{});}catch{}
+  // Clean late-arriving resources, but never delete a successor with this ID.
+  if(transfers.get(t.id)!==t)return;
   transfers.delete(t.id);
   closedTransfers.add(t.id);
+  // FIFO replay window, independent of active capacity. Ownership is checked
+  // afresh even after eviction; durable worker/main evidence remains required.
+  if(closedTransfers.size>MAX_CLOSED_TRANSFERS)closedTransfers.delete(closedTransfers.values().next().value);
 }
 async function ownedVideo(p) {
   const evidence=await inspectV2(p);
@@ -408,11 +414,13 @@ async function acquireV2(p) {
   let t=transfers.get(p.transferId);
   if(t && (t.operationId!==p.operationId || t.sceneId!==p.sceneId))return answer(p,'interrupted');
   if(p.abort){if(t)closeTransfer(t);return answer(p,'interrupted');}
+  if(t?.busy)return answer(p,'interrupted');
+  if(t)t.busy=true;
   try {
     if(!t) {
-      if(p.offset!==0 || p.sequence!==0 || transfers.size || closedTransfers.has(p.transferId) || closedTransfers.size>=64)return answer(p,'interrupted');
+      if(p.offset!==0 || p.sequence!==0 || transfers.size || closedTransfers.has(p.transferId))return answer(p,'interrupted');
       t={id:p.transferId,operationId:p.operationId,sceneId:p.sceneId,receipt:p.receipt,offset:0,sequence:0,
-        started:Date.now(),controller:new AbortController(),pending:new Uint8Array(0),ended:false};
+        started:Date.now(),controller:new AbortController(),pending:new Uint8Array(0),ended:false,busy:true};
       transfers.set(t.id,t);
       t.timer=setTimeout(()=>closeTransfer(t),15000);
       const video=await ownedVideo(p),source=video.currentSrc;
@@ -426,7 +434,7 @@ async function acquireV2(p) {
       if(t.expected!==null && (!Number.isSafeInteger(t.expected) || t.expected<12 || t.expected>MuseReceiptV2.MAX_BYTES))throw Error('LIMIT');
       t.reader=response.body.getReader();
     }
-    if(t.busy || t.controller.signal.aborted || Date.now()-t.started>300000 || t.offset!==p.offset || t.sequence!==p.sequence ||
+    if(t.controller.signal.aborted || Date.now()-t.started>300000 || t.offset!==p.offset || t.sequence!==p.sequence ||
       !MuseReceiptV2.extendsReceipt(t.receipt,p.receipt) || await ownedVideo(p)!==t.video || t.video.currentSrc!==t.source)throw Error('TRANSFER_CHANGED');
     t.busy=true;clearTimeout(t.timer);t.timer=setTimeout(()=>closeTransfer(t),15000);
     const bytes=new Uint8Array(MuseReceiptV2.CHUNK_BYTES);let size=0;

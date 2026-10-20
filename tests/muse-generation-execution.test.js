@@ -225,7 +225,7 @@ function contentFixture(options={}) {
  vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
- return {get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true};
+ return {captureTransferClose:()=>vm.runInNewContext('(()=>{const t=[...transfers.values()][0];return ()=>closeTransfer(t);})()',c),get tombstones(){return Array.from(vm.runInNewContext('[...closedTransfers]',c));},get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true};
 }
 const operation={operationId:'op',sceneId:'scene',prompt:'Exact prompt',tabId:5};
 const inspectPayload={operationId:'op',sceneId:'scene',tabId:5};
@@ -973,4 +973,73 @@ test('v2 worker cancellation tombstone blocks acquisition after observation clea
  const restarted=workerV2Harness(stored,f);
  assert.equal((await restarted.run('acquireGenerationResult',{...inspectPayload,receipt:candidate.receipt,transferId:'after-cancel',sequence:0,offset:0,mediaKind:'video'})).state,'interrupted');
  assert.equal(restarted.calls.length,0);
+});
+
+
+// Historical fixture receipt only: these transfer regressions never submit.
+function tombstoneFixture(size=20) {
+ const bytes=Buffer.alloc(size,7);let fetched=0;
+ const content=contentFixture({historicalVideos:[media()],fetch:async()=>{fetched++;return new Response(bytes,{headers:{'content-type':'video/mp4'}});}});
+ const receipt=anchoredReceipt('op');
+ receipt.assistantStableIdHash=shaBytes('op\0assistant\0owned-assistant');
+ receipt.result.ownerAssistantStableIdHash=receipt.assistantStableIdHash;
+ content.replace([content.node('assistant','owned-assistant',media())]);
+ const stored={'generation-intent:op':{tabId:5,sceneId:'scene',receipt}},worker=workerV2Harness(stored,content);
+ const payload=id=>({...inspectPayload,receipt,transferId:id,sequence:0,offset:0,mediaKind:'video'});
+ return {content,worker,payload,get fetched(){return fetched;}};
+}
+for(const aborted of [false,true])test('v2 FIFO tombstones remain bounded after 70 '+(aborted?'aborted':'successful')+' transfers without submission',async()=>{
+ const f=tombstoneFixture(aborted?210000:20);
+ for(let i=0;i<70;i++) {
+   const p=f.payload('closed-'+i),r=await f.worker.run('acquireGenerationResult',p);
+   assert.equal(r.state,'result');assert.equal(r.done,!aborted);
+   if(aborted)assert.equal((await f.worker.run('acquireGenerationResult',{...p,abort:true})).state,'interrupted');
+   assert.equal(f.content.transferCount,0);assert.equal(f.content.tombstones.length,Math.min(i+1,64));
+ }
+ assert.equal(f.content.tombstones[0],'closed-6');assert.equal(f.content.tombstones.at(-1),'closed-69');
+ const fetched=f.fetched;
+ for(const id of ['closed-6','closed-69'])assert.equal((await f.worker.run('acquireGenerationResult',f.payload(id))).state,'interrupted');
+ assert.equal(f.fetched,fetched);
+ const fresh=f.payload('fresh');assert.equal((await f.worker.run('acquireGenerationResult',fresh)).state,'result');
+ await f.worker.run('acquireGenerationResult',{...fresh,abort:true});
+ assert.equal(f.content.tombstones.length,64);
+ // Evicted IDs still cannot fetch an unowned/page-global video.
+ f.content.replace([f.content.node('assistant','unowned-assistant',media())]);
+ const before=f.fetched;
+ assert.equal((await f.worker.run('acquireGenerationResult',f.payload('closed-0'))).state,'interrupted');
+ assert.equal(f.fetched,before);
+ const forged=f.payload('closed-1');forged.receipt={...forged.receipt,assistantStableIdHash:'e'.repeat(64),result:{kind:'video',ownerAssistantStableIdHash:'e'.repeat(64)}};
+ assert.equal((await f.worker.run('acquireGenerationResult',forged)).state,'interrupted');
+ assert.equal(f.fetched,before);assert.equal(f.content.clicks,0);
+ assert(f.worker.calls.every(c=>c==='acquireGenerationResult'));
+});
+test('v2 active transfer collisions cannot replace or abort its owner and matching cancel still aborts',async()=>{
+ const f=tombstoneFixture(210000),p={...f.payload('active'),observationToken:v2Payload.observationToken};
+ const pending=f.content.send('acquireGenerationResult',p);
+ assert.equal((await f.content.send('acquireGenerationResult',p)).state,'interrupted');
+ assert.equal((await pending).state,'result');assert.equal(f.fetched,1);
+ assert.equal((await f.content.send('acquireGenerationResult',{...p,sceneId:'other'})).state,'interrupted');
+ assert.equal((await f.content.send('acquireGenerationResult',{...p,transferId:'different-id'})).state,'interrupted');
+ assert.equal(f.content.transferCount,1);assert.equal(f.fetched,1);
+ await f.worker.run('cancelGeneration',inspectPayload);
+ assert.equal(f.content.transferCount,0);assert.deepEqual(f.content.tombstones,['active']);
+ assert.equal((await f.worker.run('acquireGenerationResult',{...f.payload('active'),offset:196608,sequence:1})).state,'interrupted');
+ assert.equal(f.content.clicks,0);assert(!f.worker.calls.includes('submitGeneration'));
+});
+
+test('v2 late close cannot delete an active successor after FIFO eviction',async()=>{
+ const f=tombstoneFixture(210000),first=f.payload('reused');
+ await f.worker.run('acquireGenerationResult',first);
+ const closeOld=f.content.captureTransferClose();
+ await f.worker.run('acquireGenerationResult',{...first,abort:true});
+ for(let i=0;i<64;i++) {
+   const p=f.payload('rotate-'+i);await f.worker.run('acquireGenerationResult',p);
+   await f.worker.run('acquireGenerationResult',{...p,abort:true});
+ }
+ assert(!f.content.tombstones.includes('reused'));
+ assert.equal((await f.worker.run('acquireGenerationResult',first)).state,'result');
+ closeOld();assert.equal(f.content.transferCount,1);assert(!f.content.tombstones.includes('reused'));
+ const end=await f.worker.run('acquireGenerationResult',{...first,sequence:1,offset:196608});
+ assert.equal(end.done,true);assert.equal(f.content.transferCount,0);assert.equal(f.content.tombstones.length,64);
+ assert.equal(f.content.clicks,0);assert(f.worker.calls.every(c=>c==='acquireGenerationResult'));
 });

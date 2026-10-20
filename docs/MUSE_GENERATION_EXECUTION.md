@@ -97,8 +97,19 @@ offset, canonical base64 and SHA-256. Maximum video size is 256 MiB; raw chunks 
 receipt. Total is unknown until EOF, then must equal accumulated bytes; any declared
 Content-Length must also match. The browser retains at most one 8 MiB incoming
 stream chunk plus its output buffer, not a whole video. There is one browser transfer
-at a time. Closed transfer IDs cannot replay; after 64 closures the document fails
-closed until refresh.
+at a time. A FIFO set retains the 64 most recently closed transfer IDs and rejects
+replay within that window. Each new closure evicts only the oldest tombstone when
+necessary; fresh transfers do not exhaust the tab. Active transfers are separate
+and cannot be evicted. Duplicate in-flight requests are rejected without aborting
+the original; late cleanup cannot close a successor with a reused ID.
+
+An evicted ID is not an authorization token. Reusing it still requires the worker's
+durable operation/receipt and cancellation checks, exact Receipt V2 assistant
+ownership, scoped video lookup and allowed source validation. It cannot submit a
+generation or select a page-global video/URL. Main alone creates transfer IDs and
+validates every returned chunk against its current transfer, then verifies real
+bytes and exclusively publishes the recorded output. Eviction therefore permits
+another validated read, not ownership bypass or unvalidated output publication.
 
 Browser idle/read timeout is 15 seconds, native chunk deadline 20 seconds, and the
 transfer bound five minutes. Disconnect aborts the browser stream. Local cancellation
