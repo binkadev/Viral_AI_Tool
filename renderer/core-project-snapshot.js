@@ -9,7 +9,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel) {
   "use strict";
 
-  const CURRENT_SCHEMA_VERSION = 2;
+  const CURRENT_SCHEMA_VERSION = 4;
   const SNAPSHOT_KEY = "viral-ai-core-project-snapshot";
   const LEGACY_STATE_KEY = "viral-ai-tool-state";
   const LEGACY_UI_KEYS = Object.freeze({
@@ -184,10 +184,12 @@
     };
   }
 
-  function normalizeV2(snapshot, options = {}) {
+  function normalizeProject(snapshot, options = {}) {
     if (!snapshot || typeof snapshot !== "object") return null;
     const source = normalizeSource(snapshot.source);
-    if (!source) return null;
+    const aiProject = snapshot.schemaVersion === 4 && snapshot.projectKind === "ai";
+    if (!source && !aiProject) return null;
+    if (aiProject && (!/^[a-zA-Z0-9_-]{1,160}$/.test(snapshot.projectId || "") || !String(snapshot.projectName || "").trim())) return null;
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
       renderOptions: snapshot.workflow?.renderOptions,
@@ -198,8 +200,9 @@
     });
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: aiProject ? "ai" : "imported",
       projectId: String(snapshot.projectId || source.identity),
-      projectName: String(snapshot.projectName || source.name || source.identity),
+      projectName: String(snapshot.projectName || source?.name || source?.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
       media: mediaFromState(
@@ -225,7 +228,7 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV2(input, options);
+      const snapshot = normalizeProject(input, options);
       const migrated = Boolean(
         snapshot &&
         (
@@ -237,16 +240,16 @@
       );
       return { snapshot, migrated, unsupportedVersion: null };
     }
-    if (version === 1 && input.source && input.workflow) {
+    if ([1, 2, 3].includes(version) && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
+        snapshot: normalizeProject({ ...input, projectKind: "imported", schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
     }
     if (version === 0 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
+        snapshot: normalizeProject({ ...input, projectKind: "imported", schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
@@ -280,6 +283,7 @@
     if (!source) return null;
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: "imported",
       projectId: source.identity,
       projectName: String(legacyState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
@@ -292,14 +296,16 @@
 
   function buildSnapshot(appState, editorState = {}, previous = null, now = Date.now()) {
     const source = sourceFromState(appState);
-    if (!source) return null;
     const previousSnapshot = migrateSnapshot(previous).snapshot;
+    const aiProject = previousSnapshot?.projectKind === "ai";
+    if (!source && !aiProject) return null;
     const sameProject = Boolean(
       previousSnapshot &&
-      ((source.jobId && previousSnapshot.source?.jobId === source.jobId) || previousSnapshot.source?.identity === source.identity)
+      (aiProject || (source?.jobId && previousSnapshot.source?.jobId === source.jobId) || previousSnapshot.source?.identity === source?.identity)
     );
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: aiProject ? "ai" : "imported",
       projectId: sameProject ? previousSnapshot.projectId : source.identity,
       projectName: sameProject
         ? String(previousSnapshot.projectName || source.name || source.identity)
@@ -312,13 +318,19 @@
     };
   }
 
+  function createDraftProject({ projectId, projectName }, appState = {}, editorState = {}, now = Date.now()) {
+    return normalizeProject({ schemaVersion: 4, projectKind: "ai", projectId, projectName,
+      updatedAt: new Date(now).toISOString(), source: null, media: emptyMedia(),
+      workflow: workflowFromState(appState), editor: normalizeEditor(editorState) });
+  }
+
   function toLegacyState(snapshot, existing = {}) {
     const migrated = migrateSnapshot(snapshot).snapshot;
     if (!migrated) return clone(existing, {});
     const workflow = migrated.workflow;
     return {
       ...clone(existing, {}),
-      page: "ai-video",
+      page: migrated.source ? "ai-video" : "ai-create",
       output: workflow.output,
       media: clone(migrated.media, emptyMedia()),
       renderOptions: clone(workflow.renderOptions, {}),
@@ -368,6 +380,7 @@
     migrateSnapshot,
     fromLegacy,
     buildSnapshot,
+    createDraftProject,
     toLegacyState,
     legacyUiProjection,
     semanticSignature

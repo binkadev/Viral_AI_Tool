@@ -202,6 +202,9 @@
   function hydrateRetainedState() {
     const current = appState();
     if (!current || !currentSnapshot) return;
+    if (!current.scenePlan && currentSnapshot.scenePlan) {
+      current.scenePlan = model.clone(currentSnapshot.scenePlan);
+    }
     if (!current.media && currentSnapshot.media) {
       current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
     }
@@ -229,7 +232,7 @@
     try {
       writeNative(SNAPSHOT_KEY, JSON.stringify(next));
     } catch (error) {
-      try { removeNative(SNAPSHOT_KEY); } catch {}
+      if (currentSnapshot?.projectKind !== "ai") { try { removeNative(SNAPSHOT_KEY); } catch {} }
       dispatchSaveFailure(reason, error);
       return null;
     }
@@ -238,6 +241,46 @@
       detail: { reason, schemaVersion: next.schemaVersion, projectId: next.projectId }
     }));
     return next;
+  }
+
+  // Synchronous durable write is the admission boundary; rerenders never create projects.
+  function ensureProject({ projectName } = {}) {
+    if (unsupportedSchemaVersion) throw Error("UNSUPPORTED_PROJECT_SCHEMA");
+    const current = appState();
+    if (!current) throw Error("PROJECT_STATE_UNAVAILABLE");
+    hydrateRetainedState();
+    let next = model.buildSnapshot(current, editorState(current), currentSnapshot);
+    if (!next) {
+      const projectId = window.crypto?.randomUUID?.();
+      if (!projectId) throw Error("PROJECT_ID_UNAVAILABLE");
+      next = model.createDraftProject({ projectId, projectName }, current, editorState(current));
+    }
+    if (!next) throw Error("PROJECT_INVALID");
+    const sceneModel = window.ViralCoreScenePlanModel;
+    if (!sceneModel) throw Error("PROJECT_SCENE_UNAVAILABLE");
+    let plan = sceneModel.normalizePlan(next.scenePlan || current.scenePlan || {});
+    if (!plan.scenes.length) {
+      const id = window.crypto?.randomUUID?.();
+      if (!id) throw Error("SCENE_ID_UNAVAILABLE");
+      plan = sceneModel.normalizePlan({ ...plan, scenes: [{ id, status: "draft" }], selectedSceneId: id });
+    }
+    if (!plan.scenes.some(scene => scene.id === plan.selectedSceneId)) plan.selectedSceneId = plan.scenes[0].id;
+    next = { ...next, scenePlan: plan };
+    try {
+      const serialized = JSON.stringify(next);
+      writeNative(SNAPSHOT_KEY, serialized);
+      if (nativeGetItem.call(localStorage, SNAPSHOT_KEY) !== serialized) throw Error("PROJECT_WRITE_UNCONFIRMED");
+    } catch (error) {
+      dispatchSaveFailure("ensure-project", error);
+      throw error;
+    }
+    currentSnapshot = next;
+    current.scenePlan = model.clone(plan);
+    if (!current.media) current.media = model.clone(next.media);
+    window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
+      detail: { reason: "ensure-project", schemaVersion: next.schemaVersion, projectId: next.projectId }
+    }));
+    return model.clone(next);
   }
 
   function schedule(reason = "semantic-change") {
@@ -373,6 +416,7 @@
     key: SNAPSHOT_KEY,
     schemaVersion: model.CURRENT_SCHEMA_VERSION,
     snapshot() { return model.clone(currentSnapshot, null); },
+    ensureProject,
     schedule,
     flush,
     restore: queueRestore,

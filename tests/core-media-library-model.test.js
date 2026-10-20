@@ -167,7 +167,8 @@ const activeSnapshot = {
 };
 const liveSnapshot = snapshotModel.migrateSnapshot(activeSnapshot);
 assert.strictEqual(liveSnapshot.snapshot.media.assets[0].status, "downloading", "normal in-session normalization must not interrupt live work");
-assert.strictEqual(liveSnapshot.migrated, false);
+assert.strictEqual(liveSnapshot.migrated, true, "v2 source-backed projects explicitly migrate to v4");
+assert.strictEqual(snapshotModel.migrateSnapshot(liveSnapshot.snapshot).migrated, false);
 const bootSnapshot = snapshotModel.migrateSnapshot(activeSnapshot, { restartSafeMedia: true });
 assert.strictEqual(bootSnapshot.snapshot.media.assets[0].status, "interrupted", "bootstrap normalization must not resurrect stale work");
 assert.strictEqual(bootSnapshot.migrated, true, "restart-safe transition must be backfilled durably");

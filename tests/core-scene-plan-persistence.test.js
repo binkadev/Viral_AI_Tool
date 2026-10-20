@@ -6,7 +6,7 @@ const path = require("path");
 const sceneModel = require("../renderer/core-scene-plan-model");
 const snapshot = require("../renderer/core-project-scene-plan");
 
-assert.strictEqual(snapshot.CURRENT_SCHEMA_VERSION, 3, "scene-plan projects must use snapshot schema v3");
+assert.strictEqual(snapshot.CURRENT_SCHEMA_VERSION, 4, "scene-plan projects must use snapshot schema v4");
 
 const sourcePath = "C:/media/Wildlife.mp4";
 const sourceJob = {
@@ -54,7 +54,7 @@ const liveState = {
 
 const liveSnapshot = snapshot.buildSnapshot(liveState, {}, null, Date.UTC(2026, 9, 13, 8, 4, 0));
 assert(liveSnapshot, "a source-backed project must produce a snapshot");
-assert.strictEqual(liveSnapshot.schemaVersion, 3);
+assert.strictEqual(liveSnapshot.schemaVersion, 4);
 assert.strictEqual(liveSnapshot.scenePlan.scenes.length, acceptedPlan.scenes.length);
 assert.strictEqual(liveSnapshot.scenePlan.plannerJob.status, "planning", "normal in-session autosave must not interrupt live planner work");
 assert(liveSnapshot.scenePlan.scenes[0].lockedFields.includes("visualIntent"), "manual field locks must survive autosave");
@@ -77,8 +77,8 @@ const schemaV2 = {
 };
 delete schemaV2.scenePlan;
 const upgradedV2 = snapshot.migrateSnapshot(schemaV2);
-assert.strictEqual(upgradedV2.migrated, true, "schema-v2 projects must migrate to scene-plan-aware schema v3");
-assert.strictEqual(upgradedV2.snapshot.schemaVersion, 3);
+assert.strictEqual(upgradedV2.migrated, true, "schema-v2 projects must migrate to scene-plan-aware schema v4");
+assert.strictEqual(upgradedV2.snapshot.schemaVersion, 4);
 assert.strictEqual(upgradedV2.snapshot.scenePlan.status, "empty", "migration must not invent scenes for older projects");
 assert.deepStrictEqual(upgradedV2.snapshot.scenePlan.scenes, []);
 
@@ -116,4 +116,4 @@ assert(runtime.includes('current.scenePlan = model.normalizePlan(snapshot.sceneP
 assert(runtime.includes('viral-ai:scene-plan-changed'));
 assert(runtime.includes('persistence.schedule?.("viral-ai:scene-plan-changed")'));
 
-console.log("Scene Plan snapshot v3 migration, restart safety, runtime hydration and round-trip persistence tests passed.");
+console.log("Scene Plan snapshot v4 migration, restart safety, runtime hydration and round-trip persistence tests passed.");

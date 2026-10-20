@@ -306,7 +306,7 @@ test("renderer readiness is native-authoritative, project-scoped, fail closed an
     window: {
       addEventListener: (name, fn) => { handlers[name] = fn; },
       crypto: { randomUUID: () => "request-id" },
-      ViralCoreProjectPersistence: { snapshot: () => ({ projectId: "project-1", scenePlan: { selectedSceneId: "scene-1" } }) },
+      ViralCoreProjectPersistence: { ensureProject: () => { throw Error("readiness must not create a project"); }, snapshot: () => ({ projectId: "project-1", scenePlan: { selectedSceneId: "scene-1" } }) },
       desktopAPI: { getGenerationStatus: async () => {
         if (reject) throw Error("offline");
         return { ok: true, value: { ready, state: ready ? "ready" : "not_configured" } };

@@ -2,19 +2,19 @@ window.I18N = (() => {
   const messages = {
     vi: {
       videoProviders: {
-  "installExtension": "C?i ti?n ?ch Chrome",
-  "updateExtension": "C?p nh?t ti?n ?ch",
-  "manualInstallation": "C?i th? c?ng (h? tr?)",
-  "manualFolder": "M? th? m?c c?i th? c?ng",
-  "storeUnavailable": "Ch?a thi?t l?p ph?n ph?i qua C?a h?ng Chrome. Ch?a th? c?i t? c?a h?ng. Li?n h? h? tr? ho?c xem c?ch c?i th? c?ng.",
-  "connectionHint": "Ch?a th?y k?t n?i kh?ng c? ngh?a l? ch?a c?i. N?u ?? c?i ti?n ?ch, h?y m? Chrome r?i l?m m?i.",
-  "manualSteps": "M? chrome://extensions ? b?t Ch? ?? d?nh cho nh? ph?t tri?n ? T?i ti?n ?ch ?? gi?i n?n ? ch?n th? m?c meta-muse-extension v?a m?. Sau khi c?p nh?t, t?i l?i ti?n ?ch r?i l?m m?i tab Muse.",
+  "installExtension": "Cài tiện ích Chrome",
+  "updateExtension": "Cập nhật tiện ích",
+  "manualInstallation": "Cài thủ công (hỗ trợ)",
+  "manualFolder": "Mở thư mục cài thủ công",
+  "storeUnavailable": "Chưa có bản cài trên Cửa hàng Chrome. Bạn có thể liên hệ hỗ trợ hoặc xem cách cài thủ công.",
+  "connectionHint": "Chưa thấy kết nối không có nghĩa là chưa cài. Nếu đã cài tiện ích, hãy mở Chrome rồi làm mới.",
+  "manualSteps": "Mở chrome://extensions → bật Chế độ dành cho nhà phát triển → Tải tiện ích đã giải nén → chọn thư mục meta-muse-extension vừa mở. Sau khi cập nhật, tải lại tiện ích rồi làm mới tab Muse.",
   "distributionStates": {
-    "extension_connected": "Ti?n ?ch ?? k?t n?i",
-    "extension_install_required": "Ch?a k?t n?i ti?n ?ch ? c?i n?u ch?a c?",
-    "extension_outdated": "Ti?n ?ch c?n c?p nh?t",
-    "extension_update_required": "Ti?n ?ch c?n c?p nh?t ?? k?t n?i",
-    "extension_error": "Phi?n b?n ti?n ?ch ch?a ???c h? tr?. Ch?a th? k?t n?i. H?y c?p nh?t ?ng d?ng ho?c li?n h? h? tr?."
+    "extension_connected": "Tiện ích đã kết nối",
+    "extension_install_required": "Chưa kết nối tiện ích — cài nếu chưa có",
+    "extension_outdated": "Tiện ích cần cập nhật",
+    "extension_update_required": "Tiện ích cần cập nhật để kết nối",
+    "extension_error": "Phiên bản tiện ích chưa được hỗ trợ nên chưa thể kết nối. Hãy cập nhật ứng dụng hoặc liên hệ hỗ trợ."
   },
   "title": "Dịch vụ video AI",
   "description": "Quản lý kết nối để tạo video trong khu làm việc.",
@@ -346,6 +346,8 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         examples: [{"title":"Sản phẩm nổi bật","detail":"Ánh sáng studio · Cận cảnh","prompt":"Cận cảnh chai nước hoa trên khối đá, ánh sáng studio dịu từ bên trái, nền tím trầm, máy quay xoay chậm quanh sản phẩm."},{"title":"Một chuyến đi xa","detail":"Thiên nhiên · Điện ảnh","prompt":"Những lớp núi xanh trong sương sớm, mặt trời vừa ló phía chân trời, máy quay tiến chậm qua thung lũng, phong cách điện ảnh."},{"title":"Nhịp sống thành phố","detail":"Đường phố · Chuyển động","prompt":"Con phố về đêm sau cơn mưa, ánh đèn xanh tím phản chiếu trên mặt đường, máy quay di chuyển sát mặt đất, không khí điện ảnh."}],
 
 
+          draftProjectName: "Dự án AI mới",
+          projectSaveError: "Chưa lưu được dự án nên yêu cầu tạo video chưa được gửi. Hãy kiểm tra dung lượng lưu trữ rồi thử lại.",
           generationError: "Chưa thể xác nhận yêu cầu. Dự án của bạn vẫn an toàn. Kiểm tra kết nối rồi thử lại.",
 
           submitted: "Đã lưu yêu cầu tạo video.",
@@ -1768,6 +1770,8 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         noProjectsHint: "Projects with a source video appear here. Import a video to get started.",
         examples: [{"title":"Product spotlight","detail":"Studio lighting · Close-up","prompt":"Close-up of a perfume bottle on a stone plinth, soft studio light from the left, muted purple background, camera slowly orbiting the product."},{"title":"Somewhere far away","detail":"Nature · Cinematic","prompt":"Layers of blue mountains in morning mist, sun rising above the horizon, camera slowly moving forward through the valley, cinematic style."},{"title":"City after hours","detail":"Street life · Motion","prompt":"A city street at night after the rain, blue and purple lights reflecting on the road, camera moving close to the ground, cinematic atmosphere."}],
 
+          draftProjectName: "New AI project",
+          projectSaveError: "The project could not be saved, so video generation was not submitted. Check available storage and try again.",
           generationError: "The request could not be confirmed. Your project is safe. Check the connection and try again.",
           submitted: "Your generation request has been saved.",
           projectEyebrow: "PROJECT",

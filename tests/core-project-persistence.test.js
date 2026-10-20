@@ -11,7 +11,7 @@ const timelineSelection = fs.readFileSync(path.join(root, "renderer", "core-time
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-assert.strictEqual(snapshotModel.CURRENT_SCHEMA_VERSION, 2);
+assert.strictEqual(snapshotModel.CURRENT_SCHEMA_VERSION, 4);
 assert.strictEqual(snapshotModel.SNAPSHOT_KEY, "viral-ai-core-project-snapshot");
 
 const sourceJob = {
@@ -98,7 +98,7 @@ const migrated = snapshotModel.fromLegacy(legacy, {
 }, Date.UTC(2026, 9, 8, 12, 0, 0));
 
 assert(migrated, "legacy project with a source must migrate into a snapshot");
-assert.strictEqual(migrated.schemaVersion, 2);
+assert.strictEqual(migrated.schemaVersion, 4);
 assert.strictEqual(migrated.projectId, "source-1");
 assert.strictEqual(migrated.projectName, "Long Interview.mp4", "legacy projects must gain a stable project name from the current source");
 assert.strictEqual(migrated.source.path, sourceJob.sourcePath);
@@ -199,7 +199,7 @@ const v1 = { ...persisted, schemaVersion: 1 };
 delete v1.media;
 const upgradedV1 = snapshotModel.migrateSnapshot(v1);
 assert.strictEqual(upgradedV1.migrated, true, "schema-v1 projects must migrate to the media-aware schema");
-assert.strictEqual(upgradedV1.snapshot.schemaVersion, 2);
+assert.strictEqual(upgradedV1.snapshot.schemaVersion, 4);
 assert.strictEqual(upgradedV1.snapshot.projectName, persisted.projectName);
 assert.deepStrictEqual(upgradedV1.snapshot.media.assets, [], "v1 migration must add an empty media library without inventing assets");
 
@@ -207,7 +207,7 @@ const v0 = { ...migrated };
 delete v0.schemaVersion;
 const upgraded = snapshotModel.migrateSnapshot(v0);
 assert.strictEqual(upgraded.migrated, true);
-assert.strictEqual(upgraded.snapshot.schemaVersion, 2);
+assert.strictEqual(upgraded.snapshot.schemaVersion, 4);
 assert.strictEqual(upgraded.snapshot.projectName, migrated.projectName);
 assert.strictEqual(upgraded.snapshot.media.assets.length, 2);
 const future = snapshotModel.migrateSnapshot({ schemaVersion: 99, source: migrated.source, workflow: migrated.workflow });
@@ -292,4 +292,4 @@ assert(pkg.scripts["test:core-media-library"], "package.json must expose the med
 assert(pkg.scripts["test:core-commercial"].includes("test:core-project-persistence"), "commercial regression must gate project persistence");
 assert(pkg.scripts["test:core-commercial"].includes("test:core-media-library"), "commercial regression must gate media library invariants");
 
-console.log("Core project snapshot v2, media ownership, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");
+console.log("Core project snapshot v4, media ownership, naming, safe bootstrap backfill, migration, semantic autosave, reopen, source scoping and recovery tests passed.");

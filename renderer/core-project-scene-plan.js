@@ -9,7 +9,7 @@
 
   if (!base || !sceneModel?.normalizePlan) return base;
 
-  const CURRENT_SCHEMA_VERSION = 3;
+  const CURRENT_SCHEMA_VERSION = 4;
 
   function clone(value, fallback = null) {
     return base.clone ? base.clone(value, fallback) : JSON.parse(JSON.stringify(value ?? fallback));
@@ -33,7 +33,7 @@
     if (!snapshot || typeof snapshot !== "object") return snapshot;
     const copy = clone(snapshot, {});
     delete copy.scenePlan;
-    if (Number(copy.schemaVersion || 0) >= CURRENT_SCHEMA_VERSION) copy.schemaVersion = 2;
+    if (Number(copy.schemaVersion || 0) === 3) copy.schemaVersion = 2;
     return copy;
   }
 
@@ -42,7 +42,7 @@
     return String(input?.scenePlan?.plannerJob?.status || "idle") !== String(normalized?.scenePlan?.plannerJob?.status || "idle");
   }
 
-  function normalizeV3(input, options = {}) {
+  function normalizeV4(input, options = {}) {
     const normalizedBase = base.migrateSnapshot(baseCompatible(input), {
       restartSafeMedia: options.restartSafeMedia === true
     }).snapshot;
@@ -64,7 +64,7 @@
     }
 
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV3(input, options);
+      const snapshot = normalizeV4(input, options);
       const migrated = Boolean(
         snapshot && (
           !input.scenePlan ||
@@ -76,7 +76,7 @@
       return { snapshot, migrated, unsupportedVersion: null };
     }
 
-    const migratedBase = base.migrateSnapshot(input, {
+    const migratedBase = base.migrateSnapshot(baseCompatible(input), {
       restartSafeMedia: options.restartSafeMedia === true
     });
     if (!migratedBase.snapshot) {
@@ -106,8 +106,8 @@
   }
 
   function buildSnapshot(appState, editorState = {}, previous = null, now = Date.now()) {
-    const previousV3 = migrateSnapshot(previous).snapshot;
-    const basePrevious = previousV3 ? baseCompatible(previousV3) : baseCompatible(previous);
+    const previousV4 = migrateSnapshot(previous).snapshot;
+    const basePrevious = previousV4 ? baseCompatible(previousV4) : baseCompatible(previous);
     const snapshot = base.buildSnapshot(appState, editorState, basePrevious, now);
     if (!snapshot) return null;
     return {

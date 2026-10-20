@@ -46,7 +46,7 @@
     "test:muse-foundation": "node --test tests/muse-foundation.test.js tests/core-video-provider-settings.test.js",
     "test:generation-runtime": "node --test tests/generation-runtime.test.js",
     "test:generation-router": "node tests/generation-router.test.js",
-    "test:core-ai-create": "node tests/core-ai-create.test.js",
+    "test:core-ai-create": "node tests/core-ai-create.test.js && node tests/core-ai-first-project.test.js",
     "test:startup-shell": "node tests/startup-shell-guard.test.js",
     "test:media-local-files": "node tests/media-local-files.test.js",
     "test:media-provider-adapters": "node tests/media-provider-adapters.test.js",

@@ -55,7 +55,7 @@
   }
 
   function canGenerate() {
-    return generationReady && !submitting && Boolean(projectIdentity().projectId) && (!museSession || Boolean(projectIdentity().sceneId)) && Boolean(currentBrief().trim());
+    return generationReady && !submitting && typeof window.ViralCoreProjectPersistence?.ensureProject === "function" && Boolean(currentBrief().trim());
   }
 
   function updateGenerationControls() {
@@ -100,8 +100,8 @@
   }
 
   async function generate() {
-    const identity = projectIdentity();
     if (!canGenerate()) return;
+    const prompt = currentBrief();
     submitting = true;
     updateGenerationControls();
     submissionKey ||= window.crypto?.randomUUID?.();
@@ -112,13 +112,22 @@
       return;
     }
     try {
+      let snapshot;
+      try {
+        snapshot = await window.ViralCoreProjectPersistence.ensureProject({ projectName: copy().draftProjectName });
+        if (!snapshot?.projectId || !snapshot?.scenePlan?.selectedSceneId) throw Error("PROJECT_NOT_PERSISTED");
+      } catch {
+        feedback = copy().projectSaveError;
+        return;
+      }
+      const identity = { projectId: snapshot.projectId, sceneId: snapshot.scenePlan.selectedSceneId };
       const result = await window.desktopAPI.submitGeneration({
         projectId: identity.projectId,
         sceneId: identity.sceneId,
         idempotencyKey: submissionKey,
         kind: "video",
         mode: "text-to-video",
-        prompt: currentBrief(),
+        prompt,
         goal: selectedGoal(),
         ...(museSession?{providerId:'muse'}:{
           aspectRatio: selectedOption("aspect", ["9:16", "16:9", "1:1"], "9:16"),
