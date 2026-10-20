@@ -212,12 +212,12 @@ async function submit(p) {
   if(operations.size>=32)return answer(p,'interrupted',{invocation});
   const reservation={sceneId:p.sceneId,invalid:true};if(!prepared)operations.set(p.operationId,reservation);
   const stable=await waitForStableConversation();
-  if(!stable)return answer(p,'interrupted',{invocation});
+  if(!stable || prepared?.invalid){releaseV2(p.operationId,prepared);return answer(p,'interrupted',{invocation});}
   stableKey=stable.key;
-  if(!status().canSubmit)return answer(p,'interrupted',{invocation:{...invocation,reason:'composer-unready'}});
+  if(!status().canSubmit){releaseV2(p.operationId,prepared);return answer(p,'interrupted',{invocation:{...invocation,reason:'composer-unready'}});}
   const c=composer(),baseline=structure();
-  if(structureKey(baseline)!==stable.key)return answer(p,'interrupted',{invocation});
-  if(prepared && structureKey(baseline)!==structureKey(prepared.baseline))return answer(p,'interrupted',{invocation});
+  if(structureKey(baseline)!==stable.key){releaseV2(p.operationId,prepared);return answer(p,'interrupted',{invocation});}
+  if(prepared && structureKey(baseline)!==structureKey(prepared.baseline)){releaseV2(p.operationId,prepared);return answer(p,'interrupted',{invocation});}
   const videos=baseline.flatMap(r=>[...r.node.querySelectorAll('video')]);
   const op=prepared || {sceneId:p.sceneId,baseline:baseline.map(({id,role})=>({id,role})),baselineVideos:new Set(videos),baselineSources:new Set(videos.map(v=>v.currentSrc).filter(Boolean))};
   if(prepared){op.submissionStarted=true;op.lastContact=Date.now();}
@@ -275,16 +275,24 @@ async function submit(p) {
       }
     }
     throw Error('ACCEPTANCE_UNCERTAIN');
-  } catch {op.invalid=true;return answer(p,'interrupted',{invocation});}
-  finally {for(const type of ['input','click','keydown'])c.root.removeEventListener(type,disturbed,true);}
+  } catch {op.invalid=true;releaseV2(p.operationId,op);return answer(p,'interrupted',{invocation});}
+  finally {if(op.invalid)releaseV2(p.operationId,op);for(const type of ['input','click','keydown'])c.root.removeEventListener(type,disturbed,true);}
+}
+// The worker owns durable history. This map owns only live causal observation.
+// Invalidate retained references before deletion so pending awaits fail closed.
+function releaseV2(id,op) {
+  if(!op || op.v2Reserved===undefined)return;
+  op.invalid=true;op.v2Reserved=false;op.cleanup?.();op.cleanup=null;
+  if(operations.get(id)===op)operations.delete(id);
 }
 async function prepareV2(p) {
-  if(operations.has(p.operationId) || operations.size>=32 || [...operations.values()].some(op=>op.v2Reserved && !op.invalid && !op.receipt?.result))return answer(p,'interrupted');
+  if(operations.has(p.operationId) || operations.size>=32 || transfers.size || [...operations.values()].some(op=>op.v2Reserved && !op.invalid && !op.receipt?.result))return answer(p,'interrupted');
   const op={sceneId:p.sceneId,invalid:false,v2Reserved:true,observationToken:p.observationToken};
   operations.set(p.operationId,op);
+  try {
   const stable=await waitForStableConversation();
   if(stable)stableKey=stable.key;
-  if(op.invalid || !stable || !status().canSubmit){op.invalid=true;return answer(p,'interrupted');}
+  if(op.invalid || !stable || !status().canSubmit){releaseV2(p.operationId,op);return answer(p,'interrupted');}
   op.baseline=stable.rows.map(({id,role})=>({id,role}));op.createdAt=Date.now();op.lastContact=Date.now();
   op.newUsers=new Set();op.newAssistants=new Set();
   const sample=(mutations=[])=>{
@@ -309,35 +317,37 @@ async function prepareV2(p) {
       for(const row of rows)remember(row);
       if(op.newUsers.size>1 || op.newAssistants.size>1)op.invalid=true;
     }catch{op.invalid=true;}
+    if(op.invalid)releaseV2(p.operationId,op);
   };
   op.sample=sample;
   const observer=new MutationObserver(sample);
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeOldValue:true,attributeFilter:['data-message-id','data-message-role','data-message-item']});
-  const deadline=setTimeout(()=>{op.invalid=true;observer.disconnect();},20*60*1000);
+  const deadline=setTimeout(()=>releaseV2(p.operationId,op),20*60*1000);
   op.cleanup=()=>{observer.disconnect();clearTimeout(deadline);};
   op.preparedReceipt={version:2,operationId:p.operationId,
     baselineUserMessageIds:await Promise.all(op.baseline.filter(r=>r.role==='user').map(r=>hash(p.operationId,r.role,r.id))),
     baselineAssistantMessageIds:await Promise.all(op.baseline.filter(r=>r.role==='assistant').map(r=>hash(p.operationId,r.role,r.id)))};
-  if(op.invalid || structureKey(structure())!==stable.key){op.invalid=true;op.cleanup();return answer(p,'interrupted');}
+  if(op.invalid || structureKey(structure())!==stable.key){releaseV2(p.operationId,op);return answer(p,'interrupted');}
   return answer(p,'prepared',{receipt:op.preparedReceipt});
+  } catch {releaseV2(p.operationId,op);return answer(p,'interrupted');}
 }
 async function inspectV2(p) {
   const receipt=p.receipt;
-  if(!receipt.userStableIdHash || !status().composerReady)return answer(p,'interrupted');
+  if(!receipt.userStableIdHash || !status().composerReady){releaseV2(p.operationId,operations.get(p.operationId));return answer(p,'interrupted');}
   let op=operations.get(p.operationId),next=receipt;
   if(!receipt.assistantStableIdHash) {
     if(!op || op.sceneId!==p.sceneId || op.invalid || !op.receipt || op.observationToken!==p.observationToken || Date.now()-op.lastContact>10000 || Date.now()-op.createdAt>20*60*1000 || !MuseReceiptV2.extendsReceipt(op.receipt,receipt)) {
-      if(op){op.invalid=true;op.cleanup?.();}return answer(p,'interrupted');
+      if(op)releaseV2(p.operationId,op);return answer(p,'interrupted');
     }
     op.lastContact=Date.now();op.sample();
-    if(op.invalid || !structure().some(r=>r.role==='user' && r.id===op.submittedUserId) || op.newUsers.size!==1 || !op.newUsers.has(op.submittedUserId)){op.invalid=true;op.cleanup();return answer(p,'interrupted');}
+    if(op.invalid || !structure().some(r=>r.role==='user' && r.id===op.submittedUserId) || op.newUsers.size!==1 || !op.newUsers.has(op.submittedUserId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
     if(op.newAssistants.size===0)return answer(p,'running',{receipt});
     const id=[...op.newAssistants][0];
-    if(!structure().some(r=>r.role==='assistant' && r.id===id))return answer(p,'interrupted');
+    if(!structure().some(r=>r.role==='assistant' && r.id===id)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
     next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',id)};
     op.sample();
-    if(op.invalid || !MuseReceiptV2.valid(next,p.operationId)){op.invalid=true;op.cleanup();return answer(p,'interrupted');}
-    op.receipt=next;op.v2Reserved=false;op.cleanup();
+    if(op.invalid || !MuseReceiptV2.valid(next,p.operationId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    op.receipt=next;releaseV2(p.operationId,op);
     // Persist the assistant before inspecting/persisting a result candidate.
     return answer(p,'running',{receipt:next});
   }
@@ -372,9 +382,7 @@ const transfers=new Map(),closedTransfers=new Set();
 function cancelLocal(p) {
   const op=operations.get(p.operationId);
   if(op?.sceneId===p.sceneId && op.v2Reserved!==undefined) {
-    // Keep the reservation record and receipts as exact-once evidence. Only
-    // local observation/transfer resources are released; Muse may still run.
-    op.invalid=true;op.localCancelled=true;op.v2Reserved=false;op.cleanup?.();
+    releaseV2(p.operationId,op);
   }
   for(const t of transfers.values())if(t.operationId===p.operationId && t.sceneId===p.sceneId)closeTransfer(t);
   return answer(p,'unsupported',{confirmed:false});
@@ -403,13 +411,13 @@ async function acquireV2(p) {
   try {
     if(!t) {
       if(p.offset!==0 || p.sequence!==0 || transfers.size || closedTransfers.has(p.transferId) || closedTransfers.size>=64)return answer(p,'interrupted');
-      const video=await ownedVideo(p),source=video.currentSrc;
-      if(operations.get(p.operationId)?.localCancelled)return answer(p,'interrupted');
-      if(transfers.size || closedTransfers.has(p.transferId))return answer(p,'interrupted');
-      t={id:p.transferId,operationId:p.operationId,sceneId:p.sceneId,receipt:p.receipt,video,source,offset:0,sequence:0,
+      t={id:p.transferId,operationId:p.operationId,sceneId:p.sceneId,receipt:p.receipt,offset:0,sequence:0,
         started:Date.now(),controller:new AbortController(),pending:new Uint8Array(0),ended:false};
       transfers.set(t.id,t);
       t.timer=setTimeout(()=>closeTransfer(t),15000);
+      const video=await ownedVideo(p),source=video.currentSrc;
+      if(t.controller.signal.aborted)throw Error('TRANSFER_CANCELLED');
+      t.video=video;t.source=source;
       const response=await fetch(source,{credentials:'same-origin',redirect:'error',signal:t.controller.signal});
       if(!response.ok || response.redirected || (response.url && response.url!==source) ||
         !['video/mp4','application/octet-stream'].includes((response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase()))throw Error('TYPE');
@@ -479,7 +487,7 @@ function connect() {
     const port=chrome.runtime.connect({name:'viral-ai-muse-tab'});activePort=port;
     port.onDisconnect.addListener(()=>{
       for(const t of transfers.values())closeTransfer(t);
-      for(const op of operations.values())if(op.preparedReceipt && !op.receipt?.assistantStableIdHash){op.invalid=true;op.cleanup?.();}
+      for(const [id,op] of operations)releaseV2(id,op);
       activePort=null;
       try{if(chrome.runtime.id && reconnectAttempts<4)reconnectTimer=setTimeout(connect,1500*reconnectAttempts);}catch{}
     });

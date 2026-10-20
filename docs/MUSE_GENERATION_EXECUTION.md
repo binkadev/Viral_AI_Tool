@@ -169,3 +169,10 @@ format remain unproven live. A MediaSource object URL may not be fetchable and t
 must interrupt. No historical video was acquired, and no receipt-v2 live end-to-end
 generation/acquisition has been validated. Future controlled validation needs
 separate authorization and a genuinely owned receipt; historical media is excluded.
+
+
+### Content observation capacity
+
+Receipt V2 entries in the content script represent live causal observations, not operation history. Cancellation, invalidation, observation expiry, disconnect, and returning an assistant anchor invalidate retained references, disconnect the observer, clear its deadline, and remove the matching map entry. The 32-entry bound remains. Returning the assistant anchor releases observation only; the worker validates and persists the monotonic receipt before forwarding it. If that reply is lost before persistence, user-only recovery fails closed and never resubmits.
+
+Transfers have their own bounded lifetime. They reserve their slot before asynchronous ownership lookup so cancellation can abort even that phase; observation cleanup does not remove a live transfer. A pending/active transfer blocks competing preparation. Worker storage remains authoritative for intent, invocation, cancellation tombstones, and receipts, including after worker restart. Content cleanup never clears durable history. Regression coverage uses VM DOM/storage/fetch fixtures only, including 40 sequential cancel and assistant-anchor cycles; it performs no live Muse submission or acquisition.

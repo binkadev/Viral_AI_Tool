@@ -225,7 +225,7 @@ function contentFixture(options={}) {
  vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
- return {send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true};
+ return {get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true};
 }
 const operation={operationId:'op',sceneId:'scene',prompt:'Exact prompt',tabId:5};
 const inspectPayload={operationId:'op',sceneId:'scene',tabId:5};
@@ -391,7 +391,7 @@ for(const phase of ['prepared','accepted','anchored']) {
    const before=JSON.stringify(stored),disconnects=content.disconnected,clicks=content.clicks;
    const result=await worker.run('cancelGeneration',inspectPayload);
    assert.equal(result.state,'unsupported');assert.equal(result.confirmed,false);
-   assert(content.disconnected>disconnects);
+   assert(phase==='anchored' || content.disconnected>disconnects);assert.equal(content.operationCount,0);
    const expected=JSON.parse(before);expected['generation-intent:op'].localCancelled=true;
    assert.equal(JSON.stringify(stored),JSON.stringify(expected));
    assert.equal((await worker.run('submitGeneration',{...operation,receipt:prepared.receipt})).state,'interrupted');
@@ -898,4 +898,79 @@ test('acquisition rejects assistant ownership changing between chunks',async t=>
  const job=f.job;await f.service.recover(job.id);
  assert.equal(f.service.get(job.id).status,'interrupted');assert.equal(f.service.get(job.id).asset,null);
  assert(!fs.existsSync(path.join(f.root,'outputs',job.id,job.id+'.partial.mp4')));
+});
+
+
+test('v2 40 prepare/cancel cycles free capacity, preserve worker replay tombstones across restart, and never send',async()=>{
+ const content=contentFixture(),stored={},worker=workerV2Harness(stored,content);
+ for(let i=0;i<40;i++) {
+   const p={...inspectPayload,operationId:'cancel-'+i};
+   const prepared=await worker.run('prepareGeneration',p);assert.equal(prepared.state,'prepared');
+   assert.equal(content.operationCount,1);
+   assert.equal((await content.send('prepareGeneration',{...v2Payload,operationId:'competitor'})).state,'interrupted');
+   await worker.run('cancelGeneration',p);assert.equal(content.operationCount,0);
+   const restarted=workerV2Harness(stored,content);
+   assert.equal((await restarted.run('prepareGeneration',p)).state,'interrupted');
+   assert.equal((await restarted.run('submitGeneration',{...operation,...p,receipt:prepared.receipt})).state,'interrupted');
+   assert.equal(restarted.calls.length,0);
+ }
+ assert.equal(content.clicks,0);assert(!worker.calls.includes('submitGeneration'));
+});
+test('v2 40 fixture assistant anchors release observation entries without losing durable receipts',async()=>{
+ const content=contentFixture(),stored={},worker=workerV2Harness(stored,content);
+ for(let i=0;i<40;i++) {
+   content.replace([content.node('user','history-user'),content.node('assistant','history-assistant')]);
+   const p={...inspectPayload,operationId:'anchor-'+i};
+   const prepared=await worker.run('prepareGeneration',p);assert.equal(prepared.state,'prepared');
+   const accepted=await worker.run('submitGeneration',{...operation,...p,receipt:prepared.receipt});
+   const anchored=await worker.run('inspectGeneration',{...p,receipt:accepted.receipt});
+   assert(anchored.receipt.assistantStableIdHash);assert.equal(content.operationCount,0);
+   assert.equal(stored['generation-intent:'+p.operationId].receipt.assistantStableIdHash,anchored.receipt.assistantStableIdHash);
+ }
+});
+test('v2 released observation leaves active transfer alive and blocks competing preparation',async()=>{
+ const bytes=Buffer.alloc(210000,7),f=contentFixture({fetch:async()=>new Response(bytes,{headers:{'content-type':'video/mp4'}})});
+ const receipt=await bindV2(f);assert.equal(f.operationCount,0);
+ f.replace([f.node('assistant','new-assistant',media())]);
+ const candidate=await f.send('inspectGeneration',{...v2Payload,receipt});
+ const p={...v2Payload,receipt:candidate.receipt,transferId:'capacity-stream',sequence:0,offset:0,mediaKind:'video'};
+ const first=await f.send('acquireGenerationResult',p);assert.equal(first.done,false);assert.equal(f.transferCount,1);
+ assert.equal((await f.send('prepareGeneration',{...v2Payload,operationId:'competing'})).state,'interrupted');
+ await f.send('cancelGeneration',{...inspectPayload,operationId:'unrelated'});assert.equal(f.transferCount,1);
+ const last=await f.send('acquireGenerationResult',{...p,sequence:1,offset:196608});assert.equal(last.done,true);
+ assert.equal(f.transferCount,0);assert.deepEqual(Buffer.concat([Buffer.from(first.data,'base64'),Buffer.from(last.data,'base64')]),bytes);
+});
+test('v2 cancellation during ownership lookup prevents even fixture fetch',async()=>{
+ let fetched=0;const f=contentFixture({fetch:async()=>{fetched++;throw Error('unexpected');}}),receipt=await bindV2(f);
+ f.replace([f.node('assistant','new-assistant',media())]);
+ const candidate=await f.send('inspectGeneration',{...v2Payload,receipt});
+ const pending=f.send('acquireGenerationResult',{...v2Payload,receipt:candidate.receipt,transferId:'pending',sequence:0,offset:0,mediaKind:'video'});
+ await f.send('cancelGeneration',inspectPayload);
+ assert.equal((await pending).state,'interrupted');assert.equal(fetched,0);assert.equal(f.transferCount,0);
+});
+
+test('v2 cancellation during baseline wait releases capacity and late preparation cannot revive it',async()=>{
+ const f=contentFixture();
+ const pending=f.send('prepareGeneration',v2Payload);
+ await f.send('cancelGeneration',inspectPayload);assert.equal(f.operationCount,0);
+ assert.equal((await pending).state,'interrupted');assert.equal(f.operationCount,0);
+ assert.equal((await f.send('prepareGeneration',{...v2Payload,operationId:'fresh'})).state,'prepared');
+ await f.send('cancelGeneration',{...inspectPayload,operationId:'fresh'});assert.equal(f.clicks,0);
+});
+test('v2 changed baseline submit failure immediately releases observation without typing',async()=>{
+ const f=contentFixture(),prepared=await f.send('prepareGeneration',v2Payload);
+ f.inject(f.node('assistant','hydrated'));
+ assert.equal((await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prepared.receipt})).state,'interrupted');
+ assert.equal(f.operationCount,0);assert.equal(f.clicks,0);
+});
+
+test('v2 worker cancellation tombstone blocks acquisition after observation cleanup and restart',async()=>{
+ const f=contentFixture(),receipt=await bindV2(f);assert.equal(f.operationCount,0);
+ f.replace([f.node('assistant','new-assistant',media())]);
+ const candidate=await f.send('inspectGeneration',{...v2Payload,receipt});
+ const stored={'generation-intent:op':{tabId:5,sceneId:'scene',receipt:candidate.receipt}},worker=workerV2Harness(stored,f);
+ await worker.run('cancelGeneration',inspectPayload);
+ const restarted=workerV2Harness(stored,f);
+ assert.equal((await restarted.run('acquireGenerationResult',{...inspectPayload,receipt:candidate.receipt,transferId:'after-cancel',sequence:0,offset:0,mediaKind:'video'})).state,'interrupted');
+ assert.equal(restarted.calls.length,0);
 });

@@ -238,7 +238,7 @@ async function executeV2(c) {
     } else if(!saved.receipt.userStableIdHash)return interrupted();
   }
   const receipt=saved.receipt;
-  if(c.type==='acquireGenerationResult' && (!receipt?.result || !MuseReceiptV2.transferRequest({...p,receipt})))return interrupted();
+  if(c.type==='acquireGenerationResult' && (saved.localCancelled || !receipt?.result || !MuseReceiptV2.transferRequest({...p,receipt})))return interrupted();
   const payload={...p,...(receipt?{receipt}:{}),observationToken:observationEpoch+'_'+(bridge?.serverId||'offline')};
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload});
   if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId)return interrupted();
