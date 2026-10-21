@@ -68,15 +68,34 @@ test('historical Gate-D evidence and current DOM census are separate, immutable,
  }
 });
 
-test('historical 0.3.8 Gate-D summary preserves absent sequence fields without migration',async t=>{
+for(const [version,suffix] of [['0-3-8','assistdiag1'],['0-3-9','assistdiag2'],['0-3-10','assistsettle1']])test('historical '+version+' Gate-D summary remains readable without churn migration',async t=>{
  const f=fixture(t),{failure}=require('./fixtures/muse-assistant-failure');
- const d=failure('BLOCK_NONCONTIGUOUS');d.build='muse-content-v0-3-8-contract3-receipt2-assistdiag1';
+ const d=failure('BLOCK_NONCONTIGUOUS');d.build=`muse-content-v${version}-contract3-receipt2-${suffix}`;
+ if(version!=='0-3-8')Object.assign(d.frames[0],require('../extensions/meta-muse-bridge/receipt-v2').emptyAssistantSequence());
  Object.assign(d.frames[0],{generationActive:null,blockRowCount:0,mediaCandidateCount:null,sameSequenceParent:true,blockContiguous:false});
  f.record.assistantOwnershipFailure=d;fs.writeFileSync(f.file,JSON.stringify(f.record));const before=fs.readFileSync(f.file);
  const report=await f.service.diagnoseMuseOwnership(f.job.id);
  assert.equal(report.historicalAssistantOwnershipFailure.build,d.build);assert.deepEqual(report.historicalAssistantOwnershipFailure.lastFrame,d.frames[0]);
- assert.equal(Object.hasOwn(report.historicalAssistantOwnershipFailure.lastFrame,'firstMismatchCategory'),false);
+ assert.equal(Object.hasOwn(report.historicalAssistantOwnershipFailure.lastFrame,'firstMismatchCategory'),version!=='0-3-8');
+ assert.equal(report.historicalUserAnchorChurn,null);
  assert.equal(report.diagnostic.ownedUserMatches,1);assert.deepEqual(fs.readFileSync(f.file),before);
+});
+
+test('historical user churn is independent of current census and survives bounded transport failures without writes',async t=>{
+ const f=fixture(t),schema=require('../extensions/meta-muse-bridge/receipt-v2');
+ const d={version:1,build:require('../services/generation/bridge/extension-distribution.json').expectedContentBuild,kind:'SAME_NODE_ID_CHANGED',elapsedBucket:'under_1s',mutationCount:'one_to_four',
+   ...Object.fromEntries(schema.userChurnBools.map(k=>[k,null])),...Object.fromEntries(schema.userChurnCounts.map(k=>[k,null]))};
+ assert(schema.validUserAnchorChurn(d));f.record.userAnchorChurn=d;fs.writeFileSync(f.file,JSON.stringify(f.record));
+ const before=fs.readFileSync(f.file),jobs=fs.readFileSync(f.service.store.file),report=await f.service.diagnoseMuseOwnership(f.job.id);
+ assert.deepEqual(report.historicalUserAnchorChurn,d);assert.equal(report.historicalAssistantOwnershipFailure,null);assert.equal(report.diagnostic.ownedUserMatches,1);
+ const {sanitize}=require('../services/generation/bridge/ownership-diagnosis');
+ for(const patch of [{rawNativeId:'private'},{prompt:'private'},{url:'private'},{cookie:'private'},{kind:'private'},{mutationCount:999},{freshLogicalUserCount:129}]){
+   const safe=sanitize({...report,historicalUserAnchorChurn:{...d,...patch}},f.job.id);assert.equal(safe.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(safe).includes('private'));
+ }
+ f.bridge.command=async()=>{throw Error('private transport error');};
+ const failed=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(failed.ok,false);assert.deepEqual(failed.historicalUserAnchorChurn,d);
+ assert.deepEqual(fs.readFileSync(f.file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
+ assert(!f.calls.some(c=>c.p.userAnchorChurn!==undefined || c.p.historicalUserAnchorChurn!==undefined));
 });
 for(const scenario of ['no user','assistant anchored','production','completed','wrong scene','wrong operation','legacy'])test('ownership diagnosis fails closed without mutation: '+scenario,async t=>{
  const f=fixture(t);

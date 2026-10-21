@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.10',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.11',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -400,7 +400,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.10',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.11',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -461,6 +461,156 @@ async function acceptV2(f) {
  assert.equal(accepted.state,'running');assert.equal(accepted.receipt.version,2);assert(accepted.receipt.userStableIdHash);
  assert.equal(accepted.receipt.assistantStableIdHash,undefined);return accepted.receipt;
 }
+
+// All post-anchor cases use the isolated DOM/worker fixtures; no live bridge.
+test('user churn: unchanged accepted node and assistant-only updates record no event',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),user=f.rows.at(-1);
+ for(let i=0;i<3;i++)assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).userAnchorChurn,undefined);
+ const assistant=f.node('assistant','new-media',media());f.transaction([...f.rows,assistant],[userMutation(f,[assistant],[],user)]);
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(first.state,'running');assert.equal(first.userAnchorChurn,undefined);
+ const anchored=await f.send('inspectGeneration',{...v2Payload,receipt});assert(anchored.receipt.assistantStableIdHash);assert.equal(anchored.userAnchorChurn,undefined);
+ assert.equal(f.assistantFailureCount,0);assert.equal(f.clicks,1);
+});
+
+for(const kind of receiptV2.userChurnKinds)test('user churn: bounded first event '+kind,async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),original=f.rows.slice(),user=original.at(-1),baseline=original.slice(0,-1),tail=baseline.at(-1);
+ const replacement=f.node('user','private-replacement-id'),attribute=name=>({type:'attributes',target:user,attributeName:name,oldValue:name==='data-message-id'?'new-user':'user'});
+ if(kind==='SAME_NODE_ID_CHANGED'){user.id='private-changed-id';f.mutate([attribute('data-message-id')]);}
+ if(kind==='OWNED_NODE_REMOVED')f.transaction(baseline,[userMutation(f,[],[user],tail)]);
+ if(kind==='REPLACED_SAME_POSITION')f.transaction([...baseline,replacement],[userMutation(f,[replacement],[user],tail)]);
+ if(kind==='REPLACED_DIFFERENT_POSITION'){
+   const status=f.node('assistant','new-status');f.transaction([...baseline,status,replacement],[userMutation(f,[status,replacement],[user],tail)]);
+ }
+ if(kind==='ROLE_CHANGED'){user.role='assistant';f.mutate([attribute('data-message-role')]);}
+ if(kind==='PARENT_CHANGED'){
+   const foreign={};f.transaction(original,[userMutation(f,[],[user],tail),userMutation(f,[user],[],null,null,foreign)],()=>{user.parentNode=foreign;});
+ }
+ if(kind==='MULTIPLE_USER_CANDIDATES')f.transaction([...baseline,replacement,f.node('user','another-user')],[userMutation(f,[replacement,f.node('user','transient-user')],[user],tail)]);
+ if(kind==='NEXT_USER_OBSERVED')f.transaction([...original,replacement],[userMutation(f,[replacement],[],user)]);
+ if(kind==='BASELINE_CHANGED'){
+   const old=baseline[0].id;baseline[0].id='private-baseline-change';f.mutate([{type:'attributes',target:baseline[0],attributeName:'data-message-id',oldValue:old}]);
+ }
+ if(kind==='IDENTITY_UNAVAILABLE'){user.id='';f.mutate([attribute('data-message-id')]);}
+ if(kind==='UNKNOWN_BOUNDED')f.mutate(Array.from({length:257},()=>({type:'childList',target:f.messageParent,addedNodes:[],removedNodes:[]})));
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt}),d=JSON.parse(JSON.stringify(result.userAnchorChurn));
+ assert.equal(result.state,'interrupted');assert.equal(d.kind,kind);assert(receiptV2.validUserAnchorChurn(d));assert.equal(result.receipt,undefined);
+ assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(result)),{...inspectPayload,receipt}));
+ assert.equal(receipt.userStableIdHash,shaBytes('op\0user\0new-user'));assert.equal(receipt.assistantStableIdHash,undefined);
+ if(kind==='REPLACED_SAME_POSITION'){
+   assert.equal(d.anchoredNodeStillConnected,false);assert.equal(d.anchoredNodeRemoved,true);assert.equal(d.replacementNodeAdded,true);
+   assert.equal(d.replacementSameSequencePosition,true);assert.equal(d.replacementSameParent,true);assert.equal(d.replacementImmediatelyAfterBaseline,true);assert.equal(d.replacementHasValidNativeId,true);
+ }
+ if(kind==='REPLACED_DIFFERENT_POSITION')assert.equal(d.replacementSameSequencePosition,false);
+ if(kind==='NEXT_USER_OBSERVED')assert.equal(d.anchoredNodeStillConnected,true);
+ if(kind==='MULTIPLE_USER_CANDIDATES')assert.equal(d.replacementSameParent,null);
+ // A later final document must not replace either first failure.
+ const first=JSON.stringify(d),firstAssistant=JSON.stringify(result.assistantOwnershipFailure);
+ f.transaction([...baseline,replacement,f.node('assistant','final-video',media())]);
+ const again=await f.send('inspectGeneration',{...v2Payload,receipt});
+ assert.equal(JSON.stringify(again.userAnchorChurn),first);assert.equal(JSON.stringify(again.assistantOwnershipFailure),firstAssistant);
+ assert.equal(again.receipt,undefined);assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+ assert.equal(Object.keys(d).length,5+receiptV2.userChurnBools.length+receiptV2.userChurnCounts.length);
+ for(const secret of ['private-','new-user','history-','Exact prompt','https:','blob:','timestamp'])assert(!JSON.stringify(d).includes(secret));
+});
+
+test('user churn: final adjacency without mutation evidence cannot claim replacement or ownership',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),baseline=f.rows.slice(0,-1),candidate=f.node('user','different-id');
+ f.transaction([...baseline,candidate,f.node('assistant','has-video',media())]);
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt});
+ assert.equal(result.userAnchorChurn.kind,'OWNED_NODE_REMOVED');assert.equal(result.userAnchorChurn.anchoredNodeRemoved,false);
+ assert.equal(result.userAnchorChurn.replacementNodeAdded,false);assert.equal(result.userAnchorChurn.replacementSameSequencePosition,true);
+ assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(receipt.assistantStableIdHash,undefined);
+ assert.equal(f.clicks,1);
+});
+
+test('user churn: change and restore in one attribute batch preserves the first observed identity mutation',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),user=f.rows.at(-1);
+ f.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'},
+   {type:'attributes',target:user,attributeName:'data-message-id',oldValue:'transient-private-id'}]);
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.userAnchorChurn.kind,'SAME_NODE_ID_CHANGED');
+ assert.equal(r.userAnchorChurn.anchoredNativeIdStillSame,true);assert.equal(r.userAnchorChurn.anchoredIdAttributeChanged,true);assert.equal(r.userAnchorChurn.mutationObservedOnAnchoredNode,true);
+ assert.equal(r.state,'interrupted');assert.equal(f.clicks,1);
+});
+
+test('user churn: strict schemas reject private fields, invalid counts and execution inputs',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),user=f.rows.at(-1);user.id='other-id';f.mutate([]);
+ const result=JSON.parse(JSON.stringify(await f.send('inspectGeneration',{...v2Payload,receipt}))),d=result.userAnchorChurn;
+ for(const patch of [{rawId:'secret'},{url:'secret'},{prompt:'secret'},{timestamp:123},{kind:'secret'},{freshLogicalUserCount:129},{replacementUserCandidateCount:-1},{anchoredNodeRemoved:'true'},{elapsedBucket:'2026-10-21'}]){
+   const bad={...d,...patch};assert(!receiptV2.validUserAnchorChurn(bad));assert(!validResult('inspectGeneration',{...result,userAnchorChurn:bad},{...inspectPayload,receipt}));
+ }
+ assert(!receiptV2.valid(d,'op'));assert(!validPayload('inspectGeneration',{...inspectPayload,receipt,userAnchorChurn:d}));
+ for(const type of ['prepareGeneration','submitGeneration','acquireGenerationResult','cancelGeneration'])assert(!validResult(type,result,{...inspectPayload,receipt}));
+ for(const patch of [{state:'running'},{receipt},{data:'secret'}])assert(!validResult('inspectGeneration',{...result,...patch},{...inspectPayload,receipt}));
+ assert(!validResult('inspectGeneration',result,{...inspectPayload,receipt:{...receipt,assistantStableIdHash:'e'.repeat(64)}}));
+ assert(!validResult('inspectGeneration',result,{...inspectPayload,diagnoseOwnership:true}));
+});
+
+test('user churn: worker and native preserve first event atomically, restart and support diagnosis never retarget',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;f.bridge.developmentDiagnostics=true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),initial=fs.readFileSync(file),receipt=JSON.parse(initial).receipt,user=content.rows.at(-1);
+ assert.equal((await f.provider.reconcile(context)).status,'running');assert.deepEqual(fs.readFileSync(file),initial);
+ user.id='first-private-change';content.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'}]);
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});
+ const saved=JSON.parse(fs.readFileSync(file)),d=saved.userAnchorChurn,assistantFailure=saved.assistantOwnershipFailure;
+ assert.equal(d.kind,'SAME_NODE_ID_CHANGED');assert.equal(assistantFailure.terminalReason,'IDENTITY_MUTATED');assert.deepEqual(saved.receipt,receipt);
+ assert.deepEqual(stored['generation-intent:'+job.id].userAnchorChurn,d);assert.equal(saved.verifiedOutput,undefined);
+ assert(!fs.readdirSync(context.outputDirectory).some(n=>n.endsWith('.tmp')));
+ const before=fs.readFileSync(file),jobs=fs.readFileSync(f.service.store.file),storage=JSON.stringify(stored);
+ const report=await f.service.diagnoseMuseOwnership(job.id);assert.equal(report.historicalUserAnchorChurn.kind,d.kind);
+ assert.equal(report.historicalAssistantOwnershipFailure.terminalReason,assistantFailure.terminalReason);assert.equal(report.diagnostic.ownedUserMatches,0);
+ assert.deepEqual(fs.readFileSync(file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);assert.equal(JSON.stringify(stored),storage);
+ // A fresh worker over the durable tombstone cannot repeat submit; later
+ // bounded events also cannot overwrite first evidence at either layer.
+ const newer={...d,kind:'OWNED_NODE_REMOVED'},replacementContent={send:async(_,p)=>({operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',assistantOwnershipFailure:require('./fixtures/muse-assistant-failure').failure('OPERATION_MISSING'),userAnchorChurn:newer})};
+ const restarted=workerV2Harness(stored,replacementContent);
+ f.bridge.command=async(type,p)=>JSON.parse(JSON.stringify(await restarted.run(type,p)));
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});assert.deepEqual(fs.readFileSync(file),before);assert.equal(JSON.stringify(stored),storage);
+ assert.equal((await restarted.run('submitGeneration',{operationId:job.id,sceneId:job.sceneId,tabId:5,prompt:request().prompt,receipt})).state,'interrupted');
+ assert(!restarted.calls.includes('submitGeneration'));assert.equal(content.clicks,1);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('user churn: native write failure leaves existing receipt bytes intact and no temporary diagnostic file',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file),rename=fs.renameSync;
+ t.mock.method(fs,'renameSync',(from,to)=>{if(to===file)throw Object.assign(Error('fixture full disk'),{code:'ENOSPC'});return rename(from,to);});
+ const user=content.rows.at(-1);user.id='changed';content.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'}]);
+ await assert.rejects(f.provider.reconcile(context));assert.deepEqual(fs.readFileSync(file),before);
+ assert(!fs.readdirSync(context.outputDirectory).some(n=>n.endsWith('.tmp')));assert.equal(content.clicks,1);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('user churn: deterministic priority favors role, then parent, then native-ID evidence',async()=>{
+ for(const expected of ['ROLE_CHANGED','PARENT_CHANGED','SAME_NODE_ID_CHANGED']){
+   const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),user=f.rows.at(-1);user.id='changed';
+   // Baseline churn and a second user must not hide the original node mutation.
+   f.rows[0].id='changed-baseline';f.rows.push(f.node('user','independent-user'));
+   if(expected==='ROLE_CHANGED')user.role='assistant';
+   if(expected==='PARENT_CHANGED')user.parentNode={};
+   f.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'}]);
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.userAnchorChurn.kind,expected);assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);
+ }
+});
+
+test('user churn: released evidence remains bounded to 32 independent entries without retaining node references',async()=>{
+ let sequence=0;const f=contentFixture({noAssistant:true,afterClick:f=>{f.rows.at(-1).id='owned-'+sequence++;}});
+ for(let i=0;i<36;i++){
+   const p={...v2Payload,operationId:'churn-'+i},prepared=await f.send('prepareGeneration',p);assert.equal(prepared.state,'prepared');
+   const accepted=await f.send('submitGeneration',{...operation,...p,receipt:prepared.receipt}),user=f.rows.at(-1);assert.equal(accepted.state,'running');
+   const old=user.id;user.id='changed-'+i;f.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:old}]);
+   const r=await f.send('inspectGeneration',{...p,receipt:accepted.receipt});assert.equal(r.userAnchorChurn.kind,'SAME_NODE_ID_CHANGED');
+   assert.equal(f.operationCount,0);assert(f.assistantFailureCount<=32);
+ }
+ assert.equal(f.assistantFailureCount,32);assert.equal(f.clicks,36);
+ const prepared=await f.send('prepareGeneration',{...v2Payload,operationId:'after-churn-rotation'});assert.equal(prepared.state,'prepared');
+ await f.send('cancelGeneration',{...inspectPayload,operationId:'after-churn-rotation'});
+});
 async function bindV2(f) {
  const user=await acceptV2(f);
  const assistant=await observeMediaV2(f,user);
@@ -1419,7 +1569,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1497,8 +1647,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-10-contract3-receipt2-assistsettle1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-11-contract3-receipt2-userchurn1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1654,8 +1804,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-10-contract3-receipt2-assistsettle1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-11-contract3-receipt2-userchurn1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1687,7 +1837,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.10 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.11 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

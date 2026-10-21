@@ -3,12 +3,14 @@
 Extension 0.3.8 adds Gate-D diagnostics only. Protocol 1, execution contract 3,
 Receipt V2 (2), response-block authority, stabilization, exact-once submission,
 result discovery and acquisition requirements are unchanged. Version 0.3.9
-refined sequence failure evidence only. Current 0.3.10 adds the narrow pending
+refined sequence failure evidence only. Version 0.3.10 adds the narrow pending
 missing-role wait described in [pending role settling](MUSE_PENDING_ROLE_SETTLING.md).
+Current 0.3.11 adds separate [post-anchor user churn evidence](MUSE_USER_ANCHOR_CHURN.md),
+without changing ownership or settling behavior.
 Executing markers:
 
-- `muse-worker-v0-3-10-contract3-receipt2-assistsettle1`
-- `muse-content-v0-3-10-contract3-receipt2-assistsettle1`
+- `muse-worker-v0-3-11-contract3-receipt2-userchurn1`
+- `muse-content-v0-3-11-contract3-receipt2-userchurn1`
 
 ## Scope and timing
 

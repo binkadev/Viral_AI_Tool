@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-10-contract3-receipt2-assistsettle1';
+const WORKER_BUILD='muse-worker-v0-3-11-contract3-receipt2-userchurn1';
 if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
@@ -265,13 +265,18 @@ async function executeV2(c) {
   const payload={...p,...(receipt?{receipt}:{}),observationToken:observationEpoch+'_'+(bridge?.serverId||'offline')};
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload});
   if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId)return interrupted();
-  if(result.assistantOwnershipFailure!==undefined) {
+  if(result.assistantOwnershipFailure!==undefined || result.userAnchorChurn!==undefined) {
     if(c.type!=='inspectGeneration' || result.state!=='interrupted' || !receipt?.userStableIdHash || receipt.assistantStableIdHash ||
-      Object.keys(result).some(k=>!['operationId','sceneId','state','assistantOwnershipFailure'].includes(k)) || !MuseReceiptV2.validAssistantFailure(result.assistantOwnershipFailure))return interrupted();
+      Object.keys(result).some(k=>!['operationId','sceneId','state','assistantOwnershipFailure','userAnchorChurn'].includes(k)) ||
+      (result.assistantOwnershipFailure!==undefined && !MuseReceiptV2.validAssistantFailure(result.assistantOwnershipFailure)) ||
+      (result.userAnchorChurn!==undefined && !MuseReceiptV2.validUserAnchorChurn(result.userAnchorChurn)))return interrupted();
     // Evidence only: preserve the first terminal reason without changing receipt.
     const latest=(await chrome.storage.local.get(key))[key];
-    if(latest?.assistantOwnershipFailure && MuseReceiptV2.validAssistantFailure(latest.assistantOwnershipFailure))result.assistantOwnershipFailure=latest.assistantOwnershipFailure;
-    else await chrome.storage.local.set({[key]:{...latest,assistantOwnershipFailure:result.assistantOwnershipFailure}});
+    const patch={};
+    for(const [field,valid] of [['assistantOwnershipFailure',MuseReceiptV2.validAssistantFailure],['userAnchorChurn',MuseReceiptV2.validUserAnchorChurn]])if(result[field]!==undefined) {
+      if(latest?.[field] && valid(latest[field]))result[field]=latest[field];else patch[field]=result[field];
+    }
+    if(Object.keys(patch).length)await chrome.storage.local.set({[key]:{...latest,...patch}});
   }
   if(c.type==='submitGeneration' && result.state==='interrupted' && result.invocation?.send==='invoked' && MuseReceiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic)) {
     result.acceptanceDiagnostic={...result.acceptanceDiagnostic,workerBuild:WORKER_BUILD};

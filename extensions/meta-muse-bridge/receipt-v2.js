@@ -115,8 +115,18 @@
      d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && Number.isInteger(d.frameCount) && d.frameCount>=1 && d.frameCount<=ASSISTANT_TRACE_MAX_FRAMES &&
      validAssistantFrame(d.lastFrame) && d.lastFrame.terminal && d.lastFrame.terminalReason===d.terminalReason && d.lastFrame.phase===d.terminalPhase;
  }
+ const userChurnKinds=Object.freeze(['SAME_NODE_ID_CHANGED','OWNED_NODE_REMOVED','REPLACED_SAME_POSITION','REPLACED_DIFFERENT_POSITION','ROLE_CHANGED','PARENT_CHANGED','MULTIPLE_USER_CANDIDATES','NEXT_USER_OBSERVED','BASELINE_CHANGED','IDENTITY_UNAVAILABLE','UNKNOWN_BOUNDED']);
+ const userChurnBools=Object.freeze(['anchoredNodeStillConnected','anchoredNodeStillInContainer','anchoredNodeSameParent','anchoredNodeRoleStillUser','anchoredNativeIdStillSame','anchoredSequenceIndexValid',
+   'replacementSameParent','replacementSameSequencePosition','replacementImmediatelyAfterBaseline','replacementHasValidNativeId','mutationObservedOnAnchoredNode','anchoredIdAttributeChanged','anchoredRoleAttributeChanged','anchoredNodeRemoved','replacementNodeAdded','generationActive']);
+ const userChurnCounts=Object.freeze(['freshLogicalUserCount','replacementUserCandidateCount']);
+ function validUserAnchorChurn(d) {
+   const keys=['version','build','kind','elapsedBucket','mutationCount',...userChurnBools,...userChurnCounts];
+   return exact(d,keys) && Object.keys(d).length===keys.length && d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') &&
+     userChurnKinds.includes(d.kind) && ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(d.elapsedBucket) &&
+     ['zero','one_to_four','five_or_more'].includes(d.mutationCount) && userChurnBools.every(k=>d[k]===null || typeof d[k]==='boolean') && userChurnCounts.every(k=>count(d[k],128));
+ }
  const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
    ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,assistantSequenceCounts,assistantSequenceBools,assistantMismatchCategories,emptyAssistantSequence,
-   validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,MAX_BYTES,CHUNK_BYTES});
+   validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,userChurnKinds,userChurnBools,userChurnCounts,validUserAnchorChurn,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

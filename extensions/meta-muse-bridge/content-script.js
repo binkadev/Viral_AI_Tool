@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-10-contract3-receipt2-assistsettle1';
+const CONTENT_BUILD='muse-content-v0-3-11-contract3-receipt2-userchurn1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -108,6 +108,63 @@ async function hash(operationId,role,id) {
 const gateDError=(message,reason)=>Object.assign(Error(message),{gateDReason:reason});
 const gateDReason=error=>MuseReceiptV2.assistantReasons.includes(error?.gateDReason)?error.gateDReason:
   ['IDENTITY_MUTATED','MANUAL_INTERFERENCE','BASELINE_CHANGED','OBSERVATION_LIMIT'].includes(error?.message)?error.message:'UNKNOWN_BOUNDED';
+// Diagnostic references only. They never replace the canonical userTurn/receipt.
+function rememberUserAnchor(op,node) {
+  try {
+    const sequence=[...document.querySelectorAll(MESSAGE)].slice(0,257).filter(n=>n.parentNode===node.parentNode);
+    op.userDiagnosticAnchor={node,parent:node.parentNode,container:op.projection.container,index:sequence.indexOf(node),startedAt:Date.now()};
+  }catch{} // Diagnostics cannot change an execution decision.
+}
+function sampleUserAnchorChurn(op,mutations=[]) {
+  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.userAnchorChurn)return;
+  try {
+    const a=op.userDiagnosticAnchor;if(!a)return;
+    const all=[...document.querySelectorAll(MESSAGE)].slice(0,257),sequence=all.filter(n=>n.parentNode===a.parent);
+    const recognized=all.filter(n=>['user','assistant'].includes(n.getAttribute('data-message-role')));
+    const fresh=n=>n.getAttribute('data-message-role')==='user' && !op.baseline.some(b=>b.role==='user' && b.id===n.getAttribute('data-message-id'));
+    const candidates=new Set(all.filter(n=>n!==a.node && fresh(n))),added=new Set();
+    let visited=0,overflow=all.length===257,removed=false,idChanged=false,roleChanged=false,touched=false;
+    for(const m of mutations) {
+      if(++visited>256){overflow=true;break;}
+      if(m.target===a.node){touched=true;if(m.type==='attributes' && m.oldValue!==m.target.getAttribute(m.attributeName)){
+        if(m.attributeName==='data-message-id')idChanged=true;if(m.attributeName==='data-message-role')roleChanged=true;
+      }}
+      for(const n of m.removedNodes||[]) {
+        if(++visited>256){overflow=true;break;}
+        if(n===a.node || n.contains?.(a.node)){removed=true;touched=true;}
+      }
+      for(const n of m.addedNodes||[]) {
+        if(++visited>256){overflow=true;break;}
+        for(const candidate of [n,...(n.querySelectorAll?.(MESSAGE)||[])].slice(0,257)) {
+          if(++visited>256){overflow=true;break;}
+          if(candidate!==a.node && candidate.getAttribute && fresh(candidate)){candidates.add(candidate);added.add(candidate);}
+        }
+      }
+      if(overflow)break;
+    }
+    const connected=a.node.isConnected===true,inContainer=a.container.contains(a.node),sameParent=a.node.parentNode===a.parent;
+    const role=a.node.getAttribute('data-message-role'),id=a.node.getAttribute('data-message-id'),index=sequence.indexOf(a.node);
+    const candidate=candidates.size===1?[...candidates][0]:null,candidateIndex=candidate?sequence.indexOf(candidate):-1;
+    const baselineIntact=recognized.length>=op.baseline.length && op.baseline.every((b,i)=>b.role===recognized[i].getAttribute('data-message-role') && b.id===recognized[i].getAttribute('data-message-id'));
+    const gone=!connected || !inContainer || index<0;
+    // Priority is explicit and independent of all ownership decisions below.
+    const kind=overflow || a.index<0?'UNKNOWN_BOUNDED':role!=='user' || roleChanged?'ROLE_CHANGED':
+      connected && !sameParent?'PARENT_CHANGED':!nativeId(id)?'IDENTITY_UNAVAILABLE':
+      id!==op.submittedUserId || idChanged?'SAME_NODE_ID_CHANGED':candidates.size>1?'MULTIPLE_USER_CANDIDATES':
+      gone && removed && candidate && added.has(candidate)?(candidate.parentNode===a.parent && a.container.contains(candidate) && candidateIndex===a.index?'REPLACED_SAME_POSITION':'REPLACED_DIFFERENT_POSITION'):
+      gone || removed?'OWNED_NODE_REMOVED':!baselineIntact?'BASELINE_CHANGED':candidates.size?'NEXT_USER_OBSERVED':null;
+    if(!kind)return;
+    const ms=Math.max(0,Date.now()-a.startedAt);
+    const d={version:1,build:CONTENT_BUILD,kind,elapsedBucket:ms<1000?'under_1s':ms<10000?'1_to_10s':ms<60000?'10_to_60s':'over_60s',mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',
+      anchoredNodeStillConnected:connected,anchoredNodeStillInContainer:inContainer,anchoredNodeSameParent:sameParent,anchoredNodeRoleStillUser:role==='user',anchoredNativeIdStillSame:id===op.submittedUserId,
+      anchoredSequenceIndexValid:index>=0 && index===a.index,freshLogicalUserCount:Math.min(128,recognized.filter(fresh).length),replacementUserCandidateCount:Math.min(128,candidates.size),
+      replacementSameParent:candidate?candidate.parentNode===a.parent:null,replacementSameSequencePosition:candidate?candidateIndex>=0 && candidateIndex===a.index:null,
+      replacementImmediatelyAfterBaseline:candidate?candidateIndex>0 && sequence[candidateIndex-1]===op.baselineTail:null,replacementHasValidNativeId:candidate?nativeId(candidate.getAttribute('data-message-id')):null,
+      mutationObservedOnAnchoredNode:touched,anchoredIdAttributeChanged:idChanged,anchoredRoleAttributeChanged:roleChanged,anchoredNodeRemoved:removed,replacementNodeAdded:added.size>0,generationActive:generationActive()};
+    if(overflow)for(const k of [...MuseReceiptV2.userChurnBools,...MuseReceiptV2.userChurnCounts])d[k]=null;
+    if(MuseReceiptV2.validUserAnchorChurn(d))op.userAnchorChurn=d;
+  }catch{} // No new invalidation, waiting, identity hash, or receipt promotion.
+}
 function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
   if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.assistantFailure || op.pendingAssistantFailure)return;
   op.assistantStartedAt??=Date.now();
@@ -126,16 +183,18 @@ function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
   if(terminal)op.assistantFailure={version:1,build:CONTENT_BUILD,terminalReason,terminalPhase:phase,frames:op.assistantFrames.slice()};
 }
 function retainAssistantFailure(id,op) {
-  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure))return;
+  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure && !op.userAnchorChurn))return;
   const old=assistantFailures.get(id);
-  if(old?.failure || old?.pending && !op.assistantFailure)return;
-  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:op.assistantFailure,pending:op.pendingAssistantFailure});
+  if((old?.failure || old?.pending && !op.assistantFailure) && (old.churn || !op.userAnchorChurn))return;
+  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:old?.failure||op.assistantFailure,pending:old?.pending||op.pendingAssistantFailure,churn:old?.churn||op.userAnchorChurn});
   while(assistantFailures.size>MAX_ASSISTANT_FAILURES)assistantFailures.delete(assistantFailures.keys().next().value);
 }
 function gateDInterrupted(p,op,reason,phase='precheck') {
   const cached=assistantFailures.get(p.operationId);
   const previous=cached?.sceneId===p.sceneId && cached.userHash===p.receipt.userStableIdHash?cached:null;
-  if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:previous.failure});}
+  const churn=previous?.churn||op?.userAnchorChurn;
+  const churnEvidence=churn?{userAnchorChurn:churn}:{};
+  if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:previous.failure,...churnEvidence});}
   const evidence=op?.receipt?.userStableIdHash?op:{sceneId:p.sceneId,receipt:p.receipt};
   const pending=evidence.pendingAssistantFailure||previous?.pending;
   evidence.assistantAcknowledged=true;
@@ -146,7 +205,7 @@ function gateDInterrupted(p,op,reason,phase='precheck') {
   }else gateDFrame(evidence,phase,{},reason,true);
   retainAssistantFailure(p.operationId,evidence);
   if(op)releaseV2(p.operationId,op);
-  return answer(p,'interrupted',evidence.assistantFailure?{assistantOwnershipFailure:evidence.assistantFailure}:{});
+  return answer(p,'interrupted',{...(evidence.assistantFailure?{assistantOwnershipFailure:evidence.assistantFailure}:{}),...churnEvidence});
 }
 function afterBaseline(op,allowPending=false) {
   const rows=structure(allowPending);
@@ -546,6 +605,7 @@ async function submit(p) {
         op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
           composerCleared:!!currentComposer && editorLength(currentComposer.editor)===0,
           sendControlTransition:!actionable(button) || !currentComposer?.slot.contains(button),generationControlObserved:generationActive()}};
+        rememberUserAnchor(op,user.node);
         // User only: main/worker must durably echo this before assistant binding.
         return answer(p,'running',{receipt:op.receipt,invocation:{...invocation,reason:'accepted'}});
       }
@@ -613,6 +673,7 @@ async function prepareV2(p) {
   op.baselineTail=stable.rows.at(-1).node;op.baselineNodes=stable.rows.map(r=>r.node);op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
   const sample=(mutations=[],kind='observer')=>{
     if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
+    sampleUserAnchorChurn(op,mutations);
     try {
       gateDFrame(op,'sample_before_block',{mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',stabilizationReset:false,
         ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,...MuseReceiptV2.emptyAssistantSequence()});

@@ -18,6 +18,7 @@ function createMuseExecution(bridge,verifyVideo) {
     if(validateReceipt && r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.assistantOwnershipFailure!==undefined && !receiptV2.validAssistantFailure(r.assistantOwnershipFailure))throw failure('RECOVERY_REQUIRED');
+    if(validateReceipt && r.userAnchorChurn!==undefined && !receiptV2.validUserAnchorChurn(r.userAnchorChurn))throw failure('RECOVERY_REQUIRED');
     return r;
   }
   function saveEvidence(c,r,result) {
@@ -33,7 +34,9 @@ function createMuseExecution(bridge,verifyVideo) {
     const payload={tabId:r.target.tabId,operationId:c.jobId,sceneId:c.sceneId,...extra};
     const result=await bridge.command(type,payload,r.target);
     if(!validResult(type,result,payload))throw failure('RECOVERY_REQUIRED');
-    if(result.assistantOwnershipFailure && !r.assistantOwnershipFailure)persistRecord(c,r,{assistantOwnershipFailure:result.assistantOwnershipFailure});
+    const diagnosticPatch={};
+    for(const field of ['assistantOwnershipFailure','userAnchorChurn'])if(result[field] && !r[field])diagnosticPatch[field]=result[field];
+    if(Object.keys(diagnosticPatch).length)persistRecord(c,r,diagnosticPatch);
     if(result.invocation) {
       // Private evidence only. Transport errors leave invocation unknown.
       const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
@@ -145,7 +148,8 @@ function createMuseExecution(bridge,verifyVideo) {
       let record;
       try{guard(c);record=read(c,{validateReceipt:false});}catch{return ownershipDiagnosis.report('OPERATION_RECORD_UNAVAILABLE');}
       const historicalAssistantOwnershipFailure=receiptV2.assistantFailureSummary(record.assistantOwnershipFailure);
-      const report=(reason,evidence)=>({...ownershipDiagnosis.report(reason,evidence),historicalAssistantOwnershipFailure});
+      const historicalUserAnchorChurn=receiptV2.validUserAnchorChurn(record.userAnchorChurn)?record.userAnchorChurn:null;
+      const report=(reason,evidence)=>({...ownershipDiagnosis.report(reason,evidence),historicalAssistantOwnershipFailure,historicalUserAnchorChurn});
       const receipt=record.receipt,evidence={nativeUserAnchor:!!receipt?.userStableIdHash,nativeAssistantAnchor:!!receipt?.assistantStableIdHash};
       if(receipt?.version!==2 || !receiptV2.valid(receipt,c.jobId))return report('RECEIPT_UNAVAILABLE',evidence);
       if(!receipt.userStableIdHash)return report('USER_ANCHOR_MISSING',evidence);
@@ -154,7 +158,7 @@ function createMuseExecution(bridge,verifyVideo) {
       // describes the current document and can never extend an ownership receipt.
       const payload={tabId:record.target.tabId,operationId:c.jobId,sceneId:c.sceneId,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash};
       let result;
-      try{result=await bridge.command('inspectGeneration',payload,record.target);}catch(error){return {...ownershipDiagnosis.fromError(error,evidence),historicalAssistantOwnershipFailure};}
+      try{result=await bridge.command('inspectGeneration',payload,record.target);}catch(error){return {...ownershipDiagnosis.fromError(error,evidence),historicalAssistantOwnershipFailure,historicalUserAnchorChurn};}
       const targetEvidence={...evidence,instanceMatch:true,tabMatch:true};
       if(validResult('inspectGeneration',result,payload) && result.ownershipFailure)return report(result.ownershipFailure.reason,{...targetEvidence,...Object.fromEntries(Object.entries(result.ownershipFailure).filter(([,v])=>typeof v==='boolean'))});
       if(!validResult('inspectGeneration',result,payload) || Object.keys(result).some(k=>!['operationId','sceneId','state','ownershipDiagnostic'].includes(k)) ||

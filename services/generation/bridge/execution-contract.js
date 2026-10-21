@@ -30,10 +30,12 @@ function validPayload(type, p) {
   return type === "acquireGenerationResult" ? Number.isSafeInteger(p.offset) && p.offset >= 0 && p.offset <= 268435456 : p.offset === undefined;
 }
 function validResult(type, r, p) {
-  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "ownershipFailure", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace", "assistantOwnershipFailure"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
-  if(r.assistantOwnershipFailure!==undefined)return type==='inspectGeneration' && !p.diagnoseOwnership && !p.diagnoseAcquisition &&
+  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "ownershipFailure", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace", "assistantOwnershipFailure", "userAnchorChurn"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
+  if(r.assistantOwnershipFailure!==undefined || r.userAnchorChurn!==undefined)return type==='inspectGeneration' && !p.diagnoseOwnership && !p.diagnoseAcquisition &&
     receiptV2.valid(p.receipt,p.operationId) && !!p.receipt.userStableIdHash && !p.receipt.assistantStableIdHash && r.state==='interrupted' &&
-    exact(r,['operationId','sceneId','state','assistantOwnershipFailure']) && receiptV2.validAssistantFailure(r.assistantOwnershipFailure);
+    exact(r,['operationId','sceneId','state','assistantOwnershipFailure','userAnchorChurn']) &&
+    (r.assistantOwnershipFailure===undefined || receiptV2.validAssistantFailure(r.assistantOwnershipFailure)) &&
+    (r.userAnchorChurn===undefined || receiptV2.validUserAnchorChurn(r.userAnchorChurn));
   if(r.ownershipFailure!==undefined)return type==='inspectGeneration' && p.diagnoseOwnership===true && r.state==='interrupted' && exact(r,['operationId','sceneId','state','ownershipFailure']) && receiptV2.validOwnershipFailure(r.ownershipFailure);
   if(r.acceptanceTrace!==undefined && (type!=='submitGeneration' || p.receipt?.version!==2 || p.receipt.userStableIdHash!==undefined || r.state!=='interrupted' || r.receipt!==undefined || r.invocation?.send!=='invoked' || !receiptV2.validAcceptanceTrace(r.acceptanceTrace)))return false;
   if(r.acceptanceDiagnostic!==undefined && (type!=='submitGeneration' || p.receipt?.version!==2 || r.state!=='interrupted' || r.invocation?.send!=='invoked' || !receiptV2.validAcceptanceDiagnostic(r.acceptanceDiagnostic)))return false;
