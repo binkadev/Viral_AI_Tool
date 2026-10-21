@@ -17,6 +17,7 @@ function createMuseExecution(bridge,verifyVideo) {
     if(r.operationId!==c.jobId || r.sceneId!==c.sceneId || r.digest!==digest(c) || !Number.isFinite(r.createdAt) || typeof r.target?.instanceId!=='string' || !Number.isSafeInteger(r.target.tabId))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
+    if(validateReceipt && r.assistantOwnershipFailure!==undefined && !receiptV2.validAssistantFailure(r.assistantOwnershipFailure))throw failure('RECOVERY_REQUIRED');
     return r;
   }
   function saveEvidence(c,r,result) {
@@ -32,6 +33,7 @@ function createMuseExecution(bridge,verifyVideo) {
     const payload={tabId:r.target.tabId,operationId:c.jobId,sceneId:c.sceneId,...extra};
     const result=await bridge.command(type,payload,r.target);
     if(!validResult(type,result,payload))throw failure('RECOVERY_REQUIRED');
+    if(result.assistantOwnershipFailure && !r.assistantOwnershipFailure)persistRecord(c,r,{assistantOwnershipFailure:result.assistantOwnershipFailure});
     if(result.invocation) {
       // Private evidence only. Transport errors leave invocation unknown.
       const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
@@ -142,20 +144,22 @@ function createMuseExecution(bridge,verifyVideo) {
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
       let record;
       try{guard(c);record=read(c,{validateReceipt:false});}catch{return ownershipDiagnosis.report('OPERATION_RECORD_UNAVAILABLE');}
+      const historicalAssistantOwnershipFailure=receiptV2.assistantFailureSummary(record.assistantOwnershipFailure);
+      const report=(reason,evidence)=>({...ownershipDiagnosis.report(reason,evidence),historicalAssistantOwnershipFailure});
       const receipt=record.receipt,evidence={nativeUserAnchor:!!receipt?.userStableIdHash,nativeAssistantAnchor:!!receipt?.assistantStableIdHash};
-      if(receipt?.version!==2 || !receiptV2.valid(receipt,c.jobId))return ownershipDiagnosis.report('RECEIPT_UNAVAILABLE',evidence);
-      if(!receipt.userStableIdHash)return ownershipDiagnosis.report('USER_ANCHOR_MISSING',evidence);
-      if(receipt.assistantStableIdHash)return ownershipDiagnosis.report('ASSISTANT_ALREADY_ANCHORED',evidence);
+      if(receipt?.version!==2 || !receiptV2.valid(receipt,c.jobId))return report('RECEIPT_UNAVAILABLE',evidence);
+      if(!receipt.userStableIdHash)return report('USER_ANCHOR_MISSING',evidence);
+      if(receipt.assistantStableIdHash)return report('ASSISTANT_ALREADY_ANCHORED',evidence);
       // Deliberately bypass command()/saveEvidence()/reconcile(): this response
       // describes the current document and can never extend an ownership receipt.
       const payload={tabId:record.target.tabId,operationId:c.jobId,sceneId:c.sceneId,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash};
       let result;
-      try{result=await bridge.command('inspectGeneration',payload,record.target);}catch(error){return ownershipDiagnosis.fromError(error,evidence);}
+      try{result=await bridge.command('inspectGeneration',payload,record.target);}catch(error){return {...ownershipDiagnosis.fromError(error,evidence),historicalAssistantOwnershipFailure};}
       const targetEvidence={...evidence,instanceMatch:true,tabMatch:true};
-      if(validResult('inspectGeneration',result,payload) && result.ownershipFailure)return ownershipDiagnosis.report(result.ownershipFailure.reason,{...targetEvidence,...Object.fromEntries(Object.entries(result.ownershipFailure).filter(([,v])=>typeof v==='boolean'))});
+      if(validResult('inspectGeneration',result,payload) && result.ownershipFailure)return report(result.ownershipFailure.reason,{...targetEvidence,...Object.fromEntries(Object.entries(result.ownershipFailure).filter(([,v])=>typeof v==='boolean'))});
       if(!validResult('inspectGeneration',result,payload) || Object.keys(result).some(k=>!['operationId','sceneId','state','ownershipDiagnostic'].includes(k)) ||
-        !validAnchoredOwnershipDiagnostic(result.ownershipDiagnostic,receipt.userStableIdHash))return ownershipDiagnosis.report('DIAGNOSTIC_RESULT_INVALID',targetEvidence);
-      return {...ownershipDiagnosis.report(null,{...targetEvidence,workerIntentPresent:true,workerUserAnchor:true,workerAssistantAnchor:false}),operationId:c.jobId,userStableIdHash:receipt.userStableIdHash,diagnostic:result.ownershipDiagnostic};
+        !validAnchoredOwnershipDiagnostic(result.ownershipDiagnostic,receipt.userStableIdHash))return report('DIAGNOSTIC_RESULT_INVALID',targetEvidence);
+      return {...report(null,{...targetEvidence,workerIntentPresent:true,workerUserAnchor:true,workerAssistantAnchor:false}),operationId:c.jobId,userStableIdHash:receipt.userStableIdHash,diagnostic:result.ownershipDiagnostic};
     },
     acceptanceTrace:c=>{
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');

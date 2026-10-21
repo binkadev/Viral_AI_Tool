@@ -72,6 +72,38 @@
    return exact(d,['reason','tabMatch','workerIntentPresent','workerUserAnchor','workerAssistantAnchor']) && ownershipFailureReasons.includes(d.reason) &&
      ['tabMatch','workerIntentPresent','workerUserAnchor','workerAssistantAnchor'].every(k=>[true,false,null].includes(d[k]));
  }
- const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,MAX_BYTES,CHUNK_BYTES});
+ const ASSISTANT_TRACE_MAX_FRAMES=16;
+ const assistantPhases=Object.freeze(['precheck','sample_before_block','block_observed','sample_after_block','stabilization','precommit']);
+ const assistantReasons=Object.freeze(['OPERATION_MISSING','OPERATION_INVALID','SCENE_MISMATCH','OBSERVATION_TOKEN_MISMATCH','CONTACT_STALE','OPERATION_EXPIRED','RECEIPT_MISMATCH',
+   'OWNED_USER_MISSING','LOGICAL_USER_MISMATCH','USER_NATIVE_ID_MISMATCH','USER_HASH_MISMATCH','BLOCK_USER_INVALID','BLOCK_PARENT_MISMATCH','BLOCK_NONCONTIGUOUS','BLOCK_OUT_OF_BOUNDS','BLOCK_MULTIPLE_MEDIA_OWNERS',
+   'OBSERVER_INVALIDATED','IDENTITY_MUTATED','MANUAL_INTERFERENCE','STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE','BASELINE_CHANGED','OBSERVATION_LIMIT','UNKNOWN_BOUNDED']);
+ const assistantObservations=['STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE'];
+ const assistantBools=['generationActive','ownedUserPresent','assistantBlockWithinBound','sameSequenceParent','blockContiguous','blockSignatureChanged'];
+ const assistantFrameKeys=['phase','elapsedBucket',...assistantBools,'logicalUserCount','blockRowCount','mediaCandidateCount','mutationCount','stabilizationSamples','stabilizationReset','terminal','terminalReason'];
+ const count=(v,max)=>v===null || Number.isInteger(v) && v>=0 && v<=max;
+ function validAssistantFrame(f) {
+   return exact(f,assistantFrameKeys) && Object.keys(f).length===assistantFrameKeys.length && assistantPhases.includes(f.phase) &&
+     ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(f.elapsedBucket) && assistantBools.every(k=>f[k]===null || typeof f[k]==='boolean') &&
+     count(f.logicalUserCount,128) && count(f.blockRowCount,9) && count(f.mediaCandidateCount,9) &&
+     ['zero','one_to_four','five_or_more'].includes(f.mutationCount) && Number.isInteger(f.stabilizationSamples) && f.stabilizationSamples>=0 && f.stabilizationSamples<=2 &&
+     typeof f.stabilizationReset==='boolean' && typeof f.terminal==='boolean' &&
+     (f.terminal?assistantReasons.includes(f.terminalReason) && !assistantObservations.includes(f.terminalReason):f.terminalReason===null || assistantObservations.includes(f.terminalReason));
+ }
+ function validAssistantFailure(d) {
+   return exact(d,['version','build','terminalReason','terminalPhase','frames']) && Object.keys(d).length===5 && d.version===1 &&
+     /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && Array.isArray(d.frames) && d.frames.length>0 && d.frames.length<=ASSISTANT_TRACE_MAX_FRAMES &&
+     d.frames.every((f,i)=>validAssistantFrame(f) && f.terminal===(i===d.frames.length-1)) &&
+     d.frames.at(-1).terminalReason===d.terminalReason && d.frames.at(-1).phase===d.terminalPhase;
+ }
+ function assistantFailureSummary(d) {
+   return validAssistantFailure(d)?{version:d.version,build:d.build,terminalReason:d.terminalReason,terminalPhase:d.terminalPhase,frameCount:d.frames.length,lastFrame:{...d.frames.at(-1)}}:null;
+ }
+ function validAssistantSummary(d) {
+   return d===null || exact(d,['version','build','terminalReason','terminalPhase','frameCount','lastFrame']) && Object.keys(d).length===6 &&
+     d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && Number.isInteger(d.frameCount) && d.frameCount>=1 && d.frameCount<=ASSISTANT_TRACE_MAX_FRAMES &&
+     validAssistantFrame(d.lastFrame) && d.lastFrame.terminal && d.lastFrame.terminalReason===d.terminalReason && d.lastFrame.phase===d.terminalPhase;
+ }
+ const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
+   ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

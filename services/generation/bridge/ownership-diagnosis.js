@@ -1,6 +1,6 @@
 "use strict";
 // Support-only data, never receipt evidence or an execution/recovery input.
-const {ownershipFailureReasons}=require('../../../extensions/meta-muse-bridge/receipt-v2');
+const {ownershipFailureReasons,validAssistantSummary}=require('../../../extensions/meta-muse-bridge/receipt-v2');
 const {validAnchoredOwnershipDiagnostic}=require('./execution-contract');
 const fields=Object.freeze(['instanceMatch','tabMatch','nativeUserAnchor','nativeAssistantAnchor','workerIntentPresent','workerUserAnchor','workerAssistantAnchor']);
 const layers={JOB_NOT_FOUND:'native_validation',JOB_STATE_UNSUPPORTED:'native_validation',OPERATION_RECORD_UNAVAILABLE:'native_validation',RECEIPT_UNAVAILABLE:'native_validation',USER_ANCHOR_MISSING:'native_validation',ASSISTANT_ALREADY_ANCHORED:'native_validation',TARGET_INSTANCE_UNAVAILABLE:'target_instance',TARGET_TAB_UNAVAILABLE:'target_tab',WORKER_INTENT_UNAVAILABLE:'worker_intent',WORKER_RECEIPT_MISMATCH:'worker_receipt',CONTENT_RECEIVER_UNAVAILABLE:'content_receiver',CONTENT_DIAGNOSIS_REJECTED:'content_diagnostic',DIAGNOSTIC_RESULT_INVALID:'native_result_validation',RUNTIME_BUILD_MISMATCH:'runtime_build',EXTENSION_DIAGNOSTICS_DISABLED:'extension_diagnostics',UNAVAILABLE:'transport',UNKNOWN:'unknown'};
@@ -17,6 +17,10 @@ function fromError(error,evidence={}) {
 }
 function sanitize(input,id) {
  const safe=report(input?.ok===true?null:input?.reason,input);
+ if(input && Object.hasOwn(input,'historicalAssistantOwnershipFailure')) {
+   if(!validAssistantSummary(input.historicalAssistantOwnershipFailure))return report('DIAGNOSTIC_RESULT_INVALID',safe);
+   safe.historicalAssistantOwnershipFailure=JSON.parse(JSON.stringify(input.historicalAssistantOwnershipFailure));
+ }
  if(input?.ok===true) {
    if(input.operationId!==id || !validAnchoredOwnershipDiagnostic(input.diagnostic,input.userStableIdHash))return report('DIAGNOSTIC_RESULT_INVALID',safe);
    return {...safe,operationId:id,userStableIdHash:input.userStableIdHash,diagnostic:JSON.parse(JSON.stringify(input.diagnostic))};

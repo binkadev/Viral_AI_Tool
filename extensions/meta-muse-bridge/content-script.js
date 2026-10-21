@@ -1,7 +1,10 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-7-contract3-receipt2-wrapper1';
+const CONTENT_BUILD='muse-content-v0-3-8-contract3-receipt2-assistdiag1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
+// Released observers retain only bounded diagnostic data until a later inspect.
+// This FIFO is neither an operation reservation nor ownership/replay authority.
+const assistantFailures=new Map(),MAX_ASSISTANT_FAILURES=32;
 const ROOT='[data-hatch-composer-root]';
 const EDITOR='[data-lexical-editor="true"], textarea, [data-hatch-composer-prehydration-input], [contenteditable="true"]';
 const SLOT='[data-hatch-composer-action-slot]';
@@ -102,12 +105,55 @@ async function hash(operationId,role,id) {
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(operationId+'\0'+role+'\0'+id));
   return [...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
+const gateDError=(message,reason)=>Object.assign(Error(message),{gateDReason:reason});
+const gateDReason=error=>MuseReceiptV2.assistantReasons.includes(error?.gateDReason)?error.gateDReason:
+  ['IDENTITY_MUTATED','MANUAL_INTERFERENCE','BASELINE_CHANGED','OBSERVATION_LIMIT'].includes(error?.message)?error.message:'UNKNOWN_BOUNDED';
+function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
+  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.assistantFailure || op.pendingAssistantFailure)return;
+  op.assistantStartedAt??=Date.now();
+  op.assistantState={generationActive:null,ownedUserPresent:null,logicalUserCount:null,blockRowCount:null,mediaCandidateCount:null,
+    assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,
+    mutationCount:'zero',stabilizationSamples:0,stabilizationReset:false,...op.assistantState,...patch};
+  const ms=Math.max(0,Date.now()-op.assistantStartedAt);
+  const frame={phase,elapsedBucket:ms<1000?'under_1s':ms<10000?'1_to_10s':ms<60000?'10_to_60s':'over_60s',...op.assistantState,terminal,terminalReason};
+  if(!MuseReceiptV2.validAssistantFrame(frame))return;
+  // The echoed user receipt in inspect is the worker's durable acknowledgement.
+  // Before that echo, retain only a pending first terminal snapshot, no trace.
+  if(!op.assistantAcknowledged){if(terminal)op.pendingAssistantFailure=frame;return;}
+  op.assistantFrames??=[];
+  if(op.assistantFrames.length===MuseReceiptV2.ASSISTANT_TRACE_MAX_FRAMES)op.assistantFrames.shift();
+  op.assistantFrames.push(frame);
+  if(terminal)op.assistantFailure={version:1,build:CONTENT_BUILD,terminalReason,terminalPhase:phase,frames:op.assistantFrames.slice()};
+}
+function retainAssistantFailure(id,op) {
+  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure))return;
+  const old=assistantFailures.get(id);
+  if(old?.failure || old?.pending && !op.assistantFailure)return;
+  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:op.assistantFailure,pending:op.pendingAssistantFailure});
+  while(assistantFailures.size>MAX_ASSISTANT_FAILURES)assistantFailures.delete(assistantFailures.keys().next().value);
+}
+function gateDInterrupted(p,op,reason,phase='precheck') {
+  const cached=assistantFailures.get(p.operationId);
+  const previous=cached?.sceneId===p.sceneId && cached.userHash===p.receipt.userStableIdHash?cached:null;
+  if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:previous.failure});}
+  const evidence=op?.receipt?.userStableIdHash?op:{sceneId:p.sceneId,receipt:p.receipt};
+  const pending=evidence.pendingAssistantFailure||previous?.pending;
+  evidence.assistantAcknowledged=true;
+  if(pending){
+    evidence.pendingAssistantFailure=null;
+    evidence.assistantFrames=[pending];
+    evidence.assistantFailure={version:1,build:CONTENT_BUILD,terminalReason:pending.terminalReason,terminalPhase:pending.phase,frames:[pending]};
+  }else gateDFrame(evidence,phase,{},reason,true);
+  retainAssistantFailure(p.operationId,evidence);
+  if(op)releaseV2(p.operationId,op);
+  return answer(p,'interrupted',evidence.assistantFailure?{assistantOwnershipFailure:evidence.assistantFailure}:{});
+}
 function afterBaseline(op,allowPending=false) {
   const rows=structure(allowPending);
-  if(rows.length<op.baseline.length || op.baseline.some((r,i)=>r.id!==rows[i].id || r.role!==rows[i].role))throw Error('BASELINE_CHANGED');
+  if(rows.length<op.baseline.length || op.baseline.some((r,i)=>r.id!==rows[i].id || r.role!==rows[i].role))throw gateDError('BASELINE_CHANGED','BASELINE_CHANGED');
   const fresh=rows.slice(op.baseline.length);
   const limit=op.v2Reserved!==undefined?MAX_OWNED_ASSISTANT_ROWS:1;
-  if(fresh.length>limit+1 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw Error('AMBIGUOUS_OPERATION');
+  if(fresh.length>limit+1 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw gateDError('AMBIGUOUS_OPERATION',fresh.length>limit+1?'BLOCK_OUT_OF_BOUNDS':'LOGICAL_USER_MISMATCH');
   if(op.submittedUserId && fresh[0]?.id!==op.submittedUserId)throw Error('USER_CHANGED');
   if(op.assistantId && fresh[1]?.id!==op.assistantId)throw Error('RESPONSE_CHANGED');
   return fresh;
@@ -119,19 +165,29 @@ const directVideos=row=>{
 };
 function responseBlock(op) {
   const fresh=afterBaseline(op,true),user=fresh[0],container=op.projection?.container;
+  gateDFrame(op,'sample_before_block',{ownedUserPresent:!!user && user.id===op.submittedUserId,blockRowCount:Math.min(9,Math.max(0,fresh.length-1))});
   if(!user || !nativeId(user.id) || user.id!==op.submittedUserId || !container ||
     !container.contains(user.node) || !user.node.parentNode || user.node.parentNode!==op.userSequenceParent ||
-    structure(true).slice(0,op.baseline.length).some(r=>!container.contains(r.node)))throw Error('USER_CHANGED');
+    structure(true).slice(0,op.baseline.length).some(r=>!container.contains(r.node))){
+      const wrongParent=!!user?.node?.parentNode && user.node.parentNode!==op.userSequenceParent;
+      gateDFrame(op,'sample_before_block',{sameSequenceParent:wrongParent?false:null});
+      throw gateDError('USER_CHANGED',wrongParent?'BLOCK_PARENT_MISMATCH':'BLOCK_USER_INVALID');
+    }
   const rows=fresh.slice(1);
   // Direct sequence membership is structural evidence, not page-wide adjacency.
   // Rows outside the prepared conversation or under another list cannot bind.
-  if(rows.some(r=>r.node.parentNode!==user.node.parentNode || !container.contains(r.node)))throw Error('AMBIGUOUS_OPERATION');
+  gateDFrame(op,'sample_before_block',{ownedUserPresent:true,blockRowCount:Math.min(9,rows.length),assistantBlockWithinBound:rows.length<=MAX_OWNED_ASSISTANT_ROWS,
+    sameSequenceParent:!rows.some(r=>r.node.parentNode!==user.node.parentNode || !container.contains(r.node))});
+  if(rows.some(r=>r.node.parentNode!==user.node.parentNode || !container.contains(r.node)))throw gateDError('AMBIGUOUS_OPERATION','BLOCK_PARENT_MISMATCH');
   const sequence=[...user.node.parentNode.querySelectorAll(MESSAGE)].filter(node=>node.parentNode===user.node.parentNode),index=sequence.indexOf(user.node);
-  if(index<0 || sequence.length-index-1!==rows.length || rows.some((r,i)=>sequence[index+i+1]!==r.node))throw Error('AMBIGUOUS_OPERATION');
+  const contiguous=!(index<0 || sequence.length-index-1!==rows.length || rows.some((r,i)=>sequence[index+i+1]!==r.node));
+  gateDFrame(op,'sample_before_block',{blockContiguous:contiguous});
+  if(!contiguous)throw gateDError('AMBIGUOUS_OPERATION','BLOCK_NONCONTIGUOUS');
   const counts=rows.map(r=>directVideos(r).length);
   if(counts.some(n=>n>16))throw Error('OBSERVATION_LIMIT');
   const mediaRows=rows.filter((r,i)=>counts[i]>0);
-  if(mediaRows.length>1 || mediaRows.some(r=>directVideos(r).length!==1))throw Error('AMBIGUOUS_OPERATION');
+  gateDFrame(op,'block_observed',{mediaCandidateCount:Math.min(9,mediaRows.length),generationActive:generationActive()});
+  if(mediaRows.length>1 || mediaRows.some(r=>directVideos(r).length!==1))throw gateDError('AMBIGUOUS_OPERATION','BLOCK_MULTIPLE_MEDIA_OWNERS');
   return {user,rows,mediaRows,signature:JSON.stringify(rows.map((r,i)=>[r.id,counts[i]]))};
 }
 function sameBlock(sample,block) {
@@ -383,7 +439,7 @@ async function submit(p) {
   let inserting=false,sendButton=null,sendStartedAt=null;
   // insertText can synchronously emit a trusted input event. Only that exact
   // own insertion is exempt; trusted clicks/keys and later input still abort.
-  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor)){op.invalid=true;op.observerInvalidation||='MANUAL_INTERFERENCE';op.manualInterferenceObserved=true;}};
+  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor)){gateDFrame(op,'sample_before_block',{},'MANUAL_INTERFERENCE',true);op.invalid=true;op.observerInvalidation||='MANUAL_INTERFERENCE';op.manualInterferenceObserved=true;}};
   for(const type of ['input','click','keydown'])c.root.addEventListener(type,disturbed,true);
   try {
     invocation.reason='composer-changed';
@@ -493,6 +549,7 @@ function acceptanceFailureDiagnostic(op,original,button,started,error) {
 // Invalidate retained references before deletion so pending awaits fail closed.
 function releaseV2(id,op) {
   if(!op || op.v2Reserved===undefined)return;
+  retainAssistantFailure(id,op);
   op.invalid=true;op.v2Reserved=false;op.cleanup?.();op.cleanup=null;
   if(operations.get(id)===op)operations.delete(id);
 }
@@ -510,6 +567,8 @@ async function prepareV2(p) {
   const sample=(mutations=[],kind='observer')=>{
     if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
     try {
+      gateDFrame(op,'sample_before_block',{mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',stabilizationReset:false,
+        ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null});
       const accepting=op.sendAttempted && !op.receipt?.userStableIdHash;
       const remember=row=>{if(!op.baseline.some(b=>b.id===row.id && b.role===row.role))(row.role==='user'?op.newUsers:op.newAssistants).add(row.id);};
       let visited=0;const events=[];
@@ -546,6 +605,7 @@ async function prepareV2(p) {
       const concurrent=rows.slice(op.baseline.length).filter(r=>r.role==='user').length;
       op.maxConcurrentFreshUserRows=Math.max(op.maxConcurrentFreshUserRows,concurrent);
       if(concurrent>1)op.logicalFreshUserTurnCount=concurrent;
+      gateDFrame(op,'sample_before_block',{ownedUserPresent:rows.some(r=>r.role==='user' && r.id===op.submittedUserId),logicalUserCount:Math.min(128,op.logicalFreshUserTurnCount)});
       // Prefix and fresh role/order must stay intact until acceptance. Pending
       // native IDs may hydrate after send, but cannot grant ownership yet.
       if(!op.receipt?.userStableIdHash){
@@ -555,21 +615,22 @@ async function prepareV2(p) {
         // Once anchored, aliases grant no authority. Even a temporary alias
         // reappearing as a separate row is another/unproven turn.
         const unownedUser=r=>r.role==='user' && !op.baseline.some(b=>b.role==='user' && b.id===r.id) && r.id!==op.submittedUserId;
-        if(rows.some(unownedUser) || events.some(e=>[...e.added,...e.removed].some(unownedUser)))throw Error('AMBIGUOUS_OPERATION');
+        if(rows.some(unownedUser) || events.some(e=>[...e.added,...e.removed].some(unownedUser)))throw gateDError('AMBIGUOUS_OPERATION','LOGICAL_USER_MISMATCH');
         // Any observed churn requires fresh poll stabilization. This includes
         // transient video/row replacement restored before the next poll.
-        if(mutations.length)op.mediaStabilization=null;
+        if(mutations.length){gateDFrame(op,'stabilization',{stabilizationReset:!!op.mediaStabilization,stabilizationSamples:0},'STABILIZATION_RESET');op.mediaStabilization=null;}
         const block=responseBlock(op);
-        if(op.mediaStabilization && !sameBlock(op.mediaStabilization,block))op.mediaStabilization=null;
+        if(op.mediaStabilization && !sameBlock(op.mediaStabilization,block)){gateDFrame(op,'stabilization',{blockSignatureChanged:true,stabilizationReset:true,stabilizationSamples:0},'STABILIZATION_RESET');op.mediaStabilization=null;}
+        gateDFrame(op,'sample_after_block',{logicalUserCount:Math.min(128,op.logicalFreshUserTurnCount),stabilizationSamples:op.mediaStabilization?.samples||0});
       }
       if(op.newUsers.size>MAX_MESSAGES || op.newAssistants.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
-    }catch(error){if(error?.message==='OBSERVATION_LIMIT' && op.acceptanceTrace)op.acceptanceTrace.overflow=true;op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
+    }catch(error){gateDFrame(op,'sample_before_block',{},gateDReason(error),true);if(error?.message==='OBSERVATION_LIMIT' && op.acceptanceTrace)op.acceptanceTrace.overflow=true;op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
     if(op.invalid)releaseV2(p.operationId,op);
   };
   const observer=new MutationObserver(records=>sample(records,'observer'));
   op.sample=(kind='observer')=>sample(observer.takeRecords?.() || [],kind);
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeOldValue:true,attributeFilter:['data-message-id','data-message-role','data-message-item']});
-  const deadline=setTimeout(()=>releaseV2(p.operationId,op),20*60*1000);
+  const deadline=setTimeout(()=>{gateDFrame(op,'precheck',{},'OPERATION_EXPIRED',true);releaseV2(p.operationId,op);},20*60*1000);
   op.cleanup=()=>{observer.disconnect();clearTimeout(deadline);};
   op.preparedReceipt={version:2,operationId:p.operationId,
     baselineUserMessageIds:await Promise.all(op.baseline.filter(r=>r.role==='user').map(r=>hash(p.operationId,r.role,r.id))),
@@ -583,32 +644,48 @@ async function inspectV2(p) {
   if(!receipt.userStableIdHash){releaseV2(p.operationId,operations.get(p.operationId));return answer(p,'interrupted');}
   let op=operations.get(p.operationId),next=receipt;
   if(!receipt.assistantStableIdHash) {
-    if(!op || op.sceneId!==p.sceneId || op.invalid || !op.receipt || op.observationToken!==p.observationToken || Date.now()-op.lastContact>10000 || Date.now()-op.createdAt>20*60*1000 || !MuseReceiptV2.extendsReceipt(op.receipt,receipt)) {
-      if(op)releaseV2(p.operationId,op);return answer(p,'interrupted');
-    }
+    const precheckReason=!op?'OPERATION_MISSING':op.sceneId!==p.sceneId?'SCENE_MISMATCH':op.invalid?'OPERATION_INVALID':!op.receipt?'RECEIPT_MISMATCH':
+      op.observationToken!==p.observationToken?'OBSERVATION_TOKEN_MISMATCH':Date.now()-op.lastContact>10000?'CONTACT_STALE':Date.now()-op.createdAt>20*60*1000?'OPERATION_EXPIRED':
+      !MuseReceiptV2.extendsReceipt(op.receipt,receipt)?'RECEIPT_MISMATCH':null;
+    if(precheckReason)return gateDInterrupted(p,op,precheckReason);
+    op.assistantAcknowledged=true;
+    gateDFrame(op,'precheck');
+    let phase='sample_before_block';
     try {
     op.lastContact=Date.now();op.sample();
-    if(op.invalid || !structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId) || op.logicalFreshUserTurnCount!==1 || op.userTurn?.currentNativeId!==op.submittedUserId){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(op.invalid)return gateDInterrupted(p,op,'OBSERVER_INVALIDATED',phase);
+    if(!structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId))return gateDInterrupted(p,op,'OWNED_USER_MISSING',phase);
+    gateDFrame(op,phase,{ownedUserPresent:true,logicalUserCount:Math.min(128,op.logicalFreshUserTurnCount)});
+    if(op.logicalFreshUserTurnCount!==1)return gateDInterrupted(p,op,'LOGICAL_USER_MISMATCH',phase);
+    if(op.userTurn?.currentNativeId!==op.submittedUserId)return gateDInterrupted(p,op,'USER_NATIVE_ID_MISMATCH',phase);
     const block=responseBlock(op);
-    if(await hash(p.operationId,'user',block.user.id)!==receipt.userStableIdHash){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(await hash(p.operationId,'user',block.user.id)!==receipt.userStableIdHash)return gateDInterrupted(p,op,'USER_HASH_MISMATCH','block_observed');
+    phase='sample_after_block';
     op.sample();
-    if(op.invalid){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(op.invalid)return gateDInterrupted(p,op,'OBSERVER_INVALIDATED',phase);
+    phase='stabilization';
     if(generationActive() || block.mediaRows.length!==1 || !nativeId(block.mediaRows[0].id)) {
+      gateDFrame(op,phase,{generationActive:generationActive(),stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'STABILIZATION_NOT_READY');
       op.mediaStabilization=null;return answer(p,'running',{receipt});
     }
     const owner=block.mediaRows[0];
+    gateDFrame(op,phase,{blockSignatureChanged:!!op.mediaStabilization && !sameBlock(op.mediaStabilization,block)});
     if(!sameBlock(op.mediaStabilization,block))op.mediaStabilization={signature:block.signature,nodes:block.rows.map(r=>r.node),samples:1};
     else op.mediaStabilization.samples=Math.min(2,op.mediaStabilization.samples+1);
+    gateDFrame(op,phase,{stabilizationSamples:op.mediaStabilization.samples,stabilizationReset:false},op.mediaStabilization.samples<2?'STABILIZATION_NOT_READY':null);
     if(op.mediaStabilization.samples<2)return answer(p,'running',{receipt});
     const stable=op.mediaStabilization;
+    phase='precommit';gateDFrame(op,phase);
     next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',owner.id)};
     op.sample();
-    if(op.invalid || !MuseReceiptV2.valid(next,p.operationId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
-    if(op.mediaStabilization!==stable || generationActive() || !sameBlock(stable,responseBlock(op)))return answer(p,'running',{receipt});
+    if(op.invalid || !MuseReceiptV2.valid(next,p.operationId))return gateDInterrupted(p,op,op.invalid?'OBSERVER_INVALIDATED':'RECEIPT_MISMATCH',phase);
+    if(op.mediaStabilization!==stable){gateDFrame(op,phase,{stabilizationReset:true},'PRECOMMIT_BLOCK_CHANGED');return answer(p,'running',{receipt});}
+    if(generationActive()){gateDFrame(op,phase,{generationActive:true},'PRECOMMIT_GENERATION_ACTIVE');return answer(p,'running',{receipt});}
+    if(!sameBlock(stable,responseBlock(op))){gateDFrame(op,phase,{blockSignatureChanged:true},'PRECOMMIT_BLOCK_CHANGED');return answer(p,'running',{receipt});}
     op.receipt=next;releaseV2(p.operationId,op);
     // Persist the assistant before inspecting/persisting a result candidate.
     return answer(p,'running',{receipt:next});
-    } catch {releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    } catch(error) {return gateDInterrupted(p,op,gateDReason(error),phase);}
   }
   // Refresh/restart recovery needs no operation-map entry or global baseline.
   const candidates=[];

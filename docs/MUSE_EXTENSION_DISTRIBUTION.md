@@ -2,7 +2,7 @@
 
 Release configuration lives in `services/generation/bridge/extension-distribution.json` and ships in the application archive. It is build configuration, never a renderer-supplied URL or identity.
 
-- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.7).
+- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.8).
 - `expectedWorkerBuild` / `expectedContentBuild`: version-specific executing markers required by controlled diagnostic preflight; staged bytes alone cannot prove runtime identity.
 - `protocolVersion`: exact supported protocol (currently 1).
 - `chromeWebStoreExtensionId`: official 32-character Chrome ID; blank until assigned.

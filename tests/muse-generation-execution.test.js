@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.7',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.8',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -244,6 +244,8 @@ function contentFixture(options={}) {
    },
    get lineage(){return JSON.parse(vm.runInNewContext('JSON.stringify((()=>{const op=[...operations.values()][0];return op?{identityCount:op.newUsers?.size,logicalCount:op.logicalFreshUserTurnCount,maxConcurrent:op.maxConcurrentFreshUserRows,replacementCount:op.replacementCandidateCount,replacementObserved:!!op.identityReplacementObserved}:null;})())',c));},
    get structuralTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.acceptanceTrace||null)',c));},
+   get assistantTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.assistantFrames||null)',c));},
+   get assistantFailureCount(){return vm.runInNewContext('assistantFailures.size',c);},
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
    replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
    replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
@@ -397,7 +399,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.7',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.8',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -675,6 +677,156 @@ for(const transition of ['composer root','editor','send removed','send replaced'
 }
 
 const userMutation=(f,addedNodes,removedNodes,previousSibling,nextSibling=null,target=f.messageParent)=>({type:'childList',target,addedNodes,removedNodes,previousSibling,nextSibling});
+for(const transient of ['foreign parent','unknown row gap','foreign parent after stabilization sample'])test('Gate-D preserves first transient block failure even after final DOM settles: '+transient,async()=>{
+ const content=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status'));f.inject(f.node('assistant','media-owner',media()));}}),stored={},worker=workerV2Harness(stored,content),key='generation-intent:op';
+ content.transaction(content.rows);
+ const prep=await worker.run('prepareGeneration',inspectPayload),accepted=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+ const receipt=JSON.stringify(accepted.receipt),rows=content.rows.slice(),assistant=rows.at(-1);
+ assert.equal(content.assistantTrace,null,'No trace before durable user echo');
+ if(transient.includes('after stabilization')){
+   const running=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});assert.equal(running.state,'running');assert.equal(running.receipt.assistantStableIdHash,undefined);
+   assert(content.assistantTrace.some(frame=>frame.stabilizationSamples===1));
+ }
+ if(transient.startsWith('foreign parent')){
+   const foreign={};content.transaction(rows,[userMutation(content,[],[assistant],rows.at(-2)),userMutation(content,[assistant],[],null,null,foreign)],()=>{assistant.parentNode=foreign;});
+ }else {
+   const gap=content.node('tool','unclassified');content.transaction([...rows.slice(0,-1),gap,assistant],[userMutation(content,[gap],[],rows.at(-2),assistant)]);
+ }
+ assert.equal(content.operationCount,0);
+ content.transaction(rows); // A later settled document cannot repair causality.
+ const result=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
+ const failure=JSON.parse(JSON.stringify(result.assistantOwnershipFailure));
+ assert.equal(result.state,'interrupted');assert(receiptV2.validAssistantFailure(failure));
+ assert.equal(failure.terminalReason,transient.startsWith('foreign parent')?'BLOCK_PARENT_MISMATCH':'BLOCK_NONCONTIGUOUS');
+ if(transient.includes('after stabilization'))assert(failure.frames.some(frame=>frame.terminalReason==='STABILIZATION_RESET' && frame.stabilizationReset));
+ assert.equal(failure.terminalPhase,'sample_before_block');assert.equal(failure.frames.filter(f=>f.terminal).length,1);
+ assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(result)),{...inspectPayload,receipt:JSON.parse(receipt)}));
+ assert.equal(JSON.stringify(stored[key].receipt),receipt);assert.deepEqual(stored[key].assistantOwnershipFailure,failure);
+ const storedBefore=JSON.stringify(stored),diagnosis=await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:accepted.receipt.userStableIdHash});
+ assert.equal(diagnosis.ownershipDiagnostic.ownedUserMatches,1);assert.equal(diagnosis.ownershipDiagnostic.responseBlock.ownedResponseBlockCount,1);
+ assert.equal(diagnosis.ownershipDiagnostic.responseBlock.assistantBlockRowCount,2);
+ assert.equal(diagnosis.ownershipDiagnostic.responseBlock.mediaAssistantCandidateCount,1);assert.equal(diagnosis.ownershipDiagnostic.responseBlock.mediaAssistantStable,false);
+ assert.equal(JSON.stringify(stored),storedBefore);assert.equal(diagnosis.receipt,undefined);
+ const again=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
+ assert.deepEqual(JSON.parse(JSON.stringify(again.assistantOwnershipFailure)),failure);
+ assert.equal(JSON.stringify(stored),storedBefore);assert.equal(content.clicks,1);
+ assert(!worker.calls.includes('acquireGenerationResult'));assert.equal(stored[key].receipt.assistantStableIdHash,undefined);
+ // Worker restart may now see OPERATION_MISSING, but its first failure wins.
+ const restarted=workerV2Harness(stored,contentFixture());
+ const afterRestart=await restarted.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
+ assert.deepEqual(JSON.parse(JSON.stringify(afterRestart.assistantOwnershipFailure)),failure);assert.equal(JSON.stringify(stored),storedBefore);
+});
+
+test('Gate-D trace is memory-bounded on running polls and terminal reason is immutable',async()=>{
+ const f=contentFixture({video:media(),active:true}),receipt=await acceptV2(f);
+ for(let i=0;i<24;i++){
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'running');assert.equal(r.assistantOwnershipFailure,undefined);
+ }
+ assert.equal(f.assistantTrace.length,16);assert(f.assistantTrace.every(frame=>!frame.terminal));
+ assert(f.assistantTrace.some(frame=>frame.terminalReason==='STABILIZATION_NOT_READY'));
+ f.foreign('pointerdown');
+ const interrupted=await f.send('inspectGeneration',{...v2Payload,receipt}),d=JSON.parse(JSON.stringify(interrupted.assistantOwnershipFailure));
+ assert(receiptV2.validAssistantFailure(d));assert.equal(d.frames.length,16);assert.equal(d.terminalReason,'MANUAL_INTERFERENCE');
+ assert.equal(d.frames.filter(f=>f.terminal).length,1);assert.equal(d.frames.at(-1).terminal,true);
+ assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+});
+
+for(const reason of ['OPERATION_MISSING','SCENE_MISMATCH','OBSERVATION_TOKEN_MISMATCH','CONTACT_STALE','OPERATION_EXPIRED','RECEIPT_MISMATCH'])test('Gate-D distinguishes precheck '+reason,async()=>{
+ let now=1000;const f=contentFixture({noAssistant:true,clock:()=>now}),receipt=await acceptV2(f),p={...v2Payload,receipt};
+ if(reason==='OPERATION_MISSING')await f.send('cancelGeneration',inspectPayload);
+ if(reason==='SCENE_MISMATCH')p.sceneId='other-scene';
+ if(reason==='OBSERVATION_TOKEN_MISMATCH')p.observationToken='other-epoch';
+ if(reason==='CONTACT_STALE')now+=10001;
+ if(reason==='OPERATION_EXPIRED'){
+   for(let i=0;i<133;i++){now+=9000;assert.equal((await f.send('inspectGeneration',p)).state,'running');}
+   now+=4001; // Contact is fresh, but the original operation lifetime expired.
+ }
+ if(reason==='RECEIPT_MISMATCH')p.receipt={...receipt,acceptance:{...receipt.acceptance,composerCleared:!receipt.acceptance.composerCleared}};
+ const result=await f.send('inspectGeneration',p);assert.equal(result.state,'interrupted');
+ assert.equal(result.assistantOwnershipFailure.terminalReason,reason);
+ assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
+});
+
+test('Gate-D native persistence is atomic, first-only, separate from receipt and absent on running polls',async t=>{
+ const content=contentFixture({active:true,video:media()}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file),receipt=JSON.parse(before).receipt;
+ for(let i=0;i<4;i++)assert.equal((await f.provider.reconcile(context)).status,'running');
+ assert.deepEqual(fs.readFileSync(file),before);
+ const rows=content.rows.slice(),assistant=rows.at(-1);
+ content.transaction(rows,[],()=>{assistant.parentNode={};});content.transaction(rows);
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});
+ const persisted=JSON.parse(fs.readFileSync(file)),failure=persisted.assistantOwnershipFailure;
+ assert(receiptV2.validAssistantFailure(failure));assert.equal(failure.terminalReason,'BLOCK_PARENT_MISMATCH');assert.deepEqual(persisted.receipt,receipt);
+ assert.equal(persisted.receipt.assistantStableIdHash,undefined);assert.equal(persisted.verifiedOutput,undefined);
+ assert(!fs.readdirSync(context.outputDirectory).some(name=>name.endsWith('.tmp')));
+ const terminal=fs.readFileSync(file);
+ f.bridge.command=async(type,p)=>{assert.equal(type,'inspectGeneration');return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',assistantOwnershipFailure:require('./fixtures/muse-assistant-failure').failure('OPERATION_MISSING')};};
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});assert.deepEqual(fs.readFileSync(file),terminal);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('Gate-D successful stabilization returns exactly the original receipt extension without diagnostic persistence',async()=>{
+ const f=contentFixture({video:media()}),user=await acceptV2(f),before=JSON.stringify(user);
+ const assistant=await observeMediaV2(f,user);
+ assert.deepEqual(JSON.parse(JSON.stringify(assistant)),{operationId:'op',sceneId:'scene',state:'running',receipt:{...JSON.parse(before),assistantStableIdHash:shaBytes('op\0assistant\0new-assistant')}});
+ assert.equal(f.operationCount,0);assert.equal(f.assistantFailureCount,0);assert.equal(f.clicks,1);
+});
+
+test('Gate-D native write failure preserves the receipt and cleans the diagnostic temporary file',async t=>{
+ const content=contentFixture({video:media()}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file);
+ const rename=fs.renameSync;
+ t.mock.method(fs,'renameSync',(source,destination)=>{if(destination===file)throw Object.assign(Error('fixture disk failure'),{code:'ENOSPC'});return rename(source,destination);});
+ content.foreign('pointerdown');await assert.rejects(f.provider.reconcile(context));
+ assert.deepEqual(fs.readFileSync(file),before);assert.deepEqual(fs.readdirSync(context.outputDirectory),['muse-operation.json']);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+ assert.equal(f.service.get(job.id).asset,null);
+});
+
+test('Gate-D released failure cache remains bounded without exhausting fresh operation capacity',async()=>{
+ let sequence=0;const f=contentFixture({noAssistant:true,afterClick:f=>{f.rows.at(-1).id='independent-user-'+sequence++;}});
+ for(let i=0;i<36;i++){
+   const p={...v2Payload,operationId:'diagnostic-'+i},prepared=await f.send('prepareGeneration',p);assert.equal(prepared.state,'prepared');
+   const user=await f.send('submitGeneration',{...operation,...p,receipt:prepared.receipt});assert.equal(user.state,'running');
+   f.foreign('pointerdown');const r=await f.send('inspectGeneration',{...p,receipt:user.receipt});
+   assert.equal(r.assistantOwnershipFailure.terminalReason,'MANUAL_INTERFERENCE');assert.equal(f.operationCount,0);assert(f.assistantFailureCount<=32);
+ }
+ assert.equal(f.assistantFailureCount,32);assert.equal(f.clicks,36,'All clicks are isolated fixture callbacks, no browser transport');
+ assert.equal((await f.send('prepareGeneration',{...v2Payload,operationId:'fresh-after-cache-rotation'})).state,'prepared');
+ await f.send('cancelGeneration',{...inspectPayload,operationId:'fresh-after-cache-rotation'});
+});
+
+for(const bad of ['private frame','extra receipt','success state'])test('Gate-D worker rejects malformed diagnostic output without receipt/storage mutation: '+bad,async()=>{
+ const f=contentFixture(),stored={},worker=workerV2Harness(stored,f),prepared=await worker.run('prepareGeneration',inspectPayload);
+ const user=await worker.run('submitGeneration',{...operation,receipt:prepared.receipt}),before=JSON.stringify(stored);
+ worker.context.chrome.tabs.sendMessage=async()=>{
+   const r={operationId:'op',sceneId:'scene',state:'interrupted',assistantOwnershipFailure:require('./fixtures/muse-assistant-failure').failure()};
+   if(bad==='private frame')r.assistantOwnershipFailure.frames[0].url='private';
+   if(bad==='extra receipt')r.receipt={...user.receipt,assistantStableIdHash:'d'.repeat(64)};
+   if(bad==='success state')r.state='running';return r;
+ };
+ const result=await worker.run('inspectGeneration',{...inspectPayload,receipt:user.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.assistantOwnershipFailure,undefined);assert.equal(JSON.stringify(stored),before);assert.equal(f.clicks,1);
+ await f.send('cancelGeneration',inspectPayload);
+});
+
+test('Gate-D schema rejects private/unbounded data and cannot enter receipt or execution inputs',()=>{
+ const {failure}=require('./fixtures/muse-assistant-failure'),d=failure();assert(receiptV2.validAssistantFailure(d));
+ assert(receiptV2.validAssistantSummary(receiptV2.assistantFailureSummary(d)));
+ for(const mutate of [d=>d.frames=Array(17).fill(d.frames[0]),d=>d.terminalReason='private exception',d=>d.frames[0].url='private',d=>d.frames[0].blockRowCount=10,d=>d.frames[0].stabilizationSamples=3,d=>d.frames[0].terminalReason='STABILIZATION_RESET',d=>d.frames[0].terminal=false,d=>d.nativeId='private']){
+   const bad=structuredClone(d);mutate(bad);assert(!receiptV2.validAssistantFailure(bad));
+ }
+ assert(!receiptV2.valid(d,'op'));assert(!receiptV2.valid({...anchoredReceipt('op'),assistantOwnershipFailure:d},'op'));
+ assert(!validPayload('inspectGeneration',{...inspectPayload,receipt:anchoredReceipt('op'),assistantOwnershipFailure:d}));
+ assert(!validResult('submitGeneration',{...inspectPayload,state:'interrupted',assistantOwnershipFailure:d},operation));
+});
+
 for(const role of ['assistant','user'])test('acceptance projection gives internal baseline '+role+' wrapper churn no message authority',async()=>{
  const f=contentFixture({noAssistant:true,afterClick:f=>{
    const row=f.rows.find(r=>r.role===role),user=f.rows.at(-1),tail=f.rows.at(-2);
@@ -974,7 +1126,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1052,8 +1204,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-7-contract3-receipt2-wrapper1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-8-contract3-receipt2-assistdiag1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1209,8 +1361,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-7-contract3-receipt2-wrapper1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-8-contract3-receipt2-assistdiag1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1242,7 +1394,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.7 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.8 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];
@@ -1285,8 +1437,10 @@ test('v2 worker restart before assistant persistence breaks causal continuity an
  const prep=await worker.run('prepareGeneration',inspectPayload);
  const accepted=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
  const before=JSON.stringify(stored),next=workerV2Harness(stored,content);
- assert.equal((await next.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt})).state,'interrupted');
- assert.equal(JSON.stringify(stored),before);assert.equal(content.clicks,1);assert(!next.calls.includes('submitGeneration'));
+ const result=await next.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});assert.equal(result.state,'interrupted');
+ assert.equal(result.assistantOwnershipFailure.terminalReason,'OBSERVATION_TOKEN_MISMATCH');
+ const expected=JSON.parse(before);expected['generation-intent:op'].assistantOwnershipFailure=JSON.parse(JSON.stringify(result.assistantOwnershipFailure));
+ assert.equal(JSON.stringify(stored),JSON.stringify(expected));assert.equal(content.clicks,1);assert(!next.calls.includes('submitGeneration'));
 });
 
 test('v2 conflicting desktop receipt cannot replace worker-owned anchors',async()=>{
