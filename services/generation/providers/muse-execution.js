@@ -5,6 +5,7 @@ const {identifier}=require('../generation-request');
 const {validResult,validReceipt,validAnchoredOwnershipDiagnostic}=require('../bridge/execution-contract');
 const receiptV2=require('../../../extensions/meta-muse-bridge/receipt-v2');
 const ownershipDiagnosis=require('../bridge/ownership-diagnosis');
+const {safeObserve,digest: auditDigest}=require('../execution-audit');
 function createMuseExecution(bridge,verifyVideo) {
   const locks=new Map(),cancelled=new Set(),transfers=new Map();
   const manual=require('./muse-manual-recovery').createManualRecovery({bridge,verifyVideo,busy:id=>locks.size>0 || transfers.size>0});
@@ -28,14 +29,23 @@ function createMuseExecution(bridge,verifyVideo) {
     if(r.receipt && !(r.receipt.version===2?receiptV2.extendsReceipt(r.receipt,result.receipt):JSON.stringify(r.receipt)===JSON.stringify(result.receipt)))throw failure('RECOVERY_REQUIRED');
     if(r.assistantMessageId && result.assistantMessageId && r.assistantMessageId!==result.assistantMessageId)throw failure('RECOVERY_REQUIRED');
     if(r.receipt?.version===2 ? JSON.stringify(r.receipt)===JSON.stringify(result.receipt) : r.receipt && (!result.assistantMessageId || r.assistantMessageId===result.assistantMessageId))return;
+    const acceptedBefore=!!r.receipt?.userStableIdHash, ownedBefore=!!r.receipt?.result;
     const next={...r,receipt:result.receipt,...(result.assistantMessageId?{assistantMessageId:result.assistantMessageId}:{})};
     const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
     try {fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify(next));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));Object.assign(r,next);}
     finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
+    try {
+      const evidence={evidenceKind:'receipt-v2',evidenceVersion:2,evidenceDigest:auditDigest(result.receipt)};
+      if(result.receipt.version===2 && result.receipt.userStableIdHash && !acceptedBefore)safeObserve(c,'submit.acceptance_proven',evidence);
+      if(result.receipt.version===2 && result.receipt.result && !ownedBefore)safeObserve(c,'ownership.completed',evidence);
+    } catch {try{c.auditGap?.();}catch{}}
   }
   async function command(type,c,r,extra={}) {
     const payload={tabId:r.target.tabId,operationId:c.jobId,sceneId:c.sceneId,...extra};
-    const result=await bridge.command(type,payload,r.target);
+    try{bridge.observeExecutionAudit?.(c,r.target);}catch{}
+    const pending=bridge.command(type,payload,r.target);
+    if(type==='submitGeneration')safeObserve(c,'submit.requested');
+    const result=await pending;
     if(!validResult(type,result,payload))throw failure('RECOVERY_REQUIRED');
     const diagnosticPatch={};
     for(const field of ['assistantOwnershipFailure','userAnchorChurn','baselineDrift','baselineWindow'])if(result[field] && !r[field])diagnosticPatch[field]=result[field];

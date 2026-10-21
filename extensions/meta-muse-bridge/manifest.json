@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Viral AI · Meta Muse Bridge",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Muse session readiness for Viral AI Tool.",
   "permissions": [
     "storage",
@@ -20,6 +20,7 @@
         "https://muse.ai/*"
       ],
       "js": [
+        "execution-audit.js",
         "acceptance-replay.js",
         "receipt-v2.js",
         "manual-recovery-contract.js",

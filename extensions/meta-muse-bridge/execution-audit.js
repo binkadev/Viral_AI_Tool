@@ -1,0 +1,96 @@
+"use strict";
+// Telemetry-only storage. Never consulted by receipt, intent or candidate authority.
+(function(root) {
+  const PREFIX = 'execution-audit-v1:', MAX_RECORDS = 32, MAX_STREAMS = 16, MAX_BYTES = 24576;
+  const id = v => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
+  const clone = v => JSON.parse(JSON.stringify(v));
+  const exact = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v,k));
+  function valid(source, type, d) {
+    if (source === 'worker') return type === 'submit.committed' && exact(d, []);
+    if (type === 'submit.invocation_observed') return exact(d, ['outcome']) && ['returned','threw_unknown'].includes(d.outcome);
+    if (type === 'manual.session_opened') return exact(d, ['sessionAlias']) && id(d.sessionAlias);
+    if (type === 'manual.candidate_revealed') return exact(d, ['sessionAlias','candidateAlias']) && id(d.sessionAlias) && id(d.candidateAlias);
+    return false;
+  }
+  function create({ storage, source, uuid = () => crypto.randomUUID(), canClose = () => true }) {
+    if (!['worker', 'content'].includes(source)) throw Error('Invalid witness source');
+    const epoch = uuid(), live = new Map(), aliases = new Map(), damaged = new Set(), binding = new Map(); let tail = Promise.resolve();
+    const key = packet => PREFIX + source + ':' + packet.jobId + ':' + packet.sourceEpoch;
+    const enqueue = fn => { const task = tail.then(fn); tail = task.catch(() => {}); return task.catch(() => false); };
+    function persist(packet) {
+      return enqueue(async () => { try { await storage.set({ [key(packet)]: clone(packet) }); return true; } catch { packet.gap = true; return false; } });
+    }
+    async function bindOnce(binding) {
+      try {
+        if (!binding || Object.keys(binding).sort().join(',') !== 'auditId,jobId' || !id(binding.jobId) || !id(binding.auditId)) return false;
+        if (live.has(binding.jobId)) return live.get(binding.jobId).auditId === binding.auditId;
+        const all = await storage.get(null);
+        if (Object.keys(all).filter(k => k.startsWith(PREFIX + source + ':')).length >= MAX_STREAMS) return false;
+        const p = { version: 1, jobId: binding.jobId, auditId: binding.auditId, source, sourceEpoch: epoch, watermark: 0, closed: false, gap: damaged.has(binding.jobId), events: [] };
+        live.set(p.jobId, p); return await persist(p);
+      } catch { gap(binding?.jobId);return false; }
+    }
+    function bind(value) {
+      if(!value || !id(value.jobId))return Promise.resolve(false);
+      if(binding.has(value.jobId))return binding.get(value.jobId);
+      if(binding.size>=MAX_STREAMS)return Promise.resolve(false);
+      const pending=bindOnce(value).finally(()=>binding.delete(value.jobId));binding.set(value.jobId,pending);return pending;
+    }
+    function observe(jobId, type, detail = {}) {
+      try {
+        const p = live.get(jobId); if (!p) return;
+        if (!valid(source, type, detail)) { p.gap = true; return persist(p); }
+        if (p.closed) { p.gap = true; persist(p); return; }
+        const e = { eventId: uuid(), source, sourceEpoch: epoch, sourceSequence: ++p.watermark, type, detail: clone(detail) };
+        if (p.events.length >= MAX_RECORDS || JSON.stringify(p).length + JSON.stringify(e).length > MAX_BYTES - 1024) p.gap = true;
+        else p.events.push(e);
+        return persist(p);
+      } catch {gap(jobId);}
+    }
+    function alias(jobId, privateIdentity) {
+      // A random alias has no relationship to a candidate capability or node.
+      const k = jobId + ':' + privateIdentity;
+      if (!aliases.has(k)) { if (aliases.size >= 160) {gap(jobId);return uuid();} aliases.set(k, uuid()); }
+      return aliases.get(k);
+    }
+    async function drain(deliver) {
+      return enqueue(async () => {
+        try {
+          const all = await storage.get(null);
+          for (const k of Object.keys(all).filter(k => k.startsWith(PREFIX + source + ':')).slice(0, MAX_STREAMS)) {
+            const snapshot = clone(all[k]);
+            if (snapshot.sourceEpoch !== epoch && !snapshot.closed) { snapshot.closed = true; snapshot.gap = true; }
+            const ack = await deliver(snapshot);
+            if (!ack?.persisted) continue;
+            const p = live.get(snapshot.jobId);
+            const current = p?.sourceEpoch === snapshot.sourceEpoch ? p : clone(all[k]);
+            // Retain newer occurrences created while this snapshot was in flight.
+            const ids = new Set(snapshot.events.map(e => e.eventId));
+            current.events = current.events.filter(e => !ids.has(e.eventId));
+            if (ack.close && !current.closed && canClose(snapshot.jobId)) current.closed = true;
+            if (snapshot.sourceEpoch !== epoch) { current.closed = true; current.gap = true; }
+            if (snapshot.closed && !current.events.length && snapshot.gap===current.gap && snapshot.watermark===current.watermark) {
+              await storage.remove(k);
+              if (p === current) {
+                live.delete(current.jobId);damaged.delete(current.jobId);
+                for(const aliasKey of aliases.keys())if(aliasKey.startsWith(current.jobId+':'))aliases.delete(aliasKey);
+              }
+            }
+            else await storage.set({ [k]: clone(current) });
+          }
+          return true;
+        } catch { return false; }
+      });
+    }
+    function gap(jobId) { try { if(id(jobId) && damaged.size<MAX_STREAMS)damaged.add(jobId);const p=live.get(jobId);if(p){p.gap=true;return persist(p);} } catch {} }
+    return { bind, observe, alias, drain, gap, flush: () => tail, epoch };
+  }
+  async function settle(pending, onGap, timeout=250) {
+    let timer;
+    const gap=()=>{try{const p=onGap?.();p?.catch?.(()=>{});}catch{}};
+    try { await Promise.race([Promise.resolve(pending),new Promise(resolve=>{timer=setTimeout(()=>{gap();resolve();},timeout);})]); }
+    catch {gap();}finally{clearTimeout(timer);}
+  }
+  const api = { create, settle, PREFIX, MAX_RECORDS, MAX_STREAMS, MAX_BYTES };
+  if (typeof module === 'object' && module.exports) module.exports = api; else root.MuseExecutionAudit = api;
+})(globalThis);

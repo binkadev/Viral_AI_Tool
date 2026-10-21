@@ -352,7 +352,14 @@
 
   // Registry writes target an explicit project and never change selection.
   // Build first, commit atomically, then project the committed active state.
-  function updateProjectMedia(projectId, update) {
+  function reportGeneratedAttachment(jobId, outcome) {
+    try {
+      const pending = window.desktopAPI?.reportGenerationAttachment?.({jobId, outcome, reportId: crypto.randomUUID()});
+      pending?.catch?.(() => {});
+    } catch {}
+  }
+
+  function updateProjectMedia(projectId, update, attachmentJobId) {
     assertWritable();
     if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
     const active = registry.activeProjectId === projectId;
@@ -364,9 +371,11 @@
     try {
       writeRegistry({ ...registry, projects: registry.projects.map(item => item.projectId === projectId ? next : item) });
     } catch (error) {
+      if (attachmentJobId) reportGeneratedAttachment(attachmentJobId, "failure");
       dispatchSaveFailure("generated-media", error);
       throw error;
     }
+    if (attachmentJobId) reportGeneratedAttachment(attachmentJobId, "success");
     if (active) {
       currentSnapshot = next;
       const current = appState();
@@ -399,7 +408,7 @@
   }
 
   function attachGeneratedOutput(job, output, meta) {
-    return updateProjectMedia(job.projectId, snapshot => model.attachGeneratedOutput(snapshot, job, output, meta));
+    return updateProjectMedia(job.projectId, snapshot => model.attachGeneratedOutput(snapshot, job, output, meta), job.id);
   }
 
   function assertSwitchSafe() {

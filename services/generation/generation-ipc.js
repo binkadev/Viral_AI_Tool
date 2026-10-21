@@ -29,6 +29,11 @@ function registerGenerationIpc({ ipcMain, getService, trusted, developmentDiagno
   };
 
   const handlers = {
+    "execution-audit": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.executionAuditReport(payload);
+    },
+    "attachment-report": (service,payload)=>service.reportGenerationAttachment(payload),
     "recovery-candidates": (service,payload)=>{
       if(!identifier(payload))throw 0;
       return service.listRecoveryCandidates(payload);

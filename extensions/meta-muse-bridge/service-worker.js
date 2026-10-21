@@ -1,6 +1,57 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-15-contract3-receipt2-manual1';
-if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js');
+const WORKER_BUILD='muse-worker-v0-3-16-contract3-receipt2-manual1-audit1';
+if(typeof importScripts==='function')importScripts('execution-audit.js','acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js');
+const auditActivity=new Map();
+const workerAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'worker',canClose:id=>!auditActivity.get(id)}):null;}catch{return null;}})();
+const auditRoutePrefix='execution-audit-v1:route:';
+const auditPrepared=new Map();
+async function prepareExecutionAudit(c) {
+  // Optional envelope metadata is never forwarded into an execution payload.
+  try {
+    if(!c.audit || !workerAudit)return;
+    if(auditPrepared.has(c.audit.jobId))return;
+    if(auditPrepared.size>=16){workerAudit.gap(c.audit.jobId);return;}
+    auditPrepared.set(c.audit.jobId,c.audit.auditId);
+    const bound=await workerAudit.bind(c.audit);
+    if(!bound)workerAudit.gap(c.audit.jobId);
+    const routes=await chrome.storage.local.get(null);
+    if(!routes[auditRoutePrefix+c.audit.jobId] && Object.keys(routes).filter(k=>k.startsWith(auditRoutePrefix)).length>=16){workerAudit.gap(c.audit.jobId);return;}
+    await chrome.storage.local.set({[auditRoutePrefix+c.audit.jobId]:{tabId:c.payload.tabId,auditId:c.audit.auditId}});
+    const boundContent=await chrome.tabs.sendMessage(c.payload.tabId,{type:'viral-ai:muse-audit-bind',binding:c.audit});
+    if(!boundContent?.ok)workerAudit.gap(c.audit.jobId);
+    await workerAudit.drain(async packet=>{const r=(await chrome.storage.local.get(auditRoutePrefix+packet.jobId))[auditRoutePrefix+packet.jobId];return r?forwardExecutionAudit(packet,r.tabId):{persisted:false};});
+  }catch{try{workerAudit?.gap(c.audit?.jobId);}catch{}}
+}
+async function prepareExecutionAuditSafely(c) {
+  try {
+    const pending=prepareExecutionAudit(c);
+    if(typeof MuseExecutionAudit==='object')await MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(c.audit?.jobId),500);
+    else await pending;
+  }catch{}
+}
+async function forwardExecutionAudit(packet,tabId) {
+  try {
+    if(!bridge)return {persisted:false};
+    const ident=await identity();
+    return await request(bridge.port,'/v1/audit?instanceId='+encodeURIComponent(ident.instanceId),{token:bridge.token,body:{tabId,packet}});
+  }catch{return {persisted:false};}
+}
+let auditDraining=false;
+async function drainExecutionAudit() {
+  if(auditDraining)return;
+  auditDraining=true;
+  try {
+    await workerAudit?.drain(async packet=>{
+      const k=auditRoutePrefix+packet.jobId,r=(await chrome.storage.local.get(k))[k];
+      if(!r || r.auditId!==packet.auditId)return {persisted:false};
+      const ack=await forwardExecutionAudit(packet,r.tabId);
+      if(ack.persisted && packet.closed){await chrome.storage.local.remove(k);auditPrepared.delete(packet.jobId);}
+      return ack;
+    });
+    for(const tab of (await chrome.tabs.query({url:[MUSE_URL+'*']})).slice(0,20))
+      try{await chrome.tabs.sendMessage(tab.id,{type:'viral-ai:muse-audit-drain'});}catch{}
+  }catch{}finally{auditDraining=false;}
+}
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
 const PORTS=Array.from({length:11},(_,i)=>32147+i), MUSE_URL="https://muse.ai/";
@@ -68,7 +119,7 @@ async function museTabs() {
     diagnostic.workerBuild=WORKER_BUILD;
     diagnostic.contentBuild=/^muse-content-[a-z0-9-]{1,64}$/.test(handshake?.buildMarker||'')?handshake.buildMarker:'unreported';
     diagnostic.generationActive=status?.devEvidence?.generationActive===true;
-    return {manualRecoveryVersion:fresh && handshake?.manualRecoveryVersion===1?1:null,tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
+    return {executionAuditVersion:fresh && workerAudit && handshake?.executionAuditVersion===1?1:null,manualRecoveryVersion:fresh && handshake?.manualRecoveryVersion===1?1:null,tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
       runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported',diagnosticsEnabled:developmentDiagnostics && errorCode==='NONE' && fresh && handshake?.diagnosticsEnabled===true},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
   }));
 }
@@ -90,11 +141,17 @@ async function poll() {
     await request(b.port,"/v1/heartbeat"+suffix,{token:b.token,body:{profileLabel:ident.profileLabel,browserName:"Chrome",tabs:await museTabs()}});
     lastBridgeErrorCode='NONE';
     const response=await request(b.port,"/v1/poll"+suffix,{token:b.token});
+    void drainExecutionAudit();
     if(response.command) {
       const c=response.command;
       if(typeof c.id!=="string" || c.id.length>80)throw Error("UNAVAILABLE");
       // Keep heartbeats alive while the content script acquires a video.
-      const execution=execute(c).then(result=>request(b.port,"/v1/result"+suffix,{token:b.token,body:{commandId:c.id,ok:true,result,error:null}}),
+      const auditJob=c.payload?.operationId;
+      auditActivity.set(auditJob,(auditActivity.get(auditJob)||0)+1);
+      const execution=prepareExecutionAuditSafely(c).then(()=>execute(c)).finally(()=>{
+        const left=(auditActivity.get(auditJob)||1)-1;
+        if(left)auditActivity.set(auditJob,left);else auditActivity.delete(auditJob);
+      }).then(result=>request(b.port,"/v1/result"+suffix,{token:b.token,body:{commandId:c.id,ok:true,result,error:null}}),
         ()=>request(b.port,"/v1/result"+suffix,{token:b.token,body:{commandId:c.id,ok:false,result:null,error:null}})).catch(()=>{observationEpoch=crypto.randomUUID();});
       if(c.type==='openMuse')await execution;
     }
@@ -116,6 +173,10 @@ chrome.runtime.onConnect.addListener(port=>{
   keepAlive++;run();port.onDisconnect.addListener(()=>{keepAlive=Math.max(0,keepAlive-1);});
 });
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  if(message?.type==='viral-ai:muse-audit-packet' && sender.id===chrome.runtime.id && sender.frameId===0 &&
+      Number.isSafeInteger(sender.tab?.id) && sender.url?.startsWith(MUSE_URL)) {
+    forwardExecutionAudit(message.packet,sender.tab.id).then(reply,()=>reply({persisted:false}));return true;
+  }
   if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL("popup.html"))return false;
   (async()=>{
     if(message?.type==="viral-ai:bridge-state")return {ok:true,...await identity(),connected:!!bridge};
@@ -263,6 +324,7 @@ async function executeV2(c) {
     if(c.type==='submitGeneration') {
       if(saved.localCancelled || saved.invoked || saved.receipt.userStableIdHash || p.receipt.userStableIdHash)return interrupted();
       saved={...saved,invoked:true};await chrome.storage.local.set({[key]:saved});
+      try{const pending=workerAudit?.observe(p.operationId,'submit.committed');if(typeof MuseExecutionAudit==='object')await MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(p.operationId));}catch{try{workerAudit?.gap(p.operationId);}catch{}}
     } else if(!saved.receipt.userStableIdHash)return interrupted();
   }
   const receipt=saved.receipt;

@@ -1,8 +1,9 @@
 "use strict";
 // All authority here is ephemeral exact DOM identity, never automatic ownership.
 (function(root) {
-  function create({contract:C,uuid,hash,now=Date.now,live,enumerate,describe,watch,reveal,close}) {
+  function create({contract:C,uuid,hash,now=Date.now,live,enumerate,describe,watch,reveal,close,observe}) {
     let retained=null,session=null,stopWatch=null,timer=null;
+    const witness=(type,p,ids)=>{try{const pending=observe?.(type,p,ids);pending?.catch?.(()=>{});}catch{}};
     const documentEpoch=uuid();
     function revoke() {
       if(session)session.revoked=true;
@@ -36,6 +37,7 @@
       const s={version:C.VERSION,operationId:p.operationId,projectId:p.projectId,sceneId:p.sceneId,selectionSessionId:uuid(),documentEpoch,revision:uuid(),expiresAt:now()+C.TTL,
         nodes,descriptors,candidates:[],revoked:false,consumed:null,revealed:new Set()};
       session=s;
+      witness('manual.session_opened',p,{session:s.selectionSessionId});
       // Observe BEFORE asynchronous hashing; even transient removal is terminal.
       stopWatch=watch(()=>revoke(),r,s);
       timer=setTimeout(revoke,C.TTL);timer.unref?.();
@@ -62,6 +64,7 @@
     }
     async function view(p) {
       const item=selected(p);await reveal(item.node,item.index+1);
+      witness('manual.candidate_revealed',p,{session:item.s.selectionSessionId,candidate:p.candidateId});
       const fresh=selected(p);if(fresh.node!==item.node)throw Error('CHANGED');
       fresh.s.revealed.add(p.candidateId);
     }

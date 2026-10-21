@@ -45,6 +45,8 @@
     "test:generation-progress": "node tests/core-generation-progress.test.js && node --test tests/core-generated-media.test.js",
     "test:muse-manual-recovery": "node --test tests/muse-manual-recovery.test.js tests/muse-manual-recovery-ui.test.js",
     "dev:muse-manual-recovery": "node dev/run-manual-recovery.js",
+    "dev:execution-audit": "node dev/run-execution-audit.js",
+    "test:execution-audit": "node --test tests/execution-audit.test.js",
     "test:muse-execution": "node --test tests/muse-generation-execution.test.js tests/muse-acceptance-replay.test.js tests/muse-ownership-diagnostic.test.js",
     "test:muse-extension": "node --test tests/muse-extension-readiness.test.js tests/muse-development-diagnostics.test.js",
     "test:muse-browser": "node --test tests/muse-browser-discovery.test.js tests/muse-browser-bridge.test.js",

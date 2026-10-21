@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const C=require('../../../extensions/meta-muse-bridge/manual-recovery-contract');
 const {failure}=require('../generation-job');
 const {acquireBounded}=require('./bounded-acquisition');
+const {safeObserve}=require('../execution-audit');
 function createManualRecovery({bridge,verifyVideo,busy}) {
   const sessions=new Map(),transfers=new Map(),cancelled=new Set();
   const fail=code=>{throw failure(code||'RECOVERY_CHANGED');};
@@ -18,6 +19,7 @@ function createManualRecovery({bridge,verifyVideo,busy}) {
   async function send(type,c,r,extra={}) {
     const p={tabId:r.target.tabId,operationId:c.jobId,projectId:c.projectId,sceneId:c.sceneId,...extra};
     if(!C.request(type,p))fail();
+    try{bridge.observeExecutionAudit?.(c,r.target);}catch{}
     const result=await bridge.command(type,p,r.target);
     if(!C.result(type,result,p))fail();
     if(result.state==='unavailable')fail(result.reason==='TOO_MANY'?'RECOVERY_TOO_MANY':'RECOVERY_CHANGED');
@@ -58,13 +60,14 @@ function createManualRecovery({bridge,verifyVideo,busy}) {
       let durable=false,current=resolution;
       try {
         await send('validateRecoveryCandidate',c,s,token);
-        await persist(resolution);durable=true; // No transfer can precede this fsync-backed commit.
+        await persist(resolution);durable=true;
+        safeObserve(c,'manual.candidate_confirmed',{resolutionId:resolution.resolutionId}); // No transfer can precede this fsync-backed commit.
         await c.onVerifying?.();
         const r={target:s.target};
 
         await persist(current={...current,phase:'acquiring'});
         const result=await acquireBounded({...c,onVerifying:undefined},r,{
-          verifyVideo,cancelled,transfers,bridge:{command:(type,p)=>send(type,c,s,{...token,resolutionId:resolution.resolutionId,transferId:p.transferId,sequence:p.sequence,offset:p.offset,mediaKind:'video',abort:true})},
+          auditMode:'user-confirmed',verifyVideo,cancelled,transfers,bridge:{command:(type,p)=>send(type,c,s,{...token,resolutionId:resolution.resolutionId,transferId:p.transferId,sequence:p.sequence,offset:p.offset,mediaKind:'video',abort:true})},
           commandName:'acquireRecoveryCandidate',transferId:resolution.transferId,verifiedIdentity:()=>({}),
           command:(_type,_c,_r,p)=>send('acquireRecoveryCandidate',c,s,{...token,resolutionId:resolution.resolutionId,transferId:resolution.transferId,sequence:p.sequence,offset:p.offset,mediaKind:'video'}),
           verifyRecorded:async()=>fail(),

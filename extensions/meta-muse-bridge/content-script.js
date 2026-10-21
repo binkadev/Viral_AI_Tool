@@ -1,5 +1,7 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-15-contract3-receipt2-manual1';
+const CONTENT_BUILD='muse-content-v0-3-16-contract3-receipt2-manual1-audit1';
+const contentAuditActivity=new Map();
+const contentAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'content',canClose:id=>!contentAuditActivity.get(id)}):null;}catch{return null;}})();
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -690,7 +692,13 @@ async function submit(p) {
     }
     invocation.send='uncertain';invocation.reason='invocation-uncertain';
     sendStartedAt=Date.now();
-    button.click(); // No await between fresh resolution/validation and invocation.
+    try {
+      button.click(); // No await between fresh resolution/validation and invocation.
+    } catch(error) {
+      try{contentAudit?.observe(p.operationId,'submit.invocation_observed',{outcome:'threw_unknown'});}catch{try{contentAudit?.gap(p.operationId);}catch{}}
+      throw error;
+    }
+    try{contentAudit?.observe(p.operationId,'submit.invocation_observed',{outcome:'returned'});}catch{try{contentAudit?.gap(p.operationId);}catch{}}
     invocation.send='invoked';invocation.reason='acceptance-unproven';
     for(let i=0;i<25;i++) {
       await new Promise(r=>setTimeout(r,200));
@@ -1035,11 +1043,25 @@ async function readBoundedVideoChunk(t,p,revalidate,fields) {
 const manualRecovery=typeof installMuseManualRecovery==='function'?installMuseManualRecovery({composer,visible,generationActive,STOP,transfers,closedTransfers,closeTransfer,readChunk:readBoundedVideoChunk,autoBusy:()=>[...transfers.values()].some(t=>!t.manual) || [...operations.values()].some(op=>op.v2Reserved && !op.invalid)}):null;
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(sender.id!==chrome.runtime.id || location.origin!=='https://muse.ai' || window.top!==window)return false;
+  if(message?.type==='viral-ai:muse-audit-bind') {
+    Promise.resolve(contentAudit?.bind(message.binding)).then(async ok=>{
+      await contentAudit?.drain(packet=>chrome.runtime.sendMessage({type:'viral-ai:muse-audit-packet',packet}));
+      reply({ok:!!ok});
+    },()=>reply({ok:false})).catch(()=>reply({ok:false}));return true;
+  }
+  if(message?.type==='viral-ai:muse-audit-drain') {
+    Promise.resolve(contentAudit?.drain(packet=>chrome.runtime.sendMessage({type:'viral-ai:muse-audit-packet',packet}))).then(()=>reply({ok:true}),()=>reply({ok:false}));return true;
+  }
   if(message?.type==='viral-ai:muse-manual-recovery' && manualRecovery) {
     if(!MuseManualRecoveryContract.request(message.command,message.payload,{content:true}))return false;
-    manualRecovery.execute(message.command,message.payload).then(reply);return true;
+    const auditJob=message.payload.operationId;
+    contentAuditActivity.set(auditJob,(contentAuditActivity.get(auditJob)||0)+1);
+    manualRecovery.execute(message.command,message.payload).finally(()=>{
+      const left=(contentAuditActivity.get(auditJob)||1)-1;
+      if(left)contentAuditActivity.set(auditJob,left);else contentAuditActivity.delete(auditJob);
+    }).then(reply);return true;
   }
-  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics,manualRecoveryVersion:1});return false;}
+  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics,manualRecoveryVersion:1,executionAuditVersion:contentAudit?1:null});return false;}
   if(message?.type==='viral-ai:muse-status'){
     try{reply(status());}catch{reply({sampledAt:Date.now(),composerReady:false,inspectionComplete:false,contentError:'STATUS_EXCEPTION'});}
     return false;
@@ -1059,7 +1081,9 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(type==='submitGeneration' && !developmentDiagnostics && p.receipt?.version!==2)return false;
   if(type!=='submitGeneration' && p.prompt!==undefined)return false;
   if(type==='acquireGenerationResult' && (!Number.isSafeInteger(p.offset) || p.offset<0 || p.offset>268435456))return false;
+  contentAuditActivity.set(p.operationId,(contentAuditActivity.get(p.operationId)||0)+1);
   Promise.resolve().then(()=>type==='prepareGeneration'?prepareV2(p):type==='submitGeneration'?submit(p):type==='inspectGeneration'?inspect(p):type==='acquireGenerationResult'?acquire(p):cancelLocal(p))
+    .finally(()=>{const left=(contentAuditActivity.get(p.operationId)||1)-1;if(left)contentAuditActivity.set(p.operationId,left);else contentAuditActivity.delete(p.operationId);})
     .then(reply,()=>reply(answer(p,'interrupted')));return true;
 });
 let reconnectAttempts=0,reconnectTimer=null,activePort=null;

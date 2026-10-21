@@ -527,6 +527,7 @@ app.whenReady().then(() => {
     registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge,
       verifyVideo:async file=>{const media=await probeVideo(file);if(!(media.duration>0 && media.width>0 && media.height>0))throw Error('ASSET_UNAVAILABLE');return media;} }));
     generationService = new GenerationService({ root, registry, providerConfigStore });
+    museExtensionBridge.executionAuditSink = (packet, target) => generationService.ingestExecutionWitness(packet, target);
     }
   } catch {}
   // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.

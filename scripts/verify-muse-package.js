@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const asar = require("@electron/asar");
 function verify(archive) {
   const root = "extensions/meta-muse-bridge/";
-  for (const name of ["manifest.json", "acceptance-replay.js", "receipt-v2.js", "manual-recovery-contract.js", "manual-recovery.js", "content-manual-recovery.js", "worker-manual-recovery.js", "service-worker.js", "content-script.js", "popup.html", "popup.js", "popup.css", "strings.js"]) {
+  for (const name of ["manifest.json", "execution-audit.js", "acceptance-replay.js", "receipt-v2.js", "manual-recovery-contract.js", "manual-recovery.js", "content-manual-recovery.js", "worker-manual-recovery.js", "service-worker.js", "content-script.js", "popup.html", "popup.js", "popup.css", "strings.js"]) {
     const shipped = asar.extractFile(archive, path.normalize(root + name));
     if (!shipped.equals(fs.readFileSync(path.join(__dirname, "..", root, name)))) throw Error("Missing or stale packaged Muse extension: " + name);
   }

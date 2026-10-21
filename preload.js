@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   listGenerationJobs: projectId => ipcRenderer.invoke('generation:list', projectId),
   getGenerationJob: id => ipcRenderer.invoke('generation:get', id),
   getGenerationOutput: id => ipcRenderer.invoke('generation:output', id),
+  getGenerationExecutionAudit: id => ipcRenderer.invoke('generation:execution-audit', id),
+  reportGenerationAttachment: report => ipcRenderer.invoke('generation:attachment-report', report),
   cancelGeneration: id => ipcRenderer.invoke('generation:cancel', id),
   recoverGeneration: id => ipcRenderer.invoke('generation:recover', id),
   listRecoveryCandidates: id => ipcRenderer.invoke('generation:recovery-candidates', id),

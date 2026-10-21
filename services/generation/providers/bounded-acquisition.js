@@ -2,6 +2,7 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const {failure}=require("../generation-job");
 const receiptV2=require("../../../extensions/meta-muse-bridge/receipt-v2");
+const {safeObserve}=require('../execution-audit');
 // Shared byte transport and native verification; authorization belongs to each resolver.
 async function acquireBounded(c,r,env) {
     const {verifyVideo,cancelled,transfers,command,persistRecord,verifyRecorded,bridge,commandName,verifiedIdentity,transferId}=env;
@@ -32,6 +33,8 @@ async function acquireBounded(c,r,env) {
       // A partial from an interrupted acquisition is owned by this same operation.
       clearPartial();
       fd=fs.openSync(partial,'wx',0o600);created=true;
+      const acquisitionMode=env.auditMode||'automatic';
+      safeObserve(c,'acquisition.started',{mode:acquisitionMode,transferId:transfer.transferId});
       let offset=0;const checksum=crypto.createHash('sha256'),started=Date.now();
       do {
         if(cancelled.has(c.jobId) || Date.now()-started>300000)throw failure('RECOVERY_REQUIRED');
@@ -50,6 +53,7 @@ async function acquireBounded(c,r,env) {
         offset+=bytes.length;
       } while(!transferDone);
       fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
+      safeObserve(c,'acquisition.completed',{mode:acquisitionMode,transferId:transfer.transferId});
       const media=await verify(partial);
       if(cancelled.has(c.jobId))throw failure('RECOVERY_REQUIRED');
       const verifiedOutput={fileName,size:offset,sha256:checksum.digest('hex'),...verifiedIdentity(r)};
@@ -57,6 +61,7 @@ async function acquireBounded(c,r,env) {
       // only these exact verified bytes, never an arbitrary preexisting file.
       persistRecord(c,r,{verifiedOutput},media);
       fs.linkSync(partial,output); // Exclusive publication; never overwrite.
+      safeObserve(c,'output.published',{mode:acquisitionMode,fileName,size:verifiedOutput.size,sha256:verifiedOutput.sha256,duration:media?.duration,width:media?.width,height:media?.height});
       return {status:'completed',fileName,verifiedOutput,...(media?{media}:{})};
     } finally {
       if(fd!==undefined)fs.closeSync(fd);if(created)try{fs.unlinkSync(partial);}catch{}

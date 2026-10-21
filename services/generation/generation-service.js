@@ -9,6 +9,7 @@ const { normalizeRequest, identifier } = require("./generation-request");
 const { chooseModel } = require("./model-router");
 const { ProviderRegistry } = require("./provider-registry");
 const { GenerationStore } = require("./generation-store");
+const { ExecutionAudit, observerContext: auditContext, uuid: auditUuid, newMarker: newAuditMarker } = require("./execution-audit");
 
 const ACTIVE = new Set(["queued", "preparing", "submitting", "running", "verifying", "cancelling"]);
 const BLOCKING = new Set([...ACTIVE, "interrupted"]);
@@ -32,6 +33,7 @@ class GenerationService extends EventEmitter {
   constructor({ root, registry = new ProviderRegistry(), store = new GenerationStore(root), providerConfigStore = null }) {
     super();
     this.root = root;
+    this.executionJournal = new ExecutionAudit(root);
     this.registry = registry;
     this.providerConfigStore = providerConfigStore;
     this.store = store;
@@ -68,9 +70,16 @@ class GenerationService extends EventEmitter {
   }
 
   commit(job) {
+    const previous = this.jobs.find(item => item.id === job.id);
     const jobs = this.jobs.filter(item => item.id !== job.id).concat(job);
     this.store.save(jobs);
     this.jobs = jobs;
+    // Passive observers run only after authoritative job persistence succeeds.
+    try {
+      if (!previous && job.executionAudit) this.executionJournal.admit(job);
+      if (TERMINAL.has(job.status) && previous?.status !== job.status)
+        this.executionJournal.record(job, "job.terminal", { status: job.status }, { close: true });
+    } catch {}
     if (TERMINAL.has(job.status) || job.status === "interrupted") {
       this.runtimeActive.delete(job.id);clearTimeout(this.monitors.get(job.id));this.monitors.delete(job.id);
     }
@@ -82,6 +91,34 @@ class GenerationService extends EventEmitter {
     const job = this.jobs.find(item => item.id === id);
     if (!job) throw failure("JOB_NOT_FOUND");
     return clone(job);
+  }
+
+  executionAuditReport(id) {
+    return this.executionJournal.report(this.get(id));
+  }
+
+  reportGenerationAttachment(payload) {
+    if (!payload || Object.keys(payload).sort().join(",") !== "jobId,outcome,reportId" ||
+        !identifier(payload.jobId) || !auditUuid(payload.reportId) || !["success", "failure"].includes(payload.outcome)) throw failure("INVALID_REQUEST");
+    const job = this.get(payload.jobId);
+    if (job.status !== "completed" || !job.outputVerification || job.output?.fileName !== job.id + ".mp4") throw failure("INVALID_REQUEST");
+    const persisted = this.executionJournal.record(job, "project.attachment_reported", { outcome: payload.outcome,
+      provenance: "renderer-reported", assetId: "generation:" + job.id, sourceId: "generation-source:" + job.id },
+      { source: "renderer", eventId: payload.reportId, close: payload.outcome === "success" });
+    return { persisted };
+  }
+
+  ingestExecutionWitness(packet, target) {
+    try {
+      const job = this.get(packet.jobId);
+      if (!job.executionAudit || job.provider !== "muse" || !auditUuid(packet.auditId) || packet.auditId !== job.executionAudit.auditId) return { persisted: false };
+      // Telemetry provenance only: never used to authorize an execution action.
+      const file = path.join(this.root, "outputs", job.id, "muse-operation.json"), stat = fs.lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 262144) return { persisted: false };
+      const operation = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (operation.operationId !== job.id || operation.target?.instanceId !== target.instanceId || operation.target.tabId !== target.tabId) return { persisted: false };
+      return { persisted: this.executionJournal.ingest(job, packet), close: TERMINAL.has(job.status) };
+    } catch { return { persisted: false }; }
   }
 
   list(projectId) {
@@ -321,6 +358,7 @@ class GenerationService extends EventEmitter {
       request: clone(job.request),
       modelId: job.modelId,
       outputDirectory: path.join(this.root, "outputs", job.id),
+      ...auditContext(this.executionJournal, job),
       ...(job.manualRecovery?{manualRecovery:clone(job.manualRecovery)}:{})
     };
   }
@@ -353,6 +391,7 @@ class GenerationService extends EventEmitter {
       if (!this.registry.getProvider(route.model.provider)) throw failure("PROVIDER_UNAVAILABLE");
 
       const job = createJob(request, route, retryOf);
+      job.executionAudit = newAuditMarker();
       if(job.provider==='muse')job.manualRecovery={version:1,eligible:true};
       if(job.provider==='muse' && this.manualSelectionJob) {
         const old=this.get(this.manualSelectionJob);

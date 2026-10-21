@@ -131,6 +131,7 @@ class GenerationStore {
           cancelledAt: Number.isFinite(Date.parse(job.cancelledAt)) ? job.cancelledAt : null,
           errorCode,
           asset,
+          ...(job.executionAudit===undefined?{}:{executionAudit:require("./execution-audit").persistedMarker(job.executionAudit)}),
           ...(job.manualRecovery===undefined?{}:{manualRecovery:require('./output-resolution').eligibility(job.manualRecovery)}),
           ...(job.outputResolution===undefined?{}:{outputResolution:require('./output-resolution').validate(job.outputResolution,{id:job.id,projectId:request.projectId,sceneId:request.sceneId})})
         };
@@ -152,7 +153,9 @@ class GenerationStore {
       }
       fs.mkdirSync(this.root, { recursive: true });
       fd = fs.openSync(this.file + ".tmp", "w", 0o600);
-      fs.writeFileSync(fd, JSON.stringify({ version: 1, jobs }));
+      const persistedJobs = jobs.map(job => job.executionAudit === undefined ? job :
+        {...job, executionAudit: require("./execution-audit").persistedMarker(job.executionAudit)});
+      fs.writeFileSync(fd, JSON.stringify({ version: 1, jobs: persistedJobs }));
       fs.fsyncSync(fd);
       fs.closeSync(fd);
       fd = undefined;

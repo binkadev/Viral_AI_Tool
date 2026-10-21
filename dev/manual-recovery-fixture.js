@@ -4,8 +4,9 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),cryp
 const {GenerationService}=require('../services/generation/generation-service');
 const {ProviderRegistry}=require('../services/generation/provider-registry');
 const {createMuseProvider}=require('../services/generation/providers/muse-provider');
-function createFixture({root,bytes,verifyVideo}) {
-  const calls=[],focus=[],observers=new Set(),events=new Map(),windowEvents=new Map(),stored={};
+function createFixture({root,bytes,verifyVideo,executionAudit=false}) {
+  const calls=[],focus=[],observers=new Set(),events=new Map(),windowEvents=new Map(),stored={},auditBindings=new Map();
+  const auditStorage=require("./execution-audit-fixture").memoryStorage(stored);
   let clock=Date.now(),active=false,href='https://muse.ai/conversation/isolated',fetches=0,failPersistence=false,failOutputPersistence=false,onFetch=null,onRead=null;
   const listen=(map,k,f)=>{if(!map.has(k))map.set(k,new Set());map.get(k).add(f);};
   const remove=(map,k,f)=>map.get(k)?.delete(f);
@@ -23,7 +24,7 @@ function createFixture({root,bytes,verifyVideo}) {
   const context={document,window,location:{origin:'https://muse.ai',get href(){return href;}},URL,TextEncoder,crypto:crypto.webcrypto,AbortController,Uint8Array,btoa,console,
     Date:{now:()=>clock},setTimeout:(f,ms)=>{const t=setTimeout(f,ms);if(ms>=15000)t.unref();return t;},clearTimeout,setInterval:(f,ms)=>{const t=setInterval(f,ms);t.unref();return t;},clearInterval,
     getComputedStyle:()=>({display:'block',visibility:'visible'}),MutationObserver:class {constructor(fn){this.fn=fn;}observe(){observers.add(this.fn);}disconnect(){observers.delete(this.fn);}},
-    chrome:{runtime:{id:'fixture',getManifest:()=>({version:'0.3.15'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
+    chrome:{storage:{local:auditStorage},runtime:{id:'fixture',getManifest:()=>({version:'0.3.16'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
     fetch:async(source)=>{
       fetches++;calls.push({type:'fetch',sourceIndex:[...sources.keys()].indexOf(source)});
       onFetch?.();
@@ -36,7 +37,7 @@ function createFixture({root,bytes,verifyVideo}) {
     }
   };
   vm.createContext(context);
-  const files=['acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','manual-recovery.js','content-manual-recovery.js','content-script.js'];
+  const files=[...(executionAudit?['execution-audit.js']:[]),'acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','manual-recovery.js','content-manual-recovery.js','content-script.js'];
   vm.runInContext(files.map(f=>fs.readFileSync(path.join(__dirname,'../extensions/meta-muse-bridge',f),'utf8')).join(';\n'),context);
   // The production composer resolver is replaced only inside this DEV VM. No
   // fake production flag or branch exists in renderer/provider/security code.
@@ -48,6 +49,13 @@ function createFixture({root,bytes,verifyVideo}) {
   const contentSend=async(id,m)=>{
     if(id!==5)throw Error('Wrong pinned tab');
     const p=m.payload;
+    if(m.type==='viral-ai:muse-audit-bind') {
+      context.auditBinding=m.binding;
+      const ok=await vm.runInContext('contentAudit.bind(auditBinding)',context);
+      await vm.runInContext('contentAudit.drain(packet=>chrome.runtime.sendMessage({type:"viral-ai:muse-audit-packet",packet}))',context);
+      return {ok};
+    }
+    if(m.type==='viral-ai:muse-audit-drain')return {ok:true};
     if(m.type==='viral-ai:muse-manual-recovery') {
       context.command=m.command;context.payload=p;
       return JSON.parse(JSON.stringify(await vm.runInContext('manualRecovery.execute(command,payload)',context)));
@@ -57,15 +65,22 @@ function createFixture({root,bytes,verifyVideo}) {
     return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted'};
   };
   const wc={crypto:crypto.webcrypto,TextEncoder,setTimeout,clearTimeout,navigator:{userAgent:'Edg/1'},chrome:{
-    runtime:{id:'fixture',getManifest:()=>({version:'0.3.15'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
-    storage:{local:{get:async k=>({[k]:stored[k]}),set:async v=>Object.assign(stored,JSON.parse(JSON.stringify(v))),remove:async()=>{}}},
+    runtime:{id:'fixture',getManifest:()=>({version:'0.3.16'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+    storage:{local:auditStorage},
     tabs:{query:async()=>[{id:5,windowId:7}],update:async(id,p)=>{focus.push(['tab',id]);return {id,windowId:7};},sendMessage:contentSend},windows:{update:async id=>focus.push(['window',id])},alarms:{create(){},onAlarm:{addListener(){}}}}};
   vm.createContext(wc);
-  vm.runInContext(['acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js','service-worker.js'].map(f=>fs.readFileSync(path.join(__dirname,'../extensions/meta-muse-bridge',f),'utf8')).join(';\n'),wc);
+  vm.runInContext([...(executionAudit?['execution-audit.js']:[]),'acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js','service-worker.js'].map(f=>fs.readFileSync(path.join(__dirname,'../extensions/meta-muse-bridge',f),'utf8')).join(';\n'),wc);
   const bridge={executionReady:async()=>true,receiptV2Ready:async()=>true,executionTarget:async()=>({instanceId:'fixture-instance',tabId:5}),
-    command:async(type,p,target)=>{if(target.instanceId!=='fixture-instance' || target.tabId!==5)throw Error('Wrong pinned instance');calls.push({type,p:JSON.parse(JSON.stringify(p))});wc.command={id:crypto.randomUUID(),type,payload:p};return await vm.runInContext('execute(command)',wc);}};
+    observeExecutionAudit:(c,target)=>{if(executionAudit)auditBindings.set(c.jobId,{jobId:c.jobId,auditId:c.executionAudit.auditId});},
+    command:async(type,p,target)=>{if(target.instanceId!=='fixture-instance' || target.tabId!==5)throw Error('Wrong pinned instance');calls.push({type,p:JSON.parse(JSON.stringify(p))});wc.command={id:crypto.randomUUID(),type,payload:p,...(executionAudit?{audit:auditBindings.get(p.operationId)}:{})};if(executionAudit)await vm.runInContext('prepareExecutionAuditSafely(command)',wc);return await vm.runInContext('execute(command)',wc);}};
   const registry=new ProviderRegistry(),provider=createMuseProvider({configStore:{read:()=>({enabled:true})},extensionBridge:bridge,verifyVideo});registry.register(provider);
   const service=new GenerationService({root,registry}),originalSave=service.store.save.bind(service.store);
+  const auditDeliver=packet=>service.ingestExecutionWitness(JSON.parse(JSON.stringify(packet)),{instanceId:'fixture-instance',tabId:5});
+  if(executionAudit){
+    wc.auditDeliver=auditDeliver;vm.runInContext('forwardExecutionAudit=async packet=>auditDeliver(packet)',wc);
+    context.chrome.runtime.sendMessage=async m=>auditDeliver(m.packet);
+  }
+  async function drainAudit(){if(executionAudit)for(let i=0;i<3;i++){await vm.runInContext('workerAudit',wc).drain(auditDeliver);await vm.runInContext('contentAudit',context).drain(auditDeliver);}}
   service.store.save=jobs=>{
     if(failPersistence && jobs.some(j=>j.outputResolution?.phase==='confirmed') || failOutputPersistence && jobs.some(j=>j.outputResolution?.phase==='verified'))throw Object.assign(Error('STORE_UNAVAILABLE'),{code:'STORE_UNAVAILABLE'});
     originalSave(jobs);
@@ -77,7 +92,7 @@ function createFixture({root,bytes,verifyVideo}) {
     return service.get(job.id);
   }
   function mutate(records=[{type:'childList',target:container,addedNodes:[],removedNodes:[]}]){for(const fn of [...observers])fn(records);}
-  return {service,registry,provider,bridge,calls,focus,stored,context,wc,admit,mutate,get nodes(){return nodes;},get fetches(){return fetches;},
+  return {service,registry,provider,bridge,calls,focus,stored,context,wc,admit,mutate,drainAudit,get nodes(){return nodes;},get fetches(){return fetches;},
     setBytes:value=>{sources.set(nodes[0].currentSrc,Buffer.concat([value,Buffer.alloc(16)]));sources.set(nodes[1].currentSrc,value);},
     expire:()=>{clock+=120001;},navigate:()=>{href+='changed';mutate([]);},reload:()=>vm.runInContext('manualRecovery.controller.reset()',context),
     restartWorker:()=>vm.runInContext('observationEpoch=crypto.randomUUID()',wc),

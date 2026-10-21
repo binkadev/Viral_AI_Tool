@@ -23,6 +23,14 @@ function installMuseManualRecovery(env) {
   };
   const controller=MuseManualRecovery.create({contract:C,uuid:()=>crypto.randomUUID(),hash:async value=>{
     const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(b)].map(v=>v.toString(16).padStart(2,'0')).join('');
+  },observe:(type,p,privateIds)=>{
+    try{
+      const audit=typeof contentAudit==='undefined'?null:contentAudit;
+      if(!audit)return;
+      const detail={sessionAlias:audit.alias(p.operationId,privateIds.session)};
+      if(privateIds.candidate)detail.candidateAlias=audit.alias(p.operationId,privateIds.candidate);
+      audit.observe(p.operationId,type,detail);
+    }catch{try{contentAudit?.gap(p.operationId);}catch{}}
   },live,enumerate:container=>[...container.querySelectorAll('video')],describe:descriptor,
     close:()=>{unhighlight();for(const t of env.transfers.values())if(t.manual)env.closeTransfer(t);},
     reveal:(node,index)=>{

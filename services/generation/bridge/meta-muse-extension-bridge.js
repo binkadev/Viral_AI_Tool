@@ -34,6 +34,7 @@ class MetaMuseExtensionBridge {
     this.root=userDataPath;this.source=extensionSourceDir;this.shell=shell;this.now=now;this.commandTimeoutMs=commandTimeoutMs;
     this.selectionFile=path.join(userDataPath,"meta-muse-extension-selection.json");
     this.installDir=path.join(userDataPath,"meta-muse-extension");
+    this.auditBindings=new Map();
     this.serverId=crypto.randomUUID();this.sessions=new Map();this.pending=new Map();
     this.selectedInstanceId=null;this.selectedTabId=null;this.server=null;this.port=0;this.starting=null;this.stopped=false;
   }
@@ -104,15 +105,24 @@ class MetaMuseExtensionBridge {
     const s=this.sessions.get(url.searchParams.get("instanceId"));
     const token=req.headers["x-viral-muse-token"];
     if(!s || (ownershipTransport && this.now()-s.lastSeen>SESSION_TTL_MS) || (origin && s.origin!==origin) || typeof token!=="string" || token.length!==s.token.length || !crypto.timingSafeEqual(Buffer.from(token),Buffer.from(s.token))) return this.reply(res,401,{ok:false,error:"session-required"});
+    if(req.method==="POST" && url.pathname==="/v1/audit") {
+      const b=await body(req);
+      check(exact(b,['tabId','packet']) && tabId(b.tabId) && s.tabs.some(t=>t.tabId===b.tabId) &&
+        b.packet && Buffer.byteLength(JSON.stringify(b.packet))<=24576);
+      let ack={persisted:false};
+      try{ack=await this.executionAuditSink?.(b.packet,{instanceId:s.instanceId,tabId:b.tabId})||ack;}catch{}
+      return this.reply(res,200,{persisted:ack.persisted===true,close:ack.close===true});
+    }
     if(req.method==="POST" && url.pathname==="/v1/heartbeat") {
       const b=await body(req);
       check(exact(b,["profileLabel","browserName","tabs"]) && text(b.profileLabel,120) && b.browserName==="Chrome" && Array.isArray(b.tabs) && b.tabs.length<=20);
       const ids=new Set();
       const tabs=b.tabs.map(t=>{
         // Legacy 0.1.0 metadata is bounded then discarded, never stored or returned.
-        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild","manualRecoveryVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild","manualRecoveryVersion","executionAuditVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
         if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
         if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
+        check(t.executionAuditVersion===undefined || t.executionAuditVersion===null || t.executionAuditVersion===1);
         const evidence=t.devEvidence;
         const validEvidence=evidence && exact(evidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) &&
           ['root','editor','actionSlot','generationActive'].every(k=>typeof evidence[k]==='boolean') && Object.values(evidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128));
@@ -122,7 +132,7 @@ class MetaMuseExtensionBridge {
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
+        return {executionAuditVersion:t.executionAuditVersion===1?1:null,manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
           ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),contentFresh:!!validEvidence,composerDetected:validEvidence?evidence.root && evidence.editor && evidence.actionSlot:null,
           generationActive:validEvidence?evidence.generationActive:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection}:{})};
       });
@@ -133,7 +143,11 @@ class MetaMuseExtensionBridge {
       if(s.extensionState!=="extension_connected") return this.reply(res,200,{ok:true,command:null});
       const p=this.pending.get(s.instanceId);
       const command=p&&!p.sent ? {id:p.id,type:p.type || "openMuse",payload:p.payload || (p.tabId?{tabId:p.tabId}:{})} : null;
-      if(command)p.sent=true;
+      if(command) {
+        p.sent=true;
+        const audit=this.auditBindings.get(command.payload?.operationId);
+        if(audit && audit.target.instanceId===s.instanceId && audit.target.tabId===command.payload.tabId)command.audit=audit.binding;
+      }
       return this.reply(res,200,{ok:true,command});
     }
     if(req.method==="POST" && url.pathname==="/v1/result") {
@@ -186,7 +200,7 @@ class MetaMuseExtensionBridge {
     const receivers=sessions.flatMap((s,sessionIndex)=>s.tabs.map((t,receiverIndex)=>{
       const d=t.diagnostic;
       return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
-        reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
+        executionAuditVersion:t.executionAuditVersion===1?1:null,reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
         diagnosticsEnabled:t.runtimeBuild?.diagnosticsEnabled===true,contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
         freshness:d?.museTabEvidenceAgeBucket||(t.contentFresh?'fresh':'absent'),authenticated:d?d.authenticatedEvidencePresent===true:t.authState==='authenticated',composerDetected:d?d.composerDetected===true:t.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
     }));
@@ -258,6 +272,14 @@ class MetaMuseExtensionBridge {
     const timer=setTimeout(()=>this.finish(s.instanceId,false),['acquireGenerationResult','acquireRecoveryCandidate'].includes(type)?70000:this.commandTimeoutMs);
     this.pending.set(s.instanceId,{id:crypto.randomUUID(),type,payload,promise,resolve,reject,timer,sent:false});
     return promise;
+  }
+  observeExecutionAudit(c,target) {
+    try {
+      if(!c.executionAudit)return;
+      const binding={jobId:c.jobId,auditId:require('../execution-audit').marker(c.executionAudit).auditId};
+      if(this.auditBindings.size>=256 && !this.auditBindings.has(c.jobId))this.auditBindings.delete(this.auditBindings.keys().next().value);
+      this.auditBindings.set(c.jobId,{binding,target:{instanceId:target.instanceId,tabId:target.tabId}});
+    }catch{}
   }
   async selectSession(selection) {
     check(exact(selection,["instanceId","tabId"]) && instanceId(selection.instanceId) && (selection.tabId===null || tabId(selection.tabId)));
