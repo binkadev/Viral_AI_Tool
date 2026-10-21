@@ -80,9 +80,21 @@
  const assistantObservations=['STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE'];
  const assistantBools=['generationActive','ownedUserPresent','assistantBlockWithinBound','sameSequenceParent','blockContiguous','blockSignatureChanged'];
  const assistantFrameKeys=['phase','elapsedBucket',...assistantBools,'logicalUserCount','blockRowCount','mediaCandidateCount','mutationCount','stabilizationSamples','stabilizationReset','terminal','terminalReason'];
+ const assistantSequenceCounts=Object.freeze(['recognizedFreshRowCount','recognizedAssistantRowCount','directSequenceTailCount','directMessageItemTailCount',
+   'pendingDirectMessageItemCount','invalidIdentityDirectMessageCount','missingRoleDirectMessageCount','unsupportedRoleDirectMessageCount','expectedSequenceLength','sequenceTailLength']);
+ const assistantSequenceBools=Object.freeze(['userSequenceIndexValid','recognizedRowsMatchDirectSequence']);
+ const assistantMismatchCategories=Object.freeze(['NONE','EXTRA_DIRECT_MESSAGE_ITEM','PENDING_MESSAGE_ID','INVALID_MESSAGE_ID','MISSING_ROLE','UNSUPPORTED_ROLE',
+   'RECOGNIZED_ROW_POSITION_MISMATCH','SEQUENCE_TAIL_LENGTH_MISMATCH','USER_NOT_IN_SEQUENCE','UNKNOWN_BOUNDED']);
+ const assistantSequenceKeys=[...assistantSequenceCounts,...assistantSequenceBools,'firstMismatchCategory'];
+ const emptyAssistantSequence=()=>Object.fromEntries(assistantSequenceKeys.map(k=>[k,null]));
  const count=(v,max)=>v===null || Number.isInteger(v) && v>=0 && v<=max;
  function validAssistantFrame(f) {
-   return exact(f,assistantFrameKeys) && Object.keys(f).length===assistantFrameKeys.length && assistantPhases.includes(f.phase) &&
+   // 0.3.8 frames are immutable legacy diagnostics. New fields are optional as
+   // one complete group; absent evidence is never filled in during validation.
+   const extended=f && assistantSequenceKeys.some(k=>Object.hasOwn(f,k));
+   if(extended && (!assistantSequenceKeys.every(k=>Object.hasOwn(f,k)) || !assistantSequenceCounts.every(k=>count(f[k],257)) ||
+     !assistantSequenceBools.every(k=>f[k]===null || typeof f[k]==='boolean') || !(f.firstMismatchCategory===null || assistantMismatchCategories.includes(f.firstMismatchCategory))))return false;
+   return exact(f,[...assistantFrameKeys,...assistantSequenceKeys]) && Object.keys(f).length===assistantFrameKeys.length+(extended?assistantSequenceKeys.length:0) && assistantPhases.includes(f.phase) &&
      ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(f.elapsedBucket) && assistantBools.every(k=>f[k]===null || typeof f[k]==='boolean') &&
      count(f.logicalUserCount,128) && count(f.blockRowCount,9) && count(f.mediaCandidateCount,9) &&
      ['zero','one_to_four','five_or_more'].includes(f.mutationCount) && Number.isInteger(f.stabilizationSamples) && f.stabilizationSamples>=0 && f.stabilizationSamples<=2 &&
@@ -104,6 +116,7 @@
      validAssistantFrame(d.lastFrame) && d.lastFrame.terminal && d.lastFrame.terminalReason===d.terminalReason && d.lastFrame.phase===d.terminalPhase;
  }
  const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
-   ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,MAX_BYTES,CHUNK_BYTES});
+   ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,assistantSequenceCounts,assistantSequenceBools,assistantMismatchCategories,emptyAssistantSequence,
+   validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

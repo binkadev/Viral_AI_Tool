@@ -2,10 +2,11 @@
 
 Extension 0.3.8 adds Gate-D diagnostics only. Protocol 1, execution contract 3,
 Receipt V2 (2), response-block authority, stabilization, exact-once submission,
-result discovery and acquisition requirements are unchanged. Executing markers:
+result discovery and acquisition requirements are unchanged. Current extension
+0.3.9 refines sequence failure evidence only. Executing markers:
 
-- `muse-worker-v0-3-8-contract3-receipt2-assistdiag1`
-- `muse-content-v0-3-8-contract3-receipt2-assistdiag1`
+- `muse-worker-v0-3-9-contract3-receipt2-assistdiag2`
+- `muse-content-v0-3-9-contract3-receipt2-assistdiag2`
 
 ## Scope and timing
 
@@ -26,6 +27,68 @@ Frames contain only enumerated phase/elapsed/mutation buckets, bounded counts,
 booleans or explicit null for unknown structural evidence, stabilization samples
 0/1/2 and a bounded reason. No native IDs, text, prompts, URLs, HTML, account data,
 credentials, tokens or browser storage values are recorded.
+
+### Sequence evidence refinement in 0.3.9
+
+The observer/inspect calls `responseBlock()`, which obtains recognized fresh
+rows from `afterBaseline(op, true)`. The direct sequence is still the existing
+`[data-message-item]` query filtered to children of the owned user's parent.
+The original predicate is unchanged: the user must exist in that sequence,
+its tail length must equal the recognized assistant count and each recognized
+assistant must occupy the expected direct position. Any mismatch still throws
+`BLOCK_NONCONTIGUOUS` immediately. There is no transient wait or recovery change.
+
+The frame immediately before this throw now includes this all-or-none optional
+field group. Each field is null until actually sampled:
+
+- `recognizedFreshRowCount`: owned user plus recognized fresh assistant rows;
+- `recognizedAssistantRowCount`: recognized fresh assistant rows;
+- `directSequenceTailCount`, `directMessageItemTailCount`, `sequenceTailLength`:
+  aliases for the count of direct message-item nodes after the owned user in
+  the exact sequence used by the predicate, including unrecognized shells;
+- `expectedSequenceLength`: expected tail length (recognized assistant count),
+  not the length of the entire historical conversation;
+- `pendingDirectMessageItemCount`: tail items with null/empty native IDs;
+- `invalidIdentityDirectMessageCount`: tail items with nonempty invalid IDs;
+- `missingRoleDirectMessageCount`: tail items with null/empty roles;
+- `unsupportedRoleDirectMessageCount`: tail items with nonempty roles other
+  than user/assistant;
+- `userSequenceIndexValid`: whether the owned user occurs in that sequence;
+- `recognizedRowsMatchDirectSequence`: whether every recognized assistant
+  occupies its expected slot; true for an empty recognized tail even if an
+  extra shell still makes the original length predicate fail;
+- `firstMismatchCategory`: deterministic enum below, never an ownership input.
+
+Counts are bounded to 257. At most the first 256 direct tail nodes are inspected;
+257 is a tail-length overflow sentinel. Abnormality counts describe those sampled
+nodes (lower bounds if overflow), and overflow reports `UNKNOWN_BOUNDED` instead
+of asserting a complete classification. Unsupported/missing roles and ID
+abnormalities may overlap in their counts. The same `nativeId()` predicate is
+used locally; raw role/ID values never enter the diagnostic.
+
+Priority: `USER_NOT_IN_SEQUENCE` if the index is invalid (tail evidence unknown);
+otherwise `NONE` if the original predicate passed; otherwise overflow gives
+`UNKNOWN_BOUNDED`; then `MISSING_ROLE`, `UNSUPPORTED_ROLE`, `PENDING_MESSAGE_ID`,
+`INVALID_MESSAGE_ID`, `EXTRA_DIRECT_MESSAGE_ITEM`, `SEQUENCE_TAIL_LENGTH_MISMATCH`,
+`RECOGNIZED_ROW_POSITION_MISMATCH`, finally `UNKNOWN_BOUNDED`. Extra means a
+sampled direct tail item is not one of the recognized assistant nodes. Thus a
+missing-role shell may also have a pending ID and cause a tail-length mismatch,
+but its category is deterministically `MISSING_ROLE`; all counts remain visible.
+
+This projection uses the already-resolved sequence and rows, with no second
+selector query. Projection errors produce unknown evidence, not a new ownership
+decision. A recognized assistant with a pending ID remains governed by existing
+pending-ID semantics; it need not produce a noncontiguous failure. A recognized
+row with a nonempty invalid ID is already rejected by `structure()` before
+`responseBlock()`; its sequence fields stay null. Classifier fixture tests for
+such IDs do not claim live Muse reached the sequence check in that state.
+
+Trace envelope version remains 1. Old 0.3.8 frames without the field group remain
+valid and readable byte-for-byte, including support summaries. No defaults or
+new fields are retrofitted into stored history. New live frames initialize the
+group as null, reset it before each sample and freeze it with the first terminal
+failure. The existing 16-frame bound, worker/native atomic first-only persistence
+and separation from current DOM census remain unchanged.
 
 Released observers use a 32-entry FIFO containing only failure metadata and the
 bounded diagnostic/pending snapshot, with no DOM references or active-capacity
@@ -102,3 +165,15 @@ diagnosis, old records, strict schemas, unchanged successful receipts and no
 result/acquisition triggered by diagnostic failure paths. Existing wrapper,
 assistant-block, replacement, receipt, exact-once and acquisition suites remain
 required. No real Muse request is performed for this change.
+
+## Historical E2E #8
+
+`209ccd7d-ca69-41d0-a6e0-649d2bfbd5ff` remains interrupted / RECOVERY_REQUIRED.
+Its original 0.3.8 evidence records `BLOCK_NONCONTIGUOUS` at
+`sample_before_block`: one owned logical user, zero recognized assistant rows,
+same sequence parent, bounded block and a failed contiguity check. It cannot
+identify the offending node or establish whether an unhydrated shell caused it.
+The later user-provided current census showed two assistant rows and one media
+candidate. It does not preserve causal continuity or repeat every historical
+Gate-D check. Neither diagnostic proves that a particular shell hydrated, and
+the operation is not retrospectively repaired or annotated with new fields.

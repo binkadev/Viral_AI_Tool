@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.8',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.9',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -246,6 +246,7 @@ function contentFixture(options={}) {
    get structuralTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.acceptanceTrace||null)',c));},
    get assistantTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.assistantFrames||null)',c));},
    get assistantFailureCount(){return vm.runInNewContext('assistantFailures.size',c);},
+   sequenceEvidence:(rows,sequence,index,contiguous)=>JSON.parse(JSON.stringify(vm.runInNewContext('gateDSequenceEvidence',c)(rows,sequence,index,contiguous))),
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
    replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
    replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
@@ -399,7 +400,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.8',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.9',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -677,6 +678,150 @@ for(const transition of ['composer root','editor','send removed','send replaced'
 }
 
 const userMutation=(f,addedNodes,removedNodes,previousSibling,nextSibling=null,target=f.messageParent)=>({type:'childList',target,addedNodes,removedNodes,previousSibling,nextSibling});
+for(const scenario of ['missing role','unsupported role','extra valid item','tail length','wrong position','missing user','pending ID','invalid ID','normal'])test('Gate-D sequence evidence V2 classifies bounded direct structural mismatch: '+scenario,()=>{
+ const f=contentFixture(),user=f.node('user','fixture-user-private'),a=f.node('assistant','fixture-status-private'),b=f.node('assistant','fixture-media-private');
+ const rows=[{node:a},{node:b}];let sequence=[user,a,b],index=0,contiguous=false;
+ if(scenario==='missing role')sequence=[user,f.node(null,'shell-private'),a,b];
+ if(scenario==='unsupported role')sequence=[user,f.node('tool','shell-private'),a,b];
+ if(scenario==='extra valid item')sequence=[user,a,b,f.node('assistant','extra-private')];
+ if(scenario==='tail length')sequence=[user,a];
+ if(scenario==='wrong position')sequence=[user,b,a];
+ if(scenario==='missing user')index=-1;
+ // Pure projection inputs isolate the classification for a direct shell not
+ // in the recognized set. They do not change what live structure() recognizes.
+ if(scenario==='pending ID')sequence=[user,f.node('assistant',null),a,b];
+ if(scenario==='invalid ID')sequence=[user,f.node('assistant','https://private.invalid'),a,b];
+ if(scenario==='normal')contiguous=true;
+ const evidence=f.sequenceEvidence(rows,sequence,index,contiguous);
+ const expected={'missing role':'MISSING_ROLE','unsupported role':'UNSUPPORTED_ROLE','extra valid item':'EXTRA_DIRECT_MESSAGE_ITEM',
+   'tail length':'SEQUENCE_TAIL_LENGTH_MISMATCH','wrong position':'RECOGNIZED_ROW_POSITION_MISMATCH','missing user':'USER_NOT_IN_SEQUENCE',
+   'pending ID':'PENDING_MESSAGE_ID','invalid ID':'INVALID_MESSAGE_ID',normal:'NONE'};
+ assert.equal(evidence.firstMismatchCategory,expected[scenario]);assert.equal(evidence.recognizedFreshRowCount,3);assert.equal(evidence.recognizedAssistantRowCount,2);
+ assert.equal(evidence.expectedSequenceLength,2);assert.equal(evidence.userSequenceIndexValid,index>=0);
+ if(index>=0){assert.equal(evidence.directSequenceTailCount,sequence.length-1);assert.equal(evidence.directMessageItemTailCount,sequence.length-1);assert.equal(evidence.sequenceTailLength,sequence.length-1);}
+ assert.equal(evidence.pendingDirectMessageItemCount,scenario==='pending ID'?1:index<0?null:0);
+ assert.equal(evidence.invalidIdentityDirectMessageCount,scenario==='invalid ID'?1:index<0?null:0);
+ assert.equal(evidence.missingRoleDirectMessageCount,scenario==='missing role'?1:index<0?null:0);
+ assert.equal(evidence.unsupportedRoleDirectMessageCount,scenario==='unsupported role'?1:index<0?null:0);
+ assert.equal(evidence.recognizedRowsMatchDirectSequence,index<0?null:['normal','extra valid item'].includes(scenario));
+ for(const [key,value] of Object.entries(evidence))assert(key==='firstMismatchCategory'?typeof value==='string':value===null||typeof value==='number'||typeof value==='boolean');
+ for(const secret of ['fixture-','shell-private','https:','extra-private'])assert(!JSON.stringify(evidence).includes(secret));
+ assert.equal(f.clicks,0);
+});
+
+test('Gate-D sequence V2 mismatch priority is deterministic, bounded and has a length-only case',()=>{
+ const f=contentFixture(),user=f.node('user','private-user'),a=f.node('assistant','private-assistant');
+ const d=f.sequenceEvidence([{node:a}],[user,f.node(null,null),f.node('tool','invalid id'),a],0,false);
+ assert.equal(d.firstMismatchCategory,'MISSING_ROLE');assert.equal(d.missingRoleDirectMessageCount,1);assert.equal(d.unsupportedRoleDirectMessageCount,1);
+ assert.equal(d.pendingDirectMessageItemCount,1);assert.equal(d.invalidIdentityDirectMessageCount,1);
+ assert.equal(f.sequenceEvidence([{node:a}],[user,a],0,false).firstMismatchCategory,'UNKNOWN_BOUNDED','Inconsistent false predicate is never explained by a guess');
+ // Expected zero recognized assistants, one direct item: extra takes priority
+ // over the tail-length discrepancy, which remains visible in the counts.
+ const extra=f.sequenceEvidence([],[user,f.node('assistant','private-extra')],0,false);
+ assert.equal(extra.firstMismatchCategory,'EXTRA_DIRECT_MESSAGE_ITEM');assert.equal(extra.expectedSequenceLength,0);assert.equal(extra.sequenceTailLength,1);
+ let reads=0;const shell={getAttribute:()=>{reads++;return null;}};
+ const overflow=f.sequenceEvidence([],[user,...Array(300).fill(shell)],0,false);
+ assert.equal(overflow.directSequenceTailCount,257);assert.equal(overflow.firstMismatchCategory,'UNKNOWN_BOUNDED');assert.equal(reads,512);
+ const unavailable=f.sequenceEvidence([],[user,{getAttribute(){throw Error('private');}}],0,false);
+ assert.equal(unavailable.firstMismatchCategory,'UNKNOWN_BOUNDED');assert(!JSON.stringify(unavailable).includes('private'));
+});
+
+for(const mode of ['missing role shell','pending assistant ID','invalid assistant ID','unsupported role shell'])test('Gate-D sequence V2 live diagnostic preserves existing shell behavior: '+mode,async()=>{
+ const f=contentFixture({noAssistant:true});f.transaction(f.rows);
+ const receipt=await acceptV2(f),before=JSON.stringify(receipt),user=f.rows.at(-1);
+ const role=mode==='missing role shell'?null:mode==='unsupported role shell'?'tool':'assistant';
+ const id=mode==='pending assistant ID'?null:mode==='invalid assistant ID'?'invalid private id':'private-shell';
+ const shell=f.node(role,id);
+ f.transaction([...f.rows,shell],[userMutation(f,[shell],[],user)]);
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(JSON.stringify(receipt),before);
+ if(mode==='pending assistant ID'){
+   assert.equal(result.state,'running');assert.equal(result.receipt.assistantStableIdHash,undefined);
+   const frame=f.assistantTrace.findLast(frame=>frame.firstMismatchCategory!==null);
+   assert.equal(frame.firstMismatchCategory,'NONE');assert.equal(frame.pendingDirectMessageItemCount,1);assert.equal(frame.recognizedAssistantRowCount,1);
+   await f.send('cancelGeneration',inspectPayload);
+ }else {
+   assert.equal(result.state,'interrupted');const d=result.assistantOwnershipFailure;assert(receiptV2.validAssistantFailure(JSON.parse(JSON.stringify(d))));
+   if(mode==='invalid assistant ID'){
+     assert.equal(d.terminalReason,'UNKNOWN_BOUNDED','structure() rejects invalid recognized identity before the sequence check');
+     assert.equal(d.frames.at(-1).firstMismatchCategory,null);
+   }else {
+     assert.equal(d.terminalReason,'BLOCK_NONCONTIGUOUS');const frame=d.frames.at(-1);
+     assert.equal(frame.recognizedAssistantRowCount,0);assert.equal(frame.directMessageItemTailCount,1);assert.equal(frame.recognizedRowsMatchDirectSequence,true);
+     assert.equal(frame.firstMismatchCategory,mode==='missing role shell'?'MISSING_ROLE':'UNSUPPORTED_ROLE');
+     const first=JSON.stringify(d);f.transaction(f.rows.filter(row=>row!==shell));
+     const later=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(JSON.stringify(later.assistantOwnershipFailure),first);
+   }
+   assert.equal(result.receipt,undefined);
+ }
+ assert.equal(f.clicks,1);assert.equal(f.assistantFailureCount<=1,true);
+});
+
+test('Gate-D sequence V2 normal live two-assistant block reports no mismatch before unchanged anchoring',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status'));f.inject(f.node('assistant','owner',media()));}});
+ const receipt=await acceptV2(f),running=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(running.state,'running');
+ const frame=f.assistantTrace.findLast(frame=>frame.firstMismatchCategory!==null);
+ assert.equal(frame.firstMismatchCategory,'NONE');assert.equal(frame.recognizedFreshRowCount,3);assert.equal(frame.recognizedAssistantRowCount,2);
+ assert.equal(frame.expectedSequenceLength,2);assert.equal(frame.directSequenceTailCount,2);assert.equal(frame.directMessageItemTailCount,2);
+ assert.equal(frame.userSequenceIndexValid,true);assert.equal(frame.recognizedRowsMatchDirectSequence,true);
+ for(const key of ['pendingDirectMessageItemCount','invalidIdentityDirectMessageCount','missingRoleDirectMessageCount','unsupportedRoleDirectMessageCount'])assert.equal(frame[key],0);
+ const anchored=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(anchored.receipt.assistantStableIdHash,shaBytes('op\0assistant\0owner'));
+ assert.equal(anchored.assistantOwnershipFailure,undefined);assert.equal(f.clicks,1);
+});
+
+for(const change of ['missing tail row','wrong position'])test('Gate-D sequence V2 records discrepancy between recognized and direct sequence snapshots: '+change,async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status-private'));f.inject(f.node('assistant','owner-private',media()));}});
+ f.transaction(f.rows);const receipt=await acceptV2(f),all=f.rows.slice(),userIndex=all.findIndex(row=>row.id==='new-user');
+ // A deterministic divergent direct-query snapshot exercises the unchanged
+ // responseBlock predicate. It is not a claim that live Muse produced this.
+ f.messageParent.querySelectorAll=()=>change==='missing tail row'?all.slice(0,-1):[...all.slice(0,userIndex+1),all.at(-1),all.at(-2)];
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(result.state,'interrupted');
+ const d=result.assistantOwnershipFailure,frame=d.frames.at(-1);assert.equal(d.terminalReason,'BLOCK_NONCONTIGUOUS');
+ assert.equal(frame.recognizedAssistantRowCount,2);assert.equal(frame.directSequenceTailCount,change==='missing tail row'?1:2);
+ assert.equal(frame.firstMismatchCategory,change==='missing tail row'?'SEQUENCE_TAIL_LENGTH_MISMATCH':'RECOGNIZED_ROW_POSITION_MISMATCH');
+ assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
+ f.messageParent.querySelectorAll=()=>f.rows;
+ const later=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(JSON.stringify(later.assistantOwnershipFailure),JSON.stringify(d));
+});
+
+test('Gate-D sequence V2 schema accepts legacy 0.3.8 frames byte-for-byte and rejects partial/private extensions',()=>{
+ const {failure}=require('./fixtures/muse-assistant-failure'),old=failure('BLOCK_NONCONTIGUOUS');old.build='muse-content-v0-3-8-contract3-receipt2-assistdiag1';
+ const original=JSON.stringify(old);assert(receiptV2.validAssistantFailure(old));assert(receiptV2.validAssistantSummary(receiptV2.assistantFailureSummary(old)));
+ assert.equal(JSON.stringify(old),original);assert.equal(Object.hasOwn(receiptV2.assistantFailureSummary(old).lastFrame,'recognizedFreshRowCount'),false);
+ const extended=structuredClone(old);Object.assign(extended.frames[0],receiptV2.emptyAssistantSequence());assert(receiptV2.validAssistantFailure(extended));
+ for(const mutate of [f=>delete f.sequenceTailLength,f=>f.recognizedFreshRowCount=258,f=>f.pendingDirectMessageItemCount=-1,
+   f=>f.userSequenceIndexValid='true',f=>f.firstMismatchCategory='private native id',f=>f.rawHtml='private']){
+   const bad=structuredClone(extended);mutate(bad.frames[0]);assert(!receiptV2.validAssistantFailure(bad));
+ }
+ assert(!receiptV2.valid(extended,'op'));assert(!validPayload('inspectGeneration',{...inspectPayload,assistantOwnershipFailure:extended}));
+});
+
+test('Gate-D sequence V2 terminal detail survives worker/native persistence and read-only support summary',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ content.transaction(content.rows);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;f.bridge.developmentDiagnostics=true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=JSON.parse(fs.readFileSync(file)),user=content.rows.at(-1);
+ const shell=content.node(null,null),originalRows=content.rows.slice();
+ content.transaction([...originalRows,shell],[userMutation(content,[shell],[],user)]);
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});
+ const saved=JSON.parse(fs.readFileSync(file)),failure=saved.assistantOwnershipFailure,last=failure.frames.at(-1);
+ assert.equal(failure.terminalReason,'BLOCK_NONCONTIGUOUS');assert.equal(last.firstMismatchCategory,'MISSING_ROLE');
+ assert.equal(last.pendingDirectMessageItemCount,1);assert.equal(last.missingRoleDirectMessageCount,1);
+ assert.equal(last.recognizedAssistantRowCount,0);assert.equal(last.directMessageItemTailCount,1);assert.equal(last.sequenceTailLength,1);
+ assert.deepEqual(saved.receipt,before.receipt);assert.equal(saved.receipt.assistantStableIdHash,undefined);
+ assert.deepEqual(stored['generation-intent:'+job.id].assistantOwnershipFailure,failure);
+ // Current census may now settle; it cannot rewrite the historical frame.
+ content.transaction([...originalRows,content.node('assistant','status'),content.node('assistant','media',media())]);
+ const evidence=fs.readFileSync(file),jobBytes=fs.readFileSync(f.service.store.file);
+ const report=await f.service.diagnoseMuseOwnership(job.id);
+ assert.equal(report.ok,true);assert.deepEqual(report.historicalAssistantOwnershipFailure.lastFrame,last);
+ assert.equal(report.diagnostic.responseBlock.assistantBlockRowCount,2);assert.equal(report.diagnostic.responseBlock.mediaAssistantCandidateCount,1);
+ assert.deepEqual(fs.readFileSync(file),evidence);assert.deepEqual(fs.readFileSync(f.service.store.file),jobBytes);
+ assert.equal(content.clicks,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+ for(const secret of [request().prompt,'new-user','history-user','https://','private'])assert(!JSON.stringify(failure).includes(secret));
+});
+
 for(const transient of ['foreign parent','unknown row gap','foreign parent after stabilization sample'])test('Gate-D preserves first transient block failure even after final DOM settles: '+transient,async()=>{
  const content=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status'));f.inject(f.node('assistant','media-owner',media()));}}),stored={},worker=workerV2Harness(stored,content),key='generation-intent:op';
  content.transaction(content.rows);
@@ -1126,7 +1271,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1204,8 +1349,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-8-contract3-receipt2-assistdiag1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-9-contract3-receipt2-assistdiag2');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1361,8 +1506,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-8-contract3-receipt2-assistdiag1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-8-contract3-receipt2-assistdiag1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-9-contract3-receipt2-assistdiag2');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1394,7 +1539,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.8 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.9 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

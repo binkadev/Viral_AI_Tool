@@ -67,6 +67,17 @@ test('historical Gate-D evidence and current DOM census are separate, immutable,
    assert.equal(bad.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(bad).includes('private'));
  }
 });
+
+test('historical 0.3.8 Gate-D summary preserves absent sequence fields without migration',async t=>{
+ const f=fixture(t),{failure}=require('./fixtures/muse-assistant-failure');
+ const d=failure('BLOCK_NONCONTIGUOUS');d.build='muse-content-v0-3-8-contract3-receipt2-assistdiag1';
+ Object.assign(d.frames[0],{generationActive:null,blockRowCount:0,mediaCandidateCount:null,sameSequenceParent:true,blockContiguous:false});
+ f.record.assistantOwnershipFailure=d;fs.writeFileSync(f.file,JSON.stringify(f.record));const before=fs.readFileSync(f.file);
+ const report=await f.service.diagnoseMuseOwnership(f.job.id);
+ assert.equal(report.historicalAssistantOwnershipFailure.build,d.build);assert.deepEqual(report.historicalAssistantOwnershipFailure.lastFrame,d.frames[0]);
+ assert.equal(Object.hasOwn(report.historicalAssistantOwnershipFailure.lastFrame,'firstMismatchCategory'),false);
+ assert.equal(report.diagnostic.ownedUserMatches,1);assert.deepEqual(fs.readFileSync(f.file),before);
+});
 for(const scenario of ['no user','assistant anchored','production','completed','wrong scene','wrong operation','legacy'])test('ownership diagnosis fails closed without mutation: '+scenario,async t=>{
  const f=fixture(t);
  if(scenario==='no user'){delete f.record.receipt.userStableIdHash;delete f.record.receipt.acceptance;}

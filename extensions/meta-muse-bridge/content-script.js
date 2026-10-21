@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-8-contract3-receipt2-assistdiag1';
+const CONTENT_BUILD='muse-content-v0-3-9-contract3-receipt2-assistdiag2';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -113,7 +113,7 @@ function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
   op.assistantStartedAt??=Date.now();
   op.assistantState={generationActive:null,ownedUserPresent:null,logicalUserCount:null,blockRowCount:null,mediaCandidateCount:null,
     assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,
-    mutationCount:'zero',stabilizationSamples:0,stabilizationReset:false,...op.assistantState,...patch};
+    mutationCount:'zero',stabilizationSamples:0,stabilizationReset:false,...MuseReceiptV2.emptyAssistantSequence(),...op.assistantState,...patch};
   const ms=Math.max(0,Date.now()-op.assistantStartedAt);
   const frame={phase,elapsedBucket:ms<1000?'under_1s':ms<10000?'1_to_10s':ms<60000?'10_to_60s':'over_60s',...op.assistantState,terminal,terminalReason};
   if(!MuseReceiptV2.validAssistantFrame(frame))return;
@@ -163,6 +163,34 @@ const directVideos=row=>{
   for(const video of row.node.querySelectorAll('video'))if(video.closest(MESSAGE)===row.node){if(videos.length===16)throw Error('OBSERVATION_LIMIT');videos.push(video);}
   return videos;
 };
+// Diagnostic projection only. The original sequence predicate below remains the
+// sole authority. At most 256 tail nodes are sampled; 257 is an overflow sentinel.
+function gateDSequenceEvidence(rows,sequence,index,contiguous) {
+  const result={...MuseReceiptV2.emptyAssistantSequence(),recognizedFreshRowCount:Math.min(257,rows.length+1),
+    recognizedAssistantRowCount:Math.min(257,rows.length),expectedSequenceLength:Math.min(257,rows.length),userSequenceIndexValid:index>=0};
+  try {
+    if(index<0)return {...result,firstMismatchCategory:'USER_NOT_IN_SEQUENCE'};
+    const length=sequence.length-index-1,tail=sequence.slice(index+1,index+257),bounded=length<=256;
+    Object.assign(result,{directSequenceTailCount:Math.min(257,length),directMessageItemTailCount:Math.min(257,length),sequenceTailLength:Math.min(257,length),
+      pendingDirectMessageItemCount:0,invalidIdentityDirectMessageCount:0,missingRoleDirectMessageCount:0,unsupportedRoleDirectMessageCount:0,
+      recognizedRowsMatchDirectSequence:rows.every((r,i)=>sequence[index+i+1]===r.node)});
+    let extra=false;
+    for(const node of tail){
+      const role=node.getAttribute('data-message-role'),id=node.getAttribute('data-message-id');
+      if(role===null || role==='')result.missingRoleDirectMessageCount++;
+      else if(!['user','assistant'].includes(role))result.unsupportedRoleDirectMessageCount++;
+      if(id===null || id==='')result.pendingDirectMessageItemCount++;
+      else if(!nativeId(id))result.invalidIdentityDirectMessageCount++;
+      if(!rows.some(r=>r.node===node))extra=true;
+    }
+    // Priority is structural, never native IDs/text or a guess at hydration.
+    result.firstMismatchCategory=contiguous?'NONE':!bounded?'UNKNOWN_BOUNDED':result.missingRoleDirectMessageCount?'MISSING_ROLE':
+      result.unsupportedRoleDirectMessageCount?'UNSUPPORTED_ROLE':result.pendingDirectMessageItemCount?'PENDING_MESSAGE_ID':
+      result.invalidIdentityDirectMessageCount?'INVALID_MESSAGE_ID':extra?'EXTRA_DIRECT_MESSAGE_ITEM':length!==rows.length?'SEQUENCE_TAIL_LENGTH_MISMATCH':
+      !result.recognizedRowsMatchDirectSequence?'RECOGNIZED_ROW_POSITION_MISMATCH':'UNKNOWN_BOUNDED';
+    return result;
+  }catch{return {...MuseReceiptV2.emptyAssistantSequence(),firstMismatchCategory:'UNKNOWN_BOUNDED'};}
+}
 function responseBlock(op) {
   const fresh=afterBaseline(op,true),user=fresh[0],container=op.projection?.container;
   gateDFrame(op,'sample_before_block',{ownedUserPresent:!!user && user.id===op.submittedUserId,blockRowCount:Math.min(9,Math.max(0,fresh.length-1))});
@@ -181,7 +209,7 @@ function responseBlock(op) {
   if(rows.some(r=>r.node.parentNode!==user.node.parentNode || !container.contains(r.node)))throw gateDError('AMBIGUOUS_OPERATION','BLOCK_PARENT_MISMATCH');
   const sequence=[...user.node.parentNode.querySelectorAll(MESSAGE)].filter(node=>node.parentNode===user.node.parentNode),index=sequence.indexOf(user.node);
   const contiguous=!(index<0 || sequence.length-index-1!==rows.length || rows.some((r,i)=>sequence[index+i+1]!==r.node));
-  gateDFrame(op,'sample_before_block',{blockContiguous:contiguous});
+  gateDFrame(op,'sample_before_block',{blockContiguous:contiguous,...gateDSequenceEvidence(rows,sequence,index,contiguous)});
   if(!contiguous)throw gateDError('AMBIGUOUS_OPERATION','BLOCK_NONCONTIGUOUS');
   const counts=rows.map(r=>directVideos(r).length);
   if(counts.some(n=>n>16))throw Error('OBSERVATION_LIMIT');
@@ -568,7 +596,7 @@ async function prepareV2(p) {
     if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
     try {
       gateDFrame(op,'sample_before_block',{mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',stabilizationReset:false,
-        ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null});
+        ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,...MuseReceiptV2.emptyAssistantSequence()});
       const accepting=op.sendAttempted && !op.receipt?.userStableIdHash;
       const remember=row=>{if(!op.baseline.some(b=>b.id===row.id && b.role===row.role))(row.role==='user'?op.newUsers:op.newAssistants).add(row.id);};
       let visited=0;const events=[];
