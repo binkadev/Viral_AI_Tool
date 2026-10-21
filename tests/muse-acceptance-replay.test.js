@@ -31,3 +31,14 @@ test('offline CLI replays only sanitized input and has no live browser/service c
  const code=fs.readFileSync('dev/replay-muse-acceptance.js','utf8')+fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8');
  for(const forbidden of ['submitGeneration','MetaMuseExtensionBridge','GenerationService','chrome.','fetch(','document.'])assert(!code.includes(forbidden));
 });
+
+test('trace version 2 accepts one user plus a bounded assistant tail; historical version 1 retains its semantics',()=>{
+ const assistant=(position,id)=>event('mounted_sample',20+id,id,{role:'assistant',position,previous:'fresh_user'});
+ const frames=[frame(0,[event('added'),mount(),assistant(3,5),assistant(4,6)],1,{freshAssistants:2}),
+   frame(200,[mount(),assistant(3,5),assistant(4,6)],1,{kind:'sample',freshAssistants:2}),
+   frame(400,[mount(),assistant(3,5),assistant(4,6)],1,{kind:'sample',freshAssistants:2})];
+ const t=trace(frames),original=JSON.stringify(t);
+ assert.equal(replay.replay(t).status,'ambiguous');assert.equal(JSON.stringify(t),original);
+ t.version=2;const result=replay.replay(t);assert.equal(result.status,'accepted');assert.equal(result.logicalCount,1);assert.equal(result.maxConcurrent,1);
+ const tooMany=structuredClone(t);tooMany.frames[0].freshAssistants=9;assert.notEqual(replay.replay(tooMany).status,'accepted');
+});

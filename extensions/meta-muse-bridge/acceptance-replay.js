@@ -2,7 +2,7 @@
 // Pure structural model shared by the live adapter and offline diagnostics.
 // An exported trace is NEVER a receipt or a command to the live adapter.
 (function(root){
- const MAX_FRAMES=64,MAX_EVENTS=256,MAX_BYTES=196608,REPLACEMENT_MS=400;
+ const MAX_FRAMES=64,MAX_EVENTS=256,MAX_BYTES=196608,REPLACEMENT_MS=400,MAX_OWNED_ASSISTANT_ROWS=8;
  const exact=(o,keys)=>o && typeof o==='object' && !Array.isArray(o) && Object.keys(o).length===keys.length && Object.keys(o).every(k=>keys.includes(k));
  const int=(n,max)=>Number.isInteger(n) && n>=0 && n<=max;
  const category=['baseline_tail','fresh_user','fresh_assistant','other','none'];
@@ -12,16 +12,16 @@
  function validBaseline(b){return exact(b,baseKeys) && int(b.count,256) && b.count>0 && int(b.container,512) && int(b.tailIdentity,512) && b.tailIdentity>0;}
  function validEvent(e){return exact(e,eventKeys) && ['childList','attribute','none'].includes(e.mutation) &&
    ['added','removed','id_hydrated','id_changed','mounted_sample','wrapper'].includes(e.event) && ['user','assistant','none'].includes(e.role) &&
-   ['node','identity','parent','container','predecessor'].every(k=>int(e[k],512)) && Number.isInteger(e.position) && e.position>=-1 && e.position<=257 &&
+   ['node','identity','parent','container','predecessor'].every(k=>int(e[k],512)) && Number.isInteger(e.position) && e.position>=-1 && e.position<=256+MAX_OWNED_ASSISTANT_ROWS &&
    category.includes(e.previous) && category.includes(e.next) && typeof e.directChild==='boolean' && typeof e.mountedAfter==='boolean' &&
    Array.isArray(e.ancestors) && e.ancestors.length<=6 && e.ancestors.every(a=>exact(a,['node','category']) && int(a.node,512) && ['div','section','article','li','ul','main','other'].includes(a.category));}
  function validFrame(f){return exact(f,frameKeys) && int(f.batch,MAX_FRAMES) && f.batch>0 && ['observer','sample','manual'].includes(f.kind) && int(f.elapsedMs,5000) &&
    ['baselineValid','structureValid','roleOrderValid','composerReplaced','editorReplaced','generationActive','manualInterference'].every(k=>typeof f[k]==='boolean') &&
    int(f.freshUsers,128) && int(f.freshAssistants,128) && Array.isArray(f.events) && f.events.length<=MAX_EVENTS && f.events.every(validEvent);}
- function validTrace(t){return exact(t,['version','baseline','frames','overflow']) && t.version===1 && validBaseline(t.baseline) && typeof t.overflow==='boolean' &&
+ function validTrace(t){return exact(t,['version','baseline','frames','overflow']) && [1,2].includes(t.version) && validBaseline(t.baseline) && typeof t.overflow==='boolean' &&
    Array.isArray(t.frames) && t.frames.length<=MAX_FRAMES && t.frames.every((f,i)=>validFrame(f) && f.batch===i+1 && (!i || f.elapsedMs>=t.frames[i-1].elapsedMs)) &&
-   t.frames.reduce((n,f)=>n+f.events.length,0)<=MAX_EVENTS && JSON.stringify(t).length<=MAX_BYTES;}
- function create(baseline){
+   t.frames.reduce((n,f)=>n+f.events.length,0)<=MAX_EVENTS && (t.version!==1 || t.frames.every(f=>f.events.every(e=>e.position<=257))) && JSON.stringify(t).length<=MAX_BYTES;}
+ function create(baseline,{assistantBlock=false}={}){
    if(!validBaseline(baseline))throw Error('INVALID_TRACE');
    const state={status:'pending',reason:null,turn:null,pendingReplacement:null,assistantSeen:false,assistantIds:new Set(),identities:new Set(),
      logicalCount:0,maxConcurrent:0,replacementCount:0,replacementObserved:false,replacementAmbiguous:false,batch:0,eventCount:0,elapsedMs:0};
@@ -39,17 +39,18 @@
      state.maxConcurrent=Math.max(state.maxConcurrent,frame.freshUsers);
      if(!frame.baselineValid){fail('BASELINE_CHANGED',false);return result();}
      if(frame.manualInterference){fail('MANUAL_INTERFERENCE');return result();}
-     if(!frame.roleOrderValid || frame.freshUsers>1){state.logicalCount=Math.max(2,frame.freshUsers);fail('AMBIGUOUS_OPERATION');return result();}
+     if(!frame.roleOrderValid || frame.freshUsers>1 || assistantBlock && frame.freshAssistants>MAX_OWNED_ASSISTANT_ROWS){state.logicalCount=assistantBlock?Math.max(state.logicalCount,frame.freshUsers):Math.max(2,frame.freshUsers);fail('AMBIGUOUS_OPERATION');return result();}
      if(state.pendingReplacement && frame.elapsedMs-state.pendingReplacement.since>REPLACEMENT_MS){fail('REPLACEMENT_EXPIRED');return result();}
      let mounted=null;
      for(const e of frame.events){
        if(e.role==='none')continue;
-       if(e.event==='id_changed'){fail('IDENTITY_MUTATED',false);break;}
+       if(e.event==='id_changed' && !(assistantBlock && e.role==='assistant')){fail('IDENTITY_MUTATED',false);break;}
        if(e.position>=0 && e.position<baseline.count && e.event!=='mounted_sample'){fail('BASELINE_CHANGED',false);break;}
        if(e.role==='assistant'){
          if(e.identity)state.assistantIds.add(e.identity);
-         if(state.assistantIds.size>1){fail('AMBIGUOUS_OPERATION');break;}
-         if(state.pendingReplacement || !state.turn || e.position!==baseline.count+1){fail('REPLACEMENT_CONVERSATION_ACTIVITY');break;}
+         if(state.assistantIds.size>(assistantBlock?128:1)){fail(assistantBlock?'OBSERVATION_LIMIT':'AMBIGUOUS_OPERATION');break;}
+         if(state.pendingReplacement || !state.turn || e.position<baseline.count+1 || e.position>baseline.count+(assistantBlock?MAX_OWNED_ASSISTANT_ROWS:1) ||
+           assistantBlock && baseline.container>0 && e.container!==baseline.container){fail('REPLACEMENT_CONVERSATION_ACTIVITY');break;}
          state.assistantSeen=true;continue;
        }
        if(e.identity)state.identities.add(e.identity);
@@ -90,11 +91,11 @@
  }
  function replay(trace){
    if(!validTrace(trace))throw Error('INVALID_TRACE');
-   const model=create(trace.baseline);let result=model.result();
+   const model=create(trace.baseline,{assistantBlock:trace.version===2});let result=model.result();
    for(const frame of trace.frames)result=model.step(frame);
    if(trace.overflow)return {...result,status:'invalid',reason:'OBSERVATION_LIMIT',canonicalNode:null,canonicalIdentity:null};
    return result;
  }
- const api=Object.freeze({create,replay,validTrace,validFrame,MAX_FRAMES,MAX_EVENTS,MAX_BYTES,REPLACEMENT_MS});
+ const api=Object.freeze({create,replay,validTrace,validFrame,MAX_FRAMES,MAX_EVENTS,MAX_BYTES,REPLACEMENT_MS,MAX_OWNED_ASSISTANT_ROWS});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseAcceptanceReplay=api;
 })(globalThis);

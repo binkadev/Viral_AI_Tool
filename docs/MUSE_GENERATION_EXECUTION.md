@@ -155,7 +155,10 @@ hash; the unchanged worker/main receipt durability precedes assistant ownership.
 
 ### Failure traces and offline review
 
-Only post-send V2 acceptance before a user anchor captures traces. Schema version 1
+Only post-send V2 acceptance before a user anchor captures traces. Schema version 2
+allows the bounded assistant tail described in
+[response-block ownership](MUSE_ASSISTANT_RESPONSE_BLOCK.md). Historical schema
+version 1 retains its original single-assistant replay semantics. Both versions
 stores the baseline count/container/tail ordinals and ordered observer/sample frames:
 batch number, 0-5000 ms elapsed value, baseline/structure/order validity, mounted
 role counts, composer/editor replacement, generation/manual flags, and bounded

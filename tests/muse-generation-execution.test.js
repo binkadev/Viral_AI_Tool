@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.5',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.6',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -194,9 +194,10 @@ test('invalid, missing or unrelated acquisition never publishes an asset',async 
 
 function contentFixture(options={}) {
  const listeners=[];let rows=[],length=options.draftLength||0,clicks=0,online=true,stop=false,disconnected=0; const observerCallbacks=new Set(),observerCallback=()=>{for(const fn of [...observerCallbacks])fn();};
+ const messageParent={tagName:'DIV',getAttribute:()=>null,parentElement:null,querySelectorAll:()=>rows,contains:node=>{for(let n=node,i=0;n && i<8;n=n.parentNode,i++)if(n===messageParent)return true;return false;}};
  const base=()=>({isConnected:true,disabled:false,hidden:false,getAttribute:()=>null,matches(){return this.disabled;},closest(selector){return this.hidden || selector==='[aria-disabled="true"]' && this.getAttribute('aria-disabled')==='true'?{}:null;},getClientRects:()=>[{}],querySelector:()=>null,querySelectorAll:()=>[]});
  function forbidText(n) {for(const k of ['textContent','innerText','innerHTML','nodeValue','value'])Object.defineProperty(n,k,{get(){throw Error('TEXT_READ_FORBIDDEN');},configurable:true});return n;}
- const node=(role,id,video=null)=>{const n=forbidText({...base(),id,role,getAttribute(k){return k==='data-message-role'?this.role:k==='data-message-id'?this.id:null;},querySelectorAll:s=>s==='video' && video?[video]:[]});if(video)video.closest=()=>n;return n;};
+ const node=(role,id,video=null)=>{const n=forbidText({...base(),id,role,parentNode:messageParent,parentElement:messageParent,getAttribute(k){return k==='data-message-role'?this.role:k==='data-message-id'?this.id:null;},querySelectorAll:s=>s==='video' && video?[video]:[]});if(video)video.closest=()=>n;return n;};
  const editor=forbidText({...base(),tagName:'TEXTAREA',readOnly:false,get textLength(){return length;},focus(){},dispatchEvent(){}});
  function Textarea(){}Object.defineProperty(Textarea.prototype,'value',{set:v=>{length=v.length;if(options.ownTrustedInput)events.input?.({isTrusted:true,type:'input',target:editor});}});
  const stopNode=base();
@@ -233,7 +234,7 @@ function contentFixture(options={}) {
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
  const api={
-   messageParent:{tagName:'DIV',contains:node=>{for(let n=node,i=0;n && i<8;n=n.parentNode,i++)if(n===api.messageParent)return true;return rows.includes(node);}},
+   messageParent,
    transaction:(next,records=[],placement)=>{
      for(const old of rows)if(!next.includes(old)){old.isConnected=false;old.parentNode=null;old.previousSibling=null;old.nextSibling=null;}
      rows=next;
@@ -253,7 +254,7 @@ function contentFixture(options={}) {
    handshake:()=>{let result;listeners[0]({type:'viral-ai:muse-handshake'},{id:'ext'},r=>result=r);return result;},
    send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,
    mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},
-   inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true
+   inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true,finish:()=>{stop=false;}
  };
  return api;
 }
@@ -396,7 +397,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.5',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.6',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -459,9 +460,150 @@ async function acceptV2(f) {
 }
 async function bindV2(f) {
  const user=await acceptV2(f);
- const assistant=await f.send('inspectGeneration',{...v2Payload,receipt:user});
+ const assistant=await observeMediaV2(f,user);
  assert.equal(assistant.state,'running');assert(assistant.receipt.assistantStableIdHash);return assistant.receipt;
 }
+async function observeMediaV2(f,user,id='new-assistant') {
+ // Explicit fixture media attachment; never grants production ownership.
+ const row=f.rows.find(r=>r.role==='assistant' && r.id===id);assert(row);
+ if(!row.querySelectorAll('video').length){const video=media();video.closest=()=>row;row.querySelectorAll=s=>s==='video'?[video]:[];f.mutate([{type:'childList',target:row,addedNodes:[video],removedNodes:[]}]);}
+ f.finish();
+ const pending=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(pending.state,'running');assert.equal(pending.receipt.assistantStableIdHash,undefined);
+ return f.send('inspectGeneration',{...v2Payload,receipt:user});
+}
+
+for(const statusRow of [false,true])test('assistant block binds the sole stable direct-video owner, including a fast assistant tail: '+statusRow,async()=>{
+ const bytes=Buffer.alloc(20,7),source='blob:https://muse.ai/owned-block-fixture';let fetched=0;
+ const video={...media(),currentSrc:source};
+ const f=contentFixture({noAssistant:true,historicalVideos:[media()],afterClick:f=>{
+   if(statusRow)f.inject(f.node('assistant','status-row'));
+   f.inject(f.node('assistant','media-owner',video));
+ },fetch:async url=>{assert.equal(url,source);fetched++;return new Response(bytes,{headers:{'content-type':'video/mp4'}});}});
+ const historic=f.rows[1],historicVideo=media();historicVideo.closest=()=>historic;historic.querySelectorAll=s=>s==='video'?[historicVideo]:[];
+ const user=await acceptV2(f);assert.equal(f.lineage.logicalCount,1);assert.equal(f.lineage.maxConcurrent,1);
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(first.state,'running');assert.equal(first.receipt.assistantStableIdHash,undefined);
+ const anchored=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(anchored.state,'running');
+ assert.equal(anchored.receipt.assistantStableIdHash,shaBytes('op\0assistant\0media-owner'));assert.equal(anchored.receipt.result,undefined);assert.equal(f.operationCount,0);
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt:anchored.receipt});assert.equal(result.state,'result');assert.equal(result.receipt.result.ownerAssistantStableIdHash,anchored.receipt.assistantStableIdHash);
+ const acquired=await f.send('acquireGenerationResult',{...v2Payload,receipt:result.receipt,transferId:'owned-block-transfer',sequence:0,offset:0,mediaKind:'video'});
+ assert.equal(acquired.state,'result');assert.equal(fetched,1);assert.equal(f.clicks,1);
+ // An anchored receipt survives reinjection without user/baseline/op-map state.
+ const next=contentFixture();next.replace([next.node('assistant','media-owner',media()),next.node('assistant','unrelated',media())]);
+ const recovered=await next.send('inspectGeneration',{...v2Payload,receipt:anchored.receipt});assert.equal(recovered.state,'result');assert.equal(recovered.receipt.assistantStableIdHash,anchored.receipt.assistantStableIdHash);assert.equal(next.clicks,0);
+});
+
+for(const mode of ['zero media','old media','page-global media','generation active'])test('assistant block remains pending without a completed stable media owner: '+mode,async()=>{
+ const f=contentFixture({active:mode==='generation active',noAssistant:true,historicalVideos:[media()],afterClick:f=>{
+   f.inject(f.node('assistant','status-a'));f.inject(f.node('assistant','status-b',mode==='generation active'?media():null));
+ }});
+ if(mode==='old media'){const old=f.rows[1],v=media();v.closest=()=>old;old.querySelectorAll=s=>s==='video'?[v]:[];}
+ const user=await acceptV2(f);
+ for(let i=0;i<3;i++){const r=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);}
+ if(mode==='generation active'){
+   f.finish();const pending=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(pending.receipt.assistantStableIdHash,undefined);
+   assert((await f.send('inspectGeneration',{...v2Payload,receipt:user})).receipt.assistantStableIdHash);
+ }
+ assert.equal(f.clicks,1);
+});
+
+for(const mode of ['two media owners','multiple videos in owner','next user','foreign parent','block reparent','unknown row gap','manual interaction','user disappears','user ID changes','baseline changes'])test('assistant block fails closed on '+mode,async()=>{
+ const f=contentFixture({video:media()}),user=await acceptV2(f);
+ const owner=f.rows.at(-1);
+ if(mode==='two media owners')f.inject(f.node('assistant','second-media',media()));
+ if(mode==='multiple videos in owner'){const videos=[media(),media()];videos.forEach(v=>v.closest=()=>owner);owner.querySelectorAll=s=>s==='video'?videos:[];}
+ if(mode==='next user'){f.inject(f.node('user','another-user'));f.inject(f.node('assistant','unowned-newer',media()));}
+ if(mode==='foreign parent')owner.parentNode={querySelectorAll:()=>[owner]};
+ if(mode==='block reparent'){const userRow=f.rows.find(r=>r.id==='new-user'),parent={parentNode:f.messageParent,querySelectorAll:()=>[userRow,owner]};userRow.parentNode=parent;owner.parentNode=parent;}
+ if(mode==='unknown row gap')f.replace([...f.rows.slice(0,-1),f.node('system','unexpected-message'),owner]);
+ if(mode==='manual interaction')f.foreign('pointerdown');
+ if(mode==='user disappears')f.replace(f.rows.filter(r=>r.id!=='new-user'));
+ if(mode==='user ID changes')f.rows.find(r=>r.id==='new-user').id='changed-user';
+ if(mode==='baseline changes')f.rows[0].id='changed-baseline';
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+});
+
+for(const churn of ['different ID','same ID remount','attribute ID change','transient restored video'])test('assistant block resets stabilization on '+churn,async()=>{
+ const f=contentFixture({video:media()}),user=await acceptV2(f);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt:user})).receipt.assistantStableIdHash,undefined);
+ const old=f.rows.at(-1);let id='new-assistant';
+ if(churn==='different ID'){id='canonical-media';f.replace([...f.rows.slice(0,-1),f.node('assistant',id,media())]);}
+ if(churn==='same ID remount')f.replace([...f.rows.slice(0,-1),f.node('assistant',id,media())]);
+ if(churn==='attribute ID change'){id='hydrated-media';old.id=id;f.mutate([{type:'attributes',target:old,attributeName:'data-message-id',oldValue:'new-assistant'}]);}
+ if(churn==='transient restored video')f.mutate([{type:'childList',target:old,addedNodes:[],removedNodes:[]}]);
+ const pending=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(pending.state,'running');assert.equal(pending.receipt.assistantStableIdHash,undefined);
+ const stable=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(stable.receipt.assistantStableIdHash,shaBytes('op\0assistant\0'+id));assert.equal(f.clicks,1);
+});
+
+for(const count of [8,9])test('assistant block has an explicit eight-row bound: '+count,async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{for(let i=0;i<count;i++)f.inject(f.node('assistant','row-'+i,i===count-1?media():null));}});
+ if(count===8){const user=await acceptV2(f);await f.send('inspectGeneration',{...v2Payload,receipt:user});assert((await f.send('inspectGeneration',{...v2Payload,receipt:user})).receipt.assistantStableIdHash);}
+ else {const prep=await f.send('prepareGeneration',v2Payload),r=await f.send('submitGeneration',{...operation,...v2Payload,receipt:prep.receipt});assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);}
+ assert.equal(f.clicks,1);
+});
+
+test('assistant block candidate churn cannot outlive the existing operation lifetime',async()=>{
+ let now=1000;const f=contentFixture({video:media(),clock:()=>now}),user=await acceptV2(f);
+ for(let i=0;i<4;i++){
+   f.replace([...f.rows.slice(0,-1),f.node('assistant','candidate-'+i,media())]);
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);now+=1000;
+ }
+ now+=20*60*1000;
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt:user})).state,'interrupted');assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+});
+
+test('assistant block census is bounded, read-only, and does not stabilize or upgrade a receipt',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status'));f.inject(f.node('assistant','owner',media()));}}),user=await acceptV2(f);
+ const before=JSON.stringify(f.structuralTrace),count=f.operationCount;
+ const p={...inspectPayload,diagnoseOwnership:true,ownedUserHash:user.userStableIdHash};
+ const r=await f.send('inspectGeneration',p),b=r.ownershipDiagnostic.responseBlock;
+ assert.deepEqual(JSON.parse(JSON.stringify(b)),{ownedResponseBlockCount:1,assistantBlockRowCount:2,mediaAssistantCandidateCount:1,mediaAssistantStable:false,generationActive:false,nextUserObserved:false,assistantBlockWithinBound:true});
+ assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(r)),p));assert.equal(JSON.stringify(f.structuralTrace),before);assert.equal(f.operationCount,count);assert.equal(r.receipt,undefined);
+ for(const patch of [{rawId:'forbidden'},{assistantBlockRowCount:10},{mediaAssistantStable:'yes'}]){
+   const invalid=JSON.parse(JSON.stringify(r));Object.assign(invalid.ownershipDiagnostic.responseBlock,patch);assert(!validResult('inspectGeneration',invalid,p));
+ }
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt:user})).receipt.assistantStableIdHash,undefined);
+});
+
+test('assistant block media authority does not select the last assistant or infer ownership from a nested foreign video',async()=>{
+ const f=contentFixture({video:media(),afterClick:f=>f.inject(f.node('assistant','last-status'))}),user=await acceptV2(f);
+ await f.send('inspectGeneration',{...v2Payload,receipt:user});
+ const owner=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(owner.receipt.assistantStableIdHash,shaBytes('op\0assistant\0new-assistant'));
+ const nested=media(),g=contentFixture({noAssistant:true,afterClick:f=>{const row=f.node('assistant','outer',nested);nested.closest=()=>({});f.inject(row);}}),other=await acceptV2(g);
+ for(let i=0;i<3;i++){const r=await g.send('inspectGeneration',{...v2Payload,receipt:other});assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);}
+});
+
+test('assistant block tail remount during user acceptance does not create a second logical user',async()=>{
+ const f=contentFixture({onPostSendTick:(f,tick)=>{
+   if(tick!==2)return;
+   const old=f.rows.at(-1),replacement=f.node('assistant','canonical-media',media()),user=f.rows.at(-2);
+   f.transaction([...f.rows.slice(0,-1),replacement],[userMutation(f,[replacement],[old],user)]);
+ }});
+ const user=await acceptV2(f);assert.equal(f.lineage.logicalCount,1);assert.equal(f.lineage.maxConcurrent,1);
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(first.receipt.assistantStableIdHash,undefined);
+ const bound=await f.send('inspectGeneration',{...v2Payload,receipt:user});assert.equal(bound.receipt.assistantStableIdHash,shaBytes('op\0assistant\0canonical-media'));assert.equal(f.clicks,1);
+});
+
+test('assistant block native pipeline persists media assistant before result and acquires only after the result receipt',async t=>{
+ const bytes=Buffer.concat([Buffer.from([0,0,0,20]),Buffer.from('ftyp'),Buffer.alloc(210000,3)]),content=contentFixture({noAssistant:true,afterClick:f=>{f.inject(f.node('assistant','status'));f.inject(f.node('assistant','owned-media',media()));},fetch:async()=>new Response(bytes,{headers:{'content-type':'video/mp4'}})});
+ const stored={},worker=workerV2Harness(stored,content);let native,inspectCount=0,acquired=false;
+ const f=fixture(t,{verifyVideo:async file=>{assert.deepEqual(fs.readFileSync(file),bytes);},command:async(type,p)=>{
+   if(type==='inspectGeneration' || type==='acquireGenerationResult'){
+     const disk=JSON.parse(fs.readFileSync(path.join(native.root,'outputs',p.operationId,'muse-operation.json')));
+     assert(disk.receipt.userStableIdHash);
+     if(type==='inspectGeneration'){
+       inspectCount++;
+       if(inspectCount<=2)assert.equal(disk.receipt.assistantStableIdHash,undefined);
+       else {assert.equal(disk.receipt.assistantStableIdHash,shaBytes(p.operationId+'\0assistant\0owned-media'));assert.equal(disk.receipt.result,undefined);}
+     }else {assert(disk.receipt.assistantStableIdHash);assert.equal(disk.receipt.result.ownerAssistantStableIdHash,disk.receipt.assistantStableIdHash);acquired=true;}
+   }
+   return JSON.parse(JSON.stringify(await worker.run(type,p)));
+ }});native=f;f.bridge.receiptV2Ready=async()=>true;
+ const job=await f.service.submit(request());await until(f.service,job.id,'running');
+ await f.service.recover(job.id);assert.equal(acquired,false);
+ await f.service.recover(job.id);assert.equal(acquired,false);
+ const completed=await f.service.recover(job.id);assert.equal(completed.status,'completed');assert(acquired);assert.equal(inspectCount,3);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert.equal(content.clicks,1);
+});
 
 test('v2 browser streams owned HTTPS/blob bytes with hashes and rejects replay, source replacement, and oversized body',async()=>{
  for(const kind of ['https','blob','replacement','oversized','order','abort']) {
@@ -507,7 +649,7 @@ test('v2 worker transports bounded chunks after suspension without submission',a
 test('v2 baseline precedes typing; accepted durable-user echo precedes exactly one causal assistant anchor',async()=>{
  const f=contentFixture(),user=await acceptV2(f);
  assert.equal(user.baselineAssistantMessageIds.length,1);
- const result=await f.send('inspectGeneration',{...v2Payload,receipt:user});
+ const result=await observeMediaV2(f,user);
  assert.equal(result.state,'running');assert(result.receipt.assistantStableIdHash);assert.equal(result.receipt.result,undefined);
  assert(!user.baselineAssistantMessageIds.includes(result.receipt.assistantStableIdHash));assert.equal(f.clicks,1);
  assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(result)),{...inspectPayload,receipt:JSON.parse(JSON.stringify(user))}));
@@ -526,7 +668,7 @@ for(const transition of ['composer root','editor','send removed','send replaced'
    assert.equal(receipt.acceptance.composerCleared,false);
    assert.equal(receipt.acceptance.generationControlObserved,false);
    assert.equal(f.documentListenerCount,4,'Manual activity protection outlives composer replacement and acceptance');
-   const assistant=await f.send('inspectGeneration',{...v2Payload,receipt});
+   const assistant=await observeMediaV2(f,receipt);
    assert(assistant.receipt.assistantStableIdHash);assert.equal(f.clicks,1);
    assert.equal(f.documentListenerCount,0,'Assistant anchoring releases observer and foreign-activity listeners');
  });
@@ -553,7 +695,7 @@ for(const mode of ['atomic','split same delivery','three identities'])test('v2 p
  assert.deepEqual(f.lineage,{identityCount:mode==='three identities'?3:2,logicalCount:1,maxConcurrent:1,replacementCount:mode==='three identities'?2:1,replacementObserved:true});
  const serialized=JSON.stringify(receipt);assert(!serialized.includes('optimistic'));assert(!serialized.includes('canonical-user'));assert(!serialized.includes('aliases'));
  f.inject(f.node('assistant','causal-assistant'));
- const assistant=await f.send('inspectGeneration',{...v2Payload,receipt});
+ const assistant=await observeMediaV2(f,receipt,'causal-assistant');
  assert.equal(assistant.receipt.assistantStableIdHash,shaBytes('op\0assistant\0causal-assistant'));assert.equal(f.clicks,1);
 });
 
@@ -635,13 +777,15 @@ test('v2 canonical replacement anchor is durable in main before assistant bindin
      const persisted=JSON.parse(fs.readFileSync(path.join(native.root,'outputs',p.operationId,'muse-operation.json')));
      assert.equal(persisted.receipt.userStableIdHash,shaBytes(p.operationId+'\0user\0canonical-user'));
      assert.equal(persisted.receipt.assistantStableIdHash,undefined);
-     content.inject(content.node('assistant','causal-assistant'));
+     if(!content.rows.some(r=>r.id==='causal-assistant'))content.inject(content.node('assistant','causal-assistant',media()));
    }
    return JSON.parse(JSON.stringify(await worker.run(type,p)));
  }});native=f;f.bridge.receiptV2Ready=async()=>true;
  const job=await f.service.submit(request());await until(f.service,job.id,'running');
  const file=path.join(f.root,'outputs',job.id,'muse-operation.json');
  assert.equal(JSON.parse(fs.readFileSync(file)).receipt.userStableIdHash,shaBytes(job.id+'\0user\0canonical-user'));
+ assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,undefined);
+ await f.service.recover(job.id);
  assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,undefined);
  await f.service.recover(job.id);
  assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,shaBytes(job.id+'\0assistant\0causal-assistant'));
@@ -737,7 +881,7 @@ test('v2 delayed stable user ID and late generation control require no composer 
  assert.equal(receipt.acceptance.generationControlObserved,false);
  f.stop(); // Control mounts after the user receipt was already returned.
  f.inject(f.node('assistant','late-assistant'));
- assert((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash);
+ assert((await observeMediaV2(f,receipt,'late-assistant')).receipt.assistantStableIdHash);
  assert.equal(f.clicks,1);
 });
 
@@ -761,7 +905,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -839,8 +983,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-5-contract3-receipt2-acceptance3');
- assert.equal(d.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-6-contract3-receipt2-assistantblock1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -855,10 +999,10 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
 });
 
-for(const kind of ['two assistants','additional user','temporary additional user','epoch change','user absent']) {
+for(const kind of ['two media assistants','additional user','temporary additional user','epoch change','user absent']) {
  test('v2 causal capture interrupts on '+kind+' without adopting an assistant',async()=>{
-   const f=contentFixture(),user=await acceptV2(f);
-   if(kind==='two assistants')f.inject(f.node('assistant','competing-assistant'));
+   const f=contentFixture({video:media()}),user=await acceptV2(f);
+   if(kind==='two media assistants')f.inject(f.node('assistant','competing-assistant',media()));
    if(kind.includes('additional user'))f.inject(f.node('user','manual-turn'));
    if(kind==='temporary additional user')f.replace([f.node('user','new-user'),f.node('assistant','new-assistant')]);
    if(kind==='user absent')f.replace([f.node('assistant','new-assistant')]);
@@ -996,8 +1140,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-5-contract3-receipt2-acceptance3');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-6-contract3-receipt2-assistantblock1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1029,7 +1173,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.5 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.6 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];
@@ -1047,11 +1191,12 @@ for(const scenario of ['intent absent','user absent','hash mismatch','receiver a
 });
 
 test('v2 actual worker/content persist each stage, refuse replay, and restore an anchored receipt after both restart',async()=>{
- const stored={},content=contentFixture(),worker=workerV2Harness(stored,content),key='generation-intent:op';
+ const stored={},content=contentFixture({video:media()}),worker=workerV2Harness(stored,content),key='generation-intent:op';
  const prep=await worker.run('prepareGeneration',inspectPayload);
  assert.equal(prep.state,'prepared');assert.equal(stored[key].receipt.version,2);assert.equal(content.clicks,0);
  const accepted=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
  assert.equal(accepted.state,'running');assert(stored[key].receipt.userStableIdHash);assert.equal(content.clicks,1);
+ assert.equal((await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt})).receipt.assistantStableIdHash,undefined);
  const assistant=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
  assert.equal(assistant.state,'running');assert(stored[key].receipt.assistantStableIdHash);
  // Main may still have its user receipt if delivery of the assistant reply was lost.
@@ -1076,8 +1221,9 @@ test('v2 worker restart before assistant persistence breaks causal continuity an
 });
 
 test('v2 conflicting desktop receipt cannot replace worker-owned anchors',async()=>{
- const stored={},content=contentFixture(),worker=workerV2Harness(stored,content);
+ const stored={},content=contentFixture({video:media()}),worker=workerV2Harness(stored,content);
  const prep=await worker.run('prepareGeneration',inspectPayload),accepted=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+ await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
  const assistant=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});
  const before=JSON.stringify(stored),calls=worker.calls.length;
  assert.equal((await worker.run('inspectGeneration',{...inspectPayload,receipt:{...assistant.receipt,assistantStableIdHash:'f'.repeat(64)}})).state,'interrupted');
@@ -1368,12 +1514,13 @@ test('v2 40 prepare/cancel cycles free capacity, preserve worker replay tombston
  assert.equal(content.clicks,0);assert(!worker.calls.includes('submitGeneration'));
 });
 test('v2 40 fixture assistant anchors release observation entries without losing durable receipts',async()=>{
- const content=contentFixture(),stored={},worker=workerV2Harness(stored,content);
+ const content=contentFixture({video:media()}),stored={},worker=workerV2Harness(stored,content);
  for(let i=0;i<40;i++) {
    content.replace([content.node('user','history-user'),content.node('assistant','history-assistant')]);
    const p={...inspectPayload,operationId:'anchor-'+i};
    const prepared=await worker.run('prepareGeneration',p);assert.equal(prepared.state,'prepared');
    const accepted=await worker.run('submitGeneration',{...operation,...p,receipt:prepared.receipt});
+   await worker.run('inspectGeneration',{...p,receipt:accepted.receipt});
    const anchored=await worker.run('inspectGeneration',{...p,receipt:accepted.receipt});
    assert(anchored.receipt.assistantStableIdHash);assert.equal(content.operationCount,0);
    assert.equal(stored['generation-intent:'+p.operationId].receipt.assistantStableIdHash,anchored.receipt.assistantStableIdHash);

@@ -66,7 +66,14 @@ function validResult(type, r, p) {
   return r.data === undefined && r.offset === undefined && r.total === undefined;
 }
 function validOwnershipDiagnostic(d) {
-  return exact(d,['receiptAvailable','ownedUserMatches','rows']) && typeof d.receiptAvailable==='boolean' && Number.isInteger(d.ownedUserMatches) && d.ownedUserMatches>=0 && d.ownedUserMatches<=128 && Array.isArray(d.rows) && d.rows.length<=256 && d.rows.every(r=>
+  if(d?.responseBlock!==undefined) {
+    const b=d.responseBlock;
+    if(!exact(b,['ownedResponseBlockCount','assistantBlockRowCount','mediaAssistantCandidateCount','mediaAssistantStable','generationActive','nextUserObserved','assistantBlockWithinBound']) ||
+      !Number.isInteger(b.ownedResponseBlockCount) || b.ownedResponseBlockCount<0 || b.ownedResponseBlockCount>1 ||
+      !['assistantBlockRowCount','mediaAssistantCandidateCount'].every(k=>Number.isInteger(b[k]) && b[k]>=0 && b[k]<=9) ||
+      !['mediaAssistantStable','generationActive','nextUserObserved','assistantBlockWithinBound'].every(k=>typeof b[k]==='boolean'))return false;
+  }
+  return exact(d,['receiptAvailable','ownedUserMatches','rows','responseBlock']) && typeof d.receiptAvailable==='boolean' && Number.isInteger(d.ownedUserMatches) && d.ownedUserMatches>=0 && d.ownedUserMatches<=128 && Array.isArray(d.rows) && d.rows.length<=256 && d.rows.every(r=>
     exact(r,['id','role','ownedUser','parentIndex','nextSiblingIndex','ancestors','candidates','linkage','videoCount','sourceTypes']) && hash(r.id) && ['user','assistant'].includes(r.role) && typeof r.ownedUser==='boolean' && Number.isInteger(r.parentIndex) && r.parentIndex>=0 && r.parentIndex<256 && Number.isInteger(r.nextSiblingIndex) && r.nextSiblingIndex>=-1 && r.nextSiblingIndex<d.rows.length && Array.isArray(r.ancestors) && r.ancestors.length<=4 && r.ancestors.every(a=>exact(a,['attribute','value']) && ['data-message-id','data-item-id','data-turn-id','data-response-id','data-thread-id','data-conversation-item-id','data-conversation-id','data-response-group-id','data-media-id','data-video-id','data-result-id'].includes(a.attribute) && hash(a.value)) && validCandidates(r.candidates) && validLinkage(r.linkage) && Number.isInteger(r.videoCount) && r.videoCount>=0 && r.videoCount<=16 && Array.isArray(r.sourceTypes) && r.sourceTypes.length<=16 && r.sourceTypes.every(v=>['https','blob','other','empty'].includes(v)));
 }
 function validAnchoredOwnershipDiagnostic(d,ownedUserHash) {

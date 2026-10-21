@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-5-contract3-receipt2-acceptance3';
+const CONTENT_BUILD='muse-content-v0-3-6-contract3-receipt2-assistantblock1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -8,6 +8,7 @@ const SLOT='[data-hatch-composer-action-slot]';
 const MESSAGE='[data-message-item]';
 const STOP='[data-testid="hatch-composer-stop-button"]';
 const MAX_MESSAGES=128;
+const MAX_OWNED_ASSISTANT_ROWS=MuseAcceptanceReplay.MAX_OWNED_ASSISTANT_ROWS;
 let stableKey=null,readinessProbe=null;
 const structureKey=rows=>JSON.stringify(rows.map(({id,role})=>[id,role]));
 // No verified empty-conversation marker exists yet. Zero rows fail closed.
@@ -105,10 +106,36 @@ function afterBaseline(op,allowPending=false) {
   const rows=structure(allowPending);
   if(rows.length<op.baseline.length || op.baseline.some((r,i)=>r.id!==rows[i].id || r.role!==rows[i].role))throw Error('BASELINE_CHANGED');
   const fresh=rows.slice(op.baseline.length);
-  if(fresh.length>2 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw Error('AMBIGUOUS_OPERATION');
+  const limit=op.v2Reserved!==undefined?MAX_OWNED_ASSISTANT_ROWS:1;
+  if(fresh.length>limit+1 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw Error('AMBIGUOUS_OPERATION');
   if(op.submittedUserId && fresh[0]?.id!==op.submittedUserId)throw Error('USER_CHANGED');
   if(op.assistantId && fresh[1]?.id!==op.assistantId)throw Error('RESPONSE_CHANGED');
   return fresh;
+}
+const directVideos=row=>{
+  const videos=[];
+  for(const video of row.node.querySelectorAll('video'))if(video.closest(MESSAGE)===row.node){if(videos.length===16)throw Error('OBSERVATION_LIMIT');videos.push(video);}
+  return videos;
+};
+function responseBlock(op) {
+  const fresh=afterBaseline(op,true),user=fresh[0],container=op.projection?.container;
+  if(!user || !nativeId(user.id) || user.id!==op.submittedUserId || !container ||
+    !container.contains(user.node) || !user.node.parentNode || user.node.parentNode!==op.userSequenceParent ||
+    structure(true).slice(0,op.baseline.length).some(r=>!container.contains(r.node)))throw Error('USER_CHANGED');
+  const rows=fresh.slice(1);
+  // Direct sequence membership is structural evidence, not page-wide adjacency.
+  // Rows outside the prepared conversation or under another list cannot bind.
+  if(rows.some(r=>r.node.parentNode!==user.node.parentNode || !container.contains(r.node)))throw Error('AMBIGUOUS_OPERATION');
+  const sequence=[...user.node.parentNode.querySelectorAll(MESSAGE)].filter(node=>node.parentNode===user.node.parentNode),index=sequence.indexOf(user.node);
+  if(index<0 || sequence.length-index-1!==rows.length || rows.some((r,i)=>sequence[index+i+1]!==r.node))throw Error('AMBIGUOUS_OPERATION');
+  const counts=rows.map(r=>directVideos(r).length);
+  if(counts.some(n=>n>16))throw Error('OBSERVATION_LIMIT');
+  const mediaRows=rows.filter((r,i)=>counts[i]>0);
+  if(mediaRows.length>1 || mediaRows.some(r=>directVideos(r).length!==1))throw Error('AMBIGUOUS_OPERATION');
+  return {user,rows,mediaRows,signature:JSON.stringify(rows.map((r,i)=>[r.id,counts[i]]))};
+}
+function sameBlock(sample,block) {
+  return sample?.signature===block.signature && sample.nodes.length===block.rows.length && sample.nodes.every((node,i)=>node===block.rows[i].node);
 }
 // The DOM adapter projects only bounded structural ordinals into the pure model.
 const acceptanceNow=()=>typeof performance!=='undefined' && typeof performance.now==='function'?performance.now():Date.now();
@@ -132,6 +159,8 @@ function acceptanceProjection(op,mutations,rows,kind,structureValid=true) {
   const slot=(node,mutation,removed)=>{
     const index=rows.findIndex(r=>r.node===node);
     if(!removed && index>=0 && (within(node) || !projection.container))return {container:ordinal(projection.container),position:index};
+    const observed=removed && projection.lastAssistantRows?.find(r=>r.node===node);
+    if(observed && observed.parents.includes(mutation?.target))return {container:ordinal(projection.container),position:observed.position};
     const cached=projection.last;
     if(removed && cached?.node===node && (cached.parents.includes(mutation?.target) || mutation?.target===projection.container)){
       // Direct-list anchors cannot contradict the previously observed suffix.
@@ -181,7 +210,7 @@ function acceptanceProjection(op,mutations,rows,kind,structureValid=true) {
   for(const row of suffix)event(row.node,null,'mounted_sample');
   const c=composer();
   const frame={batch:op.acceptanceTrace.frames.length+1,kind,elapsedMs:Math.floor(Math.min(5000,Math.max(0,acceptanceNow()-projection.started))),baselineValid,structureValid,
-    roleOrderValid:suffix.length<=2 && suffix.every((r,i)=>r.role===(i===0?'user':'assistant')),
+    roleOrderValid:suffix.length<=MAX_OWNED_ASSISTANT_ROWS+1 && suffix.every((r,i)=>r.role===(i===0?'user':'assistant')),
     freshUsers:Math.min(128,suffix.filter(r=>r.role==='user').length),freshAssistants:Math.min(128,suffix.filter(r=>r.role==='assistant').length),
     composerReplaced:c?.root!==projection.composer.root,editorReplaced:c?.editor!==projection.composer.editor,
     generationActive:generationActive(),manualInterference:op.manualInterferenceObserved===true,events};
@@ -198,6 +227,13 @@ function acceptanceProjection(op,mutations,rows,kind,structureValid=true) {
     const parents=[];for(let n=user.node.parentNode,i=0;n && i<6;n=n.parentNode,i++){parents.push(n);if(n===projection.container)break;}
     projection.last={node:user.node,parents};
   }else if(op.userTurn){op.userTurn.mounted=false;op.userTurn.stabilizedSamples=0;}
+  // Only previously observed rows inside the prepared container can retain an
+  // assistant-tail slot through removal. This never proves user replacement.
+  projection.lastAssistantRows=suffix.flatMap((row,i)=>{
+    if(row.role!=='assistant' || !within(row.node))return [];
+    const parents=[];for(let node=row.node.parentNode,depth=0;node && depth<6;node=node.parentNode,depth++){parents.push(node);if(node===projection.container)break;}
+    return [{node:row.node,position:op.baseline.length+i,parents}];
+  }).slice(0,MAX_OWNED_ASSISTANT_ROWS);
   if(['ambiguous','invalid'].includes(result.status))throw Error(result.reason);
 }
 function startAcceptanceProjection(op,original) {
@@ -212,8 +248,9 @@ function startAcceptanceProjection(op,original) {
   if(op.projection.container)nodes.set(op.projection.container,++op.projection.nextNode);
   const baseline={count:op.baseline.length,container:nodes.get(op.projection.container)||0,tailIdentity:ids.get(op.baseline.at(-1).id)};
   op.projection.tailIdentity=baseline.tailIdentity;
-  op.acceptanceTrace={version:1,baseline,frames:[],overflow:false};
-  op.acceptanceModel=MuseAcceptanceReplay.create(baseline);
+  // Version 1 traces retain their original single-assistant replay semantics.
+  op.acceptanceTrace={version:2,baseline,frames:[],overflow:false};
+  op.acceptanceModel=MuseAcceptanceReplay.create(baseline,{assistantBlock:true});
 }
 
 async function inspect(p) {
@@ -281,7 +318,16 @@ async function diagnoseOwnership(p) {
     const linkage=await linkageMetadata(p.operationId,row.node,videos);
     report.push({id,role:row.role,ownedUser:row.role==='user' && id===p.ownedUserHash,parentIndex:parents.indexOf(parent),nextSiblingIndex:rows.findIndex(r=>r.node===row.node.nextElementSibling),ancestors,candidates,linkage,videoCount:videos.length,sourceTypes:videos.map(v=>!v.currentSrc?'empty':v.currentSrc.startsWith('blob:')?'blob':v.currentSrc.startsWith('https:')?'https':'other')});
   }
-  return answer(p,'interrupted',{ownershipDiagnostic:{receiptAvailable:typeof p.ownedUserHash==='string',ownedUserMatches:report.filter(r=>r.ownedUser).length,rows:report}});
+  const owned=report.flatMap((r,i)=>r.ownedUser?[i]:[]),index=owned.length===1?owned[0]:-1;
+  const tail=index<0?[]:rows.slice(index+1),end=tail.findIndex(r=>r.role==='user');
+  const block=(end<0?tail:tail.slice(0,end)),within=block.length<=MAX_OWNED_ASSISTANT_ROWS && block.every(r=>r.node.parentNode===rows[index]?.node.parentNode && !!r.node.parentNode);
+  const userNode=rows[index]?.node,parent=userNode?.parentNode,sequence=parent?[...parent.querySelectorAll(MESSAGE)].filter(node=>node.parentNode===parent):[],start=sequence.indexOf(userNode);
+  const contiguous=start>=0 && block.every((r,i)=>sequence[start+i+1]===r.node);
+  const summary={ownedResponseBlockCount:index>=0 && block.length>0 && within && contiguous?1:0,assistantBlockRowCount:Math.min(MAX_OWNED_ASSISTANT_ROWS+1,block.length),
+    mediaAssistantCandidateCount:Math.min(MAX_OWNED_ASSISTANT_ROWS+1,block.filter(r=>directVideos(r).length>0).length),
+    mediaAssistantStable:false,generationActive:generationActive(),nextUserObserved:end>=0,assistantBlockWithinBound:within};
+  // A current census never advances stabilization or retrofits a receipt.
+  return answer(p,'interrupted',{ownershipDiagnostic:{receiptAvailable:typeof p.ownedUserHash==='string',ownedUserMatches:owned.length,rows:report,responseBlock:summary}});
 }
 async function linkageMetadata(operationId,message,videos) {
   const attributes=['data-message-id','data-item-id','data-turn-id','data-response-id','data-thread-id','data-conversation-item-id','data-conversation-id','data-response-group-id','data-media-id','data-video-id','data-result-id','data-attachment-id','data-asset-id','data-generation-id','data-request-id','data-response-to','data-response-to-id','data-reply-to','data-reply-to-id','data-parent-id','data-parent-message-id','data-user-message-id'];
@@ -390,6 +436,7 @@ async function submit(p) {
         if(op.invalid || op.acceptanceResult?.status!=='accepted' || afterBaseline(op,true)[0]?.id!==user.id || op.userTurn?.node!==user.node ||
           op.acceptanceResult.canonicalNode!==op.projection.nodes.get(user.node) || op.acceptanceResult.canonicalIdentity!==op.projection.ids.get(user.id))throw Error('USER_CHANGED');
         op.submittedUserId=user.id;
+        op.userSequenceParent=user.node.parentNode;
         const currentComposer=composer();
         op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
           composerCleared:!!currentComposer && editorLength(currentComposer.editor)===0,
@@ -468,7 +515,8 @@ async function prepareV2(p) {
       // a manual turn appended and removed in one batch still invalidates.
       for(const mutation of mutations) {
         if(++visited>256)throw Error('OBSERVATION_LIMIT');
-        if(!accepting && mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
+        if(!accepting && mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName) &&
+          !(mutation.attributeName==='data-message-id' && mutation.target.getAttribute('data-message-role')==='assistant' && !op.baseline.some(r=>r.id===mutation.oldValue)))throw Error('IDENTITY_MUTATED');
         const event={mutation,added:[],removed:[]};events.push(event);
         const changes=[...[...(mutation.addedNodes||[])].map(node=>({node,removed:false})),
           ...[...(mutation.removedNodes||[])].map(node=>({node,removed:true}))];
@@ -506,9 +554,13 @@ async function prepareV2(p) {
         // reappearing as a separate row is another/unproven turn.
         const unownedUser=r=>r.role==='user' && !op.baseline.some(b=>b.role==='user' && b.id===r.id) && r.id!==op.submittedUserId;
         if(rows.some(unownedUser) || events.some(e=>[...e.added,...e.removed].some(unownedUser)))throw Error('AMBIGUOUS_OPERATION');
+        // Any observed churn requires fresh poll stabilization. This includes
+        // transient video/row replacement restored before the next poll.
+        if(mutations.length)op.mediaStabilization=null;
+        const block=responseBlock(op);
+        if(op.mediaStabilization && !sameBlock(op.mediaStabilization,block))op.mediaStabilization=null;
       }
-      if(op.newUsers.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
-      if(op.newAssistants.size>1){op.invalid=true;op.observerInvalidation||='AMBIGUOUS_OPERATION';}
+      if(op.newUsers.size>MAX_MESSAGES || op.newAssistants.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
     }catch(error){if(error?.message==='OBSERVATION_LIMIT' && op.acceptanceTrace)op.acceptanceTrace.overflow=true;op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
     if(op.invalid)releaseV2(p.operationId,op);
   };
@@ -532,17 +584,29 @@ async function inspectV2(p) {
     if(!op || op.sceneId!==p.sceneId || op.invalid || !op.receipt || op.observationToken!==p.observationToken || Date.now()-op.lastContact>10000 || Date.now()-op.createdAt>20*60*1000 || !MuseReceiptV2.extendsReceipt(op.receipt,receipt)) {
       if(op)releaseV2(p.operationId,op);return answer(p,'interrupted');
     }
+    try {
     op.lastContact=Date.now();op.sample();
     if(op.invalid || !structure(true).some(r=>r.role==='user' && r.id===op.submittedUserId) || op.logicalFreshUserTurnCount!==1 || op.userTurn?.currentNativeId!==op.submittedUserId){releaseV2(p.operationId,op);return answer(p,'interrupted');}
-    if(op.newAssistants.size===0)return answer(p,'running',{receipt});
-    const id=[...op.newAssistants][0];
-    if(!structure(true).some(r=>r.role==='assistant' && r.id===id)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
-    next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',id)};
+    const block=responseBlock(op);
+    if(await hash(p.operationId,'user',block.user.id)!==receipt.userStableIdHash){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    op.sample();
+    if(op.invalid){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(generationActive() || block.mediaRows.length!==1 || !nativeId(block.mediaRows[0].id)) {
+      op.mediaStabilization=null;return answer(p,'running',{receipt});
+    }
+    const owner=block.mediaRows[0];
+    if(!sameBlock(op.mediaStabilization,block))op.mediaStabilization={signature:block.signature,nodes:block.rows.map(r=>r.node),samples:1};
+    else op.mediaStabilization.samples=Math.min(2,op.mediaStabilization.samples+1);
+    if(op.mediaStabilization.samples<2)return answer(p,'running',{receipt});
+    const stable=op.mediaStabilization;
+    next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',owner.id)};
     op.sample();
     if(op.invalid || !MuseReceiptV2.valid(next,p.operationId)){releaseV2(p.operationId,op);return answer(p,'interrupted');}
+    if(op.mediaStabilization!==stable || generationActive() || !sameBlock(stable,responseBlock(op)))return answer(p,'running',{receipt});
     op.receipt=next;releaseV2(p.operationId,op);
     // Persist the assistant before inspecting/persisting a result candidate.
     return answer(p,'running',{receipt:next});
+    } catch {releaseV2(p.operationId,op);return answer(p,'interrupted');}
   }
   // Refresh/restart recovery needs no operation-map entry or global baseline.
   const candidates=[];

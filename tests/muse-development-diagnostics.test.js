@@ -20,7 +20,7 @@ test('production source stays unmarked; only explicit native dev staging produce
  assert(matches(destination,development));assert(!matches(destination,production));
  const manifest=path.join(destination,'manifest.json');fs.appendFileSync(manifest,' ');assert(!matches(destination,development));
  stageBundle(source,destination,config);assert(matches(destination,production));assert(!matches(destination,development));
- assert.equal(compatibility('0.3.4',1,config),'extension_outdated');assert.equal(config.expectedExtensionVersion,'0.3.5');
+ assert.equal(compatibility('0.3.4',1,config),'extension_outdated');assert.equal(config.expectedExtensionVersion,'0.3.6');
 });
 test('a user/distribution preference cannot opt production staging into diagnostics',async t=>{
  const root=temporary(t),bridge=new MetaMuseExtensionBridge({userDataPath:root,extensionSourceDir:source,distribution:{developmentDiagnostics:true,diagnosticsEnabled:true}});
