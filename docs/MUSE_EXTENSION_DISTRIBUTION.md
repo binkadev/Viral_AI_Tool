@@ -2,7 +2,7 @@
 
 Release configuration lives in `services/generation/bridge/extension-distribution.json` and ships in the application archive. It is build configuration, never a renderer-supplied URL or identity.
 
-- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.2).
+- `expectedExtensionVersion`: minimum supported extension version (currently 0.3.3).
 - `expectedWorkerBuild` / `expectedContentBuild`: version-specific executing markers required by controlled diagnostic preflight; staged bytes alone cannot prove runtime identity.
 - `protocolVersion`: exact supported protocol (currently 1).
 - `chromeWebStoreExtensionId`: official 32-character Chrome ID; blank until assigned.
@@ -19,13 +19,13 @@ A lower extension version yields `extension_outdated`; a lower explicit protocol
 
 The normal action opens only the validated Web Store listing. Without configuration it is disabled and explanatory VI/EN copy appears. No fake installation or silent installation occurs. A support disclosure contains manual instructions: chrome://extensions ? Developer mode ? Load unpacked ? select the revealed userData/meta-muse-extension folder. An updated unpacked extension must be reloaded by the user, then the Muse tab refreshed.
 
-The reveal action validates and reads all eight known bundled files first, writes a complete sibling bundle with its manifest last, and verifies every byte before and after directory publication. The old directory is retained for rollback until publication succeeds. Incomplete sources and write failures leave the managed copy untouched; failed publication restores the old bundle or leaves execution safely unavailable. Redirected ancestors/directories/files and unexpected entries are rejected. Chrome profiles remain untouched. A safe result reports extensionVersion and bundleVerified without a private path. Errors surface through the existing localized connection error; retry is available. Actions are short and do not create jobs or cancellation state. Repeated UI actions are disabled while pending; concurrent store opens coalesce. No installation claim persists: connection evidence expires and is rebuilt after restart. Only the existing selected profile identifier persists.
+The reveal action validates and reads all nine known bundled files first, including the pure acceptance replay module, writes a complete sibling bundle with its manifest last, and verifies every byte before and after directory publication. The old directory is retained for rollback until publication succeeds. Incomplete sources and write failures leave the managed copy untouched; failed publication restores the old bundle or leaves execution safely unavailable. Redirected ancestors/directories/files and unexpected entries are rejected. Chrome profiles remain untouched. A safe result reports extensionVersion and bundleVerified without a private path. Errors surface through the existing localized connection error; retry is available. Actions are short and do not create jobs or cancellation state. Repeated UI actions are disabled while pending; concurrent store opens coalesce. No installation claim persists: connection evidence expires and is rebuilt after restart. Only the existing selected profile identifier persists.
 
 ## Verification
 
 `npm run test:muse-extension` covers real loopback requests, protocol compatibility, official origins, token isolation, store URL validation, manual-folder boundaries, and production archive removal failures. `npm run test:core-commercial` includes these checks and VI/EN settings tests.
 
-`afterPack` runs scripts/verify-muse-package.js: all eight extension files must exist in app.asar and match source bytes; the packaged version contract must match. A broken archive fails packaging.
+`afterPack` runs scripts/verify-muse-package.js: all nine extension files must exist in app.asar and match source bytes; the packaged version contract must match. A broken archive fails packaging.
 
 Opt-in desktop check: clear ELECTRON_RUN_AS_NODE, then run `electron tests/muse-distribution.desktop.js`. This starts the application, waits for an existing Chrome heartbeat without altering its session, and exercises missing-extension status, refusal of an unconfigured store action, and the real manual-folder reveal. It quits the verification app afterwards. Do not run alongside another application instance.
 

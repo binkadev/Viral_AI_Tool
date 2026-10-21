@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.2',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.3',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -158,7 +158,7 @@ test('worker durable intent deduplicates submit across worker restart',async()=>
  const stored={},commands=[];
  const make=()=>{
   const chrome={runtime:{id:'ext',getManifest:()=>({version:'0.3.0',version_name:'development-diagnostics'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},storage:{local:{get:async key=>({[key]:stored[key]}),set:async value=>Object.assign(stored,value)}},tabs:{query:async()=>[{id:5}],sendMessage:async(id,m)=>{commands.push(m.command);return withReceipt({operationId:m.payload.operationId,sceneId:m.payload.sceneId,state:'running'},m.payload);}},alarms:{create(){},onAlarm:{addListener(){}}}};
-  const c={chrome,navigator:{userAgent:'Edg/1'},crypto:require('node:crypto').webcrypto,TextEncoder,setTimeout,clearTimeout};vm.createContext(c);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),c);return c;
+  const c={chrome,navigator:{userAgent:'Edg/1'},crypto:require('node:crypto').webcrypto,TextEncoder,setTimeout,clearTimeout};vm.createContext(c);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),c);return c;
  };
  const c=make();c.command={id:'command',type:'submitGeneration',payload:{operationId:'op',sceneId:'s',tabId:5,prompt:'exact'}};
  await Promise.all([vm.runInContext('execute(command)',c),vm.runInContext('execute(command)',c)]);
@@ -225,22 +225,24 @@ function contentFixture(options={}) {
    removeEventListener:(type,fn)=>documentEvents.get(type)?.delete(fn),
    createTreeWalker:()=>({nextNode:()=>null})};
  const window={};window.top=window;
- const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,
+ const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,performance:options.monotonicClock?{now:options.monotonicClock}:undefined,
    setTimeout:(fn,ms)=>ms>=15000?setTimeout(fn,options.transferTimeout && ms===15000?20:ms).unref():setTimeout(()=>{if(options.disturb && events.input)events.input({isTrusted:true});if(options.mutating){rows=[node('user','changing-'+Math.random())];observerCallback?.();}if(clicks)options.onPostSendTick?.(api,++postSendTicks);fn();},ms===5000?100:1),clearTimeout,
-   MutationObserver:class {constructor(fn){this.fn=fn;}observe(){observerCallbacks.add(this.fn);}disconnect(){observerCallbacks.delete(this.fn);disconnected++;}},
+   MutationObserver:class {constructor(fn){this.fn=records=>fn(records,this);}observe(){observerCallbacks.add(this.fn);}disconnect(){observerCallbacks.delete(this.fn);disconnected++;}},
    getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(options.production?{}:{version_name:'development-diagnostics'})}),onMessage:{addListener:f=>listeners.push(f)},connect:()=>({onDisconnect:{addListener(){}}})}}};
- vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
+ vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
  const api={
-   messageParent:{},
-   transaction:(next,records=[])=>{
+   messageParent:{tagName:'DIV',contains:node=>{for(let n=node,i=0;n && i<8;n=n.parentNode,i++)if(n===api.messageParent)return true;return rows.includes(node);}},
+   transaction:(next,records=[],placement)=>{
      for(const old of rows)if(!next.includes(old)){old.isConnected=false;old.parentNode=null;old.previousSibling=null;old.nextSibling=null;}
      rows=next;
      rows.forEach((n,i)=>{n.isConnected=true;n.parentNode=api.messageParent;n.previousSibling=rows[i-1]||null;n.nextSibling=rows[i+1]||null;});
+     placement?.();
      api.mutate(records);
    },
    get lineage(){return JSON.parse(vm.runInNewContext('JSON.stringify((()=>{const op=[...operations.values()][0];return op?{identityCount:op.newUsers?.size,logicalCount:op.logicalFreshUserTurnCount,maxConcurrent:op.maxConcurrentFreshUserRows,replacementCount:op.replacementCandidateCount,replacementObserved:!!op.identityReplacementObserved}:null;})())',c));},
+   get structuralTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.acceptanceTrace||null)',c));},
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
    replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
    replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
@@ -392,7 +394,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.2',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.3',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -586,7 +588,7 @@ test('v2 historical replacement aliases cannot reappear as user authority after 
  assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
 });
 
-for(const failure of ['concurrent','appended','gap','assistant between','manual second','baseline changed','transient baseline removal','ID mutation','wrong parent','wrong slot','no records','nested removal','transient second'])test('v2 logical lineage rejects '+failure,async()=>{
+for(const failure of ['concurrent','appended','gap','assistant between','manual second','baseline changed','transient baseline removal','ID mutation','wrong parent','wrong slot','no records','transient second'])test('v2 logical lineage rejects '+failure,async()=>{
  let old;
  const f=contentFixture({noAssistant:true,userId:'optimistic-user',afterClick:f=>{
    old=f.rows.at(-1);f.transaction(f.rows,[userMutation(f,[old],[],f.rows.at(-2))]);
@@ -606,9 +608,6 @@ for(const failure of ['concurrent','appended','gap','assistant between','manual 
    if(failure==='wrong parent')f.transaction([...baseline,second],[userMutation(f,[second],[old],tail,null,{})]);
    if(failure==='wrong slot')f.transaction([...baseline,second],[userMutation(f,[second],[old],null)]);
    if(failure==='no records')f.transaction([...baseline,second]);
-   if(failure==='nested removal'){
-     const wrapper={querySelectorAll:()=>[old]};f.transaction([...baseline,second],[userMutation(f,[second],[wrapper],tail)]);
-   }
    if(failure==='transient second'){
      second.isConnected=false;f.transaction(f.rows,[userMutation(f,[second],[second],old)]);
    }
@@ -619,7 +618,7 @@ for(const failure of ['concurrent','appended','gap','assistant between','manual 
  assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
  assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
  if(['concurrent','appended'].includes(failure)){assert.equal(result.acceptanceDiagnostic.maxConcurrentFreshUserRows,2);assert.equal(result.acceptanceDiagnostic.logicalFreshUserTurnCount,2);}
- if(['gap','wrong parent','wrong slot','no records','nested removal','assistant between','transient second'].includes(failure))assert.equal(result.acceptanceDiagnostic.replacementAmbiguous,true);
+ if(['gap','wrong parent','wrong slot','no records','assistant between','transient second'].includes(failure))assert.equal(result.acceptanceDiagnostic.replacementAmbiguous,true);
  assert.equal(stored['generation-intent:op'].receipt.userStableIdHash,undefined);
  const again=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});assert.equal(again.state,'interrupted');assert.equal(f.clicks,1);
  assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
@@ -646,6 +645,81 @@ test('v2 canonical replacement anchor is durable in main before assistant bindin
  assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,shaBytes(job.id+'\0assistant\0causal-assistant'));
  assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));assert.equal(content.clicks,1);
  assert(!fs.readFileSync(file,'utf8').includes('optimistic-user'));
+});
+
+for(const scenario of ['cross-batch','wrapper replacement','expired','different container'])test('v3 live DOM adapter and offline trace agree: '+scenario,async()=>{
+ let now=1000,old,baseline,tail;
+ const f=contentFixture({noAssistant:true,userId:'temporary',clock:()=>-now,monotonicClock:()=>now+0.5,afterClick:f=>{
+   old=f.rows.at(-1);baseline=f.rows.slice(0,-1);tail=baseline.at(-1);
+   f.transaction(f.rows,[userMutation(f,[old],[],tail)]);
+ },onPostSendTick:(f,tick)=>{
+   now=1000+tick*200;
+   if(tick===1){
+     if(scenario==='wrapper replacement'){
+       const wrapper={tagName:'DIV',querySelectorAll:()=>[old]};f.transaction(baseline,[userMutation(f,[],[wrapper],tail)]);
+     }else f.transaction(baseline,[userMutation(f,[],[old],tail)]);
+   }
+   if(tick===2)f.mutate([{type:'childList',target:f.messageParent,addedNodes:[],removedNodes:[],previousSibling:null,nextSibling:null}]);
+   if(tick===(scenario==='expired'?4:3)){
+     const canonical=f.node('user','canonical');
+     if(scenario==='different container')f.transaction([...baseline,canonical],[userMutation(f,[canonical],[],tail,null,{})],()=>{canonical.parentNode={};});
+     else if(scenario==='wrapper replacement'){
+       const wrapper={tagName:'DIV',parentNode:f.messageParent,previousSibling:tail,nextSibling:null,querySelectorAll:()=>[canonical]};
+       f.transaction([...baseline,canonical],[userMutation(f,[wrapper],[],tail)],()=>{canonical.parentNode=wrapper;});
+     }else f.transaction([...baseline,canonical],[userMutation(f,[canonical],[],tail)]);
+   }
+ }});f.transaction(f.rows);
+ const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
+ const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+ if(['expired','different container'].includes(scenario)){
+   assert.equal(result.state,'interrupted');assert(receiptV2.validAcceptanceTrace(result.acceptanceTrace));
+   const trace=JSON.parse(JSON.stringify(result.acceptanceTrace)),replayed=require('../extensions/meta-muse-bridge/acceptance-replay').replay(trace);
+   assert.equal(replayed.reason,result.acceptanceDiagnostic.failureReason);
+   assert.equal(replayed.canonicalIdentity,null);
+ }else {
+   assert.equal(result.state,'running');assert.equal(result.receipt.userStableIdHash,shaBytes('op\0user\0canonical'));
+   assert.equal(f.lineage.replacementCount,1);assert.equal(result.acceptanceTrace,undefined);
+   assert.equal(require('../extensions/meta-muse-bridge/acceptance-replay').replay(f.structuralTrace).status,'accepted');
+   await worker.run('cancelGeneration',inspectPayload);
+ }
+ assert.equal(f.clicks,1);
+});
+
+test('v3 failure trace is private, bounded, persisted and support-exported read-only with trusted IPC',async t=>{
+ const content=contentFixture({noAssistant:true,afterClick:f=>f.replace([...f.rows,f.node('user','private-second-id')])});
+ const stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;f.bridge.developmentDiagnostics=true;
+ const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
+ const file=path.join(f.root,'outputs',job.id,'muse-operation.json'),before=fs.readFileSync(file),jobs=fs.readFileSync(f.service.store.file),calls=f.calls.length;
+ const record=JSON.parse(before),trace=record.acceptanceTrace;
+ assert(receiptV2.validAcceptanceTrace(trace));assert.equal(require('../extensions/meta-muse-bridge/acceptance-replay').replay(trace).status,'ambiguous');
+ for(const secret of ['private-second-id','new-user','history-user',request().prompt,'https:','token'])assert(!JSON.stringify(trace).includes(secret));
+ assert(!receiptV2.valid({...record.receipt,acceptanceTrace:trace},job.id));assert(!validPayload('inspectGeneration',{...inspectPayload,acceptanceTrace:trace}));
+ const failedResult={operationId:job.id,sceneId:job.sceneId,state:'interrupted',invocation:record.invocation,acceptanceTrace:trace};
+ assert(validResult('submitGeneration',failedResult,{operationId:job.id,sceneId:job.sceneId,receipt:record.receipt}));
+ assert(!validResult('submitGeneration',failedResult,{operationId:job.id,sceneId:job.sceneId,receipt:{...record.receipt,userStableIdHash:'c'.repeat(64)}}));
+ const report=await f.service.acceptanceTrace(job.id);assert.deepEqual(report.trace,trace);assert.equal(report.operationId,job.id);
+ const handlers={};require('../services/generation/generation-ipc').registerGenerationIpc({ipcMain:{handle:(n,fn)=>handlers[n]=fn},getService:()=>f.service,trusted:e=>e.trusted});
+ assert.equal((await handlers['generation:acceptance-trace']({trusted:true},job.id)).ok,true);
+ assert.equal((await handlers['generation:acceptance-trace']({trusted:false},job.id)).errorCode,'UNAVAILABLE');
+ assert.equal((await handlers['generation:acceptance-trace']({trusted:true},{id:job.id})).errorCode,'INVALID_REQUEST');
+ f.bridge.developmentDiagnostics=false;await assert.rejects(f.service.acceptanceTrace(job.id),{code:'UNAVAILABLE'});
+ assert.equal(f.calls.length,calls);assert.deepEqual(fs.readFileSync(file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
+ // Missing scalar diagnostics must not hide a valid bounded failure trace.
+ f.bridge.developmentDiagnostics=true;const traceOnly={...record};delete traceOnly.acceptanceDiagnostic;fs.writeFileSync(file,JSON.stringify(traceOnly));
+ const traceOnlyBytes=fs.readFileSync(file);assert.equal((await f.service.acceptanceTrace(job.id)).diagnostic,null);assert.deepEqual(fs.readFileSync(file),traceOnlyBytes);
+ assert.equal(content.clicks,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('v3 trace overflow interrupts without resubmission and remains offline-readable',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{for(let i=0;i<70;i++)f.mutate([]);}});
+ const stored={},worker=workerV2Harness(stored,f),prep=await worker.run('prepareGeneration',inspectPayload);
+ const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.acceptanceDiagnostic.failureReason,'OBSERVATION_LIMIT');
+ assert(result.acceptanceTrace.overflow);assert.equal(result.acceptanceTrace.frames.length,64);
+ assert(receiptV2.validAcceptanceTrace(result.acceptanceTrace));
+ assert.equal(require('../extensions/meta-muse-bridge/acceptance-replay').replay(JSON.parse(JSON.stringify(result.acceptanceTrace))).reason,'OBSERVATION_LIMIT');
+ assert.equal(f.clicks,1);assert.equal(f.operationCount,0);
 });
 
 test('v2 delayed stable user ID and late generation control require no composer transition',async()=>{
@@ -685,7 +759,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-2-contract3-receipt2-acceptance2');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-3-contract3-receipt2-acceptance3');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -763,8 +837,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-2-contract3-receipt2-acceptance2');
- assert.equal(d.workerBuild,'muse-worker-v0-3-2-contract3-receipt2-acceptance2');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-3-contract3-receipt2-acceptance3');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-3-contract3-receipt2-acceptance3');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -896,7 +970,7 @@ function workerV2Harness(stored,content,production=false) {
    storage:{local:{get:async key=>({[key]:stored[key]}),set:async values=>Object.assign(stored,JSON.parse(JSON.stringify(values)))}},
    tabs:{query:async()=>[{id:5}],sendMessage:async(id,m)=>{calls.push(m.command);return content.send(m.command,m.payload);}},alarms:{create(){},onAlarm:{addListener(){}}}};
  const c={chrome,navigator:{userAgent:'Edg/1'},crypto:require('node:crypto').webcrypto,TextEncoder,setTimeout,clearTimeout};
- vm.createContext(c);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),c);
+ vm.createContext(c);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),c);
  return {calls,context:c,run:async(type,p)=>{c.command={id:'cmd',type,payload:p};return vm.runInContext('execute(command)',c);}};
 }
 

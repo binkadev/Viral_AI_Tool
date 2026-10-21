@@ -1,6 +1,6 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-2-contract3-receipt2-acceptance2';
-if(typeof importScripts==='function')importScripts('receipt-v2.js');
+const WORKER_BUILD='muse-worker-v0-3-3-contract3-receipt2-acceptance3';
+if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
 const PORTS=Array.from({length:11},(_,i)=>32147+i), MUSE_URL="https://muse.ai/";

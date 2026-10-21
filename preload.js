@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   checkGenerationProviderSession: id => ipcRenderer.invoke('generation:provider-session-check', id),
   checkGenerationProvider: id => ipcRenderer.invoke('generation:provider-check', id),
   diagnoseGenerationProviderRuntime: id => ipcRenderer.invoke('generation:provider-runtime-diagnosis', id),
+  getGenerationAcceptanceTrace: id => ipcRenderer.invoke('generation:acceptance-trace', id),
   configureGenerationProvider: config => ipcRenderer.invoke('generation:provider-configure', config),
   listGenerationProviders: () => ipcRenderer.invoke('generation:providers'),
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),

@@ -12,7 +12,7 @@ The renderer has no generic command, selector, script, remote URL or byte API.
 
 | Layer | Version |
 | --- | --- |
-| Extension manifest and minimum compatible extension | 0.3.2 |
+| Extension manifest and minimum compatible extension | 0.3.3 |
 | Loopback transport protocol | 1 |
 | Execution contract | 3 |
 | Ownership receipt | 2 |
@@ -25,17 +25,17 @@ protocol versions fail closed. See [distribution](MUSE_EXTENSION_DISTRIBUTION.md
 The store identity and URL stay blank until an actual listing is configured.
 
 Executing JavaScript reports version-specific markers:
-- muse-worker-v0-3-2-contract3-receipt2-acceptance2
-- muse-content-v0-3-2-contract3-receipt2-acceptance2
+- muse-worker-v0-3-3-contract3-receipt2-acceptance3
+- muse-content-v0-3-3-contract3-receipt2-acceptance3
 
-Packaging tests ensure marker versions match the manifest and all eight extension
+Packaging tests ensure marker versions match the manifest and all nine extension
 files match source in the ASAR. Managed staging copies repository files, never
 browser profiles. Staging is not proof Chrome reloaded them: after a bundle update,
 the user must reload the extension and refresh the existing tab once. Receiver
 selection respects the selected session; multiple candidates require selection.
 
-The 0.3.2 distribution rejects 0.3.1 and older workers as outdated. Managed staging reads
-and validates all eight source files before writing a unique sibling directory,
+The 0.3.3 distribution rejects 0.3.2 and older workers as outdated. Managed staging reads
+and validates all nine source files before writing a unique sibling directory,
 writes its manifest last, and verifies every byte before publication. The old
 directory is retained as a rollback backup until the new directory is published
 and byte-verified. Failures block execution; a crash during directory publication
@@ -117,7 +117,7 @@ The stable user ID must match across two 200 ms observations within the existing
 five-second post-send deadline. Initially unassigned native IDs may hydrate;
 identity mutation, a transient unidentified removed turn, or ambiguity interrupts.
 
-### Logical user-turn lineage (acceptance2)
+### Logical user-turn lineage and replay (acceptance3)
 
 The old observer remembered every native ID seen in added/removed nodes or in a
 mounted snapshot, then rejected historical ID cardinality above one. Thus A and B
@@ -125,30 +125,66 @@ can be recorded even when A was removed before the snapshot that mounted B. This
 is a testable DOM pattern, not a proven explanation of the historical yellow-car
 failure: that operation contains no mutation transaction evidence and stays interrupted.
 
-The observer now tracks the logical candidate at suffix position `baseline.length`
-separately from its bounded native-ID history. Empty-ID hydration is allowed on
-the same mounted node. A node replacement requires bounded records in the **same
-observer delivery**: removal of the tracked node and addition of its replacement
-as direct message children of the same parent, with identical sibling anchors.
-The predecessor must be the mounted last baseline row and the successor must be
-absent. The old node must be disconnected. A single replaceChild record and a
-remove/add pair within that delivery are supported, including a proven chain of
-replacements. An initial optimistic candidate already removed before the first
-snapshot needs an explicit insertion record at that same anchored slot.
+Acceptance2 required one observer delivery, direct children, identical mutation
+parents/siblings and an already disconnected old node. Those restrictions can
+reject React scheduling with nested wrappers or separate cleanup/render deliveries.
+The historical purple-airplane diagnostic proves only that replacement was ambiguous;
+it does not identify which predicate failed. No trace can be reconstructed for it.
 
-Records preserve order: a second independent user, an assistant between replacements,
-an unproven removal gap, changed parent/slot, wrappers that obscure direct replacement,
-non-empty in-place ID mutation, baseline change, trusted manual input or unknown
-lineage interrupts. No arbitrary later A-disappears/B-appears inference is allowed.
-The final mounted node and canonical ID must match across two 200 ms samples;
-replacement resets stabilization. Historical aliases never leave the content script
-and never grant ownership, including after the canonical anchor is accepted.
-The canonical hash is durably echoed before the unchanged assistant/result flow.
+The live adapter now projects structural facts into the pure `acceptance-replay.js`
+model. Baseline IDs/order remain immutable. The logical slot is the first suffix
+position, its baseline-tail predecessor, and the prepared message-list ancestor.
+That ancestor must contain every baseline message, be found within six parent
+steps, and cannot be the document/body root. Wrappers may change within that same
+container. A missing/changed container cannot prove replacement. Detached records
+need explicit baseline sibling anchors or the previously observed ancestor path;
+currently mounted rows must occupy the same slot inside the prepared container.
 
-All mutation records remain bounded by the existing 256-visit limit; identity and
-replacement histories are capped by the existing 128-message bound and released
-with observation cleanup. No text, timing-based identity or newest-element rule
-participates. No historical receipt is migrated, recovered or reinterpreted.
+A removal record enters pending replacement. Addition of a canonical candidate
+in that same proven slot may follow in another batch within **400 ms**, two of the
+existing 200 ms sampling intervals. This is an upper scheduling budget, not an ID
+or timestamp match. Wrapper/composer/control changes are allowed while pending;
+assistant activity, unrelated user activity, a different slot/container, baseline
+change, manual interference, stable-ID mutation or expiry fail closed. Mere absence
+followed by a mounted sample is insufficient: an addition record is required.
+The final mounted canonical node and ID need two timer samples after replacement.
+Observer deliveries alone cannot grant stabilization. The five-second acceptance
+deadline remains. Historical identity cardinality is diagnostic, never turn count.
+Only the live adapter's matching current DOM node/native ID can produce the user
+hash; the unchanged worker/main receipt durability precedes assistant ownership.
+
+### Failure traces and offline review
+
+Only post-send V2 acceptance before a user anchor captures traces. Schema version 1
+stores the baseline count/container/tail ordinals and ordered observer/sample frames:
+batch number, 0-5000 ms elapsed value, baseline/structure/order validity, mounted
+role counts, composer/editor replacement, generation/manual flags, and bounded
+mutation events. Events contain role/type/action, operation-local node/identity/parent
+ordinals, slot position/container/predecessor, sibling categories, direct-child and
+mounted-after flags, and at most six ancestor ordinal/tag categories. No raw native
+IDs, text, HTML, URLs, credentials, account identity or browser storage is exported.
+
+Hard limits are 64 frames (including timer samples), 256 events total, ordinals
+0-512, six ancestors and 196608 JSON bytes. Overflow interrupts with
+OBSERVATION_LIMIT and a flagged bounded prefix. The existing 256-visit observer
+limit remains. Failed future operations atomically persist the sanitized trace
+beside invocation and safe diagnostic fields in the private intent. Historical
+intents are never backfilled; a successful receipt does not publish a trace.
+
+Run `node dev/replay-muse-acceptance.js trace.json` against a copied trace or support
+report. The CLI uses the same pure model and returns pending/accepted/ambiguous/invalid,
+canonical ordinals, counters and a bounded reason. It has no browser, bridge, job,
+network or publication access. An accepted offline replay is not a Receipt V2 anchor.
+Imported/exported traces can never be supplied to a live execution payload or used
+by native recovery to invent ownership. Only real live receipts authorize acquisition.
+
+In unpackaged Settings > Muse support details, enter an explicit interrupted job ID,
+read its trace, and copy the sanitized JSON for offline review. The narrow
+`getGenerationAcceptanceTrace(id)` / `generation:acceptance-trace` path reads an
+existing future failed operation only, with native ID/status/schema checks. It
+does not start a bridge, create a job, choose a session, execute, stage, reload,
+recover or acquire. Packaged production returns UNAVAILABLE and hides this block.
+An old operation without a trace remains unavailable; no retrospective migration occurs.
 
 Trusted input/click/key/pointer protection moves to document scope after send and
 survives composer replacement through assistant binding. Cancellation,

@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-2-contract3-receipt2-acceptance2';
+const CONTENT_BUILD='muse-content-v0-3-3-contract3-receipt2-acceptance3';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -110,69 +110,112 @@ function afterBaseline(op,allowPending=false) {
   if(op.assistantId && fresh[1]?.id!==op.assistantId)throw Error('RESPONSE_CHANGED');
   return fresh;
 }
-function trackFreshUserTurn(op,events,fresh) {
-  // Native IDs are historical evidence, not a count of logical turns. Aliases
-  // stay in this document and never enter Receipt V2 or cross the bridge.
-  const ambiguous=()=>{op.replacementAmbiguous=true;throw Error('REPLACEMENT_AMBIGUOUS');};
-  const independent=()=>{op.logicalFreshUserTurnCount=2;op.maxConcurrentFreshUserRows=Math.max(2,op.maxConcurrentFreshUserRows);throw Error('AMBIGUOUS_OPERATION');};
-  const isFresh=r=>!op.baseline.some(b=>b.role===r.role && b.id===r.id);
-  const slot=(m,node)=>m?.target && m.previousSibling===op.baselineTail && m.nextSibling===null &&
-    op.baselineTail?.parentNode===m.target && [...(m.addedNodes||[])].includes(node);
-  const begin=(row,m)=>{
-    if(op.userTurn)independent();
-    if(op.freshAssistantSeen)ambiguous();
-    // A transient first candidate needs explicit insertion at N; a currently
-    // mounted first candidate can instead be established by the full prefix.
-    if(fresh[0]?.node!==row.node && !slot(m,row.node))ambiguous();
-    op.userTurn={node:row.node,currentNativeId:row.id,logicalPosition:op.baseline.length,mounted:true,
-      parent:m?.target||row.node.parentNode,before:m?m.previousSibling:row.node.previousSibling,
-      after:m?m.nextSibling:row.node.nextSibling,aliases:new Set(nativeId(row.id)?[row.id]:[]),stabilizedSamples:0};
-    op.logicalFreshUserTurnCount=1;
-    op.maxConcurrentFreshUserRows=Math.max(1,op.maxConcurrentFreshUserRows);
+// The DOM adapter projects only bounded structural ordinals into the pure model.
+const acceptanceNow=()=>typeof performance!=='undefined' && typeof performance.now==='function'?performance.now():Date.now();
+function acceptanceProjection(op,mutations,rows,kind,structureValid=true) {
+  const projection=op.projection;
+  const ordinal=node=>{
+    if(!node || typeof node!=='object')return 0;
+    if(!projection.nodes.has(node)){if(projection.nextNode>=512)throw Error('OBSERVATION_LIMIT');projection.nodes.set(node,++projection.nextNode);}
+    return projection.nodes.get(node);
   };
-  let removed=null;
-  for(const {mutation:m,added,removed:removedRows} of events) {
-    if(removedRows.some(r=>!isFresh(r)))throw Error('BASELINE_CHANGED');
-    const add=added.filter(r=>r.role==='user' && isFresh(r)),del=removedRows.filter(r=>r.role==='user' && isFresh(r));
-    if(add.length>1 || del.length>1)independent();
-    if(del.length){
-      const turn=op.userTurn;
-      if(removed || !turn || !turn.mounted || turn.node!==del[0].node || !nativeId(del[0].id) ||
-        ![...(m.removedNodes||[])].includes(turn.node) || turn.parent!==m.target || turn.before!==m.previousSibling || turn.after!==m.nextSibling ||
-        turn.before!==op.baselineTail || turn.after!==null || op.baselineTail?.parentNode!==m.target || op.freshAssistantSeen || op.manualInterferenceObserved)ambiguous();
-      turn.mounted=false;removed={mutation:m,node:turn.node};
+  const identity=id=>{
+    if(!nativeId(id))return 0;
+    if(!projection.ids.has(id)){if(projection.ids.size>=512)throw Error('OBSERVATION_LIMIT');projection.ids.set(id,projection.ids.size+1);}
+    return projection.ids.get(id);
+  };
+  const isBaseline=(role,id)=>op.baseline.some(r=>r.role===role && r.id===id);
+  const cat=node=>!node?'none':node===op.baselineTail || node.contains?.(op.baselineTail)?'baseline_tail':
+    node.getAttribute?.('data-message-role')==='user'?'fresh_user':node.getAttribute?.('data-message-role')==='assistant'?'fresh_assistant':'other';
+  const path=node=>{const list=[];for(let n=node?.parentNode;n && list.length<6;n=n.parentNode){list.push({node:ordinal(n),category:['div','section','article','li','ul','main'].includes(n.tagName?.toLowerCase())?n.tagName.toLowerCase():'other'});if(n===projection.container)break;}return list;};
+  const within=node=>{for(let n=node,i=0;n && i<=6;n=n.parentNode,i++)if(n===projection.container)return true;return false;};
+  const slot=(node,mutation,removed)=>{
+    const index=rows.findIndex(r=>r.node===node);
+    if(!removed && index>=0 && (within(node) || !projection.container))return {container:ordinal(projection.container),position:index};
+    const cached=projection.last;
+    if(removed && cached?.node===node && (cached.parents.includes(mutation?.target) || mutation?.target===projection.container)){
+      // Direct-list anchors cannot contradict the previously observed suffix.
+      if(mutation?.target!==projection.container || cat(mutation.previousSibling)==='baseline_tail' && cat(mutation.nextSibling)==='none')return {container:ordinal(projection.container),position:op.baseline.length};
     }
-    if(add.length){
-      const row=add[0],turn=op.userTurn;
-      if(removed){
-        if(!slot(m,row.node) || removed.mutation.target!==m.target || removed.mutation.previousSibling!==m.previousSibling ||
-          removed.mutation.nextSibling!==m.nextSibling || removed.node===row.node || removed.node.isConnected!==false || op.freshAssistantSeen || op.manualInterferenceObserved)ambiguous();
-        if(++op.replacementCandidateCount>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
-        turn.node=row.node;turn.currentNativeId=row.id;turn.mounted=true;turn.stabilizedSamples=0;
-        if(nativeId(row.id))turn.aliases.add(row.id);
-        op.identityReplacementObserved=true;op.stableUserIdentityObserved=false;removed=null;
-      }else if(turn){if(turn.node.isConnected===false)ambiguous();independent();}
-      else begin(row,m);
-    }
-    if([...added,...removedRows].some(r=>r.role==='assistant' && isFresh(r))){
-      if(removed || !op.userTurn)ambiguous();
-      op.freshAssistantSeen=true;
+    if(mutation?.target===projection.container && cat(mutation.previousSibling)==='baseline_tail' && cat(mutation.nextSibling)==='none')return {container:ordinal(projection.container),position:op.baseline.length};
+    // Internal wrapper mutation: its standing branch must follow the baseline
+    // tail branch in the same prepared container. Empty/replaced wrappers are OK.
+    let branch=mutation?.target;
+    for(let i=0;branch && i<6 && branch.parentNode!==projection.container;i++)branch=branch.parentNode;
+    if(branch?.parentNode===projection.container && cat(branch.previousSibling)==='baseline_tail' && cat(branch.nextSibling)==='none')return {container:ordinal(projection.container),position:op.baseline.length};
+    return {container:0,position:-1};
+  };
+  let baselineValid=rows.length>=op.baseline.length && op.baseline.every((r,i)=>r.id===rows[i].id && r.role===rows[i].role);
+  const suffix=rows.slice(op.baseline.length),events=[];let visited=0;
+  const event=(node,mutation,action)=>{
+    if(++visited>256)throw Error('OBSERVATION_LIMIT');
+    const role=node?.getAttribute?.('data-message-role'),id=node?.getAttribute?.('data-message-id');
+    const message=['user','assistant'].includes(role),location=message?slot(node,mutation,action==='removed'):{container:ordinal(projection.container),position:-1};
+    if(message && isBaseline(role,id))location.position=op.baseline.findIndex(r=>r.role===role && r.id===id);
+    const result={mutation:mutation?.type==='attributes'?'attribute':mutation?.type==='childList'?'childList':'none',event:message?action:'wrapper',role:message?role:'none',
+      node:ordinal(node),identity:message?identity(id):0,parent:ordinal(mutation?.target||node?.parentNode),...location,
+      predecessor:projection.tailIdentity,previous:cat(mutation?mutation.previousSibling:node?.previousSibling),next:cat(mutation?mutation.nextSibling:node?.nextSibling),
+      directChild:!!node && node.parentNode===(mutation?.target||node.parentNode),mountedAfter:rows.some(r=>r.node===node),ancestors:path(node)};
+    events.push(result);
+  };
+  for(const mutation of mutations){
+    if(++visited>256)throw Error('OBSERVATION_LIMIT');
+    if(mutation.type==='attributes'){
+      if(['data-message-id','data-message-role'].includes(mutation.attributeName)){
+        const current=mutation.target.getAttribute(mutation.attributeName),old=mutation.oldValue;
+        if(old!==null && old!=='' && old!==current)event(mutation.target,mutation,'id_changed');
+        else if(old!==current)event(mutation.target,mutation,'id_hydrated');
+      }
+    }else {
+      let found=false;
+      // Mutation-record order is preserved; an atomic replace removes A then adds B.
+      for(const [nodes,action] of [[mutation.removedNodes,'removed'],[mutation.addedNodes,'added']])for(const node of nodes||[]){
+        for(const candidate of [node,...(node.querySelectorAll?.(MESSAGE)||[])]){
+          if(++visited>256)throw Error('OBSERVATION_LIMIT');
+          if(['user','assistant'].includes(candidate.getAttribute?.('data-message-role'))){event(candidate,mutation,action);found=true;}
+        }
+      }
+      if(!found)event(mutation.target,mutation,'wrapper');
     }
   }
-  // A removal cannot carry replacement authority across observer deliveries.
-  if(removed)ambiguous();
-  const row=fresh[0];
-  if(!op.userTurn && row)begin(row);
-  const turn=op.userTurn;
-  if(turn){
-    if(!row || row.node!==turn.node || row.node.isConnected===false)ambiguous();
-    if(nativeId(turn.currentNativeId) && turn.currentNativeId!==row.id)throw Error('IDENTITY_MUTATED');
-    turn.currentNativeId=row.id;
-    if(nativeId(row.id))turn.aliases.add(row.id);
-    if(turn.aliases.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
-  }
-  if(fresh[1])op.freshAssistantSeen=true;
+  for(const row of suffix)event(row.node,null,'mounted_sample');
+  const c=composer();
+  const frame={batch:op.acceptanceTrace.frames.length+1,kind,elapsedMs:Math.floor(Math.min(5000,Math.max(0,acceptanceNow()-projection.started))),baselineValid,structureValid,
+    roleOrderValid:suffix.length<=2 && suffix.every((r,i)=>r.role===(i===0?'user':'assistant')),
+    freshUsers:Math.min(128,suffix.filter(r=>r.role==='user').length),freshAssistants:Math.min(128,suffix.filter(r=>r.role==='assistant').length),
+    composerReplaced:c?.root!==projection.composer.root,editorReplaced:c?.editor!==projection.composer.editor,
+    generationActive:generationActive(),manualInterference:op.manualInterferenceObserved===true,events};
+  if(!MuseAcceptanceReplay.validFrame(frame) || op.acceptanceTrace.frames.length>=MuseAcceptanceReplay.MAX_FRAMES ||
+    op.acceptanceTrace.frames.reduce((n,f)=>n+f.events.length,0)+events.length>MuseAcceptanceReplay.MAX_EVENTS){op.acceptanceTrace.overflow=true;throw Error('OBSERVATION_LIMIT');}
+  op.acceptanceTrace.frames.push(frame);
+  if(JSON.stringify(op.acceptanceTrace).length>MuseAcceptanceReplay.MAX_BYTES){op.acceptanceTrace.frames.pop();op.acceptanceTrace.overflow=true;throw Error('OBSERVATION_LIMIT');}
+  const result=op.acceptanceModel.step(frame);op.acceptanceResult=result;
+  op.logicalFreshUserTurnCount=result.logicalCount;op.maxConcurrentFreshUserRows=result.maxConcurrent;op.replacementCandidateCount=result.replacementCount;
+  op.identityReplacementObserved=result.replacementObserved;op.replacementAmbiguous=result.replacementAmbiguous || result.pendingReplacement;
+  op.stableUserIdentityObserved=result.canonicalStable;
+  const user=suffix[0];
+  if(user){op.userTurn={node:user.node,currentNativeId:user.id,mounted:true,stabilizedSamples:result.canonicalStable?2:0};
+    const parents=[];for(let n=user.node.parentNode,i=0;n && i<6;n=n.parentNode,i++){parents.push(n);if(n===projection.container)break;}
+    projection.last={node:user.node,parents};
+  }else if(op.userTurn){op.userTurn.mounted=false;op.userTurn.stabilizedSamples=0;}
+  if(['ambiguous','invalid'].includes(result.status))throw Error(result.reason);
 }
+function startAcceptanceProjection(op,original) {
+  const nodes=new WeakMap(),ids=new Map();
+  op.projection={nodes,ids,nextNode:0,container:null,started:acceptanceNow(),composer:original,last:null};
+  for(const row of op.baseline)ids.set(row.id,ids.size+1);
+  let container=op.baselineTail?.parentNode;
+  for(let depth=0;container && depth<6;depth++,container=container.parentNode){
+    if(container===document.documentElement || container===document.body)break;
+    if(op.baselineNodes.every(node=>container.contains?.(node))){op.projection.container=container;break;}
+  }
+  if(op.projection.container)nodes.set(op.projection.container,++op.projection.nextNode);
+  const baseline={count:op.baseline.length,container:nodes.get(op.projection.container)||0,tailIdentity:ids.get(op.baseline.at(-1).id)};
+  op.projection.tailIdentity=baseline.tailIdentity;
+  op.acceptanceTrace={version:1,baseline,frames:[],overflow:false};
+  op.acceptanceModel=MuseAcceptanceReplay.create(baseline);
+}
+
 async function inspect(p) {
   if(p.diagnoseAcquisition===true)return diagnoseAcquisition(p);
   if(p.diagnoseOwnership===true)return diagnoseOwnership(p);
@@ -325,27 +368,27 @@ async function submit(p) {
       const cleanup=op.cleanup;
       op.cleanup=()=>{cleanup?.();for(const type of ['input','click','keydown','pointerdown'])document.removeEventListener(type,disturbed,true);};
       op.sendAttempted=true;
+      startAcceptanceProjection(op,c);
     }
     invocation.send='uncertain';invocation.reason='invocation-uncertain';
     sendStartedAt=Date.now();
     button.click(); // No await between fresh resolution/validation and invocation.
     invocation.send='invoked';invocation.reason='acceptance-unproven';
-    let candidateUser=null,candidateNode=null,stableUserSamples=0;
     for(let i=0;i<25;i++) {
       await new Promise(r=>setTimeout(r,200));
       if(prepared) {
-        op.sample();
+        op.sample('sample');
         if(op.invalid)throw Error('OBSERVATION_INVALID');
         const fresh=afterBaseline(op,true),user=fresh[0];
-        if(!user || !nativeId(user.id)){candidateUser=null;stableUserSamples=0;continue;}
+        if(!user || !nativeId(user.id))continue;
         if(op.logicalFreshUserTurnCount!==1 || op.userTurn?.node!==user.node || !op.userTurn.mounted)throw Error('AMBIGUOUS_OPERATION');
-        stableUserSamples=candidateUser===user.id && candidateNode===user.node?stableUserSamples+1:1;candidateUser=user.id;candidateNode=user.node;
-        op.userTurn.stabilizedSamples=stableUserSamples;
-        if(stableUserSamples<2)continue;
+        if(op.acceptanceResult?.status!=='accepted')continue;
+        if(op.acceptanceResult.canonicalNode!==op.projection.nodes.get(user.node) || op.acceptanceResult.canonicalIdentity!==op.projection.ids.get(user.id))throw Error('USER_CHANGED');
         op.stableUserIdentityObserved=true;
         const userStableIdHash=await hash(p.operationId,'user',user.id);
         op.sample();
-        if(op.invalid || afterBaseline(op,true)[0]?.id!==user.id || op.userTurn?.node!==user.node)throw Error('USER_CHANGED');
+        if(op.invalid || op.acceptanceResult?.status!=='accepted' || afterBaseline(op,true)[0]?.id!==user.id || op.userTurn?.node!==user.node ||
+          op.acceptanceResult.canonicalNode!==op.projection.nodes.get(user.node) || op.acceptanceResult.canonicalIdentity!==op.projection.ids.get(user.id))throw Error('USER_CHANGED');
         op.submittedUserId=user.id;
         const currentComposer=composer();
         op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
@@ -372,7 +415,9 @@ async function submit(p) {
     let acceptanceDiagnostic;
     if(prepared && invocation.send==='invoked')acceptanceDiagnostic=acceptanceFailureDiagnostic(op,c,sendButton,sendStartedAt,error);
     op.invalid=true;releaseV2(p.operationId,op);
-    return answer(p,'interrupted',{invocation,...(acceptanceDiagnostic?{acceptanceDiagnostic}:{})});
+    const acceptanceTrace=op.acceptanceTrace;
+    return answer(p,'interrupted',{invocation,...(acceptanceDiagnostic?{acceptanceDiagnostic}:{}),
+      ...(prepared && invocation.send==='invoked' && !op.receipt?.userStableIdHash && MuseAcceptanceReplay.validTrace(acceptanceTrace)?{acceptanceTrace}:{})});
   }
   finally {if(op.invalid)releaseV2(p.operationId,op);for(const type of ['input','click','keydown'])c.root.removeEventListener(type,disturbed,true);}
 }
@@ -412,16 +457,18 @@ async function prepareV2(p) {
   if(op.invalid || !stable || !status().canSubmit){releaseV2(p.operationId,op);return answer(p,'interrupted');}
   op.baseline=stable.rows.map(({id,role})=>({id,role}));op.createdAt=Date.now();op.lastContact=Date.now();
   op.newUsers=new Set();op.newAssistants=new Set();
-  op.baselineTail=stable.rows.at(-1).node;op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
-  const sample=(mutations=[])=>{
+  op.baselineTail=stable.rows.at(-1).node;op.baselineNodes=stable.rows.map(r=>r.node);op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
+  const sample=(mutations=[],kind='observer')=>{
+    if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
     try {
+      const accepting=op.sendAttempted && !op.receipt?.userStableIdHash;
       const remember=row=>{if(!op.baseline.some(b=>b.id===row.id && b.role===row.role))(row.role==='user'?op.newUsers:op.newAssistants).add(row.id);};
       let visited=0;const events=[];
       // Inspect bounded mutation additions/removals as well as mounted rows:
       // a manual turn appended and removed in one batch still invalidates.
       for(const mutation of mutations) {
         if(++visited>256)throw Error('OBSERVATION_LIMIT');
-        if(mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
+        if(!accepting && mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName))throw Error('IDENTITY_MUTATED');
         const event={mutation,added:[],removed:[]};events.push(event);
         const changes=[...[...(mutation.addedNodes||[])].map(node=>({node,removed:false})),
           ...[...(mutation.removedNodes||[])].map(node=>({node,removed:true}))];
@@ -434,13 +481,17 @@ async function prepareV2(p) {
               (removed?event.removed:event.added).push({node:candidate,id,role});
               // An initially unassigned ID may hydrate on its mounted row.
               // A transient unidentified turn cannot disappear from evidence.
-              if(!nativeId(id)){if(op.sendAttempted && !removed && (id===null || id===''))continue;throw Error('IDENTITY_UNAVAILABLE');}
+              if(!nativeId(id)){if(accepting || op.sendAttempted && !removed && (id===null || id===''))continue;throw Error('IDENTITY_UNAVAILABLE');}
               remember({id,role});
             }
           }
         }
       }
-      const rows=structure(!!op.sendAttempted);
+      let rows,structureValid=true;
+      try{rows=structure(!!op.sendAttempted);}catch(error){
+        if(!accepting)throw error;structureValid=false;
+        rows=[...document.querySelectorAll(MESSAGE)].slice(0,257).filter(node=>['user','assistant'].includes(node.getAttribute('data-message-role'))).map(node=>({node,id:node.getAttribute('data-message-id'),role:node.getAttribute('data-message-role')}));
+      }
       for(const row of rows)if(nativeId(row.id))remember(row);
       const concurrent=rows.slice(op.baseline.length).filter(r=>r.role==='user').length;
       op.maxConcurrentFreshUserRows=Math.max(op.maxConcurrentFreshUserRows,concurrent);
@@ -448,8 +499,8 @@ async function prepareV2(p) {
       // Prefix and fresh role/order must stay intact until acceptance. Pending
       // native IDs may hydrate after send, but cannot grant ownership yet.
       if(!op.receipt?.userStableIdHash){
-        const fresh=afterBaseline(op,!!op.sendAttempted);
-        if(op.sendAttempted)trackFreshUserTurn(op,events,fresh);
+        if(accepting)acceptanceProjection(op,mutations,rows,kind,structureValid);
+        else afterBaseline(op,!!op.sendAttempted);
       }else {
         // Once anchored, aliases grant no authority. Even a temporary alias
         // reappearing as a separate row is another/unproven turn.
@@ -458,11 +509,11 @@ async function prepareV2(p) {
       }
       if(op.newUsers.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
       if(op.newAssistants.size>1){op.invalid=true;op.observerInvalidation||='AMBIGUOUS_OPERATION';}
-    }catch(error){op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
+    }catch(error){if(error?.message==='OBSERVATION_LIMIT' && op.acceptanceTrace)op.acceptanceTrace.overflow=true;op.invalid=true;op.observerInvalidation||=MuseReceiptV2.acceptanceFailureReasons.includes(error?.message)?error.message:'UNKNOWN';}
     if(op.invalid)releaseV2(p.operationId,op);
   };
-  const observer=new MutationObserver(sample);
-  op.sample=()=>sample(observer.takeRecords?.() || []);
+  const observer=new MutationObserver(records=>sample(records,'observer'));
+  op.sample=(kind='observer')=>sample(observer.takeRecords?.() || [],kind);
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeOldValue:true,attributeFilter:['data-message-id','data-message-role','data-message-item']});
   const deadline=setTimeout(()=>releaseV2(p.operationId,op),20*60*1000);
   op.cleanup=()=>{observer.disconnect();clearTimeout(deadline);};

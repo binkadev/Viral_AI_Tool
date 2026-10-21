@@ -1,6 +1,6 @@
 "use strict";
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const FILES=Object.freeze(['manifest.json','receipt-v2.js','service-worker.js','content-script.js','popup.html','popup.js','popup.css','strings.js']);
+const FILES=Object.freeze(['manifest.json','acceptance-replay.js','receipt-v2.js','service-worker.js','content-script.js','popup.html','popup.js','popup.css','strings.js']);
 function check(ok){if(!ok)throw Object.assign(Error('Invalid managed extension bundle'),{code:'INVALID_REQUEST'});}
 function safeDirectory(directory) {
   const absolute=path.resolve(directory),parsed=path.parse(absolute);
@@ -27,7 +27,7 @@ function readBundle(source,config) {
   const manifest=JSON.parse(files.find(f=>f.file==='manifest.json').data);
   check(manifest.version===config.expectedExtensionVersion && manifest.manifest_version===3 &&
     manifest.background?.service_worker==='service-worker.js' && manifest.action?.default_popup==='popup.html' &&
-    JSON.stringify(manifest.content_scripts?.flatMap(s=>s.js))===JSON.stringify(['receipt-v2.js','content-script.js']));
+    JSON.stringify(manifest.content_scripts?.flatMap(s=>s.js))===JSON.stringify(['acceptance-replay.js','receipt-v2.js','content-script.js']));
   const marker=(file,name)=>files.find(f=>f.file===file).data.toString('utf8').match(new RegExp("const "+name+"='([^']+)'"))?.[1];
   const workerBuild=marker('service-worker.js','WORKER_BUILD'),contentBuild=marker('content-script.js','CONTENT_BUILD');
   check(workerBuild===config.expectedWorkerBuild && contentBuild===config.expectedContentBuild);
@@ -48,7 +48,7 @@ function identity(directory) {
   }catch{return null;}
 }
 function removeOwnedDirectory(directory) {
-  // Only the eight known regular files in a unique staging/backup directory.
+  // Only known regular files in a unique staging/backup directory.
   // No recursive removal, no junction following, no unrelated files.
   safeContents(directory);
   if(!fs.existsSync(directory))return;

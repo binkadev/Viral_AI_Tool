@@ -11,10 +11,11 @@ function createMuseExecution(bridge,verifyVideo) {
   const digest=c=>crypto.createHash('sha256').update(c.sceneId+'\0'+c.request.prompt).digest('hex');
   function read(c) {
     const file=recordPath(c),stat=fs.lstatSync(file);
-    if(!stat.isFile() || stat.isSymbolicLink() || stat.size>32768)throw failure('RECOVERY_REQUIRED');
+    if(!stat.isFile() || stat.isSymbolicLink() || stat.size>262144)throw failure('RECOVERY_REQUIRED');
     const r=JSON.parse(fs.readFileSync(file,'utf8'));
     if(r.operationId!==c.jobId || r.sceneId!==c.sceneId || r.digest!==digest(c) || !Number.isFinite(r.createdAt) || typeof r.target?.instanceId!=='string' || !Number.isSafeInteger(r.target.tabId))throw failure('RECOVERY_REQUIRED');
     if(r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
+    if(r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
     return r;
   }
   function saveEvidence(c,r,result) {
@@ -33,7 +34,7 @@ function createMuseExecution(bridge,verifyVideo) {
     if(result.invocation) {
       // Private evidence only. Transport errors leave invocation unknown.
       const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
-      try {const evidence={invocation:result.invocation,...(result.acceptanceDiagnostic?{acceptanceDiagnostic:result.acceptanceDiagnostic}:{})};fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({...r,...evidence}));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));Object.assign(r,evidence);}
+      try {const evidence={invocation:result.invocation,...(result.acceptanceDiagnostic?{acceptanceDiagnostic:result.acceptanceDiagnostic}:{}),...(result.acceptanceTrace?{acceptanceTrace:result.acceptanceTrace}:{})};fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({...r,...evidence}));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));Object.assign(r,evidence);}
       finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
     }
     if(['prepared','running','result'].includes(result.state))saveEvidence(c,r,result);
@@ -136,6 +137,12 @@ function createMuseExecution(bridge,verifyVideo) {
     const task=Promise.resolve().then(fn).finally(()=>locks.delete(c.jobId));locks.set(c.jobId,task);return task;
   }
   return {
+    acceptanceTrace:c=>{
+      if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
+      guard(c);const record=read(c);
+      if(record.receipt?.userStableIdHash || !receiptV2.validAcceptanceTrace(record.acceptanceTrace) || record.acceptanceDiagnostic!==undefined && !receiptV2.validAcceptanceDiagnostic(record.acceptanceDiagnostic))throw failure('UNAVAILABLE');
+      return {operationId:c.jobId,diagnostic:record.acceptanceDiagnostic||null,trace:record.acceptanceTrace};
+    },
     // Read-only presentation classification. Never migrate, infer anchors, or
     // rewrite historical evidence just to explain why reconciliation is blocked.
     recoveryState:c=>{

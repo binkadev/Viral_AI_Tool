@@ -4,6 +4,14 @@
   const copy = () => window.I18N.messages[state.locale === "en" ? "en" : "vi"].videoProviders;
   let status = null, session = null, pending = false, failed = false, supportOpen = false;
   let runtimeReport=null,diagnosticAvailable=false,diagnosticPending=false,diagnosticFailed=false;
+  let traceReport=null,traceJob='',tracePending=false,traceMessage='',traceOpen=false;
+  function traceContent() {
+    const c=copy().runtimeDiagnostic;
+    return '<details data-video-provider-trace-support'+(traceOpen?' open':'')+'><summary>'+esc(c.traceTitle)+'</summary><label>'+esc(c.traceJob)+'<input data-video-provider-trace-id value="'+esc(traceJob)+'" autocomplete="off" spellcheck="false"'+(tracePending?' disabled':'')+'></label>'+
+      '<button type="button" class="button ghost" data-video-provider-trace-read'+(pending||diagnosticPending||tracePending?' disabled':'')+'>'+esc(c.traceRead)+'</button>'+
+      '<p role="status">'+esc(tracePending?c.checking:traceMessage?c[traceMessage]:'')+'</p>'+
+      (traceReport?'<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(traceReport,null,2))+'</pre><button type="button" class="button ghost" data-video-provider-trace-copy'+(tracePending?' disabled':'')+'>'+esc(c.traceCopy)+'</button>':'')+'</details>';
+  }
   function runtimeContent() {
     if(!diagnosticAvailable)return '';
     const c=copy().runtimeDiagnostic,r=runtimeReport;
@@ -11,7 +19,7 @@
       '<p role="status">'+esc(diagnosticPending?c.checking:diagnosticFailed?c.unavailable:r?.readyForControlledE2E?c.ready:c.notReady)+'</p>'+
       (r?'<dl><dt>'+esc(c.worker)+'</dt><dd>'+esc(r.runtime.workerBuild===r.expected.workerBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.content)+'</dt><dd>'+esc(r.runtime.contentBuild===r.expected.contentBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.session)+'</dt><dd>'+esc(r.runtime.heartbeatFresh && r.runtime.authenticated && r.runtime.composerReady?c.current:c.unproven)+'</dd></dl>'+
       '<details><summary>'+esc(c.details)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(r,null,2))+'</pre></details>':'')+
-      '<button type="button" class="button ghost" data-video-provider-diagnose'+(diagnosticPending||pending?' disabled':'')+'>'+esc(c.check)+'</button></section>';
+      '<button type="button" class="button ghost" data-video-provider-diagnose'+(diagnosticPending||pending||tracePending?' disabled':'')+'>'+esc(c.check)+'</button>'+traceContent()+'</section>';
   }
   function content() {
     const c = copy();
@@ -55,12 +63,13 @@
     const active = document.activeElement;
     const keepFocus = focus || (active?.matches?.("[data-video-provider-open]") ? "open" : active?.matches?.("[data-video-provider-enable]") ? "enable" : active?.matches?.("[data-video-provider-check]") ? "check" : null);
     supportOpen = Boolean(root.querySelector("[data-video-provider-support]")?.open);
+    traceOpen = Boolean(root.querySelector('[data-video-provider-trace-support]')?.open);
     root.innerHTML = content();
     root.setAttribute("aria-busy", String(pending));
     if (keepFocus) root.querySelector("[data-video-provider-"+keepFocus+"]")?.focus({preventScroll:true});
   }
   async function refresh(enabled, focus, open = false, selection = null, setup = false, store = false) {
-    if (pending || diagnosticPending) return;
+    if (pending || diagnosticPending || tracePending) return;
     pending = true; failed = false; runtimeReport=null; paint();
     try {
       const result = typeof enabled === "boolean"
@@ -87,7 +96,7 @@
     finally { pending = false; paint(focus); await diagnose(); }
   }
   async function diagnose(focus) {
-    if(diagnosticPending || pending || typeof window.desktopAPI.diagnoseGenerationProviderRuntime!=='function')return;
+    if(diagnosticPending || pending || tracePending || typeof window.desktopAPI.diagnoseGenerationProviderRuntime!=='function')return;
     diagnosticPending=true;diagnosticFailed=false;runtimeReport=null;paint();
     try {
       const result=await window.desktopAPI.diagnoseGenerationProviderRuntime('muse');
@@ -96,10 +105,29 @@
     } catch {diagnosticFailed=true;}
     finally {diagnosticPending=false;paint(focus);}
   }
+  async function readTrace() {
+    if(!diagnosticAvailable || tracePending || diagnosticPending || pending)return;
+    traceJob=(document.getElementById('video-provider-settings')?.querySelector('[data-video-provider-trace-id]')?.value||'').trim();
+    traceReport=null;traceMessage='';
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(traceJob)){traceMessage='traceUnavailable';paint('trace-read');return;}
+    tracePending=true;paint();
+    try {const result=await window.desktopAPI.getGenerationAcceptanceTrace(traceJob);if(!result?.ok)throw 0;traceReport=result.value;}
+    catch {traceMessage='traceUnavailable';}
+    finally {tracePending=false;paint('trace-read');}
+  }
+  async function copyTrace() {
+    if(!diagnosticAvailable || !traceReport || tracePending)return;
+    tracePending=true;
+    try {await navigator.clipboard.writeText(JSON.stringify(traceReport,null,2));traceMessage='traceCopied';}
+    catch {traceMessage='traceCopyFailed';}
+    finally {tracePending=false;paint('trace-copy');}
+  }
   window.ViralVideoProviderSettings = {html};
   function install() {
     document.addEventListener("click", event => {
-      if (event.target?.closest?.("[data-video-provider-diagnose]")) diagnose('diagnose');
+      if (event.target?.closest?.("[data-video-provider-trace-read]")) readTrace();
+      else if (event.target?.closest?.("[data-video-provider-trace-copy]")) copyTrace();
+      else if (event.target?.closest?.("[data-video-provider-diagnose]")) diagnose('diagnose');
       else if (event.target?.closest?.("[data-video-provider-open]")) refresh(undefined,"open",true);
       else if (event.target?.closest?.("[data-video-provider-check]")) refresh(undefined,"check");
       else if (event.target?.closest?.("[data-video-provider-store]")) refresh(undefined,"store",false,null,false,true);

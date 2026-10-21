@@ -141,6 +141,17 @@ class GenerationService extends EventEmitter {
     return sanitizeReport(await adapter.runtimeDiagnosis());
   }
 
+  async acceptanceTrace(id) {
+    if(this.stopping)throw failure('UNAVAILABLE');
+    if(!identifier(id))throw failure('INVALID_REQUEST');
+    const job=this.get(id),adapter=this.registry.getProvider(job.request.providerId);
+    if(job.status!=='interrupted' || job.request.providerId!=='muse' || typeof adapter?.acceptanceTrace!=='function')throw failure('UNAVAILABLE');
+    const report=await adapter.acceptanceTrace(this.context(job));
+    const receipt=require('../../extensions/meta-muse-bridge/receipt-v2');
+    if(report?.operationId!==id || !receipt.validAcceptanceTrace(report.trace) || report.diagnostic!==null && !receipt.validAcceptanceDiagnostic(report.diagnostic))throw failure('UNAVAILABLE');
+    return {operationId:id,diagnostic:report.diagnostic,trace:report.trace};
+  }
+
   async providerSession(id, open = false) {
     if (this.stopping) throw failure("UNAVAILABLE");
     if (!identifier(id)) throw failure("INVALID_REQUEST");

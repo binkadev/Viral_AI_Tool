@@ -81,7 +81,7 @@ test('runtime support block is development-only, bilingual, read-only, and handl
  for(const locale of ['vi','en'])for(const enabled of [false,true]){
    const listeners={},focus=[],calls=[];let complete;
    const root={innerHTML:'',setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
-   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.2',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
+   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.3',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
    const context={state:{locale,page:'settings'},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},window:{addEventListener(){},desktopAPI:{
      checkGenerationProvider:async()=>{calls.push('provider');return {ok:true,value:{id:'muse',enabled:true,ready:true,state:'ready'}};},
      diagnoseGenerationProviderRuntime:async id=>{assert.equal(id,'muse');calls.push('diagnose');return enabled?{ok:true,value:report}:{ok:false,errorCode:'UNAVAILABLE'};}
@@ -102,6 +102,28 @@ test('runtime support block is development-only, bilingual, read-only, and handl
    context.window.desktopAPI.diagnoseGenerationProviderRuntime=async()=>({ok:true,value:{...report,readyForControlledE2E:false,runtime:{...report.runtime,contentBuild:null}}});
    click();await tick();assert(root.innerHTML.includes(c.notReady));assert(root.innerHTML.includes(c.unproven));
    assert.deepEqual(calls,['diagnose']);
+ }
+});
+
+test('support trace view reads an explicit job, preserves focus and copies sanitized JSON without execution',async()=>{
+ for(const locale of ['vi','en']){
+   const listeners={},calls=[],focus=[];let complete,copied;
+   const input={value:'job-1'},root={innerHTML:'',setAttribute(){},querySelector:s=>s==='[data-video-provider-trace-id]'?input:s==='[data-video-provider-trace-support]'?{open:true}:{focus:()=>focus.push(s)}};
+   const trace=require('./fixtures/muse-acceptance-replay').cases[6].trace,report={operationId:'job-1',trace};
+   const context={state:{locale,page:'settings'},navigator:{clipboard:{writeText:async text=>copied=text}},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(n,fn)=>listeners[n]=fn},window:{addEventListener(){},desktopAPI:{
+     checkGenerationProvider:async()=>({ok:true,value:{id:'muse',ready:true,state:'ready'}}),
+     diagnoseGenerationProviderRuntime:async()=>({ok:true,value:{expected:{workerBuild:'current',contentBuild:'current'},runtime:{},readyForControlledE2E:false}}),
+     getGenerationAcceptanceTrace:id=>{calls.push(id);return new Promise(resolve=>complete=resolve);}
+   }}};
+   vm.runInNewContext(fs.readFileSync('renderer/i18n.js','utf8'),context);vm.runInNewContext(fs.readFileSync('renderer/core-video-provider-settings.js','utf8'),context);await tick();
+   const c=context.window.I18N.messages[locale].videoProviders.runtimeDiagnostic;
+   const click=action=>listeners.click({target:{closest:s=>s==='[data-video-provider-trace-'+action+']'?{}:null}});
+   click('read');click('read');assert.deepEqual(calls,['job-1']);complete({ok:true,value:report});await tick();
+   assert(root.innerHTML.includes('data-video-provider-trace-support open'));assert(root.innerHTML.includes(c.traceCopy));assert(root.innerHTML.includes('baselineValid'));
+   assert(focus.includes('[data-video-provider-trace-read]'));
+   click('copy');await tick();assert.deepEqual(JSON.parse(copied),report);assert(root.innerHTML.includes(c.traceCopied));
+   context.navigator.clipboard.writeText=async()=>{throw Error('private error');};click('copy');await tick();assert(root.innerHTML.includes(c.traceCopyFailed));assert(!root.innerHTML.includes('private error'));
+   input.value='../invalid';click('read');await tick();assert.deepEqual(calls,['job-1']);assert(root.innerHTML.includes(c.traceUnavailable));assert(!root.innerHTML.includes('baselineValid'));
  }
 });
 

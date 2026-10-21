@@ -1,6 +1,7 @@
 "use strict";
 // Shared pure schema; no DOM, storage, transport, or acquisition side effects.
 (function(root){
+ const replay=typeof module==='object' && module.exports?require('./acceptance-replay'):root.MuseAcceptanceReplay;
  const hash=v=>typeof v==='string' && /^[a-f0-9]{64}$/.test(v);
  const exact=(v,keys)=>v && typeof v==='object' && !Array.isArray(v) && Object.keys(v).every(k=>keys.includes(k));
  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -30,7 +31,7 @@
    return !old.result || !!next.result && old.result.kind===next.result.kind && old.result.ownerAssistantStableIdHash===next.result.ownerAssistantStableIdHash;
  }
  const MAX_BYTES=268435456,CHUNK_BYTES=196608;
- const acceptanceFailureReasons=Object.freeze(['BASELINE_CHANGED','AMBIGUOUS_OPERATION','USER_CHANGED','RESPONSE_CHANGED','IDENTITY_MUTATED','IDENTITY_UNAVAILABLE','OBSERVATION_LIMIT','MANUAL_INTERFERENCE','ACCEPTANCE_UNCERTAIN','OBSERVATION_INVALID','COMPOSER_CHANGED','REPLACEMENT_AMBIGUOUS','UNKNOWN']);
+ const acceptanceFailureReasons=Object.freeze(['BASELINE_CHANGED','AMBIGUOUS_OPERATION','USER_CHANGED','RESPONSE_CHANGED','IDENTITY_MUTATED','IDENTITY_UNAVAILABLE','OBSERVATION_LIMIT','MANUAL_INTERFERENCE','ACCEPTANCE_UNCERTAIN','OBSERVATION_INVALID','COMPOSER_CHANGED','REPLACEMENT_AMBIGUOUS','REPLACEMENT_SLOT_UNPROVEN','REPLACEMENT_EXPIRED','REPLACEMENT_CONVERSATION_ACTIVITY','INVALID_TRACE','UNKNOWN']);
  function validAcceptanceDiagnostic(d) {
    const bools=['deadlineReached','baselinePrefixValid','stableUserIdentityObserved','manualInterferenceObserved','composerReplaced','editorReplaced','sendControlTransitionObserved','generationControlObserved'];
    const lineageCounts=['freshUserIdentityCount','logicalFreshUserTurnCount','maxConcurrentFreshUserRows','replacementCandidateCount'],lineageBools=['identityReplacementObserved','canonicalUserStable','replacementAmbiguous'];
@@ -66,6 +67,6 @@
      ['blob','https','other','none'].includes(v.sourceKind) && Number.isInteger(v.sourceChildCount) && v.sourceChildCount>=0 && v.sourceChildCount<=8 &&
      Number.isInteger(v.readyState) && v.readyState>=0 && v.readyState<=4 && Number.isInteger(v.networkState) && v.networkState>=0 && v.networkState<=3);
  }
- const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,acceptanceFailureReasons,MAX_BYTES,CHUNK_BYTES});
+ const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);
