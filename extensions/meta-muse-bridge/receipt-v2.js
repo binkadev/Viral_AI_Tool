@@ -125,8 +125,23 @@
      userChurnKinds.includes(d.kind) && ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(d.elapsedBucket) &&
      ['zero','one_to_four','five_or_more'].includes(d.mutationCount) && userChurnBools.every(k=>d[k]===null || typeof d[k]==='boolean') && userChurnCounts.every(k=>count(d[k],128));
  }
+ const baselineDriftKinds=Object.freeze(['BASELINE_ROW_REMOVED','BASELINE_ROW_ADDED','BASELINE_ID_CHANGED','BASELINE_ROLE_CHANGED','BASELINE_REORDERED',
+   'BASELINE_PARENT_CHANGED','BASELINE_CONTAINER_CHANGED','OWNED_USER_INDEX_SHIFT','PREFIX_LENGTH_CHANGED','MULTIPLE_BASELINE_DIFFERENCES','IDENTITY_UNAVAILABLE','UNKNOWN_BOUNDED']);
+ const baselineDriftCounts=Object.freeze(['baselineLength','currentRecognizedPrefixLength','currentRowsBeforeOwnedUser','ownedUserOriginalIndex','ownedUserCurrentIndex',
+   'baselineRowsStillConnectedCount','baselineRowsStillInContainerCount','baselineRowsSameParentCount','baselineRowsIdentityUnchangedCount','baselineRowsRoleUnchangedCount',
+   'removedBaselineRowCount','addedRowsBeforeOwnedUserCount','changedBaselineIdCount','changedBaselineRoleCount','movedBaselineRowCount']);
+ const baselineDriftBools=Object.freeze(['baselineLengthChanged','ownedUserIndexChanged','generationActive']);
+ function validBaselineDrift(d) {
+   const keys=['version','build','kind','firstMismatchIndexBucket','firstMismatchKind','elapsedBucket','mutationCountBucket',...baselineDriftCounts,...baselineDriftBools];
+   return exact(d,keys) && Object.keys(d).length===keys.length && d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') &&
+     baselineDriftKinds.includes(d.kind) && (d.firstMismatchKind===null || baselineDriftKinds.includes(d.firstMismatchKind)) &&
+     [null,'zero','one_to_four','five_to_sixteen','seventeen_or_more'].includes(d.firstMismatchIndexBucket) &&
+     ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(d.elapsedBucket) && ['zero','one_to_four','five_or_more'].includes(d.mutationCountBucket) &&
+     baselineDriftCounts.every(k=>count(d[k],257)) && baselineDriftBools.every(k=>d[k]===null || typeof d[k]==='boolean');
+ }
  const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
    ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,assistantSequenceCounts,assistantSequenceBools,assistantMismatchCategories,emptyAssistantSequence,
-   validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,userChurnKinds,userChurnBools,userChurnCounts,validUserAnchorChurn,MAX_BYTES,CHUNK_BYTES});
+   validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,userChurnKinds,userChurnBools,userChurnCounts,validUserAnchorChurn,
+   baselineDriftKinds,baselineDriftCounts,baselineDriftBools,validBaselineDrift,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

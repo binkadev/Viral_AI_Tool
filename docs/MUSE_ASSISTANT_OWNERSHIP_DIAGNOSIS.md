@@ -13,10 +13,11 @@ for trace bounds, reasons, persistence and the unchanged transient-state behavio
 
 ## Runtime identity and failure reports
 
-The ownership-diagnosis runtime is extension **0.3.11**, worker
-`muse-worker-v0-3-11-contract3-receipt2-userchurn1`, and content
-`muse-content-v0-3-11-contract3-receipt2-userchurn1`. See also the separate persisted
-[user churn diagnostic](MUSE_USER_ANCHOR_CHURN.md). Protocol 1, execution
+The ownership-diagnosis runtime is extension **0.3.12**, worker
+`muse-worker-v0-3-12-contract3-receipt2-baselinediag1`, and content
+`muse-content-v0-3-12-contract3-receipt2-baselinediag1`. See also the separate persisted
+[user churn diagnostic](MUSE_USER_ANCHOR_CHURN.md) and
+[baseline drift diagnostic](MUSE_BASELINE_DRIFT.md). Protocol 1, execution
 contract 3 and Receipt V2 are unchanged. All nine managed files must match the
 effective bundle, including the deterministic unpackaged-development manifest
 overlay described in [distribution](MUSE_EXTENSION_DISTRIBUTION.md).

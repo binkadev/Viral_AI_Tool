@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.11',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.12',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -245,6 +245,7 @@ function contentFixture(options={}) {
    get lineage(){return JSON.parse(vm.runInNewContext('JSON.stringify((()=>{const op=[...operations.values()][0];return op?{identityCount:op.newUsers?.size,logicalCount:op.logicalFreshUserTurnCount,maxConcurrent:op.maxConcurrentFreshUserRows,replacementCount:op.replacementCandidateCount,replacementObserved:!!op.identityReplacementObserved}:null;})())',c));},
    get structuralTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.acceptanceTrace||null)',c));},
    get assistantTrace(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.assistantFrames||null)',c));},
+   get baselineDrift(){return JSON.parse(vm.runInNewContext('JSON.stringify([...operations.values()][0]?.baselineDrift||null)',c));},
    get assistantFailureCount(){return vm.runInNewContext('assistantFailures.size',c);},
    sequenceEvidence:(rows,sequence,index,contiguous)=>JSON.parse(JSON.stringify(vm.runInNewContext('gateDSequenceEvidence',c)(rows,sequence,index,contiguous))),
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
@@ -400,7 +401,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.11',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.12',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -461,6 +462,192 @@ async function acceptV2(f) {
  assert.equal(accepted.state,'running');assert.equal(accepted.receipt.version,2);assert(accepted.receipt.userStableIdHash);
  assert.equal(accepted.receipt.assistantStableIdHash,undefined);return accepted.receipt;
 }
+
+test('baseline drift: unchanged baseline, remounted baseline IDs, pending role/ID and assistant stabilization add no evidence',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f);
+ for(let i=0;i<3;i++)assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).state,'running');
+ assert.equal(f.baselineDrift,null);
+ const shell=appendPendingRole(f);assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).state,'running');assert.equal(f.baselineDrift,null);
+ hydratePendingRole(f,shell);shell.id=null;f.mutate([]);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).state,'running');assert.equal(f.baselineDrift,null,'Pending assistant IDs after the owned user are not baseline drift');
+ shell.id='status';f.mutate([]);f.inject(f.node('assistant','owned-media',media()));
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(first.state,'running');assert.equal(first.baselineDrift,undefined);assert.equal(f.baselineDrift,null);
+ const second=await f.send('inspectGeneration',{...v2Payload,receipt});assert(second.receipt.assistantStableIdHash);assert.equal(second.baselineDrift,undefined);assert.equal(f.clicks,1);
+ const g=contentFixture({noAssistant:true}),other=await acceptV2(g),old=g.rows.slice();
+ g.transaction([g.node('user','history-user'),g.node('assistant','history-assistant'),old.at(-1)]);
+ // Remounting identical baseline IDs does not change the ordered-prefix comparison.
+ assert.equal(g.baselineDrift,null);const r=await g.send('inspectGeneration',{...v2Payload,receipt:other});
+ assert.equal(r.baselineDrift,undefined);assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);assert.equal(g.clicks,1);
+});
+
+for(const kind of ['BASELINE_ROW_REMOVED','BASELINE_ROW_ADDED','BASELINE_ID_CHANGED','BASELINE_ROLE_CHANGED','BASELINE_REORDERED','BASELINE_PARENT_CHANGED','BASELINE_CONTAINER_CHANGED','OWNED_USER_INDEX_SHIFT','MULTIPLE_BASELINE_DIFFERENCES','IDENTITY_UNAVAILABLE','UNKNOWN_BOUNDED'])test('baseline drift: first structural divergence '+kind,async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),original=f.rows.slice(),baseline=original.slice(0,-1),user=original.at(-1),before=JSON.stringify(receipt);
+ if(kind==='BASELINE_ROW_REMOVED')f.transaction(original.slice(1),[userMutation(f,[],[baseline[0]],null,baseline[1])]);
+ if(kind==='BASELINE_ROW_ADDED'){
+   const extra=f.node('assistant','inserted-baseline-row');f.transaction([baseline[0],extra,baseline[1],user],[userMutation(f,[extra],[],baseline[0],baseline[1])]);
+ }
+ if(kind==='BASELINE_ID_CHANGED'){baseline[1].id='changed-baseline-id';f.mutate([]);}
+ if(kind==='BASELINE_ROLE_CHANGED'){baseline[0].role='assistant';f.mutate([]);}
+ if(kind==='BASELINE_REORDERED')f.transaction([baseline[1],baseline[0],user],[userMutation(f,[baseline[1]],[baseline[1]],null,baseline[0])]);
+ if(kind==='BASELINE_PARENT_CHANGED' || kind==='BASELINE_CONTAINER_CHANGED'){
+   const parent=kind==='BASELINE_PARENT_CHANGED'?{parentNode:f.messageParent}:{};
+   f.transaction(original,[],()=>{baseline[0].parentNode=parent;});
+ }
+ if(kind==='OWNED_USER_INDEX_SHIFT')f.transaction([...baseline,f.node('tool','unrecognized-shell'),user]);
+ if(kind==='MULTIPLE_BASELINE_DIFFERENCES'){
+   baseline[1].id='changed-baseline-id';f.transaction([baseline[0],f.node('assistant','inserted-row'),baseline[1],user]);
+ }
+ if(kind==='IDENTITY_UNAVAILABLE'){baseline[1].id='';f.mutate([]);}
+ if(kind==='UNKNOWN_BOUNDED')f.mutate(Array.from({length:257},()=>({type:'childList',target:f.messageParent,addedNodes:[],removedNodes:[]})));
+ if(['BASELINE_PARENT_CHANGED','OWNED_USER_INDEX_SHIFT'].includes(kind)){
+   assert.equal(f.baselineDrift.kind,kind);const running=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(running.state,'running');
+   assert.equal(running.baselineDrift,undefined);assert.equal(JSON.stringify(running.receipt),before,'Diagnostics must not invalidate or rewrite a still-running receipt');
+   f.foreign('pointerdown'); // Existing manual-interference guard, not diagnostic logic.
+ }
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt}),d=JSON.parse(JSON.stringify(r.baselineDrift));
+ assert.equal(r.state,'interrupted');assert.equal(d.kind,kind);assert(receiptV2.validBaselineDrift(d));assert.equal(r.receipt,undefined);assert.equal(JSON.stringify(receipt),before);
+ assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(r)),{...inspectPayload,receipt}));
+ if(['BASELINE_ROW_REMOVED','BASELINE_ROW_ADDED','BASELINE_ID_CHANGED','BASELINE_ROLE_CHANGED','BASELINE_REORDERED','MULTIPLE_BASELINE_DIFFERENCES','IDENTITY_UNAVAILABLE'].includes(kind))assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');
+ if(kind==='BASELINE_ROW_REMOVED'){
+   assert.equal(d.baselineLength,2);assert.equal(d.currentRecognizedPrefixLength,0);assert.equal(d.currentRowsBeforeOwnedUser,1);
+   assert.equal(d.ownedUserOriginalIndex,2);assert.equal(d.ownedUserCurrentIndex,1);assert.equal(d.ownedUserIndexChanged,true);assert.equal(d.baselineLengthChanged,true);
+   assert.equal(d.removedBaselineRowCount,1);assert.equal(d.addedRowsBeforeOwnedUserCount,0);assert.equal(d.baselineRowsStillConnectedCount,1);
+   assert.equal(d.baselineRowsStillInContainerCount,1);assert.equal(d.baselineRowsSameParentCount,1);assert.equal(d.changedBaselineIdCount,0);assert.equal(d.changedBaselineRoleCount,0);
+   assert.equal(d.firstMismatchIndexBucket,'zero');assert.equal(d.firstMismatchKind,kind);
+   assert.equal(r.userAnchorChurn.kind,'BASELINE_CHANGED');assert.equal(r.userAnchorChurn.anchoredNativeIdStillSame,true);assert.equal(r.userAnchorChurn.anchoredNodeRemoved,false);
+ }
+ if(kind==='BASELINE_ROW_ADDED'){assert.equal(d.addedRowsBeforeOwnedUserCount,1);assert.equal(d.removedBaselineRowCount,0);assert.equal(d.firstMismatchKind,kind);}
+ if(kind==='BASELINE_ID_CHANGED'){assert.equal(d.changedBaselineIdCount,1);assert.equal(d.baselineLengthChanged,false);assert.equal(d.firstMismatchKind,kind);}
+ if(kind==='BASELINE_ROLE_CHANGED')assert.equal(d.changedBaselineRoleCount,1);
+ if(kind==='BASELINE_REORDERED'){assert.equal(d.movedBaselineRowCount,2);assert.equal(d.removedBaselineRowCount,0);assert.equal(d.addedRowsBeforeOwnedUserCount,0);}
+ if(kind==='BASELINE_CONTAINER_CHANGED')assert.equal(d.baselineRowsStillInContainerCount,1);
+ if(kind==='OWNED_USER_INDEX_SHIFT'){assert.equal(d.currentRowsBeforeOwnedUser,2);assert.equal(d.ownedUserCurrentIndex,3);assert.equal(d.baselineLengthChanged,false);assert.equal(d.firstMismatchKind,kind);}
+ if(kind==='UNKNOWN_BOUNDED')for(const k of [...receiptV2.baselineDriftCounts,...receiptV2.baselineDriftBools])assert.equal(d[k],null);
+ // Even final valid adjacency and a video cannot repair historical ownership.
+ const first=JSON.stringify(d),assistant=JSON.stringify(r.assistantOwnershipFailure),churn=JSON.stringify(r.userAnchorChurn);
+ baseline[0].id='history-user';baseline[0].role='user';baseline[1].id='history-assistant';baseline[1].role='assistant';
+ f.transaction([...original,f.node('assistant','final-status'),f.node('assistant','final-video',media())]);
+ const again=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(again.state,'interrupted');assert.equal(again.receipt,undefined);
+ assert.equal(JSON.stringify(again.baselineDrift),first);assert.equal(JSON.stringify(again.assistantOwnershipFailure),assistant);assert.equal(JSON.stringify(again.userAnchorChurn),churn);
+ assert.equal(JSON.stringify(receipt),before);assert.equal(receipt.assistantStableIdHash,undefined);assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+ for(const secret of ['history-user','changed-baseline','inserted-row','Exact prompt','https:','blob:','timestamp'])assert(!JSON.stringify(d).includes(secret));
+});
+
+test('baseline drift: multiple removed rows and compound mutations have deterministic bounded priority',async()=>{
+ for(const scenario of ['two removed','role and id','invalid and removed']){
+   const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),user=f.rows.at(-1);
+   if(scenario==='two removed')f.transaction([user]);
+   if(scenario==='role and id'){f.rows[0].role='assistant';f.rows[0].id='changed';f.mutate([]);}
+   if(scenario==='invalid and removed'){f.rows[1].id='';f.transaction(f.rows.slice(1));}
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.baselineDrift.kind,scenario==='invalid and removed'?'IDENTITY_UNAVAILABLE':'MULTIPLE_BASELINE_DIFFERENCES');
+   assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);
+ }
+});
+
+test('baseline drift: a remounted baseline ID with a changed role reports the actual first mismatch without promoting ownership',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),before=JSON.stringify(receipt),[,assistant,user]=f.rows;
+ f.transaction([f.node('assistant','history-user'),assistant,user]);
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt}),d=r.baselineDrift;
+ assert.equal(d.kind,'BASELINE_ROLE_CHANGED');assert.equal(d.firstMismatchKind,'BASELINE_ROLE_CHANGED');assert.equal(d.changedBaselineRoleCount,1);
+ assert.equal(d.removedBaselineRowCount,0);assert.equal(d.addedRowsBeforeOwnedUserCount,0);assert.equal(d.baselineRowsStillConnectedCount,1);
+ assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');assert.equal(r.receipt,undefined);assert.equal(JSON.stringify(receipt),before);assert.equal(f.clicks,1);
+});
+
+test('baseline drift: extra recognized row after matching prefix identifies the row instead of merely the shifted user index',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),[a,b,user]=f.rows;
+ f.transaction([a,b,f.node('assistant','extra-before-user'),user]);
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt}),d=r.baselineDrift;
+ assert.equal(d.kind,'BASELINE_ROW_ADDED');assert.equal(d.firstMismatchKind,'BASELINE_ROW_ADDED');assert.equal(d.firstMismatchIndexBucket,'one_to_four');
+ assert.equal(d.currentRecognizedPrefixLength,2);assert.equal(d.currentRowsBeforeOwnedUser,3);assert.equal(d.addedRowsBeforeOwnedUserCount,1);
+ assert.equal(r.state,'interrupted');assert.equal(r.assistantOwnershipFailure.terminalReason,'LOGICAL_USER_MISMATCH');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);
+});
+
+for(const measurable of [true,false])test('baseline drift: prefix displaced by original owned user, direct index measurable: '+measurable,async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f),[a,b,user]=f.rows;
+ f.transaction([a,user,b],[],()=>{if(!measurable)user.parentNode={};});
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt}),d=r.baselineDrift;
+ assert.equal(d.kind,measurable?'OWNED_USER_INDEX_SHIFT':'PREFIX_LENGTH_CHANGED');assert.equal(d.baselineLength,2);assert.equal(d.currentRowsBeforeOwnedUser,1);
+ assert.equal(d.removedBaselineRowCount,0);assert.equal(d.addedRowsBeforeOwnedUserCount,0);assert.equal(d.changedBaselineIdCount,0);assert.equal(d.changedBaselineRoleCount,0);
+ assert.equal(d.ownedUserCurrentIndex,measurable?1:null);assert.equal(r.state,'interrupted');assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);
+});
+
+test('baseline drift: schemas reject private/partial fields, receipt promotion and execution inputs',async()=>{
+ const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f);f.transaction(f.rows.slice(1));
+ const r=JSON.parse(JSON.stringify(await f.send('inspectGeneration',{...v2Payload,receipt}))),d=r.baselineDrift;
+ for(const patch of [{nativeId:'private'},{html:'private'},{prompt:'private'},{url:'private'},{token:'private'},{kind:'private'},{baselineLength:258},{ownedUserCurrentIndex:-1},{baselineLengthChanged:'true'},{firstMismatchIndexBucket:0},{firstMismatchKind:'private'},{elapsedBucket:123},{mutationCountBucket:257}]){
+   assert(!receiptV2.validBaselineDrift({...d,...patch}));assert(!validResult('inspectGeneration',{...r,baselineDrift:{...d,...patch}},{...inspectPayload,receipt}));
+ }
+ for(const k of Object.keys(d)){const bad={...d};delete bad[k];assert(!receiptV2.validBaselineDrift(bad));}
+ assert(receiptV2.validBaselineDrift({...d,kind:'PREFIX_LENGTH_CHANGED',firstMismatchKind:'PREFIX_LENGTH_CHANGED'}));
+ assert(!receiptV2.valid(d,'op'));assert(!validPayload('inspectGeneration',{...inspectPayload,receipt,baselineDrift:d}));
+ for(const type of ['prepareGeneration','submitGeneration','acquireGenerationResult','cancelGeneration'])assert(!validResult(type,r,{...inspectPayload,receipt}));
+ for(const patch of [{state:'running'},{receipt},{data:'private'}])assert(!validResult('inspectGeneration',{...r,...patch},{...inspectPayload,receipt}));
+ assert(!validResult('inspectGeneration',r,{...inspectPayload,diagnoseOwnership:true}));
+ assert(!validResult('inspectGeneration',r,{...inspectPayload,receipt:{...receipt,assistantStableIdHash:'e'.repeat(64)}}));
+});
+
+test('baseline drift: atomic worker/native first evidence survives later valid DOM, worker restart and read-only support',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;f.bridge.developmentDiagnostics=true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),initial=fs.readFileSync(file),receipt=JSON.parse(initial).receipt,original=content.rows.slice();
+ assert.equal((await f.provider.reconcile(context)).status,'running');assert.deepEqual(fs.readFileSync(file),initial);
+ let renames=0;const rename=fs.renameSync;t.mock.method(fs,'renameSync',(from,to)=>{if(to===file)renames++;return rename(from,to);});
+ content.transaction(original.slice(1),[userMutation(content,[],[original[0]],null,original[1])]);
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});assert.equal(renames,1,'All three first diagnostics share one atomic native write');
+ const saved=JSON.parse(fs.readFileSync(file)),d=saved.baselineDrift,key='generation-intent:'+job.id;
+ assert.equal(d.kind,'BASELINE_ROW_REMOVED');assert(receiptV2.validBaselineDrift(d));assert.equal(saved.userAnchorChurn.kind,'BASELINE_CHANGED');assert.equal(saved.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');
+ assert.deepEqual(saved.receipt,receipt);assert.deepEqual(stored[key].baselineDrift,d);assert.equal(saved.verifiedOutput,undefined);
+ assert(!fs.readdirSync(context.outputDirectory).some(n=>n.endsWith('.tmp')));
+ content.transaction([...original,content.node('assistant','current-status'),content.node('assistant','current-media',media())]);
+ const bytes=fs.readFileSync(file),jobs=fs.readFileSync(f.service.store.file),storage=JSON.stringify(stored),report=await f.service.diagnoseMuseOwnership(job.id);
+ assert.deepEqual(report.historicalBaselineDrift,d);assert.equal(report.historicalAssistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');assert.equal(report.historicalUserAnchorChurn.kind,'BASELINE_CHANGED');
+ assert.equal(report.diagnostic.ownedUserMatches,1);assert.equal(report.diagnostic.responseBlock.assistantBlockRowCount,2);assert.equal(report.diagnostic.responseBlock.mediaAssistantCandidateCount,1);
+ assert.equal(report.nativeAssistantAnchor,false);assert.deepEqual(fs.readFileSync(file),bytes);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);assert.equal(JSON.stringify(stored),storage);
+ const newer={...d,kind:'BASELINE_ROW_ADDED'},fake={send:async(_,p)=>({operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',baselineDrift:newer,assistantOwnershipFailure:require('./fixtures/muse-assistant-failure').failure('OPERATION_MISSING')})};
+ const restarted=workerV2Harness(stored,fake);f.bridge.command=async(type,p)=>JSON.parse(JSON.stringify(await restarted.run(type,p)));
+ await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});assert.deepEqual(fs.readFileSync(file),bytes);assert.equal(JSON.stringify(stored),storage);assert.equal(renames,1);
+ assert.equal((await restarted.run('submitGeneration',{operationId:job.id,sceneId:job.sceneId,tabId:5,prompt:request().prompt,receipt})).state,'interrupted');assert(!restarted.calls.includes('submitGeneration'));
+ assert.equal(content.clicks,1);assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('baseline drift: native write failure preserves all prior bytes and cleans diagnostic temporary file',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file),rename=fs.renameSync;
+ t.mock.method(fs,'renameSync',(from,to)=>{if(to===file)throw Object.assign(Error('fixture full disk'),{code:'ENOSPC'});return rename(from,to);});
+ content.transaction(content.rows.slice(1));await assert.rejects(f.provider.reconcile(context));assert.deepEqual(fs.readFileSync(file),before);
+ assert(!fs.readdirSync(context.outputDirectory).some(n=>n.endsWith('.tmp')));assert.equal(content.clicks,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));
+});
+
+test('baseline drift: async hash continuation cannot attach later DOM changes after an earlier terminal interruption',async()=>{
+ let f,armed=false;const subtle=require('node:crypto').webcrypto.subtle;
+ const crypto={subtle:{digest:async(...args)=>{
+   const result=await subtle.digest(...args);
+   if(armed && new TextDecoder().decode(args[1]).includes('\0assistant\0')){
+     armed=false;f.foreign('pointerdown');f.transaction(f.rows.slice(1));
+   }
+   return result;
+ }}};
+ f=contentFixture({video:media(),crypto});const receipt=await acceptV2(f);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).state,'running');armed=true;
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'interrupted');assert.equal(r.assistantOwnershipFailure.terminalReason,'MANUAL_INTERFERENCE');
+ assert.equal(r.baselineDrift,undefined,'A closed observer cannot create retrospective baseline history');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);
+});
+
+test('baseline drift: bounded released cache rotates without consuming active operation capacity',async()=>{
+ let sequence=0;const f=contentFixture({noAssistant:true,afterClick:f=>{f.rows.at(-1).id='baseline-owned-'+sequence++;}});
+ for(let i=0;i<36;i++){
+   const p={...v2Payload,operationId:'baseline-drift-'+i},prepared=await f.send('prepareGeneration',p);assert.equal(prepared.state,'prepared');
+   const accepted=await f.send('submitGeneration',{...operation,...p,receipt:prepared.receipt});assert.equal(accepted.state,'running');
+   f.transaction(f.rows.slice(1));const r=await f.send('inspectGeneration',{...p,receipt:accepted.receipt});assert.equal(r.baselineDrift.kind,'BASELINE_ROW_REMOVED');
+   assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');assert.equal(f.operationCount,0);assert(f.assistantFailureCount<=32);
+ }
+ assert.equal(f.assistantFailureCount,32);assert.equal(f.clicks,36,'Isolated fixture callbacks only, never a real Muse browser');
+ const p={...v2Payload,operationId:'after-baseline-rotation'};assert.equal((await f.send('prepareGeneration',p)).state,'prepared');await f.send('cancelGeneration',p);
+});
 
 // All post-anchor cases use the isolated DOM/worker fixtures; no live bridge.
 test('user churn: unchanged accepted node and assistant-only updates record no event',async()=>{
@@ -1569,7 +1756,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1647,8 +1834,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-11-contract3-receipt2-userchurn1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-12-contract3-receipt2-baselinediag1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1804,8 +1991,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-11-contract3-receipt2-userchurn1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-11-contract3-receipt2-userchurn1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-12-contract3-receipt2-baselinediag1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1837,7 +2024,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.11 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.12 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

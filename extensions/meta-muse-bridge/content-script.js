@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-11-contract3-receipt2-userchurn1';
+const CONTENT_BUILD='muse-content-v0-3-12-contract3-receipt2-baselinediag1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -115,6 +115,62 @@ function rememberUserAnchor(op,node) {
     op.userDiagnosticAnchor={node,parent:node.parentNode,container:op.projection.container,index:sequence.indexOf(node),startedAt:Date.now()};
   }catch{} // Diagnostics cannot change an execution decision.
 }
+function rememberBaselineAnchor(op) {
+  try {
+    if(op.userDiagnosticAnchor && op.baselineNodes.length<=256)op.baselineDiagnosticAnchor=op.baselineNodes.map((node,i)=>({node,parent:node.parentNode,...op.baseline[i]}));
+  }catch{} // Separate from user churn; neither snapshot grants authority.
+}
+function sampleBaselineDrift(op,mutations=[]) {
+  if(!op?.receipt?.userStableIdHash || op.invalid || op.receipt.assistantStableIdHash || op.baselineDrift)return;
+  try {
+    const anchor=op.userDiagnosticAnchor,baseline=op.baselineDiagnosticAnchor;if(!anchor || !baseline)return;
+    const all=[...document.querySelectorAll(MESSAGE)].slice(0,257),overflow=all.length===257 || mutations.length>256;
+    const rows=all.filter(n=>['user','assistant'].includes(n.getAttribute('data-message-role'))),before=rows.indexOf(anchor.node);
+    const sequence=all.filter(n=>n.parentNode===anchor.parent),userIndex=sequence.indexOf(anchor.node);
+    const cap=n=>Math.min(257,n),countBy=fn=>cap(baseline.filter(fn).length);
+    let prefix=0;while(prefix<baseline.length && prefix<rows.length && rows[prefix].getAttribute('data-message-id')===baseline[prefix].id && rows[prefix].getAttribute('data-message-role')===baseline[prefix].role)prefix++;
+    // Resolve only known baseline rows for diagnostics. A remounted baseline ID
+    // may explain churn, but never substitutes for an owned user/assistant.
+    const resolved=baseline.map(b=>all.includes(b.node)?b.node:all.find(n=>n.getAttribute('data-message-id')===b.id)||null);
+    const resolvedSet=new Set(resolved.filter(Boolean)),positions=resolved.map(n=>n?rows.indexOf(n):-1);
+    const removed=resolved.filter(n=>!n).length,added=before<0?null:rows.slice(0,before).filter(n=>!resolvedSet.has(n)).length;
+    const idChanged=resolved.filter((n,i)=>n && n.getAttribute('data-message-id')!==baseline[i].id).length,roleChanged=resolved.filter((n,i)=>n && n.getAttribute('data-message-role')!==baseline[i].role).length;
+    const outside=resolved.filter(n=>n && !anchor.container.contains(n)).length;
+    const parentChanged=resolved.filter((n,i)=>n && anchor.container.contains(n) && n.parentNode!==baseline[i].parent).length;
+    const presentPositions=positions.filter(i=>i>=0),reordered=presentPositions.some((position,i)=>i>0 && position<presentPositions[i-1]);
+    const prefixRows=rows.slice(0,before<0?baseline.length:before),prefixIds=prefixRows.map(n=>n.getAttribute('data-message-id'));
+    const invalid=prefixIds.some(id=>!nativeId(id)) || new Set(prefixIds).size!==prefixIds.length || resolved.some(n=>n && !nativeId(n.getAttribute('data-message-id')));
+    const indexShift=userIndex>=0 && userIndex!==anchor.index,prefixChanged=prefix!==baseline.length;
+    const differences=removed+(added||0)+idChanged+roleChanged+outside+parentChanged+(reordered?1:0);
+    const singleKind=outside?'BASELINE_CONTAINER_CHANGED':parentChanged?'BASELINE_PARENT_CHANGED':roleChanged?'BASELINE_ROLE_CHANGED':idChanged?'BASELINE_ID_CHANGED':
+      removed?'BASELINE_ROW_REMOVED':added?'BASELINE_ROW_ADDED':reordered?'BASELINE_REORDERED':indexShift?'OWNED_USER_INDEX_SHIFT':prefixChanged?'PREFIX_LENGTH_CHANGED':null;
+    const kind=overflow || anchor.index<0?'UNKNOWN_BOUNDED':invalid?'IDENTITY_UNAVAILABLE':differences>1?'MULTIPLE_BASELINE_DIFFERENCES':singleKind;
+    if(!kind)return;
+    let mismatchIndex=null,firstKind=null;
+    if(prefixChanged){
+      mismatchIndex=prefix;
+      const b=baseline[prefix],n=rows[prefix],r=resolved[prefix];
+      firstKind=b && !r?'BASELINE_ROW_REMOVED':r && !nativeId(r.getAttribute('data-message-id'))?'IDENTITY_UNAVAILABLE':n===anchor.node && indexShift?'OWNED_USER_INDEX_SHIFT':n && !resolvedSet.has(n) && n!==anchor.node?'BASELINE_ROW_ADDED':
+        b && r.getAttribute('data-message-role')!==b.role?'BASELINE_ROLE_CHANGED':b && r.getAttribute('data-message-id')!==b.id?'BASELINE_ID_CHANGED':reordered?'BASELINE_REORDERED':'PREFIX_LENGTH_CHANGED';
+    }else if(outside || parentChanged){
+      mismatchIndex=resolved.findIndex((n,i)=>n && (!anchor.container.contains(n) || n.parentNode!==baseline[i].parent));
+      firstKind=resolved[mismatchIndex] && !anchor.container.contains(resolved[mismatchIndex])?'BASELINE_CONTAINER_CHANGED':'BASELINE_PARENT_CHANGED';
+    }else if(added){
+      mismatchIndex=rows.slice(0,before).findIndex(n=>!resolvedSet.has(n));firstKind='BASELINE_ROW_ADDED';
+    }else if(indexShift){mismatchIndex=userIndex;firstKind='OWNED_USER_INDEX_SHIFT';}
+    const ms=Math.max(0,Date.now()-anchor.startedAt);
+    const d={version:1,build:CONTENT_BUILD,kind,firstMismatchIndexBucket:mismatchIndex===null?null:mismatchIndex===0?'zero':mismatchIndex<=4?'one_to_four':mismatchIndex<=16?'five_to_sixteen':'seventeen_or_more',
+      firstMismatchKind:firstKind,elapsedBucket:ms<1000?'under_1s':ms<10000?'1_to_10s':ms<60000?'10_to_60s':'over_60s',mutationCountBucket:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',
+      baselineLength:cap(baseline.length),currentRecognizedPrefixLength:cap(prefix),currentRowsBeforeOwnedUser:before<0?null:cap(before),ownedUserOriginalIndex:anchor.index<0?null:cap(anchor.index),ownedUserCurrentIndex:userIndex<0?null:cap(userIndex),
+      baselineLengthChanged:before<0?null:before!==baseline.length,ownedUserIndexChanged:userIndex<0?null:indexShift,
+      baselineRowsStillConnectedCount:countBy(b=>b.node.isConnected===true),baselineRowsStillInContainerCount:countBy(b=>anchor.container.contains(b.node)),baselineRowsSameParentCount:countBy(b=>b.node.parentNode===b.parent),
+      baselineRowsIdentityUnchangedCount:cap(resolved.filter((n,i)=>n && n.getAttribute('data-message-id')===baseline[i].id).length),baselineRowsRoleUnchangedCount:cap(resolved.filter((n,i)=>n && n.getAttribute('data-message-role')===baseline[i].role).length),
+      removedBaselineRowCount:cap(removed),addedRowsBeforeOwnedUserCount:added===null?null:cap(added),changedBaselineIdCount:idChanged,changedBaselineRoleCount:roleChanged,
+      movedBaselineRowCount:cap(positions.filter((index,i)=>index>=0 && index!==i).length),generationActive:generationActive()};
+    if(overflow){for(const k of [...MuseReceiptV2.baselineDriftCounts,...MuseReceiptV2.baselineDriftBools])d[k]=null;d.firstMismatchKind=null;d.firstMismatchIndexBucket=null;}
+    if(MuseReceiptV2.validBaselineDrift(d))op.baselineDrift=d;
+  }catch{} // Observation cannot invalidate, wait, rewrite a receipt, or retry.
+}
 function sampleUserAnchorChurn(op,mutations=[]) {
   if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.userAnchorChurn)return;
   try {
@@ -183,17 +239,18 @@ function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
   if(terminal)op.assistantFailure={version:1,build:CONTENT_BUILD,terminalReason,terminalPhase:phase,frames:op.assistantFrames.slice()};
 }
 function retainAssistantFailure(id,op) {
-  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure && !op.userAnchorChurn))return;
+  if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure && !op.userAnchorChurn && !op.baselineDrift))return;
   const old=assistantFailures.get(id);
-  if((old?.failure || old?.pending && !op.assistantFailure) && (old.churn || !op.userAnchorChurn))return;
-  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:old?.failure||op.assistantFailure,pending:old?.pending||op.pendingAssistantFailure,churn:old?.churn||op.userAnchorChurn});
+  if((old?.failure || old?.pending && !op.assistantFailure) && (old.churn || !op.userAnchorChurn) && (old.drift || !op.baselineDrift))return;
+  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:old?.failure||op.assistantFailure,pending:old?.pending||op.pendingAssistantFailure,churn:old?.churn||op.userAnchorChurn,drift:old?.drift||op.baselineDrift});
   while(assistantFailures.size>MAX_ASSISTANT_FAILURES)assistantFailures.delete(assistantFailures.keys().next().value);
 }
 function gateDInterrupted(p,op,reason,phase='precheck') {
   const cached=assistantFailures.get(p.operationId);
   const previous=cached?.sceneId===p.sceneId && cached.userHash===p.receipt.userStableIdHash?cached:null;
   const churn=previous?.churn||op?.userAnchorChurn;
-  const churnEvidence=churn?{userAnchorChurn:churn}:{};
+  const drift=previous?.drift||op?.baselineDrift;
+  const churnEvidence={...(churn?{userAnchorChurn:churn}:{}),...(drift?{baselineDrift:drift}:{})};
   if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:previous.failure,...churnEvidence});}
   const evidence=op?.receipt?.userStableIdHash?op:{sceneId:p.sceneId,receipt:p.receipt};
   const pending=evidence.pendingAssistantFailure||previous?.pending;
@@ -606,6 +663,7 @@ async function submit(p) {
           composerCleared:!!currentComposer && editorLength(currentComposer.editor)===0,
           sendControlTransition:!actionable(button) || !currentComposer?.slot.contains(button),generationControlObserved:generationActive()}};
         rememberUserAnchor(op,user.node);
+        rememberBaselineAnchor(op);
         // User only: main/worker must durably echo this before assistant binding.
         return answer(p,'running',{receipt:op.receipt,invocation:{...invocation,reason:'accepted'}});
       }
@@ -674,6 +732,7 @@ async function prepareV2(p) {
   const sample=(mutations=[],kind='observer')=>{
     if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
     sampleUserAnchorChurn(op,mutations);
+    sampleBaselineDrift(op,mutations);
     try {
       gateDFrame(op,'sample_before_block',{mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',stabilizationReset:false,
         ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,...MuseReceiptV2.emptyAssistantSequence()});

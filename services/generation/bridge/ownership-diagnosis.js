@@ -1,6 +1,6 @@
 "use strict";
 // Support-only data, never receipt evidence or an execution/recovery input.
-const {ownershipFailureReasons,validAssistantSummary,validUserAnchorChurn}=require('../../../extensions/meta-muse-bridge/receipt-v2');
+const {ownershipFailureReasons,validAssistantSummary,validUserAnchorChurn,validBaselineDrift}=require('../../../extensions/meta-muse-bridge/receipt-v2');
 const {validAnchoredOwnershipDiagnostic}=require('./execution-contract');
 const fields=Object.freeze(['instanceMatch','tabMatch','nativeUserAnchor','nativeAssistantAnchor','workerIntentPresent','workerUserAnchor','workerAssistantAnchor']);
 const layers={JOB_NOT_FOUND:'native_validation',JOB_STATE_UNSUPPORTED:'native_validation',OPERATION_RECORD_UNAVAILABLE:'native_validation',RECEIPT_UNAVAILABLE:'native_validation',USER_ANCHOR_MISSING:'native_validation',ASSISTANT_ALREADY_ANCHORED:'native_validation',TARGET_INSTANCE_UNAVAILABLE:'target_instance',TARGET_TAB_UNAVAILABLE:'target_tab',WORKER_INTENT_UNAVAILABLE:'worker_intent',WORKER_RECEIPT_MISMATCH:'worker_receipt',CONTENT_RECEIVER_UNAVAILABLE:'content_receiver',CONTENT_DIAGNOSIS_REJECTED:'content_diagnostic',DIAGNOSTIC_RESULT_INVALID:'native_result_validation',RUNTIME_BUILD_MISMATCH:'runtime_build',EXTENSION_DIAGNOSTICS_DISABLED:'extension_diagnostics',UNAVAILABLE:'transport',UNKNOWN:'unknown'};
@@ -24,6 +24,10 @@ function sanitize(input,id) {
  if(input && Object.hasOwn(input,'historicalUserAnchorChurn')) {
    if(input.historicalUserAnchorChurn!==null && !validUserAnchorChurn(input.historicalUserAnchorChurn))return report('DIAGNOSTIC_RESULT_INVALID',safe);
    safe.historicalUserAnchorChurn=JSON.parse(JSON.stringify(input.historicalUserAnchorChurn));
+ }
+ if(input && Object.hasOwn(input,'historicalBaselineDrift')) {
+   if(input.historicalBaselineDrift!==null && !validBaselineDrift(input.historicalBaselineDrift))return report('DIAGNOSTIC_RESULT_INVALID',safe);
+   safe.historicalBaselineDrift=JSON.parse(JSON.stringify(input.historicalBaselineDrift));
  }
  if(input?.ok===true) {
    if(input.operationId!==id || !validAnchoredOwnershipDiagnostic(input.diagnostic,input.userStableIdHash))return report('DIAGNOSTIC_RESULT_INVALID',safe);
