@@ -1,4 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
+// Main-process authority only: preferences, argv and renderer state cannot
+// opt a packaged app into support diagnostics. Missing capability fails closed.
+const developmentSupport = typeof ipcRenderer.sendSync === 'function' &&
+  ipcRenderer.sendSync('generation:development-diagnostics') === true;
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
@@ -20,7 +24,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   checkGenerationProvider: id => ipcRenderer.invoke('generation:provider-check', id),
   diagnoseGenerationProviderRuntime: id => ipcRenderer.invoke('generation:provider-runtime-diagnosis', id),
   getGenerationAcceptanceTrace: id => ipcRenderer.invoke('generation:acceptance-trace', id),
-  diagnoseMuseOwnership: id => ipcRenderer.invoke('generation:ownership-diagnosis', id),
+  ...(developmentSupport ? {diagnoseMuseOwnership: id => ipcRenderer.invoke('generation:ownership-diagnosis', id)} : {}),
   configureGenerationProvider: config => ipcRenderer.invoke('generation:provider-configure', config),
   listGenerationProviders: () => ipcRenderer.invoke('generation:providers'),
   submitGeneration: request => ipcRenderer.invoke('generation:submit', request),

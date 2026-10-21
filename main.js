@@ -1736,7 +1736,7 @@ ipcMain.handle('video:file-url', async (_event, inputPath) => {
   return pathToFileURL(safePath).href;
 });
 
-registerGenerationIpc({ ipcMain, getService: () => generationService, trusted: event =>
+registerGenerationIpc({ ipcMain, getService: () => generationService, developmentDiagnostics: !app.isPackaged, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&
     event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)

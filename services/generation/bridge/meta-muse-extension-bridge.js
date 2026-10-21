@@ -184,7 +184,7 @@ class MetaMuseExtensionBridge {
       const d=t.diagnostic;
       return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
         reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
-        contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
+        diagnosticsEnabled:t.runtimeBuild?.diagnosticsEnabled===true,contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
         freshness:d?.museTabEvidenceAgeBucket||(t.contentFresh?'fresh':'absent'),authenticated:d?d.authenticatedEvidencePresent===true:t.authState==='authenticated',composerDetected:d?d.composerDetected===true:t.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
     }));
     return {selectionState:selected.state,selectionReason:selected.state==='selection_required'?'AMBIGUOUS':receivers.some(r=>r.selected)?'EXISTING_SELECTION_OR_SOLE_TAB':'NO_SELECTED_RECEIVER',
@@ -201,19 +201,20 @@ class MetaMuseExtensionBridge {
       (!this.source || this.stagedBundleVerified()) && (!this.developmentDiagnostics || this.runtimeBuildPreflight().ready);
   }
   stagedBundleVerified() {
-    try{return matches(this.installDir,readBundle(this.source,this.distribution));}catch{return false;}
+    try{return matches(this.installDir,readBundle(this.source,this.distribution,{developmentDiagnostics:this.developmentDiagnostics}));}catch{return false;}
   }
   runtimeBuildPreflight() {
     if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
     const selected=this.snapshot({readOnly:true}),s=selected.sessions.some(s=>s.instanceId===selected.selectedInstanceId)?this.sessions.get(selected.selectedInstanceId):null,tab=s?.tabs.find(t=>t.tabId===selected.selectedTabId),d=tab?.diagnostic;
     const expected=this.distribution,build=tab?.runtimeBuild||d;
     let sourceBuild=null;
-    try{sourceBuild=readBundle(this.source,expected).summary;}catch{}
+    try{sourceBuild=readBundle(this.source,expected,{developmentDiagnostics:this.developmentDiagnostics}).summary;}catch{}
     let reason='READY';
     if(selected.extensionState!=='extension_connected' || selected.state!=='authenticated' || !s?.heartbeatSeen || tab?.executionContract!==3 || tab?.ownershipReceiptVersion!==2 || !tab?.canSubmit)reason='SESSION_UNREADY';
     else if(!build || (d && (!d.museTabEvidenceFresh || !d.museContentScriptHandshakeSeen || d.lastContentScriptErrorCode!=='NONE' || d.lastBridgeErrorCode!=='NONE')) || !build.workerBuild || !build.contentBuild || build.contentBuild==='unreported')reason='BUILD_EVIDENCE_MISSING';
     else if(build.workerBuild!==expected.expectedWorkerBuild)reason='WORKER_BUILD_MISMATCH';
     else if(build.contentBuild!==expected.expectedContentBuild)reason='CONTENT_BUILD_MISMATCH';
+    else if(build.diagnosticsEnabled!==true)reason='EXTENSION_DIAGNOSTICS_DISABLED';
     else if(!sourceBuild || !this.stagedBundleVerified())reason='STAGING_UNVERIFIED';
     return {ready:reason==='READY',reason,sourceBuild,stagedBuild:bundleIdentity(this.installDir),stagedBundleVerified:this.stagedBundleVerified(),expectedWorkerBuild:expected.expectedWorkerBuild,expectedContentBuild:expected.expectedContentBuild,
       executingWorkerBuild:build?.workerBuild||'unreported',executingContentBuild:build?.contentBuild||'unreported'};
@@ -241,6 +242,7 @@ class MetaMuseExtensionBridge {
       if(this.stagingFailed || session.extensionState!=='extension_connected' ||
         tab.runtimeBuild?.workerBuild!==this.distribution.expectedWorkerBuild || tab.runtimeBuild?.contentBuild!==this.distribution.expectedContentBuild ||
         (this.source && !this.stagedBundleVerified()))throw diagnosticFailure('RUNTIME_BUILD_MISMATCH',evidence);
+      if(tab.runtimeBuild.diagnosticsEnabled!==true)throw diagnosticFailure('EXTENSION_DIAGNOSTICS_DISABLED',evidence);
       if(!tab.contentFresh || tab.diagnostic?.museTabEvidenceFresh===false)throw diagnosticFailure('CONTENT_RECEIVER_UNAVAILABLE',evidence);
       if(tab.authState!=='authenticated' || tab.executionContract!==3)throw diagnosticFailure('CONTENT_DIAGNOSIS_REJECTED',evidence);
       if(this.pending.has(target.instanceId))throw diagnosticFailure('UNAVAILABLE',evidence);
@@ -283,7 +285,7 @@ class MetaMuseExtensionBridge {
     check(typeof this.source==="string");
     let summary;
     try {
-      summary=stageBundle(this.source,this.installDir,this.distribution);this.stagingFailed=false;
+      summary=stageBundle(this.source,this.installDir,this.distribution,{developmentDiagnostics:this.developmentDiagnostics});this.stagingFailed=false;
     } catch(error) {this.stagingFailed=true;throw error;}
     this.shell?.showItemInFolder(path.join(this.installDir,"manifest.json"));
     return {id:"muse",folderRevealed:true,extensionVersion:summary.extensionVersion,bundleVerified:summary.bundleVerified};

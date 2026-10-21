@@ -11,6 +11,7 @@ function verify(archive) {
   }
   const config = JSON.parse(asar.extractFile(archive, path.normalize("services/generation/bridge/extension-distribution.json")));
   const manifest = JSON.parse(asar.extractFile(archive, path.normalize(root + "manifest.json")));
+  if (manifest.version_name !== undefined) throw Error("Packaged Muse extension must not enable development diagnostics");
   if (config.expectedExtensionVersion !== manifest.version) throw Error("Muse version contract mismatch");
 }
 module.exports = async context => verify(path.join(context.appOutDir, "resources", "app.asar"));

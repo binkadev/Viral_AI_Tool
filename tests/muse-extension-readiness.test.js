@@ -20,7 +20,7 @@ async function fixture(t,options={}) {
   });
  }
  const register=async(instanceId='profile-one',extra={})=>{
-  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.4',protocolVersion:1},...extra});
+  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.5',protocolVersion:1},...extra});
   assert.equal(r.status,200);return r.value.token;
  };
  const beat=(token,tabs=[],id='profile-one',extra={})=>request('/v1/heartbeat?instanceId='+id,{method:'POST',token,body:{profileLabel:'Work',browserName:'Chrome',tabs},...extra});
@@ -31,7 +31,7 @@ const tab=(id=1,ready=true)=>({tabId:id,url:'https://muse.ai/',composerReady:rea
 function diagnosticWorker({missing=false,version=3,stale=false,statusError=false,development=true}={}) {
  const calls=[],events={},alarms=[];
  const chrome={runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(development?{version_name:'development-diagnostics'}:{})}),onConnect:{addListener:f=>events.connect=f},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener:f=>events.startup=f}},storage:{local:{get:async()=>({instanceId:'profile-one',profileLabel:''}),set:async()=>{}}},
-  tabs:{onUpdated:{addListener:f=>events.updated=f},query:async()=>[{id:1}],sendMessage:async(id,m)=>{calls.push(m.type);if(missing)throw Error('Could not establish connection. Receiving end does not exist.');if(m.type==='viral-ai:muse-handshake')return {contractVersion:version};return {sampledAt:Date.now()-(stale?13000:0),composerReady:!statusError,inspectionComplete:!statusError,executionContract:statusError?null:version,canSubmit:true,devEvidence:{generationActive:false},...(statusError?{contentError:'STATUS_EXCEPTION'}:{})};}},
+  tabs:{onUpdated:{addListener:f=>events.updated=f},query:async()=>[{id:1}],sendMessage:async(id,m)=>{calls.push(m.type);if(missing)throw Error('Could not establish connection. Receiving end does not exist.');if(m.type==='viral-ai:muse-handshake')return {contractVersion:version,diagnosticsEnabled:development};return {sampledAt:Date.now()-(stale?13000:0),composerReady:!statusError,inspectionComplete:!statusError,executionContract:statusError?null:version,canSubmit:true,devEvidence:{generationActive:false},...(statusError?{contentError:'STATUS_EXCEPTION'}:{})};}},
   alarms:{create:(...a)=>alarms.push(a),onAlarm:{addListener:f=>events.alarm=f}}};
  const context={chrome,navigator:{userAgent:'Edg/1'},setTimeout,clearTimeout,Date,AbortController,crypto:require('node:crypto').webcrypto,TextEncoder};
  vm.createContext(context);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),context);
@@ -50,7 +50,7 @@ test('executing worker reports its own build and each receiver handshake build s
  f.context.chrome.tabs.query=async()=>[{id:1},{id:2}];
  f.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?{contractVersion:3,...(id===2?{buildMarker:'muse-content-20261019-receivers-1'}:{})}:{sampledAt:Date.now(),composerReady:true,executionContract:3,devEvidence:{generationActive:id===2}};
  const tabs=await f.tabs();
- assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1');
+ assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
  assert.equal(tabs[0].devConnection.contentBuild,'unreported');
  assert.equal(tabs[1].devConnection.contentBuild,'muse-content-20261019-receivers-1');
  assert.equal(tabs[0].devConnection.generationActive,false);assert.equal(tabs[1].devConnection.generationActive,true);
@@ -247,7 +247,7 @@ test('popup strings derive from VI/EN product i18n and all runtime imports resol
 
 test('extension setup copies only app-managed source files without creating browser profiles',async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
- await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.4');
+ await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.5');
  assert(!fs.existsSync(path.join(f.root,'browser-sessions')));assert(!fs.existsSync(path.join(f.root,'meta-muse-profile')));
 });
 
@@ -301,7 +301,7 @@ test('controlled build preflight separates source, staged, executing worker and 
  await f.bridge.revealExtension();const token=await f.register(),config=f.bridge.distribution;
  const diagnostic=(await diagnosticWorker().tabs())[0].devConnection;
  const heartbeat=async(workerBuild,contentBuild)=>f.beat(token,[{...tab(),executionContract:3,ownershipReceiptVersion:2,canSubmit:true,
-   devConnection:{...diagnostic,workerBuild,contentBuild}}]);
+   runtimeBuild:{workerBuild,contentBuild,diagnosticsEnabled:true},devConnection:{...diagnostic,workerBuild,contentBuild}}]);
  for(const [worker,content,reason] of [
    ['muse-worker-v0-3-0-contract3-receipt2',config.expectedContentBuild,'WORKER_BUILD_MISMATCH'],
    [config.expectedWorkerBuild,'muse-content-v0-3-0-contract3-receipt2','CONTENT_BUILD_MISMATCH'],
@@ -328,10 +328,10 @@ test('production heartbeat proves executing builds privately without enabling in
    {sampledAt:Date.now(),composerReady:true,inspectionComplete:true,executionContract:3,ownershipReceiptVersion:2,canSubmit:true};
  const tabs=JSON.parse(JSON.stringify(await worker.tabs()));
  assert.equal(tabs[0].devConnection,undefined);
- assert.deepEqual(tabs[0].runtimeBuild,{workerBuild:config.expectedWorkerBuild,contentBuild:config.expectedContentBuild});
+ assert.deepEqual(tabs[0].runtimeBuild,{workerBuild:config.expectedWorkerBuild,contentBuild:config.expectedContentBuild,diagnosticsEnabled:false});
  assert.equal((await f.beat(token,tabs)).status,200);
- assert.equal(f.bridge.runtimeBuildPreflight().ready,true);
- assert.equal(await f.bridge.executionReady(),true);
+ assert.equal(f.bridge.runtimeBuildPreflight().reason,'EXTENSION_DIAGNOSTICS_DISABLED');
+ assert.equal(await f.bridge.executionReady(),false);
  for(const field of ['runtimeBuild','workerBuild','contentBuild','devConnection'])assert(!JSON.stringify(f.bridge.snapshot()).includes(field));
  for(const runtimeBuild of [
    {workerBuild:'muse-worker-v0-3-0-contract3-receipt2',contentBuild:config.expectedContentBuild},
@@ -348,14 +348,14 @@ test('production heartbeat proves executing builds privately without enabling in
  assert.equal(f.bridge.pending.size,0);
 });
 
-for(const scenario of ['disabled','missing','old worker','old content','stale','contract','receipt','authentication','composer','active','unknown generation','provider disabled','current'])test('read-only provider runtime preflight: '+scenario,async t=>{
+for(const scenario of ['disabled','missing','old worker','old content','stale','contract','receipt','authentication','composer','active','unknown generation','provider disabled','extension diagnostics disabled','current'])test('read-only provider runtime preflight: '+scenario,async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),developmentDiagnostics:scenario!=='disabled'});
  await f.bridge.revealExtension();
  const config=f.bridge.distribution;
  if(scenario!=='missing'){
    const token=await f.register();
    const payload={...tab(),inspectionComplete:true,executionContract:scenario==='contract'?2:3,ownershipReceiptVersion:scenario==='receipt'?1:2,canSubmit:true,
-     runtimeBuild:{workerBuild:scenario==='old worker'?'muse-worker-old':config.expectedWorkerBuild,contentBuild:scenario==='old content'?'muse-content-old':config.expectedContentBuild},
+     runtimeBuild:{diagnosticsEnabled:scenario!=='extension diagnostics disabled',workerBuild:scenario==='old worker'?'muse-worker-old':config.expectedWorkerBuild,contentBuild:scenario==='old content'?'muse-content-old':config.expectedContentBuild},
      devEvidence:{root:scenario!=='composer',editor:true,actionSlot:true,actionableButtons:0,composerEmpty:true,generationActive:scenario==='active',userMessageCount:8,assistantMessageCount:32,messageIdentityValid:true,assistantVideoPresent:false}};
    if(scenario==='authentication')payload.composerReady=false;
    if(scenario==='unknown generation')delete payload.devEvidence;
@@ -374,7 +374,7 @@ for(const scenario of ['disabled','missing','old worker','old content','stale','
    const report=await service.providerRuntimeDiagnosis('muse');
    assert.equal(report.readyForControlledE2E,scenario==='current');
    assert.equal(report.mismatches.length===0,scenario==='current');
-   assert.equal(report.expected.extensionVersion,'0.3.4');
+   assert.equal(report.expected.extensionVersion,'0.3.5');
    if(scenario==='current')assert.equal(report.runtime.generationActive,false);
    for(const secret of ['profile-one','token','tabId','instanceId','http:','https:','port','prompt',f.root])assert(!JSON.stringify(report).includes(secret));
  }
@@ -460,7 +460,7 @@ test('distribution compatibility, missing evidence and legacy 0.2.0 session pres
  const token=await f.register();await f.beat(token,[tab()]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_connected');assert.equal(f.bridge.snapshot().state,'authenticated');
  f.advance();assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
- for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_outdated'],['0.3.1',1,'extension_outdated'],['0.3.2',1,'extension_outdated'],['0.3.3',1,'extension_outdated'],['0.3.4',1,'extension_connected']]) {
+ for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_outdated'],['0.3.1',1,'extension_outdated'],['0.3.2',1,'extension_outdated'],['0.3.3',1,'extension_outdated'],['0.3.4',1,'extension_outdated'],['0.3.5',1,'extension_connected']]) {
   const r=await f.request('/v1/register',{method:'POST',body:{instanceId:'version-test',profileLabel:'',browserName:'Chrome',extensionVersion,protocolVersion}});
   assert.equal(r.status,200);await f.beat(r.value.token,[tab()],'version-test');
   assert.equal(f.bridge.snapshot().extensionState,expected);
@@ -493,7 +493,7 @@ test('store configuration opens only a validated official store page and coalesc
 
 test('manual support action reveals only the managed manifest and never reports installed',async t=>{
  const shown=[];const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),shell:{showItemInFolder:file=>shown.push(file)}});
- assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true,extensionVersion:'0.3.4',bundleVerified:true});
+ assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true,extensionVersion:'0.3.5',bundleVerified:true});
  assert.deepEqual(shown,[path.join(f.root,'meta-muse-extension','manifest.json')]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
 });

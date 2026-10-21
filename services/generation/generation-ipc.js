@@ -1,6 +1,7 @@
 "use strict";
 
 const { identifier } = require("./generation-request");
+const { failure } = require('./generation-job');
 
 const SAFE_CODES = new Set([
   "INVALID_REQUEST",
@@ -16,7 +17,10 @@ const SAFE_CODES = new Set([
   "UNAVAILABLE"
 ]);
 
-function registerGenerationIpc({ ipcMain, getService, trusted }) {
+function registerGenerationIpc({ ipcMain, getService, trusted, developmentDiagnostics=false }) {
+  ipcMain.on?.('generation:development-diagnostics', event => {
+    event.returnValue = developmentDiagnostics===true && trusted(event)===true;
+  });
   const noPayload = (service, payload, fn) => {
     if (payload !== undefined) throw 0;
     return fn(service);
@@ -46,6 +50,7 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
       return service.acceptanceTrace(payload);
     },
     "ownership-diagnosis": (service,payload) => {
+      if(developmentDiagnostics!==true)throw failure('UNAVAILABLE');
       if(!identifier(payload))throw 0;
       return service.diagnoseMuseOwnership(payload);
     },

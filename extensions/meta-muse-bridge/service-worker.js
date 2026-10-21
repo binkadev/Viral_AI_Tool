@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1';
+const WORKER_BUILD='muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2';
 if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
@@ -69,7 +69,7 @@ async function museTabs() {
     diagnostic.contentBuild=/^muse-content-[a-z0-9-]{1,64}$/.test(handshake?.buildMarker||'')?handshake.buildMarker:'unreported';
     diagnostic.generationActive=status?.devEvidence?.generationActive===true;
     return {tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
-      runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported'},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
+      runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported',diagnosticsEnabled:developmentDiagnostics && errorCode==='NONE' && fresh && handshake?.diagnosticsEnabled===true},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
   }));
 }
 async function openMuse(tabId) {
@@ -158,7 +158,8 @@ async function execute(c) {
   if(p.receipt!==undefined && (!['submitGeneration','inspectGeneration','acquireGenerationResult'].includes(c.type) || !MuseReceiptV2.valid(p.receipt,p.operationId) || p.diagnoseOwnership!==undefined))throw Error('INVALID_RECEIPT');
   if(c.type==='acquireGenerationResult' && !MuseReceiptV2.transferRequest(p))throw Error('INVALID_TRANSFER');
   if(!(c.type==='acquireGenerationResult' && p.receipt) && ['transferId','sequence','mediaKind','abort'].some(k=>p[k]!==undefined))throw Error('INVALID_TRANSFER');
-  if((p.diagnoseAcquisition!==undefined || p.diagnoseOwnership!==undefined) && !developmentDiagnostics)throw Error('DIAGNOSTICS_DISABLED');
+  if(p.diagnoseOwnership===true && !developmentDiagnostics)return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',ownershipFailure:{reason:'EXTENSION_DIAGNOSTICS_DISABLED',tabMatch:null,workerIntentPresent:null,workerUserAnchor:null,workerAssistantAnchor:null}};
+  if(p.diagnoseAcquisition!==undefined && !developmentDiagnostics)throw Error('DIAGNOSTICS_DISABLED');
   if(p.diagnoseOwnership===true)return diagnoseStoredOwnership(p);
   const tabs=await chrome.tabs.query({url:[MUSE_URL+'*']});
   if(!tabs.some(t=>t.id===p.tabId))throw Error('UNAVAILABLE');

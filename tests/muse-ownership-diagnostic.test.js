@@ -65,13 +65,13 @@ for(const forbidden of ['text','url','html','token','nativeId'])test('ownership 
  const before=fs.readFileSync(f.file),report=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(report.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(report).includes('private'));assert.deepEqual(fs.readFileSync(f.file),before);
 });
 test('trusted ownership IPC validates IDs and preload exposes only a job-ID method',async t=>{
- const f=fixture(t),handlers={};require('../services/generation/generation-ipc').registerGenerationIpc({ipcMain:{handle:(k,v)=>handlers[k]=v},getService:()=>f.service,trusted:e=>e.trusted});
+ const f=fixture(t),handlers={};require('../services/generation/generation-ipc').registerGenerationIpc({ipcMain:{handle:(k,v)=>handlers[k]=v},getService:()=>f.service,trusted:e=>e.trusted,developmentDiagnostics:true});
  const action=handlers['generation:ownership-diagnosis'];
  assert.equal((await action({trusted:false},f.job.id)).errorCode,'UNAVAILABLE');
  for(const p of [{id:f.job.id},'../job',null])assert.equal((await action({trusted:true},p)).errorCode,'INVALID_REQUEST');
  assert.equal(f.calls.length,0);assert.equal((await action({trusted:true},f.job.id)).ok,true);
  let api;const calls=[];
- vm.runInNewContext(fs.readFileSync('preload.js','utf8'),{require:name=>{assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(_,v)=>api=v},ipcRenderer:{invoke:(...v)=>calls.push(v)}};}});
+ vm.runInNewContext(fs.readFileSync('preload.js','utf8'),{require:name=>{assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(_,v)=>api=v},ipcRenderer:{sendSync:()=>true,invoke:(...v)=>calls.push(v)}};}});
  api.diagnoseMuseOwnership(f.job.id);assert.deepEqual(calls,[['generation:ownership-diagnosis',f.job.id]]);
 });
 for(const scenario of ['different worker user','incorrect match count','receipt unavailable'])test('diagnosis cannot report ownership inconsistent with the native durable anchor: '+scenario,async t=>{
@@ -89,7 +89,7 @@ test('ownership bridge transport neither starts/prunes nor changes session/selec
  const bridge=new MetaMuseExtensionBridge({userDataPath:root,developmentDiagnostics:true});await bridge.start();
  t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  const origin='chrome-extension://'+'a'.repeat(32),token='a'.repeat(64),id='profile-one';
- bridge.sessions.set(id,{instanceId:id,origin,token,lastSeen:Date.now(),extensionState:'extension_connected',tabs:[{tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}}]});
+ bridge.sessions.set(id,{instanceId:id,origin,token,lastSeen:Date.now(),extensionState:'extension_connected',tabs:[{tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{diagnosticsEnabled:true,workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}}]});
  bridge.sessions.set('stale',{lastSeen:0});
  bridge.selectedInstanceId=id;bridge.selectedTabId=5;
  const before=JSON.stringify([...bridge.sessions]),selection=[bridge.selectedInstanceId,bridge.selectedTabId];
@@ -116,11 +116,11 @@ test('native validation returns the first bounded gate and never queries the bri
  assert.equal(report.reason,'OPERATION_RECORD_UNAVAILABLE');assert.equal(report.layer,'native_validation');
  assert.equal(report.instanceMatch,null);assert.equal(f.calls.length,0);
 });
-for(const scenario of ['instance','tab','old runtime','content'])test('exact recorded target gate is bounded and never retargets: '+scenario,async t=>{
+for(const scenario of ['instance','tab','old runtime','content','diagnostics'])test('exact recorded target gate is bounded and never retargets: '+scenario,async t=>{
  const f=fixture(t),bridge=new MetaMuseExtensionBridge({userDataPath:f.root,developmentDiagnostics:true});
  // No listening socket is needed: every case rejects before allocating transport.
  bridge.server={};bridge.start=bridge.prune=()=>{throw Error('FORBIDDEN');};
- const tab={tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}};
+ const tab={tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{diagnosticsEnabled:true,workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}};
  bridge.sessions.set('profile-one',{lastSeen:Date.now(),extensionState:'extension_connected',tabs:[tab]});
  bridge.sessions.set('unrelated',{lastSeen:Date.now(),extensionState:'extension_connected',tabs:[tab]});
  bridge.selectedInstanceId='unrelated';bridge.selectedTabId=5;
@@ -128,10 +128,11 @@ for(const scenario of ['instance','tab','old runtime','content'])test('exact rec
  if(scenario==='tab')bridge.sessions.get('profile-one').tabs=[];
  if(scenario==='old runtime')tab.runtimeBuild.workerBuild='muse-worker-v0-3-3-contract3-receipt2-acceptance3';
  if(scenario==='content')tab.contentFresh=false;
+ if(scenario==='diagnostics')tab.runtimeBuild.diagnosticsEnabled=false;
  const before=JSON.stringify([...bridge.sessions]);
  f.bridge.command=(...args)=>bridge.command(...args);
  const report=await f.service.diagnoseMuseOwnership(f.job.id);
- assert.equal(report.reason,{instance:'TARGET_INSTANCE_UNAVAILABLE',tab:'TARGET_TAB_UNAVAILABLE','old runtime':'RUNTIME_BUILD_MISMATCH',content:'CONTENT_RECEIVER_UNAVAILABLE'}[scenario]);
+ assert.equal(report.reason,{instance:'TARGET_INSTANCE_UNAVAILABLE',tab:'TARGET_TAB_UNAVAILABLE','old runtime':'RUNTIME_BUILD_MISMATCH',content:'CONTENT_RECEIVER_UNAVAILABLE',diagnostics:'EXTENSION_DIAGNOSTICS_DISABLED'}[scenario]);
  assert.equal(report.instanceMatch,scenario!=='instance');assert.equal(report.tabMatch,!['instance','tab'].includes(scenario));
  assert.equal(bridge.pending.size,0);assert.equal(JSON.stringify([...bridge.sessions]),before);assert.equal(bridge.selectedInstanceId,'unrelated');
 });

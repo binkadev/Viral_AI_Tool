@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.4',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.5',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -228,7 +228,7 @@ function contentFixture(options={}) {
  const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,performance:options.monotonicClock?{now:options.monotonicClock}:undefined,
    setTimeout:(fn,ms)=>ms>=15000?setTimeout(fn,options.transferTimeout && ms===15000?20:ms).unref():setTimeout(()=>{if(options.disturb && events.input)events.input({isTrusted:true});if(options.mutating){rows=[node('user','changing-'+Math.random())];observerCallback?.();}if(clicks)options.onPostSendTick?.(api,++postSendTicks);fn();},ms===5000?100:1),clearTimeout,
    MutationObserver:class {constructor(fn){this.fn=records=>fn(records,this);}observe(){observerCallbacks.add(this.fn);}disconnect(){observerCallbacks.delete(this.fn);disconnected++;}},
-   getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(options.production?{}:{version_name:'development-diagnostics'})}),onMessage:{addListener:f=>listeners.push(f)},connect:()=>({onDisconnect:{addListener(){}}})}}};
+   getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'ext',getManifest:()=>options.manifest||({version:'0.3.0',...(options.production?{}:{version_name:'development-diagnostics'})}),onMessage:{addListener:f=>listeners.push(f)},connect:()=>({onDisconnect:{addListener(){}}})}}};
  vm.runInNewContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),c);
  const send=(command,payload)=>new Promise(resolve=>listeners[0]({type:'viral-ai:muse-execution',command,payload},{id:'ext'},resolve));
  const status=()=>{let result;listeners[0]({type:'viral-ai:muse-status'},{id:'ext'},r=>result=r);return result;};
@@ -250,6 +250,7 @@ function contentFixture(options={}) {
    get documentListenerCount(){return ['input','click','keydown','pointerdown'].reduce((n,type)=>n+(documentEvents.get(type)?.size||0),0);},
    get rows(){return rows;},captureTransferClose:()=>vm.runInNewContext('(()=>{const t=[...transfers.values()][0];return ()=>closeTransfer(t);})()',c),
    get tombstones(){return Array.from(vm.runInNewContext('[...closedTransfers]',c));},get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},
+   handshake:()=>{let result;listeners[0]({type:'viral-ai:muse-handshake'},{id:'ext'},r=>result=r);return result;},
    send,status,rejects:(command,payload)=>listeners[0]({type:"viral-ai:muse-execution",command,payload},{id:"ext"},()=>{throw Error("UNEXPECTED_REPLY");})===false,
    mutate:records=>{for(const fn of [...observerCallbacks])fn(records);},get clicks(){return clicks;},get disconnected(){return disconnected;},
    inject:n=>{rows.push(n);observerCallback?.();},node,offline:()=>online=false,replace:next=>{rows=next;observerCallback?.();},stop:()=>stop=true
@@ -266,7 +267,8 @@ test('production rejects investigative diagnostics at native, worker and content
  for(const flag of ['diagnoseOwnership','diagnoseAcquisition']) {
    const p={...inspectPayload,[flag]:true};
    assert(f.rejects('inspectGeneration',p));
-   await assert.rejects(worker.run('inspectGeneration',p),/DIAGNOSTICS_DISABLED/);
+   if(flag==='diagnoseOwnership')assert.equal((await worker.run('inspectGeneration',p)).ownershipFailure.reason,'EXTENSION_DIAGNOSTICS_DISABLED');
+   else await assert.rejects(worker.run('inspectGeneration',p),/DIAGNOSTICS_DISABLED/);
    const root=fs.mkdtempSync(path.join(os.tmpdir(),'muse-private-diagnostic-'));
    t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
    const bridge=new MetaMuseExtensionBridge({userDataPath:root});
@@ -394,7 +396,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.4',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.5',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -759,7 +761,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -837,8 +839,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-4-contract3-receipt2-acceptance3');
- assert.equal(d.workerBuild,'muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-5-contract3-receipt2-acceptance3');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -964,15 +966,39 @@ test('v2 remembers an added-and-removed manual turn from a single mutation batch
  assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt:user})).state,'interrupted');assert.equal(f.clicks,1);
 });
 
-function workerV2Harness(stored,content,production=false) {
+function workerV2Harness(stored,content,production=false,manifest) {
  const calls=[];
- const chrome={runtime:{id:'ext',getManifest:()=>({version:'0.3.0',...(production?{}:{version_name:'development-diagnostics'})}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+ const chrome={runtime:{id:'ext',getManifest:()=>manifest||({version:'0.3.0',...(production?{}:{version_name:'development-diagnostics'})}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
    storage:{local:{get:async key=>({[key]:stored[key]}),set:async values=>Object.assign(stored,JSON.parse(JSON.stringify(values)))}},
    tabs:{query:async()=>[{id:5}],sendMessage:async(id,m)=>{calls.push(m.command);return content.send(m.command,m.payload);}},alarms:{create(){},onAlarm:{addListener(){}}}};
  const c={chrome,navigator:{userAgent:'Edg/1'},crypto:require('node:crypto').webcrypto,TextEncoder,setTimeout,clearTimeout};
  vm.createContext(c);vm.runInContext(fs.readFileSync('extensions/meta-muse-bridge/acceptance-replay.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/receipt-v2.js','utf8')+';'+fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8'),c);
  return {calls,context:c,run:async(type,p)=>{c.command={id:'cmd',type,payload:p};return vm.runInContext('execute(command)',c);}};
 }
+
+test('actual effective staged manifests control both extension gates without user settings or submission',()=>{
+ const {readBundle}=require('../services/generation/bridge/extension-bundle'),{configuration}=require('../services/generation/bridge/extension-distribution');
+ const source=path.resolve('extensions/meta-muse-bridge');
+ const production=JSON.parse(readBundle(source,configuration()).files.find(f=>f.file==='manifest.json').data);
+ const development=JSON.parse(readBundle(source,configuration(),{developmentDiagnostics:true}).files.find(f=>f.file==='manifest.json').data);
+ assert.equal(production.version_name,undefined);assert.equal(development.version_name,'development-diagnostics');
+});
+for(const dev of [false,true])test('actual managed manifest enables only dev diagnosis and reaches missing worker intent without execution: '+dev,async()=>{
+ const {readBundle}=require('../services/generation/bridge/extension-bundle'),{configuration}=require('../services/generation/bridge/extension-distribution');
+ const manifest=JSON.parse(readBundle(path.resolve('extensions/meta-muse-bridge'),configuration(),{developmentDiagnostics:dev}).files.find(f=>f.file==='manifest.json').data);
+ const content=contentFixture({empty:true,manifest}),stored={},worker=workerV2Harness(stored,content,false,manifest);
+ const result=await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'c'.repeat(64)});
+ assert.equal(result.ownershipFailure.reason,dev?'WORKER_INTENT_UNAVAILABLE':'EXTENSION_DIAGNOSTICS_DISABLED');
+ if(dev)assert((await content.send('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'c'.repeat(64)})).ownershipDiagnostic);
+ else assert(content.rejects('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'c'.repeat(64)}));
+ assert.equal(content.clicks,0);assert.deepEqual(stored,{});assert.deepEqual(worker.calls,[]);
+ assert.equal(require('../services/generation/bridge/ownership-diagnosis').report(result.ownershipFailure.reason).layer,dev?'worker_intent':'extension_diagnostics');
+ worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
+ const [tab]=await vm.runInContext('museTabs()',worker.context);
+ assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-5-contract3-receipt2-ownershipdiag2');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-5-contract3-receipt2-acceptance3');
+});
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
  const content=contentFixture({empty:true,draftLength:17}),user=content.node('user','owned-user'),assistant=content.node('assistant','unproven-assistant',media());
@@ -994,7 +1020,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
    if(scenario==='assistant anchored')copy['generation-intent:op'].receipt.assistantStableIdHash='d'.repeat(64);
    if(scenario==='wrong scene')copy['generation-intent:op'].sceneId='other';
    const snapshot=JSON.stringify(copy),worker=workerV2Harness(copy,content,scenario==='production');
-   if(scenario==='production')await assert.rejects(worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash}));
+   if(scenario==='production')assert.equal((await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash})).ownershipFailure.reason,'EXTENSION_DIAGNOSTICS_DISABLED');
    else assert.equal((await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash})).ownershipFailure.reason,'WORKER_RECEIPT_MISMATCH');
    assert.equal(JSON.stringify(copy),snapshot);assert.deepEqual(worker.calls,[]);
  }
@@ -1003,7 +1029,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.4 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.5 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

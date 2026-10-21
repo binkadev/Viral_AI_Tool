@@ -13,8 +13,9 @@ function validDiagnostic(value) {
   return value && Object.getPrototypeOf(value)===Object.prototype && Object.keys(value).length===keys.length && Object.keys(value).every(k=>keys.includes(k)) && booleans.every(k=>typeof value[k]==='boolean') && Number.isInteger(value.museContentScriptContractVersion) && value.museContentScriptContractVersion>=0 && value.museContentScriptContractVersion<=100 && ['absent','fresh','stale'].includes(value.museTabEvidenceAgeBucket) && contentErrors.includes(value.lastContentScriptErrorCode) && bridgeErrors.includes(value.lastBridgeErrorCode);
 }
 function validRuntimeBuild(value) {
-  return value && typeof value==='object' && !Array.isArray(value) && Object.keys(value).length===2 &&
-    Object.keys(value).every(k=>['workerBuild','contentBuild'].includes(k)) &&
+  return value && typeof value==='object' && !Array.isArray(value) && [2,3].includes(Object.keys(value).length) &&
+    Object.keys(value).every(k=>['workerBuild','contentBuild','diagnosticsEnabled'].includes(k)) &&
+    (value.diagnosticsEnabled===undefined || typeof value.diagnosticsEnabled==='boolean') &&
     /^muse-worker-[a-z0-9-]{1,64}$/.test(value.workerBuild||'') &&
     (value.contentBuild==='unreported' || /^muse-content-[a-z0-9-]{1,64}$/.test(value.contentBuild||''));
 }

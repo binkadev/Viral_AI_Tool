@@ -20,17 +20,21 @@ function safeContents(directory,ancestors=true) {
     const s=fs.lstatSync(path.join(directory,name));check(s.isFile() && !s.isSymbolicLink());
   }
 }
-function readBundle(source,config) {
+function readBundle(source,config,{developmentDiagnostics=false}={}) {
   check(typeof source==='string' && path.isAbsolute(source));
   safeContents(source,false); // Source may be inside Electron's virtual ASAR.
   const files=FILES.map(file=>({file,data:fs.readFileSync(path.join(source,file))}));
   const manifest=JSON.parse(files.find(f=>f.file==='manifest.json').data);
+  // Repository/ASAR/store source is always production-safe. Only the native
+  // unpackaged staging caller may request this exact, deterministic overlay.
+  check(manifest.version_name===undefined);
   check(manifest.version===config.expectedExtensionVersion && manifest.manifest_version===3 &&
     manifest.background?.service_worker==='service-worker.js' && manifest.action?.default_popup==='popup.html' &&
     JSON.stringify(manifest.content_scripts?.flatMap(s=>s.js))===JSON.stringify(['acceptance-replay.js','receipt-v2.js','content-script.js']));
   const marker=(file,name)=>files.find(f=>f.file===file).data.toString('utf8').match(new RegExp("const "+name+"='([^']+)'"))?.[1];
   const workerBuild=marker('service-worker.js','WORKER_BUILD'),contentBuild=marker('content-script.js','CONTENT_BUILD');
   check(workerBuild===config.expectedWorkerBuild && contentBuild===config.expectedContentBuild);
+  if(developmentDiagnostics===true)files.find(f=>f.file==='manifest.json').data=Buffer.from(JSON.stringify({...manifest,version_name:'development-diagnostics'},null,2)+'\n');
   return {files,summary:{extensionVersion:manifest.version,workerBuild,contentBuild}};
 }
 function matches(directory,bundle) {
@@ -55,8 +59,8 @@ function removeOwnedDirectory(directory) {
   for(const file of fs.readdirSync(directory))fs.unlinkSync(path.join(directory,file));
   fs.rmdirSync(directory);
 }
-function stageBundle(source,destination,config) {
-  const bundle=readBundle(source,config); // Read and validate everything first.
+function stageBundle(source,destination,config,options) {
+  const bundle=readBundle(source,config,options); // Read and validate everything first.
   const parent=path.dirname(destination);
   safeDirectory(parent);safeContents(destination);
   fs.mkdirSync(parent,{recursive:true});
