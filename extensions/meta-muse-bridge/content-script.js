@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-12-contract3-receipt2-baselinediag1';
+const CONTENT_BUILD='muse-content-v0-3-13-contract3-receipt2-baselinewindow1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -171,7 +171,7 @@ function sampleBaselineDrift(op,mutations=[]) {
     if(MuseReceiptV2.validBaselineDrift(d))op.baselineDrift=d;
   }catch{} // Observation cannot invalidate, wait, rewrite a receipt, or retry.
 }
-function sampleUserAnchorChurn(op,mutations=[]) {
+function sampleUserAnchorChurn(op,mutations=[],baselinePrefixPruned=false) {
   if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.userAnchorChurn)return;
   try {
     const a=op.userDiagnosticAnchor;if(!a)return;
@@ -208,7 +208,7 @@ function sampleUserAnchorChurn(op,mutations=[]) {
       connected && !sameParent?'PARENT_CHANGED':!nativeId(id)?'IDENTITY_UNAVAILABLE':
       id!==op.submittedUserId || idChanged?'SAME_NODE_ID_CHANGED':candidates.size>1?'MULTIPLE_USER_CANDIDATES':
       gone && removed && candidate && added.has(candidate)?(candidate.parentNode===a.parent && a.container.contains(candidate) && candidateIndex===a.index?'REPLACED_SAME_POSITION':'REPLACED_DIFFERENT_POSITION'):
-      gone || removed?'OWNED_NODE_REMOVED':!baselineIntact?'BASELINE_CHANGED':candidates.size?'NEXT_USER_OBSERVED':null;
+      gone || removed?'OWNED_NODE_REMOVED':!baselineIntact && !baselinePrefixPruned?'BASELINE_CHANGED':candidates.size?'NEXT_USER_OBSERVED':null;
     if(!kind)return;
     const ms=Math.max(0,Date.now()-a.startedAt);
     const d={version:1,build:CONTENT_BUILD,kind,elapsedBucket:ms<1000?'under_1s':ms<10000?'1_to_10s':ms<60000?'10_to_60s':'over_60s',mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',
@@ -274,6 +274,52 @@ function afterBaseline(op,allowPending=false) {
   if(op.assistantId && fresh[1]?.id!==op.assistantId)throw Error('RESPONSE_CHANGED');
   return fresh;
 }
+// Gate C and legacy observers always use afterBaseline(). Only the exact
+// durably echoed V2 user may establish this narrower post-anchor window.
+function postAnchorConversationWindow(op) {
+  if(!op.assistantAcknowledged)return {fresh:afterBaseline(op,true),pruned:0};
+  const reject=()=>{throw gateDError('BASELINE_CHANGED','BASELINE_CHANGED');};
+  const rows=structure(true),container=op.projection?.container;
+  const matches=rows.filter(r=>r.role==='user' && r.id===op.submittedUserId),user=matches[0];
+  if(op.invalid || op.manualInterferenceObserved || !MuseReceiptV2.valid(op.receipt,op.receipt?.operationId) ||
+    !op.receipt.userStableIdHash || op.receipt.assistantStableIdHash || Date.now()-op.lastContact>10000 || Date.now()-op.createdAt>20*60*1000 ||
+    matches.length!==1 || user.node!==op.ownedUserNode || user.node!==op.userTurn?.node || !user.node.isConnected ||
+    !container?.contains(user.node) || user.node.parentNode!==op.userSequenceParent || op.userTurn.currentNativeId!==op.submittedUserId)reject();
+  const index=rows.indexOf(user),pruned=op.baseline.length-index;
+  if(pruned===0){
+    if(op.baselineNodes.some((node,i)=>rows[i]?.node===node && node.parentNode!==op.baselineParents[i]))reject();
+    return {fresh:afterBaseline(op,true),pruned:0};
+  }
+  // Keep at least the original tail as a positive boundary; an empty surviving
+  // baseline, middle/tail deletion, insertion, remount or migration is not proof.
+  if(pruned<1 || pruned>=op.baseline.length || rows.length>256 || !op.baselineParents ||
+    rows.some(r=>r.role==='user' && r!==user && !op.baseline.some(b=>b.role==='user' && b.id===r.id)))reject();
+  const before=rows.slice(0,index);
+  for(let i=0;i<op.baseline.length;i++) {
+    const b=op.baseline[i],node=op.baselineNodes[i];
+    if(node.getAttribute('data-message-id')!==b.id || node.getAttribute('data-message-role')!==b.role)reject();
+    if(i<pruned){if(node.isConnected || container.contains(node) || rows.some(r=>r.id===b.id))reject();}
+    else {
+      const r=before[i-pruned];
+      if(!r || r.node!==node || r.id!==b.id || r.role!==b.role || !node.isConnected || !container.contains(node) ||
+        node.parentNode!==op.baselineParents[i] || node.parentNode!==op.userSequenceParent)reject();
+    }
+  }
+  const direct=[...op.userSequenceParent.querySelectorAll(MESSAGE)].filter(n=>n.parentNode===op.userSequenceParent);
+  if(direct.length>256 || direct.indexOf(user.node)!==before.length || before.some((r,i)=>direct[i]!==r.node))reject();
+  const fresh=rows.slice(index);
+  if(fresh.length>MAX_OWNED_ASSISTANT_ROWS+1 || fresh.some((r,i)=>r.role!==(i===0?'user':'assistant')))throw gateDError('AMBIGUOUS_OPERATION','LOGICAL_USER_MISMATCH');
+  return {fresh,pruned};
+}
+function baselineWindowEvidence(op,window) {
+  if(!window.pruned)return;
+  op.baselineWindow??={version:1,build:CONTENT_BUILD,baselineWindowState:'BASELINE_PREFIX_PRUNED',originalBaselineLength:op.baseline.length,
+    retainedBaselineLength:op.baseline.length-window.pruned,prunedPrefixCount:window.pruned,survivingSuffixOrderValid:true,survivingIdentityValid:true,survivingRoleValid:true,
+    addedRowsBeforeOwnedUser:0,ownedUserIndex:op.baseline.length-window.pruned};
+}
+function windowAnswer(p,op,receipt) {
+  return answer(p,'running',{receipt,...(op.baselineWindow?{baselineWindow:op.baselineWindow}:{})});
+}
 const directVideos=row=>{
   const videos=[];
   for(const video of row.node.querySelectorAll('video'))if(video.closest(MESSAGE)===row.node){if(videos.length===16)throw Error('OBSERVATION_LIMIT');videos.push(video);}
@@ -308,11 +354,12 @@ function gateDSequenceEvidence(rows,sequence,index,contiguous) {
   }catch{return {...MuseReceiptV2.emptyAssistantSequence(),firstMismatchCategory:'UNKNOWN_BOUNDED'};}
 }
 function responseBlock(op) {
-  const fresh=afterBaseline(op,true),user=fresh[0],container=op.projection?.container;
+  const window=postAnchorConversationWindow(op),fresh=window.fresh,user=fresh[0],container=op.projection?.container;
+  baselineWindowEvidence(op,window);
   gateDFrame(op,'sample_before_block',{ownedUserPresent:!!user && user.id===op.submittedUserId,blockRowCount:Math.min(9,Math.max(0,fresh.length-1))});
   if(!user || !nativeId(user.id) || user.id!==op.submittedUserId || !container ||
     !container.contains(user.node) || !user.node.parentNode || user.node.parentNode!==op.userSequenceParent ||
-    structure(true).slice(0,op.baseline.length).some(r=>!container.contains(r.node))){
+    structure(true).slice(0,op.baseline.length-window.pruned).some(r=>!container.contains(r.node))){
       const wrongParent=!!user?.node?.parentNode && user.node.parentNode!==op.userSequenceParent;
       gateDFrame(op,'sample_before_block',{sameSequenceParent:wrongParent?false:null});
       throw gateDError('USER_CHANGED',wrongParent?'BLOCK_PARENT_MISMATCH':'BLOCK_USER_INVALID');
@@ -657,6 +704,7 @@ async function submit(p) {
         if(op.invalid || op.acceptanceResult?.status!=='accepted' || afterBaseline(op,true)[0]?.id!==user.id || op.userTurn?.node!==user.node ||
           op.acceptanceResult.canonicalNode!==op.projection.nodes.get(user.node) || op.acceptanceResult.canonicalIdentity!==op.projection.ids.get(user.id))throw Error('USER_CHANGED');
         op.submittedUserId=user.id;
+        op.ownedUserNode=user.node;
         op.userSequenceParent=user.node.parentNode;
         const currentComposer=composer();
         op.receipt={...op.preparedReceipt,userStableIdHash,acceptance:{baselineIntact:true,uniqueUserTurn:true,
@@ -728,11 +776,16 @@ async function prepareV2(p) {
   if(op.invalid || !stable || !status().canSubmit){releaseV2(p.operationId,op);return answer(p,'interrupted');}
   op.baseline=stable.rows.map(({id,role})=>({id,role}));op.createdAt=Date.now();op.lastContact=Date.now();
   op.newUsers=new Set();op.newAssistants=new Set();
-  op.baselineTail=stable.rows.at(-1).node;op.baselineNodes=stable.rows.map(r=>r.node);op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
+  op.baselineTail=stable.rows.at(-1).node;op.baselineNodes=stable.rows.map(r=>r.node);op.baselineParents=stable.rows.map(r=>r.node.parentNode);op.logicalFreshUserTurnCount=0;op.maxConcurrentFreshUserRows=0;op.replacementCandidateCount=0;
   const sample=(mutations=[],kind='observer')=>{
     if(op.invalid && ['ambiguous','invalid'].includes(op.acceptanceResult?.status))return;
-    sampleUserAnchorChurn(op,mutations);
-    sampleBaselineDrift(op,mutations);
+    let safePrune=false;
+    if(op.assistantAcknowledged && !op.invalid)try{
+      const window=postAnchorConversationWindow(op);safePrune=window.pruned>0;
+      if(safePrune)baselineWindowEvidence(op,window);
+    }catch{} // Existing guards below still determine the terminal failure.
+    sampleUserAnchorChurn(op,mutations,safePrune);
+    if(!safePrune)sampleBaselineDrift(op,mutations);
     try {
       gateDFrame(op,'sample_before_block',{mutationCount:mutations.length===0?'zero':mutations.length<=4?'one_to_four':'five_or_more',stabilizationReset:false,
         ownedUserPresent:null,blockRowCount:null,mediaCandidateCount:null,assistantBlockWithinBound:null,sameSequenceParent:null,blockContiguous:null,blockSignatureChanged:null,...MuseReceiptV2.emptyAssistantSequence()});
@@ -744,7 +797,8 @@ async function prepareV2(p) {
       for(const mutation of mutations) {
         if(++visited>256)throw Error('OBSERVATION_LIMIT');
         if(!accepting && mutation.type==='attributes' && ['data-message-id','data-message-role'].includes(mutation.attributeName) && mutation.oldValue!==null && mutation.oldValue!=='' && mutation.oldValue!==mutation.target.getAttribute(mutation.attributeName) &&
-          !(mutation.attributeName==='data-message-id' && mutation.target.getAttribute('data-message-role')==='assistant' && !op.baseline.some(r=>r.id===mutation.oldValue)))throw Error('IDENTITY_MUTATED');
+          !(mutation.attributeName==='data-message-id' && mutation.target.getAttribute('data-message-role')==='assistant' &&
+            !op.baselineNodes.includes(mutation.target) && !op.baseline.some(r=>r.id===mutation.oldValue)))throw Error('IDENTITY_MUTATED');
         const event={mutation,added:[],removed:[]};events.push(event);
         const changes=[...[...(mutation.addedNodes||[])].map(node=>({node,removed:false})),
           ...[...(mutation.removedNodes||[])].map(node=>({node,removed:true}))];
@@ -769,7 +823,7 @@ async function prepareV2(p) {
         rows=[...document.querySelectorAll(MESSAGE)].slice(0,257).filter(node=>['user','assistant'].includes(node.getAttribute('data-message-role'))).map(node=>({node,id:node.getAttribute('data-message-id'),role:node.getAttribute('data-message-role')}));
       }
       for(const row of rows)if(nativeId(row.id))remember(row);
-      const concurrent=rows.slice(op.baseline.length).filter(r=>r.role==='user').length;
+      const concurrent=rows.slice(safePrune?rows.findIndex(r=>r.node===op.ownedUserNode):op.baseline.length).filter(r=>r.role==='user').length;
       op.maxConcurrentFreshUserRows=Math.max(op.maxConcurrentFreshUserRows,concurrent);
       if(concurrent>1)op.logicalFreshUserTurnCount=concurrent;
       gateDFrame(op,'sample_before_block',{ownedUserPresent:rows.some(r=>r.role==='user' && r.id===op.submittedUserId),logicalUserCount:Math.min(128,op.logicalFreshUserTurnCount)});
@@ -833,29 +887,29 @@ async function inspectV2(p) {
     phase='stabilization';
     if(block.settling || op.pendingRoleSettling) {
       gateDFrame(op,phase,{stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'PENDING_ROLE_SETTLING');
-      op.mediaStabilization=null;return answer(p,'running',{receipt});
+      op.mediaStabilization=null;return windowAnswer(p,op,receipt);
     }
     if(generationActive() || block.mediaRows.length!==1 || !nativeId(block.mediaRows[0].id)) {
       gateDFrame(op,phase,{generationActive:generationActive(),stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'STABILIZATION_NOT_READY');
-      op.mediaStabilization=null;return answer(p,'running',{receipt});
+      op.mediaStabilization=null;return windowAnswer(p,op,receipt);
     }
     const owner=block.mediaRows[0];
     gateDFrame(op,phase,{blockSignatureChanged:!!op.mediaStabilization && !sameBlock(op.mediaStabilization,block)});
     if(!sameBlock(op.mediaStabilization,block))op.mediaStabilization={signature:block.signature,nodes:block.rows.map(r=>r.node),samples:1};
     else op.mediaStabilization.samples=Math.min(2,op.mediaStabilization.samples+1);
     gateDFrame(op,phase,{stabilizationSamples:op.mediaStabilization.samples,stabilizationReset:false},op.mediaStabilization.samples<2?'STABILIZATION_NOT_READY':null);
-    if(op.mediaStabilization.samples<2)return answer(p,'running',{receipt});
+    if(op.mediaStabilization.samples<2)return windowAnswer(p,op,receipt);
     const stable=op.mediaStabilization;
     phase='precommit';gateDFrame(op,phase);
     next={...receipt,assistantStableIdHash:await hash(p.operationId,'assistant',owner.id)};
     op.sample();
     if(op.invalid || !MuseReceiptV2.valid(next,p.operationId))return gateDInterrupted(p,op,op.invalid?'OBSERVER_INVALIDATED':'RECEIPT_MISMATCH',phase);
-    if(op.mediaStabilization!==stable){gateDFrame(op,phase,{stabilizationReset:true},'PRECOMMIT_BLOCK_CHANGED');return answer(p,'running',{receipt});}
-    if(generationActive()){gateDFrame(op,phase,{generationActive:true},'PRECOMMIT_GENERATION_ACTIVE');return answer(p,'running',{receipt});}
-    if(!sameBlock(stable,responseBlock(op))){gateDFrame(op,phase,{blockSignatureChanged:true},'PRECOMMIT_BLOCK_CHANGED');return answer(p,'running',{receipt});}
+    if(op.mediaStabilization!==stable){gateDFrame(op,phase,{stabilizationReset:true},'PRECOMMIT_BLOCK_CHANGED');return windowAnswer(p,op,receipt);}
+    if(generationActive()){gateDFrame(op,phase,{generationActive:true},'PRECOMMIT_GENERATION_ACTIVE');return windowAnswer(p,op,receipt);}
+    if(!sameBlock(stable,responseBlock(op))){gateDFrame(op,phase,{blockSignatureChanged:true},'PRECOMMIT_BLOCK_CHANGED');return windowAnswer(p,op,receipt);}
     op.receipt=next;releaseV2(p.operationId,op);
     // Persist the assistant before inspecting/persisting a result candidate.
-    return answer(p,'running',{receipt:next});
+    return windowAnswer(p,op,next);
     } catch(error) {return gateDInterrupted(p,op,gateDReason(error),phase);}
   }
   // Refresh/restart recovery needs no operation-map entry or global baseline.

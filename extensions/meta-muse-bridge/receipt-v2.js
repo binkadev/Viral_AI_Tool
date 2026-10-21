@@ -139,9 +139,17 @@
      ['under_1s','1_to_10s','10_to_60s','over_60s'].includes(d.elapsedBucket) && ['zero','one_to_four','five_or_more'].includes(d.mutationCountBucket) &&
      baselineDriftCounts.every(k=>count(d[k],257)) && baselineDriftBools.every(k=>d[k]===null || typeof d[k]==='boolean');
  }
+ function validBaselineWindow(d) {
+   const keys=['version','build','baselineWindowState','originalBaselineLength','retainedBaselineLength','prunedPrefixCount',
+     'survivingSuffixOrderValid','survivingIdentityValid','survivingRoleValid','addedRowsBeforeOwnedUser','ownedUserIndex'];
+   return exact(d,keys) && Object.keys(d).length===keys.length && d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && d.baselineWindowState==='BASELINE_PREFIX_PRUNED' &&
+     ['originalBaselineLength','retainedBaselineLength','prunedPrefixCount','ownedUserIndex'].every(k=>Number.isInteger(d[k]) && d[k]>=1 && d[k]<=256) &&
+     d.retainedBaselineLength+d.prunedPrefixCount===d.originalBaselineLength && d.ownedUserIndex===d.retainedBaselineLength && d.addedRowsBeforeOwnedUser===0 &&
+     ['survivingSuffixOrderValid','survivingIdentityValid','survivingRoleValid'].every(k=>d[k]===true);
+ }
  const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
    ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,assistantSequenceCounts,assistantSequenceBools,assistantMismatchCategories,emptyAssistantSequence,
    validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,userChurnKinds,userChurnBools,userChurnCounts,validUserAnchorChurn,
-   baselineDriftKinds,baselineDriftCounts,baselineDriftBools,validBaselineDrift,MAX_BYTES,CHUNK_BYTES});
+   baselineDriftKinds,baselineDriftCounts,baselineDriftBools,validBaselineDrift,validBaselineWindow,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

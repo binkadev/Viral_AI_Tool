@@ -68,7 +68,7 @@ test('historical Gate-D evidence and current DOM census are separate, immutable,
  }
 });
 
-for(const [version,suffix] of [['0-3-8','assistdiag1'],['0-3-9','assistdiag2'],['0-3-10','assistsettle1'],['0-3-11','userchurn1']])test('historical '+version+' Gate-D summary remains readable without diagnostic migration',async t=>{
+for(const [version,suffix] of [['0-3-8','assistdiag1'],['0-3-9','assistdiag2'],['0-3-10','assistsettle1'],['0-3-11','userchurn1'],['0-3-12','baselinediag1']])test('historical '+version+' Gate-D summary remains readable without diagnostic migration',async t=>{
  const f=fixture(t),{failure}=require('./fixtures/muse-assistant-failure');
  const d=failure('BLOCK_NONCONTIGUOUS');d.build=`muse-content-v${version}-contract3-receipt2-${suffix}`;
  if(version!=='0-3-8')Object.assign(d.frames[0],require('../extensions/meta-muse-bridge/receipt-v2').emptyAssistantSequence());
@@ -79,6 +79,7 @@ for(const [version,suffix] of [['0-3-8','assistdiag1'],['0-3-9','assistdiag2'],[
  assert.equal(Object.hasOwn(report.historicalAssistantOwnershipFailure.lastFrame,'firstMismatchCategory'),version!=='0-3-8');
  assert.equal(report.historicalUserAnchorChurn,null);
  assert.equal(report.historicalBaselineDrift,null);
+ assert.equal(report.historicalBaselineWindow,null);
  assert.equal(report.diagnostic.ownedUserMatches,1);assert.deepEqual(fs.readFileSync(f.file),before);
 });
 
@@ -102,11 +103,12 @@ test('historical user churn is independent of current census and survives bounde
 
 test('historical baseline drift is separately sanitized and never reconstructed or persisted by support diagnosis',async t=>{
  const f=fixture(t),schema=require('../extensions/meta-muse-bridge/receipt-v2');
- const d={version:1,build:require('../services/generation/bridge/extension-distribution.json').expectedContentBuild,kind:'BASELINE_ROW_REMOVED',elapsedBucket:'10_to_60s',mutationCountBucket:'one_to_four',firstMismatchKind:'BASELINE_ROW_REMOVED',firstMismatchIndexBucket:'one_to_four',
+ const d={version:1,build:'muse-content-v0-3-12-contract3-receipt2-baselinediag1',kind:'BASELINE_ROW_REMOVED',elapsedBucket:'10_to_60s',mutationCountBucket:'one_to_four',firstMismatchKind:'BASELINE_ROW_REMOVED',firstMismatchIndexBucket:'one_to_four',
    ...Object.fromEntries(schema.baselineDriftCounts.map(k=>[k,null])),...Object.fromEntries(schema.baselineDriftBools.map(k=>[k,null]))};
  assert(schema.validBaselineDrift(d));f.record.baselineDrift=d;fs.writeFileSync(f.file,JSON.stringify(f.record));
  const before=fs.readFileSync(f.file),jobs=fs.readFileSync(f.service.store.file),report=await f.service.diagnoseMuseOwnership(f.job.id);
  assert.deepEqual(report.historicalBaselineDrift,d);assert.equal(report.historicalAssistantOwnershipFailure,null);assert.equal(report.historicalUserAnchorChurn,null);assert.equal(report.diagnostic.ownedUserMatches,1);
+ assert.equal(report.historicalBaselineWindow,null,'No safe-window proof is reconstructed for 0.3.12');
  const {sanitize}=require('../services/generation/bridge/ownership-diagnosis');
  for(const patch of [{rawId:'private'},{prompt:'private'},{url:'private'},{account:'private'},{kind:'private'},{baselineLength:258},{firstMismatchIndexBucket:4}]){
    const safe=sanitize({...report,historicalBaselineDrift:{...d,...patch}},f.job.id);assert.equal(safe.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(safe).includes('private'));

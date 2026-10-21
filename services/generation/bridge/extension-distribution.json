@@ -1,8 +1,8 @@
 {
   "distributionMode": "production",
-  "expectedExtensionVersion": "0.3.12",
-  "expectedWorkerBuild": "muse-worker-v0-3-12-contract3-receipt2-baselinediag1",
-  "expectedContentBuild": "muse-content-v0-3-12-contract3-receipt2-baselinediag1",
+  "expectedExtensionVersion": "0.3.13",
+  "expectedWorkerBuild": "muse-worker-v0-3-13-contract3-receipt2-baselinewindow1",
+  "expectedContentBuild": "muse-content-v0-3-13-contract3-receipt2-baselinewindow1",
   "protocolVersion": 1,
   "chromeWebStoreExtensionId": "",
   "chromeWebStoreUrl": ""

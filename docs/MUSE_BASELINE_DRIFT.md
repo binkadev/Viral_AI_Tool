@@ -1,6 +1,9 @@
 # Baseline drift evidence — extension 0.3.12
 
-Executing builds:
+This schema first shipped in 0.3.12. Current 0.3.13 preserves it for unsafe drift
+and separately handles [verified post-anchor prefix pruning](MUSE_BASELINE_PREFIX_WINDOW.md).
+
+Original 0.3.12 executing builds:
 
 - `muse-worker-v0-3-12-contract3-receipt2-baselinediag1`
 - `muse-content-v0-3-12-contract3-receipt2-baselinediag1`

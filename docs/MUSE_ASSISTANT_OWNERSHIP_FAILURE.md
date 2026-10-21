@@ -6,12 +6,13 @@ result discovery and acquisition requirements are unchanged. Version 0.3.9
 refined sequence failure evidence only. Version 0.3.10 adds the narrow pending
 missing-role wait described in [pending role settling](MUSE_PENDING_ROLE_SETTLING.md).
 Version 0.3.11 adds separate [post-anchor user churn evidence](MUSE_USER_ANCHOR_CHURN.md).
-Current 0.3.12 adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md),
+Version 0.3.12 adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md),
 without changing ownership or settling behavior.
+Current 0.3.13 additionally permits only [verified post-anchor head pruning](MUSE_BASELINE_PREFIX_WINDOW.md).
 Executing markers:
 
-- `muse-worker-v0-3-12-contract3-receipt2-baselinediag1`
-- `muse-content-v0-3-12-contract3-receipt2-baselinediag1`
+- `muse-worker-v0-3-13-contract3-receipt2-baselinewindow1`
+- `muse-content-v0-3-13-contract3-receipt2-baselinewindow1`
 
 ## Scope and timing
 

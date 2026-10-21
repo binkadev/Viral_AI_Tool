@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-12-contract3-receipt2-baselinediag1';
+const WORKER_BUILD='muse-worker-v0-3-13-contract3-receipt2-baselinewindow1';
 if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
@@ -265,6 +265,8 @@ async function executeV2(c) {
   const payload={...p,...(receipt?{receipt}:{}),observationToken:observationEpoch+'_'+(bridge?.serverId||'offline')};
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload});
   if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId)return interrupted();
+  if(result.baselineWindow!==undefined && (c.type!=='inspectGeneration' || result.state!=='running' || !receipt?.userStableIdHash || receipt.assistantStableIdHash ||
+    !MuseReceiptV2.validBaselineWindow(result.baselineWindow) || Object.keys(result).some(k=>!['operationId','sceneId','state','receipt','baselineWindow'].includes(k))))return interrupted();
   if(result.assistantOwnershipFailure!==undefined || result.userAnchorChurn!==undefined || result.baselineDrift!==undefined) {
     if(c.type!=='inspectGeneration' || result.state!=='interrupted' || !receipt?.userStableIdHash || receipt.assistantStableIdHash ||
       Object.keys(result).some(k=>!['operationId','sceneId','state','assistantOwnershipFailure','userAnchorChurn','baselineDrift'].includes(k)) ||
@@ -292,7 +294,9 @@ async function executeV2(c) {
     // Worker durable before main receives; a lost reply can recover this exact
     // monotonic receipt without replaying submit or inventing a delta.
     const latest=(await chrome.storage.local.get(key))[key];
-    saved={...saved,receipt:result.receipt,...(latest?.localCancelled?{localCancelled:true}:{})};await chrome.storage.local.set({[key]:saved});
+    const baselineWindow=latest?.baselineWindow||result.baselineWindow;
+    saved={...saved,receipt:result.receipt,...(baselineWindow?{baselineWindow}:{}),...(latest?.localCancelled?{localCancelled:true}:{})};await chrome.storage.local.set({[key]:saved});
+    if(result.baselineWindow && baselineWindow)result.baselineWindow=baselineWindow;
   }
   return result;
 }

@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.12',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.13',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -401,7 +401,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.12',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.13',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -463,6 +463,213 @@ async function acceptV2(f) {
  assert.equal(accepted.receipt.assistantStableIdHash,undefined);return accepted.receipt;
 }
 
+async function prefixWindowFixture({count=8,active=false,video=null,ack=true,clock,crypto}={}) {
+ const f=contentFixture({noAssistant:!video,active,video,clock,crypto});
+ f.transaction(Array.from({length:count},(_,i)=>f.node(i%2?'assistant':'user','window-history-'+i)));
+ const receipt=await acceptV2(f),original=f.rows.slice(),baseline=original.slice(0,count),user=original[count];
+ if(ack){const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'running');assert.equal(r.baselineWindow,undefined);}
+ const prune=n=>f.transaction(original.slice(n),[userMutation(f,[],baseline.slice(0,n),null,baseline[n])]);
+ return {f,receipt,original,baseline,user,prune};
+}
+
+for(const [count,pruned] of [[8,1],[39,3],[100,90],[8,7]])test('prefix window: exact retained suffix continues nonterminal '+count+' minus '+pruned,async()=>{
+ const {f,receipt,baseline,prune}=await prefixWindowFixture({count}),before=JSON.stringify(receipt),ids=baseline.map(n=>n.id);
+ prune(pruned);assert.equal(f.operationCount,1);
+ for(let i=0;i<3;i++){
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'running');assert.equal(JSON.stringify(r.receipt),before);
+   assert.deepEqual(JSON.parse(JSON.stringify(r.baselineWindow)),{version:1,build:require('../services/generation/bridge/extension-distribution.json').expectedContentBuild,baselineWindowState:'BASELINE_PREFIX_PRUNED',
+     originalBaselineLength:count,retainedBaselineLength:count-pruned,prunedPrefixCount:pruned,survivingSuffixOrderValid:true,survivingIdentityValid:true,survivingRoleValid:true,addedRowsBeforeOwnedUser:0,ownedUserIndex:count-pruned});
+   assert(receiptV2.validBaselineWindow(r.baselineWindow));assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(r)),{...inspectPayload,receipt}));
+   assert.equal(r.assistantOwnershipFailure,undefined);assert.equal(r.userAnchorChurn,undefined);assert.equal(r.baselineDrift,undefined);assert.equal(f.baselineDrift,null);
+ }
+ assert.deepEqual(baseline.map(n=>n.id),ids);assert.equal(f.assistantFailureCount,0);assert.equal(f.clicks,1);
+ f.foreign('pointerdown');const end=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(end.assistantOwnershipFailure.terminalReason,'MANUAL_INTERFERENCE');
+ assert.equal(end.userAnchorChurn,undefined,'Safe prefix pruning never creates user churn');assert.equal(end.baselineDrift,undefined);
+});
+
+for(const phase of ['before send','during acceptance','before durable echo'])test('prefix window: full prepared baseline remains strict '+phase,async()=>{
+ let f;
+ if(phase==='during acceptance'){
+   f=contentFixture({noAssistant:true,afterClick:f=>f.transaction(f.rows.slice(1))});f.transaction(f.rows);
+   const prepared=await f.send('prepareGeneration',v2Payload),r=await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prepared.receipt});
+   assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);assert.equal(r.baselineWindow,undefined);return;
+ }
+ if(phase==='before send'){
+   f=contentFixture({noAssistant:true});f.transaction(f.rows);const prepared=await f.send('prepareGeneration',v2Payload);f.transaction(f.rows.slice(1));
+   const r=await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prepared.receipt});assert.equal(r.state,'interrupted');assert.equal(f.clicks,0);assert.equal(r.baselineWindow,undefined);return;
+ }
+ const x=await prefixWindowFixture({ack:false});x.prune(1);
+ const r=await x.f.send('inspectGeneration',{...v2Payload,receipt:x.receipt});assert.equal(r.state,'interrupted');assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');assert.equal(r.baselineWindow,undefined);assert.equal(x.f.clicks,1);
+});
+
+for(const change of ['middle','noncontiguous','tail','all baseline','reorder','insert','baseline id','baseline role','parent','container','remount survivor','removed still connected','owned id','owned role','owned missing','owned replacement same id','owned replacement different id','extra user','duplicate id','unrecognized gap','baseline pending id','manual'])test('prefix window: unsafe change remains terminal '+change,async()=>{
+ const x=await prefixWindowFixture(),{f,receipt,original,baseline,user}=x,before=JSON.stringify(receipt);
+ if(change==='middle')f.transaction(original.filter(n=>n!==baseline[3]));
+ else if(change==='noncontiguous')f.transaction(original.filter(n=>n!==baseline[0] && n!==baseline[3]));
+ else if(change==='tail')f.transaction(original.filter(n=>n!==baseline.at(-1)));
+ else if(change==='all baseline')f.transaction([user]);
+ else if(change==='reorder')f.transaction([baseline[3],baseline[2],...original.slice(4)]);
+ else if(change==='insert')f.transaction([f.node('assistant','unowned-extra'),...original.slice(2)]);
+ else if(change==='baseline id'){baseline[3].id='changed-history';f.transaction(original.slice(2));}
+ else if(change==='baseline role'){baseline[3].role='user';f.transaction(original.slice(2));}
+ else if(change==='parent' || change==='container'){
+   const parent=change==='parent'?{parentNode:f.messageParent}:{};f.transaction(original.slice(2),[],()=>{baseline[3].parentNode=parent;});
+ }
+ else if(change==='remount survivor')f.transaction([f.node('user',baseline[2].id),...original.slice(3)]);
+ else if(change==='removed still connected')f.transaction(original.slice(2),[],()=>{baseline[0].isConnected=true;baseline[0].parentNode={};});
+ else if(change==='owned id'){user.id='changed-owned';f.transaction(original.slice(2));}
+ else if(change==='owned role'){user.role='assistant';f.transaction(original.slice(2));}
+ else if(change==='owned missing')f.transaction(original.slice(2,-1));
+ else if(change.startsWith('owned replacement'))f.transaction([...original.slice(2,-1),f.node('user',change.endsWith('same id')?user.id:'replacement-id')]);
+ else if(change==='extra user')f.transaction([...original.slice(2),f.node('user','another-user')]);
+ else if(change==='duplicate id')f.transaction([...original.slice(2),f.node('user',user.id)]);
+ else if(change==='unrecognized gap')f.transaction([baseline[2],f.node(null,null),...original.slice(3)]);
+ else if(change==='baseline pending id'){baseline[3].id=null;f.transaction(original.slice(2));}
+ else {f.foreign('pointerdown');f.transaction(original.slice(2));}
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(r.baselineWindow,undefined);
+ if(['middle','noncontiguous','tail','all baseline','reorder'].includes(change))assert.equal(r.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');
+ assert.equal(JSON.stringify(receipt),before);assert.equal(receipt.assistantStableIdHash,undefined);assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+});
+
+for(const failure of ['scene mismatch','token mismatch','receipt mismatch','contact stale','expired','user hash mismatch'])test('prefix window: existing receipt/contact gates still reject '+failure,async()=>{
+ let now=1000;const {f,receipt,prune}=await prefixWindowFixture({clock:()=>now});prune(2);const p={...v2Payload,receipt};
+ if(failure==='scene mismatch')p.sceneId='other-scene';if(failure==='token mismatch')p.observationToken='other-token';
+ if(failure==='receipt mismatch')p.receipt={...receipt,acceptance:{...receipt.acceptance,composerCleared:false}};
+ if(failure==='user hash mismatch')p.receipt={...receipt,userStableIdHash:'e'.repeat(64)};
+ if(failure==='contact stale')now+=10001;
+ if(failure==='expired'){
+   for(let i=0;i<133;i++){now+=9000;assert.equal((await f.send('inspectGeneration',p)).state,'running');}now+=4001;
+ }
+ const r=await f.send('inspectGeneration',p);assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);assert.equal(f.operationCount,0);
+});
+
+test('prefix window: progressive head pruning keeps original baseline and resets media stabilization',async()=>{
+ const {f,receipt,original,baseline}=await prefixWindowFixture({video:media()}),before=JSON.stringify(receipt);
+ f.transaction(original.slice(1),[userMutation(f,[],[baseline[0]],null,baseline[1])]);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);
+ f.transaction(original.slice(3),[userMutation(f,[],baseline.slice(1,3),null,baseline[3])]);
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(first.receipt.assistantStableIdHash,undefined);assert.equal(first.baselineWindow.prunedPrefixCount,1,'First nonterminal snapshot remains immutable');
+ const second=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(second.receipt.assistantStableIdHash,shaBytes('op\0assistant\0new-assistant'));
+ assert.equal(second.receipt.result,undefined);assert.equal(JSON.stringify(receipt),before);assert.deepEqual(JSON.parse(JSON.stringify(second.receipt.baselineUserMessageIds)),JSON.parse(before).baselineUserMessageIds);
+ assert.equal(f.operationCount,0);assert.equal(f.assistantFailureCount,0);assert.equal(f.clicks,1);
+});
+
+for(const change of ['restored user id','transient unowned user','restored baseline id','restored baseline assistant id'])test('prefix window: transient identity/manual-turn evidence still invalidates '+change,async()=>{
+ const {f,receipt,original,baseline,user}=await prefixWindowFixture();
+ const records=[userMutation(f,[],baseline.slice(0,2),null,baseline[2])];
+ if(change==='restored user id')records.push({type:'attributes',target:user,attributeName:'data-message-id',oldValue:'temporary-owned-id'});
+ if(change==='restored baseline id')records.push({type:'attributes',target:baseline[2],attributeName:'data-message-id',oldValue:'temporary-baseline-id'});
+ if(change==='restored baseline assistant id')records.push({type:'attributes',target:baseline[3],attributeName:'data-message-id',oldValue:'temporary-baseline-assistant-id'});
+ if(change==='transient unowned user'){
+   const foreign=f.node('user','transient-private-user');records.push(userMutation(f,[foreign],[foreign],user));
+ }
+ f.transaction(original.slice(2),records);
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(r.baselineWindow,undefined);
+ if(change==='restored user id')assert.equal(r.userAnchorChurn.kind,'SAME_NODE_ID_CHANGED');
+ if(change==='transient unowned user')assert.equal(r.userAnchorChurn.kind,'NEXT_USER_OBSERVED');
+ assert.equal(f.clicks,1);
+});
+
+test('prefix window: native persists nonterminal proof and assistant before restart-safe exact-owned acquisition',async t=>{
+ const bytes=Buffer.concat([Buffer.from([0,0,0,20]),Buffer.from('ftyp'),Buffer.alloc(210000,4)]),source='blob:https://muse.ai/owned-prefix-fixture';
+ const content=contentFixture({noAssistant:true}),stored={};content.transaction(Array.from({length:10},(_,i)=>content.node(i%2?'assistant':'user','pipeline-baseline-'+i)));
+ let worker=workerV2Harness(stored,content),native,acquired=false,verified=0;
+ const f=fixture(t,{verifyVideo:async file=>{assert.deepEqual(fs.readFileSync(file),bytes);verified++;},command:async(type,p)=>{
+   if(type==='acquireGenerationResult'){
+     const disk=JSON.parse(fs.readFileSync(path.join(native.root,'outputs',p.operationId,'muse-operation.json')));
+     assert.equal(disk.receipt.assistantStableIdHash,shaBytes(p.operationId+'\0assistant\0owned-prefix-media'));assert(disk.receipt.result);
+     assert.equal(disk.baselineWindow.prunedPrefixCount,3);assert.equal(disk.assistantOwnershipFailure,undefined);acquired=true;
+   }
+   return JSON.parse(JSON.stringify(await worker.run(type,p)));
+ }});native=f;f.bridge.receiptV2Ready=async()=>true;f.bridge.developmentDiagnostics=true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),initial=fs.readFileSync(file),original=content.rows.slice(),initialReceipt=JSON.parse(initial).receipt;
+ await f.provider.reconcile(context);assert.deepEqual(fs.readFileSync(file),initial,'No window evidence before pruning');
+ content.transaction(original.slice(3),[userMutation(content,[],original.slice(0,3),null,original[3])]);const shell=appendPendingRole(content);
+ await f.provider.reconcile(context);const first=JSON.parse(fs.readFileSync(file)),window=first.baselineWindow;
+ assert(receiptV2.validBaselineWindow(window));assert.equal(window.prunedPrefixCount,3);assert.deepEqual(first.receipt,initialReceipt);
+ assert.equal(first.assistantOwnershipFailure,undefined);assert.equal(first.userAnchorChurn,undefined);assert.equal(first.baselineDrift,undefined);
+ assert.deepEqual(stored['generation-intent:'+job.id].baselineWindow,window);
+ const waitBytes=fs.readFileSync(file);for(let i=0;i<3;i++)assert.equal((await f.provider.reconcile(context)).status,'running');assert.deepEqual(fs.readFileSync(file),waitBytes);
+ const report=await f.service.diagnoseMuseOwnership(job.id);assert.deepEqual(report.historicalBaselineWindow,window);assert.equal(report.historicalBaselineDrift,null);assert.deepEqual(fs.readFileSync(file),waitBytes);
+ hydratePendingRole(content,shell);content.inject(content.node('assistant','owned-prefix-media',media()));
+ await f.provider.reconcile(context);assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,undefined);assert.equal(acquired,false);
+ await f.provider.reconcile(context);const anchored=JSON.parse(fs.readFileSync(file));assert.equal(anchored.receipt.assistantStableIdHash,shaBytes(job.id+'\0assistant\0owned-prefix-media'));
+ assert.equal(anchored.receipt.result,undefined);assert.equal(acquired,false);assert.deepEqual(anchored.receipt.baselineUserMessageIds,initialReceipt.baselineUserMessageIds);assert.deepEqual(anchored.receipt.baselineAssistantMessageIds,initialReceipt.baselineAssistantMessageIds);
+ const v={...media(),currentSrc:source};let fetchCount=0;
+ const next=contentFixture({historicalVideos:[media()],fetch:async url=>{assert.equal(url,source);fetchCount++;return new Response(bytes,{headers:{'content-type':'video/mp4'}});}});
+ next.replace([next.node('assistant','unrelated-old',media()),next.node('assistant','owned-prefix-media',v),next.node('assistant','unrelated-newest',media())]);
+ worker=workerV2Harness(stored,next);
+ const done=await f.service.recover(job.id);assert.equal(done.status,'completed');assert(done.asset);assert(acquired);assert(verified>0);assert.equal(fetchCount,1);
+ assert.deepEqual(fs.readFileSync(path.join(context.outputDirectory,job.id+'.mp4')),bytes);assert.equal(done.projectId,job.projectId);assert.equal(done.sceneId,job.sceneId);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert.equal(content.clicks,1);assert.equal(next.clicks,0);assert(!worker.calls.includes('submitGeneration'));assert(!worker.calls.includes('prepareGeneration'));
+ assert.deepEqual(stored['generation-intent:'+job.id].baselineWindow,window);
+});
+
+test('prefix window: strict schemas reject forged nonterminal proof, private fields and receipt/input promotion',async()=>{
+ const {f,receipt,prune}=await prefixWindowFixture();prune(2);const r=JSON.parse(JSON.stringify(await f.send('inspectGeneration',{...v2Payload,receipt}))),d=r.baselineWindow;
+ for(const patch of [{nativeId:'private'},{prompt:'private'},{url:'private'},{timestamp:123},{baselineWindowState:'BASELINE_CHANGED'},{prunedPrefixCount:0},{retainedBaselineLength:0},{originalBaselineLength:257},{ownedUserIndex:7},{survivingIdentityValid:false},{survivingRoleValid:false},{survivingSuffixOrderValid:false},{addedRowsBeforeOwnedUser:1}]){
+   assert(!receiptV2.validBaselineWindow({...d,...patch}));assert(!validResult('inspectGeneration',{...r,baselineWindow:{...d,...patch}},{...inspectPayload,receipt}));
+ }
+ for(const key of Object.keys(d)){const bad={...d};delete bad[key];assert(!receiptV2.validBaselineWindow(bad));}
+ for(const type of ['prepareGeneration','submitGeneration','acquireGenerationResult','cancelGeneration'])assert(!validResult(type,r,{...inspectPayload,receipt}));
+ for(const patch of [{state:'interrupted'},{state:'result'},{receipt:undefined},{receipt:{...receipt,userStableIdHash:'e'.repeat(64)}},{assistantOwnershipFailure:require('./fixtures/muse-assistant-failure').failure()}])assert(!validResult('inspectGeneration',{...r,...patch},{...inspectPayload,receipt}));
+ assert(!receiptV2.valid(d,'op'));assert(!validPayload('inspectGeneration',{...inspectPayload,receipt,baselineWindow:d}));assert(!validResult('inspectGeneration',r,{...inspectPayload,diagnoseOwnership:true}));
+ const {sanitize}=require('../services/generation/bridge/ownership-diagnosis');
+ for(const patch of [{url:'private'},{ownedUserIndex:-1},{addedRowsBeforeOwnedUser:1}]){
+   const safe=sanitize({ok:false,reason:'UNAVAILABLE',historicalBaselineWindow:{...d,...patch}},'op');assert.equal(safe.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(safe).includes('private'));
+ }
+ assert.deepEqual(sanitize({ok:false,reason:'UNAVAILABLE',historicalBaselineWindow:d},'op').historicalBaselineWindow,d);
+ for(const secret of ['window-history-','new-user','Exact prompt','https:','blob:'])assert(!JSON.stringify(d).includes(secret));
+ assert.equal(f.clicks,1);
+});
+
+for(const corruption of ['two media owners','assigned id without role','two pending shells','noncontiguous gap','unsupported assistant role','foreign assistant parent'])test('prefix window: response block guard still rejects '+corruption,async()=>{
+ const {f,receipt,original}=await prefixWindowFixture(),base=original.slice(2),status=f.node('assistant','owned-status'),mediaRow=f.node('assistant','owned-media',media());
+ if(corruption==='two media owners')f.transaction([...base,mediaRow,f.node('assistant','other-media',media())]);
+ if(corruption==='assigned id without role')f.transaction([...base,f.node(null,'unassigned-role')]);
+ if(corruption==='two pending shells')f.transaction([...base,f.node(null,null),f.node(null,null)]);
+ if(corruption==='noncontiguous gap')f.transaction([...base,status,f.node('tool','gap'),mediaRow]);
+ if(corruption==='unsupported assistant role')f.transaction([...base,f.node('tool','unsupported')]);
+ if(corruption==='foreign assistant parent')f.transaction([...base,status,mediaRow],[],()=>{mediaRow.parentNode={};});
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(f.clicks,1);assert.equal(f.operationCount,0);
+});
+
+test('prefix window: nonterminal state retains the original active reservation and exact-once tombstone',async()=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);content.transaction(content.rows);
+ const prepared=await worker.run('prepareGeneration',inspectPayload),accepted=await worker.run('submitGeneration',{...operation,receipt:prepared.receipt});
+ await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});content.transaction(content.rows.slice(1));
+ const r=await worker.run('inspectGeneration',{...inspectPayload,receipt:accepted.receipt});assert.equal(r.state,'running');assert.equal(content.operationCount,1);
+ assert.equal((await content.send('prepareGeneration',{...v2Payload,operationId:'competing'})).state,'interrupted');
+ assert.equal((await worker.run('submitGeneration',{...operation,receipt:accepted.receipt})).state,'interrupted');
+ assert.equal(worker.calls.filter(c=>c==='submitGeneration').length,1);assert.equal(content.clicks,1);assert.equal(content.operationCount,1);
+});
+
+test('prefix window: failure to persist nonterminal evidence preserves native receipt without output or resubmit',async t=>{
+ const content=contentFixture({noAssistant:true}),stored={},worker=workerV2Harness(stored,content);
+ const f=fixture(t,{command:async(type,p)=>JSON.parse(JSON.stringify(await worker.run(type,p)))});f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file),rename=fs.renameSync;
+ await f.provider.reconcile(context);content.transaction(content.rows.slice(1));
+ t.mock.method(fs,'renameSync',(from,to)=>{if(to===file)throw Object.assign(Error('fixture full disk'),{code:'ENOSPC'});return rename(from,to);});
+ await assert.rejects(f.provider.reconcile(context));assert.deepEqual(fs.readFileSync(file),before);assert(!fs.readdirSync(context.outputDirectory).some(n=>n.endsWith('.tmp')));
+ assert.equal(content.clicks,1);assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert(!f.calls.some(c=>c.type==='acquireGenerationResult'));assert.equal(f.service.get(job.id).asset,null);
+});
+
+for(const active of [false,true])test('prefix window: prune then pending role/status/media still requires inactive generation and two polls '+active,async()=>{
+ const {f,receipt,prune}=await prefixWindowFixture({active});prune(3);const shell=appendPendingRole(f);
+ for(let i=0;i<3;i++){
+   const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);assert.equal(r.baselineWindow.prunedPrefixCount,3);
+   assert.equal(r.assistantOwnershipFailure,undefined);assert.equal(r.userAnchorChurn,undefined);assert.equal(r.baselineDrift,undefined);
+ }
+ hydratePendingRole(f,shell);f.inject(f.node('assistant','owned-prefix-media',media()));
+ if(active){for(let i=0;i<3;i++)assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);f.finish();}
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(first.receipt.assistantStableIdHash,undefined);
+ const second=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(second.receipt.assistantStableIdHash,shaBytes('op\0assistant\0owned-prefix-media'));
+ assert.equal(second.receipt.result,undefined);assert.equal(f.clicks,1);assert.equal(f.assistantFailureCount,0);
+ const result=await f.send('inspectGeneration',{...v2Payload,receipt:second.receipt});assert.equal(result.state,'result');assert.equal(result.receipt.result.ownerAssistantStableIdHash,second.receipt.assistantStableIdHash);
+});
+
 test('baseline drift: unchanged baseline, remounted baseline IDs, pending role/ID and assistant stabilization add no evidence',async()=>{
  const f=contentFixture({noAssistant:true}),receipt=await acceptV2(f);
  for(let i=0;i<3;i++)assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).state,'running');
@@ -499,7 +706,7 @@ for(const kind of ['BASELINE_ROW_REMOVED','BASELINE_ROW_ADDED','BASELINE_ID_CHAN
  }
  if(kind==='IDENTITY_UNAVAILABLE'){baseline[1].id='';f.mutate([]);}
  if(kind==='UNKNOWN_BOUNDED')f.mutate(Array.from({length:257},()=>({type:'childList',target:f.messageParent,addedNodes:[],removedNodes:[]})));
- if(['BASELINE_PARENT_CHANGED','OWNED_USER_INDEX_SHIFT'].includes(kind)){
+ if(kind==='OWNED_USER_INDEX_SHIFT'){
    assert.equal(f.baselineDrift.kind,kind);const running=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(running.state,'running');
    assert.equal(running.baselineDrift,undefined);assert.equal(JSON.stringify(running.receipt),before,'Diagnostics must not invalidate or rewrite a still-running receipt');
    f.foreign('pointerdown'); // Existing manual-interference guard, not diagnostic logic.
@@ -594,7 +801,8 @@ test('baseline drift: atomic worker/native first evidence survives later valid D
  const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),initial=fs.readFileSync(file),receipt=JSON.parse(initial).receipt,original=content.rows.slice();
  assert.equal((await f.provider.reconcile(context)).status,'running');assert.deepEqual(fs.readFileSync(file),initial);
  let renames=0;const rename=fs.renameSync;t.mock.method(fs,'renameSync',(from,to)=>{if(to===file)renames++;return rename(from,to);});
- content.transaction(original.slice(1),[userMutation(content,[],[original[0]],null,original[1])]);
+ // A tail deletion remains unsafe in 0.3.13; only head pruning is tolerated.
+ content.transaction([original[0],...original.slice(2)],[userMutation(content,[],[original[1]],original[0],original[2])]);
  await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});assert.equal(renames,1,'All three first diagnostics share one atomic native write');
  const saved=JSON.parse(fs.readFileSync(file)),d=saved.baselineDrift,key='generation-intent:'+job.id;
  assert.equal(d.kind,'BASELINE_ROW_REMOVED');assert(receiptV2.validBaselineDrift(d));assert.equal(saved.userAnchorChurn.kind,'BASELINE_CHANGED');assert.equal(saved.assistantOwnershipFailure.terminalReason,'BASELINE_CHANGED');
@@ -1756,7 +1964,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-13-contract3-receipt2-baselinewindow1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1834,8 +2042,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-12-contract3-receipt2-baselinediag1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-13-contract3-receipt2-baselinewindow1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-13-contract3-receipt2-baselinewindow1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1991,8 +2199,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-12-contract3-receipt2-baselinediag1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-12-contract3-receipt2-baselinediag1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-13-contract3-receipt2-baselinewindow1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-13-contract3-receipt2-baselinewindow1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -2024,7 +2232,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.12 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.13 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

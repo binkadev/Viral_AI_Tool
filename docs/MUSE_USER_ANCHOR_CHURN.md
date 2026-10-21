@@ -1,7 +1,8 @@
 # Post-anchor user identity churn — extension 0.3.11
 
-First shipped in 0.3.11. Current 0.3.12 retains this schema and behavior unchanged
-and adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md).
+First shipped in 0.3.11. Version 0.3.12 adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md).
+Current 0.3.13 retains unsafe identity diagnostics while excluding only
+[proven safe head pruning](MUSE_BASELINE_PREFIX_WINDOW.md) from baseline-change churn.
 
 Original 0.3.11 executing builds:
 
@@ -112,4 +113,4 @@ references/native IDs remain inside the extension's existing observation boundar
 All regressions use isolated DOM/worker/native fixtures. No real Muse execution,
 historical recovery/acquisition, staging or browser interaction is authorized by
 this change. A future E2E requires separate authorization after manual staging
-and read-only preflight of the complete current 0.3.12 bundle.
+and read-only preflight of the complete current 0.3.13 bundle.
