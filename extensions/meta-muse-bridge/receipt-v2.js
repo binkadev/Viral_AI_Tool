@@ -76,8 +76,8 @@
  const assistantPhases=Object.freeze(['precheck','sample_before_block','block_observed','sample_after_block','stabilization','precommit']);
  const assistantReasons=Object.freeze(['OPERATION_MISSING','OPERATION_INVALID','SCENE_MISMATCH','OBSERVATION_TOKEN_MISMATCH','CONTACT_STALE','OPERATION_EXPIRED','RECEIPT_MISMATCH',
    'OWNED_USER_MISSING','LOGICAL_USER_MISMATCH','USER_NATIVE_ID_MISMATCH','USER_HASH_MISMATCH','BLOCK_USER_INVALID','BLOCK_PARENT_MISMATCH','BLOCK_NONCONTIGUOUS','BLOCK_OUT_OF_BOUNDS','BLOCK_MULTIPLE_MEDIA_OWNERS',
-   'OBSERVER_INVALIDATED','IDENTITY_MUTATED','MANUAL_INTERFERENCE','STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE','BASELINE_CHANGED','OBSERVATION_LIMIT','UNKNOWN_BOUNDED']);
- const assistantObservations=['STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE'];
+   'OBSERVER_INVALIDATED','IDENTITY_MUTATED','MANUAL_INTERFERENCE','STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE','BASELINE_CHANGED','OBSERVATION_LIMIT','UNKNOWN_BOUNDED','PENDING_ROLE_SETTLING']);
+ const assistantObservations=['STABILIZATION_NOT_READY','STABILIZATION_RESET','PRECOMMIT_BLOCK_CHANGED','PRECOMMIT_GENERATION_ACTIVE','PENDING_ROLE_SETTLING'];
  const assistantBools=['generationActive','ownedUserPresent','assistantBlockWithinBound','sameSequenceParent','blockContiguous','blockSignatureChanged'];
  const assistantFrameKeys=['phase','elapsedBucket',...assistantBools,'logicalUserCount','blockRowCount','mediaCandidateCount','mutationCount','stabilizationSamples','stabilizationReset','terminal','terminalReason'];
  const assistantSequenceCounts=Object.freeze(['recognizedFreshRowCount','recognizedAssistantRowCount','directSequenceTailCount','directMessageItemTailCount',

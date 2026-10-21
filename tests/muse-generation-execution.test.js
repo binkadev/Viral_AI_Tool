@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.9',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.10',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -226,7 +226,7 @@ function contentFixture(options={}) {
    removeEventListener:(type,fn)=>documentEvents.get(type)?.delete(fn),
    createTreeWalker:()=>({nextNode:()=>null})};
  const window={};window.top=window;
- const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,performance:options.monotonicClock?{now:options.monotonicClock}:undefined,
+ const c={document,window,URL,fetch:options.fetch,AbortController,btoa,location:{origin:'https://muse.ai'},HTMLTextAreaElement:Textarea,Event:class{},NodeFilter:{SHOW_TEXT:4},crypto:options.crypto||require('node:crypto').webcrypto,TextEncoder,Date:options.clock?{now:options.clock}:Date,performance:options.monotonicClock?{now:options.monotonicClock}:undefined,
    setTimeout:(fn,ms)=>ms>=15000?setTimeout(fn,options.transferTimeout && ms===15000?20:ms).unref():setTimeout(()=>{if(options.disturb && events.input)events.input({isTrusted:true});if(options.mutating){rows=[node('user','changing-'+Math.random())];observerCallback?.();}if(clicks)options.onPostSendTick?.(api,++postSendTicks);fn();},ms===5000?100:1),clearTimeout,
    MutationObserver:class {constructor(fn){this.fn=records=>fn(records,this);}observe(){observerCallbacks.add(this.fn);}disconnect(){observerCallbacks.delete(this.fn);disconnected++;}},
    getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),chrome:{runtime:{id:'ext',getManifest:()=>options.manifest||({version:'0.3.0',...(options.production?{}:{version_name:'development-diagnostics'})}),onMessage:{addListener:f=>listeners.push(f)},connect:()=>({onDisconnect:{addListener(){}}})}}};
@@ -400,7 +400,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.9',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.10',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -678,6 +678,154 @@ for(const transition of ['composer root','editor','send removed','send replaced'
 }
 
 const userMutation=(f,addedNodes,removedNodes,previousSibling,nextSibling=null,target=f.messageParent)=>({type:'childList',target,addedNodes,removedNodes,previousSibling,nextSibling});
+function appendPendingRole(f) {
+ const shell=f.node(null,null),tail=f.rows.at(-1);
+ f.transaction([...f.rows,shell],[userMutation(f,[shell],[],tail)]);return shell;
+}
+function hydratePendingRole(f,shell,id='status') {
+ shell.role='assistant';shell.id=id;
+ f.mutate([{type:'attributes',target:shell,attributeName:'data-message-role',oldValue:null},
+   {type:'attributes',target:shell,attributeName:'data-message-id',oldValue:null}]);
+}
+for(const active of [false,true])test('pending missing-role shell stays running without anchor or durable failure, then hydrates through normal status/media stabilization: '+active,async()=>{
+ const f=contentFixture({noAssistant:true,active}),stored={},worker=workerV2Harness(stored,f);f.transaction(f.rows);
+ const prepared=await worker.run('prepareGeneration',inspectPayload),accepted=await worker.run('submitGeneration',{...operation,receipt:prepared.receipt}),receipt=JSON.parse(JSON.stringify(accepted.receipt));
+ const before=JSON.stringify(stored),shell=appendPendingRole(f);assert.equal(f.operationCount,1);assert.equal(f.assistantFailureCount,0);
+ for(let i=0;i<4;i++){
+   const r=await worker.run('inspectGeneration',{...inspectPayload,receipt});assert.equal(r.state,'running');assert.deepEqual(JSON.parse(JSON.stringify(r.receipt)),receipt);
+   assert.equal(r.assistantOwnershipFailure,undefined);assert.equal(r.receipt.assistantStableIdHash,undefined);assert.equal(f.operationCount,1);
+ }
+ assert.equal(JSON.stringify(stored),before,'No new receipt/diagnostic is persisted on settling polls');
+ const observation=f.assistantTrace.findLast(frame=>frame.terminalReason==='PENDING_ROLE_SETTLING');assert(observation);assert.equal(observation.terminal,false);
+ assert.equal(observation.firstMismatchCategory,'MISSING_ROLE');assert.equal(observation.pendingDirectMessageItemCount,1);assert.equal(observation.missingRoleDirectMessageCount,1);assert.equal(observation.stabilizationSamples,0);
+ hydratePendingRole(f,shell);
+ f.inject(f.node('assistant','owned-media',media()));
+ if(active){for(let i=0;i<3;i++)assert.equal((await worker.run('inspectGeneration',{...inspectPayload,receipt})).receipt.assistantStableIdHash,undefined);f.finish();}
+ const first=await worker.run('inspectGeneration',{...inspectPayload,receipt});assert.equal(first.state,'running');assert.equal(first.receipt.assistantStableIdHash,undefined);
+ const second=await worker.run('inspectGeneration',{...inspectPayload,receipt});assert.equal(second.state,'running');assert.equal(second.receipt.assistantStableIdHash,shaBytes('op\0assistant\0owned-media'));
+ assert.equal(second.receipt.result,undefined);assert.equal(stored['generation-intent:op'].assistantOwnershipFailure,undefined);
+ assert.equal(f.operationCount,0);assert.equal(f.clicks,1);assert(!worker.calls.includes('acquireGenerationResult'));
+});
+
+test('pending missing role resets an in-progress assistant stabilization and requires two new matching polls',async()=>{
+ const f=contentFixture({video:media()}),receipt=await acceptV2(f);f.transaction(f.rows);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);
+ assert(f.assistantTrace.some(frame=>frame.stabilizationSamples===1));
+ const shell=appendPendingRole(f);
+ for(let i=0;i<2;i++)assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);
+ assert.equal(f.assistantTrace.at(-1).stabilizationSamples,0);
+ hydratePendingRole(f,shell,'tail-status');
+ const first=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(first.receipt.assistantStableIdHash,undefined);
+ const second=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(second.receipt.assistantStableIdHash,shaBytes('op\0assistant\0new-assistant'));
+ assert.equal(f.clicks,1);assert.equal(f.assistantFailureCount,0);
+});
+
+for(const phase of ['user','assistant'])test('pending missing role appearing during async '+phase+' hashing prevents assistant commit',async()=>{
+ let armed=false,shell,f;
+ const webcrypto=require('node:crypto').webcrypto;
+ const crypto={subtle:{digest:async(algorithm,data)=>{
+   const result=await webcrypto.subtle.digest(algorithm,data);
+   if(armed && new TextDecoder().decode(data).includes('\0'+phase+'\0')){armed=false;shell=appendPendingRole(f);}
+   return result;
+ }}};
+ f=contentFixture({video:media(),crypto});f.transaction(f.rows);const receipt=await acceptV2(f);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);
+ armed=true;
+ const raced=await f.send('inspectGeneration',{...v2Payload,receipt});assert(shell);assert.equal(raced.state,'running');assert.equal(raced.receipt.assistantStableIdHash,undefined);
+ assert.equal(raced.assistantOwnershipFailure,undefined);assert.equal(f.operationCount,1);
+ hydratePendingRole(f,shell,'after-hash-status');
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,undefined);
+ assert.equal((await f.send('inspectGeneration',{...v2Payload,receipt})).receipt.assistantStableIdHash,shaBytes('op\0assistant\0new-assistant'));
+ assert.equal(f.clicks,1);
+});
+
+for(const failure of ['next user','parent change','baseline change','invalid shell ID','assigned shell ID','unsupported role','multiple media owners','manual input','user ID mutation','missing user in sequence','wrong position','short tail','extra direct item','two pending shells','shell with video','shell with nested message','overflow','scene mismatch','token mismatch','receipt mismatch','user hash mismatch'])test('pending missing-role tolerance remains fail-closed on '+failure,async()=>{
+ const f=contentFixture({noAssistant:failure!=='multiple media owners' && failure!=='wrong position' && failure!=='short tail',video:media()}),receipt=await acceptV2(f);
+ f.transaction(f.rows);const shell=appendPendingRole(f),p={...v2Payload,receipt};
+ if(failure==='next user')f.inject(f.node('user','unowned'));
+ if(failure==='parent change')f.rows.find(row=>row.id==='new-user').parentNode={};
+ if(failure==='baseline change'){f.rows[0].id='changed';f.mutate([{type:'attributes',target:f.rows[0],attributeName:'data-message-id',oldValue:'history-user'}]);}
+ if(failure==='invalid shell ID'){shell.id='invalid id';f.mutate([{type:'attributes',target:shell,attributeName:'data-message-id',oldValue:null}]);}
+ if(failure==='assigned shell ID'){shell.id='assigned-without-role';f.mutate([{type:'attributes',target:shell,attributeName:'data-message-id',oldValue:null}]);}
+ if(failure==='unsupported role'){shell.role='tool';f.mutate([{type:'attributes',target:shell,attributeName:'data-message-role',oldValue:null}]);}
+ if(failure==='multiple media owners'){
+   const owner=f.node('assistant','second-owner',media());f.transaction([...f.rows.slice(0,-1),owner,shell],[userMutation(f,[owner],[],f.rows.at(-2),shell)]);
+ }
+ if(failure==='manual input')f.foreign('input');
+ if(failure==='user ID mutation'){const user=f.rows.find(row=>row.id==='new-user');user.id='mutated';f.mutate([{type:'attributes',target:user,attributeName:'data-message-id',oldValue:'new-user'}]);}
+ if(failure==='missing user in sequence')f.messageParent.querySelectorAll=()=>f.rows.filter(row=>row.id!=='new-user');
+ if(failure==='wrong position')f.messageParent.querySelectorAll=()=>[...f.rows.slice(0,-2),shell,f.rows.at(-2)];
+ if(failure==='short tail')f.messageParent.querySelectorAll=()=>f.rows.slice(0,-2);
+ if(failure==='extra direct item'){const extra=f.node('assistant','unrecognized');f.messageParent.querySelectorAll=()=>[...f.rows.slice(0,-1),extra,shell];}
+ if(failure==='two pending shells')appendPendingRole(f);
+ if(failure==='shell with video'){shell.querySelectorAll=selector=>selector==='video'?[media()]:[];}
+ if(failure==='shell with nested message'){shell.querySelectorAll=selector=>selector==='[data-message-item]'?[f.node(null,null)]:[];}
+ if(failure==='overflow'){
+   const status=Array.from({length:8},(_,i)=>f.node('assistant','status-'+i));f.transaction([...f.rows.slice(0,-1),...status,shell]);
+ }
+ if(failure==='scene mismatch')p.sceneId='other';
+ if(failure==='token mismatch')p.observationToken='wrong-token';
+ if(failure==='receipt mismatch')p.receipt={...receipt,acceptance:{...receipt.acceptance,composerCleared:!receipt.acceptance.composerCleared}};
+ if(failure==='user hash mismatch'){
+   // The echoed receipt cannot change an established native anchor.
+   p.receipt={...receipt,userStableIdHash:'e'.repeat(64)};
+ }
+ const r=await f.send('inspectGeneration',p);assert.equal(r.state,'interrupted');assert.equal(r.receipt,undefined);assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+ assert(receiptV2.validAssistantFailure(JSON.parse(JSON.stringify(r.assistantOwnershipFailure))));
+ if(failure==='multiple media owners')assert.equal(r.assistantOwnershipFailure.terminalReason,'BLOCK_MULTIPLE_MEDIA_OWNERS');
+ if(failure==='two pending shells' || failure==='invalid shell ID' || failure==='assigned shell ID')assert.equal(r.assistantOwnershipFailure.terminalReason,'BLOCK_NONCONTIGUOUS');
+});
+
+for(const failure of ['contact stale','operation expired'])test('pending missing role remains bounded by existing '+failure,async()=>{
+ let now=1000;const f=contentFixture({noAssistant:true,clock:()=>now}),receipt=await acceptV2(f);f.transaction(f.rows);appendPendingRole(f);
+ if(failure==='contact stale')now+=10001;
+ else {for(let i=0;i<133;i++){now+=9000;const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'running');assert.equal(r.receipt.assistantStableIdHash,undefined);}now+=4001;}
+ const r=await f.send('inspectGeneration',{...v2Payload,receipt});assert.equal(r.state,'interrupted');assert.equal(r.assistantOwnershipFailure.terminalReason,failure==='contact stale'?'CONTACT_STALE':'OPERATION_EXPIRED');
+ assert.equal(f.operationCount,0);assert.equal(f.clicks,1);
+});
+
+test('pending role observation is nonterminal only; historical 0.3.9 MISSING_ROLE failure remains readable unchanged',()=>{
+ const {failure}=require('./fixtures/muse-assistant-failure'),d=failure('BLOCK_NONCONTIGUOUS');d.build='muse-content-v0-3-9-contract3-receipt2-assistdiag2';
+ Object.assign(d.frames[0],receiptV2.emptyAssistantSequence(),{firstMismatchCategory:'MISSING_ROLE',missingRoleDirectMessageCount:1,pendingDirectMessageItemCount:1});
+ const before=JSON.stringify(d);assert(receiptV2.validAssistantFailure(d));assert.equal(JSON.stringify(d),before);
+ const bad=structuredClone(d);bad.terminalReason='PENDING_ROLE_SETTLING';bad.frames[0].terminalReason='PENDING_ROLE_SETTLING';assert(!receiptV2.validAssistantFailure(bad));
+ const observed={...bad.frames[0],terminal:false};assert(receiptV2.validAssistantFrame(observed));assert(!receiptV2.valid(observed,'op'));
+});
+
+test('pending role hydration native pipeline persists the assistant before restart-safe exact-owned acquisition',async t=>{
+ const bytes=Buffer.concat([Buffer.from([0,0,0,20]),Buffer.from('ftyp'),Buffer.alloc(210000,4)]),source='blob:https://muse.ai/owned-hydration-fixture';
+ const content=contentFixture({noAssistant:true}),stored={};content.transaction(content.rows);
+ let worker=workerV2Harness(stored,content),native,acquired=false,verified=0;
+ const f=fixture(t,{verifyVideo:async file=>{assert.deepEqual(fs.readFileSync(file),bytes);verified++;},command:async(type,p)=>{
+   if(type==='acquireGenerationResult'){
+     const disk=JSON.parse(fs.readFileSync(path.join(native.root,'outputs',p.operationId,'muse-operation.json')));
+     assert.equal(disk.receipt.assistantStableIdHash,shaBytes(p.operationId+'\0assistant\0owned-media'));assert(disk.receipt.result);
+     assert.equal(disk.assistantOwnershipFailure,undefined);acquired=true;
+   }
+   return JSON.parse(JSON.stringify(await worker.run(type,p)));
+ }});native=f;f.bridge.receiptV2Ready=async()=>true;
+ const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
+ clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
+ const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=fs.readFileSync(file),shell=appendPendingRole(content);
+ for(let i=0;i<3;i++)assert.equal((await f.provider.reconcile(context)).status,'running');
+ assert.deepEqual(fs.readFileSync(file),before);assert.equal(acquired,false);assert.equal(f.service.get(job.id).asset,null);
+ hydratePendingRole(content,shell);
+ content.inject(content.node('assistant','owned-media',media()));
+ await f.provider.reconcile(context);assert.equal(JSON.parse(fs.readFileSync(file)).receipt.assistantStableIdHash,undefined);
+ await f.provider.reconcile(context);const anchored=JSON.parse(fs.readFileSync(file));
+ assert.equal(anchored.receipt.assistantStableIdHash,shaBytes(job.id+'\0assistant\0owned-media'));assert.equal(anchored.receipt.result,undefined);
+ assert.equal(anchored.assistantOwnershipFailure,undefined);assert.equal(acquired,false);
+ const v={...media(),currentSrc:source};let fetchCount=0;
+ const next=contentFixture({historicalVideos:[media()],fetch:async url=>{assert.equal(url,source);fetchCount++;return new Response(bytes,{headers:{'content-type':'video/mp4'}});}});
+ next.replace([next.node('assistant','unrelated-old',media()),next.node('assistant','owned-media',v),next.node('assistant','unrelated-newest',media())]);
+ worker=workerV2Harness(stored,next);
+ const done=await f.service.recover(job.id);assert.equal(done.status,'completed');assert(done.asset);assert(acquired);assert(verified>0);assert.equal(fetchCount,1);
+ assert.deepEqual(fs.readFileSync(path.join(context.outputDirectory,job.id+'.mp4')),bytes);
+ assert.equal(done.projectId,job.projectId);assert.equal(done.sceneId,job.sceneId);
+ assert.equal(f.calls.filter(c=>c.type==='submitGeneration').length,1);assert.equal(content.clicks,1);assert.equal(next.clicks,0);
+ assert(!worker.calls.includes('submitGeneration'));assert(!worker.calls.includes('prepareGeneration'));
+});
+
 for(const scenario of ['missing role','unsupported role','extra valid item','tail length','wrong position','missing user','pending ID','invalid ID','normal'])test('Gate-D sequence evidence V2 classifies bounded direct structural mismatch: '+scenario,()=>{
  const f=contentFixture(),user=f.node('user','fixture-user-private'),a=f.node('assistant','fixture-status-private'),b=f.node('assistant','fixture-media-private');
  const rows=[{node:a},{node:b}];let sequence=[user,a,b],index=0,contiguous=false;
@@ -802,12 +950,12 @@ test('Gate-D sequence V2 terminal detail survives worker/native persistence and 
  const submitted=await f.service.submit(request()),job=await until(f.service,submitted.id,'running');
  clearTimeout(f.service.monitors.get(job.id));f.service.monitors.clear();
  const context=f.service.context(job),file=path.join(context.outputDirectory,'muse-operation.json'),before=JSON.parse(fs.readFileSync(file)),user=content.rows.at(-1);
- const shell=content.node(null,null),originalRows=content.rows.slice();
+ const shell=content.node(null,'assigned-without-role'),originalRows=content.rows.slice();
  content.transaction([...originalRows,shell],[userMutation(content,[shell],[],user)]);
  await assert.rejects(f.provider.reconcile(context),{code:'RECOVERY_REQUIRED'});
  const saved=JSON.parse(fs.readFileSync(file)),failure=saved.assistantOwnershipFailure,last=failure.frames.at(-1);
  assert.equal(failure.terminalReason,'BLOCK_NONCONTIGUOUS');assert.equal(last.firstMismatchCategory,'MISSING_ROLE');
- assert.equal(last.pendingDirectMessageItemCount,1);assert.equal(last.missingRoleDirectMessageCount,1);
+ assert.equal(last.pendingDirectMessageItemCount,0);assert.equal(last.missingRoleDirectMessageCount,1);
  assert.equal(last.recognizedAssistantRowCount,0);assert.equal(last.directMessageItemTailCount,1);assert.equal(last.sequenceTailLength,1);
  assert.deepEqual(saved.receipt,before.receipt);assert.equal(saved.receipt.assistantStableIdHash,undefined);
  assert.deepEqual(stored['generation-intent:'+job.id].assistantOwnershipFailure,failure);
@@ -1271,7 +1419,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -1349,8 +1497,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-9-contract3-receipt2-assistdiag2');
- assert.equal(d.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-10-contract3-receipt2-assistsettle1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1506,8 +1654,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-9-contract3-receipt2-assistdiag2');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-10-contract3-receipt2-assistsettle1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1539,7 +1687,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.9 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.10 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

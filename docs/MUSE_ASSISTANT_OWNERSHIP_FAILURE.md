@@ -2,11 +2,13 @@
 
 Extension 0.3.8 adds Gate-D diagnostics only. Protocol 1, execution contract 3,
 Receipt V2 (2), response-block authority, stabilization, exact-once submission,
-result discovery and acquisition requirements are unchanged. Current extension
-0.3.9 refines sequence failure evidence only. Executing markers:
+result discovery and acquisition requirements are unchanged. Version 0.3.9
+refined sequence failure evidence only. Current 0.3.10 adds the narrow pending
+missing-role wait described in [pending role settling](MUSE_PENDING_ROLE_SETTLING.md).
+Executing markers:
 
-- `muse-worker-v0-3-9-contract3-receipt2-assistdiag2`
-- `muse-content-v0-3-9-contract3-receipt2-assistdiag2`
+- `muse-worker-v0-3-10-contract3-receipt2-assistsettle1`
+- `muse-content-v0-3-10-contract3-receipt2-assistsettle1`
 
 ## Scope and timing
 
@@ -30,7 +32,7 @@ credentials, tokens or browser storage values are recorded.
 
 ### Sequence evidence refinement in 0.3.9
 
-The observer/inspect calls `responseBlock()`, which obtains recognized fresh
+In 0.3.9 the observer/inspect calls `responseBlock()`, which obtains recognized fresh
 rows from `afterBaseline(op, true)`. The direct sequence is still the existing
 `[data-message-item]` query filtered to children of the owned user's parent.
 The original predicate is unchanged: the user must exist in that sequence,
@@ -177,3 +179,12 @@ The later user-provided current census showed two assistant rows and one media
 candidate. It does not preserve causal continuity or repeat every historical
 Gate-D check. Neither diagnostic proves that a particular shell hydrated, and
 the operation is not retrospectively repaired or annotated with new fields.
+
+## Future executions in 0.3.10
+
+The diagnostic fields above remain intact. `PENDING_ROLE_SETTLING` is a new
+nonterminal observation only, never a historical terminal failure. The strict
+eligibility check reads actual structural nodes, not these diagnostic counters.
+Only the proven pending missing-role state gains a bounded wait. Other structural
+gaps still fail closed. Prior 0.3.8/0.3.9 terminal records keep their original
+meaning; no record is migrated, rewritten or retrospectively treated as running.

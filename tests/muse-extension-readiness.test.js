@@ -20,7 +20,7 @@ async function fixture(t,options={}) {
   });
  }
  const register=async(instanceId='profile-one',extra={})=>{
-  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.9',protocolVersion:1},...extra});
+  const r=await request('/v1/register',{method:'POST',body:{instanceId,profileLabel:'Work',browserName:'Chrome',extensionVersion:'0.3.10',protocolVersion:1},...extra});
   assert.equal(r.status,200);return r.value.token;
  };
  const beat=(token,tabs=[],id='profile-one',extra={})=>request('/v1/heartbeat?instanceId='+id,{method:'POST',token,body:{profileLabel:'Work',browserName:'Chrome',tabs},...extra});
@@ -50,7 +50,7 @@ test('executing worker reports its own build and each receiver handshake build s
  f.context.chrome.tabs.query=async()=>[{id:1},{id:2}];
  f.context.chrome.tabs.sendMessage=async(id,m)=>m.type==='viral-ai:muse-handshake'?{contractVersion:3,...(id===2?{buildMarker:'muse-content-20261019-receivers-1'}:{})}:{sampledAt:Date.now(),composerReady:true,executionContract:3,devEvidence:{generationActive:id===2}};
  const tabs=await f.tabs();
- assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-9-contract3-receipt2-assistdiag2');
+ assert.equal(tabs[0].devConnection.workerBuild,'muse-worker-v0-3-10-contract3-receipt2-assistsettle1');
  assert.equal(tabs[0].devConnection.contentBuild,'unreported');
  assert.equal(tabs[1].devConnection.contentBuild,'muse-content-20261019-receivers-1');
  assert.equal(tabs[0].devConnection.generationActive,false);assert.equal(tabs[1].devConnection.generationActive,true);
@@ -247,7 +247,7 @@ test('popup strings derive from VI/EN product i18n and all runtime imports resol
 
 test('extension setup copies only app-managed source files without creating browser profiles',async t=>{
  const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge')});
- await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.9');
+ await f.bridge.revealExtension();assert.equal(JSON.parse(fs.readFileSync(path.join(f.bridge.installDir,'manifest.json'))).version,'0.3.10');
  assert(!fs.existsSync(path.join(f.root,'browser-sessions')));assert(!fs.existsSync(path.join(f.root,'meta-muse-profile')));
 });
 
@@ -374,7 +374,7 @@ for(const scenario of ['disabled','missing','old worker','old content','stale','
    const report=await service.providerRuntimeDiagnosis('muse');
    assert.equal(report.readyForControlledE2E,scenario==='current');
    assert.equal(report.mismatches.length===0,scenario==='current');
-   assert.equal(report.expected.extensionVersion,'0.3.9');
+   assert.equal(report.expected.extensionVersion,'0.3.10');
    if(scenario==='current')assert.equal(report.runtime.generationActive,false);
    for(const secret of ['profile-one','token','tabId','instanceId','http:','https:','port','prompt',f.root])assert(!JSON.stringify(report).includes(secret));
  }
@@ -460,7 +460,7 @@ test('distribution compatibility, missing evidence and legacy 0.2.0 session pres
  const token=await f.register();await f.beat(token,[tab()]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_connected');assert.equal(f.bridge.snapshot().state,'authenticated');
  f.advance();assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
- for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_outdated'],['0.3.1',1,'extension_outdated'],['0.3.2',1,'extension_outdated'],['0.3.3',1,'extension_outdated'],['0.3.4',1,'extension_outdated'],['0.3.5',1,'extension_outdated'],['0.3.6',1,'extension_outdated'],['0.3.7',1,'extension_outdated'],['0.3.8',1,'extension_outdated'],['0.3.9',1,'extension_connected']]) {
+ for(const [extensionVersion,protocolVersion,expected] of [['0.1.0',undefined,'extension_outdated'],['0.1.0',1,'extension_outdated'],['0.3.0',2,'extension_error'],['0.3.0',0,'extension_error'],['0.2.0',undefined,'extension_outdated'],['0.2.0',1,'extension_outdated'],['0.3.0',undefined,'extension_error'],['0.3.0',1,'extension_outdated'],['0.3.1',1,'extension_outdated'],['0.3.2',1,'extension_outdated'],['0.3.3',1,'extension_outdated'],['0.3.4',1,'extension_outdated'],['0.3.5',1,'extension_outdated'],['0.3.6',1,'extension_outdated'],['0.3.7',1,'extension_outdated'],['0.3.8',1,'extension_outdated'],['0.3.9',1,'extension_outdated'],['0.3.10',1,'extension_connected']]) {
   const r=await f.request('/v1/register',{method:'POST',body:{instanceId:'version-test',profileLabel:'',browserName:'Chrome',extensionVersion,protocolVersion}});
   assert.equal(r.status,200);await f.beat(r.value.token,[tab()],'version-test');
   assert.equal(f.bridge.snapshot().extensionState,expected);
@@ -493,7 +493,7 @@ test('store configuration opens only a validated official store page and coalesc
 
 test('manual support action reveals only the managed manifest and never reports installed',async t=>{
  const shown=[];const f=await fixture(t,{extensionSourceDir:path.resolve('extensions/meta-muse-bridge'),shell:{showItemInFolder:file=>shown.push(file)}});
- assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true,extensionVersion:'0.3.9',bundleVerified:true});
+ assert.deepEqual(await f.bridge.revealExtension(),{id:'muse',folderRevealed:true,extensionVersion:'0.3.10',bundleVerified:true});
  assert.deepEqual(shown,[path.join(f.root,'meta-muse-extension','manifest.json')]);
  assert.equal(f.bridge.snapshot().extensionState,'extension_install_required');
 });

@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-9-contract3-receipt2-assistdiag2';
+const CONTENT_BUILD='muse-content-v0-3-10-contract3-receipt2-assistsettle1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -163,8 +163,8 @@ const directVideos=row=>{
   for(const video of row.node.querySelectorAll('video'))if(video.closest(MESSAGE)===row.node){if(videos.length===16)throw Error('OBSERVATION_LIMIT');videos.push(video);}
   return videos;
 };
-// Diagnostic projection only. The original sequence predicate below remains the
-// sole authority. At most 256 tail nodes are sampled; 257 is an overflow sentinel.
+// Diagnostic projection only; counts/categories never grant settling or ownership.
+// At most 256 tail nodes are sampled; 257 is an overflow sentinel.
 function gateDSequenceEvidence(rows,sequence,index,contiguous) {
   const result={...MuseReceiptV2.emptyAssistantSequence(),recognizedFreshRowCount:Math.min(257,rows.length+1),
     recognizedAssistantRowCount:Math.min(257,rows.length),expectedSequenceLength:Math.min(257,rows.length),userSequenceIndexValid:index>=0};
@@ -210,12 +210,31 @@ function responseBlock(op) {
   const sequence=[...user.node.parentNode.querySelectorAll(MESSAGE)].filter(node=>node.parentNode===user.node.parentNode),index=sequence.indexOf(user.node);
   const contiguous=!(index<0 || sequence.length-index-1!==rows.length || rows.some((r,i)=>sequence[index+i+1]!==r.node));
   gateDFrame(op,'sample_before_block',{blockContiguous:contiguous,...gateDSequenceEvidence(rows,sequence,index,contiguous)});
-  if(!contiguous)throw gateDError('AMBIGUOUS_OPERATION','BLOCK_NONCONTIGUOUS');
+  let settling=false;
+  if(!contiguous) {
+    // Only the proven trailing shell with BOTH role and ID unassigned may
+    // settle. Diagnostic counts/categories never grant execution authority.
+    const shell=sequence.at(-1),empty=value=>value===null || value==='';
+    settling=index>=0 && sequence.length-index-1===rows.length+1 && rows.length+1<=MAX_OWNED_ASSISTANT_ROWS &&
+      rows.every((row,i)=>sequence[index+i+1]===row.node) && !!shell && shell.parentNode===user.node.parentNode && container.contains(shell) &&
+      empty(shell.getAttribute('data-message-role')) && empty(shell.getAttribute('data-message-id')) &&
+      shell.querySelectorAll(MESSAGE).length===0 && shell.querySelectorAll('video').length===0 &&
+      !op.invalid && !op.manualInterferenceObserved && op.logicalFreshUserTurnCount===1 && op.userTurn?.currentNativeId===op.submittedUserId &&
+      MuseReceiptV2.valid(op.receipt,op.receipt?.operationId) && !!op.receipt.userStableIdHash && !op.receipt.assistantStableIdHash &&
+      Date.now()-op.lastContact<=10000 && Date.now()-op.createdAt<=20*60*1000;
+    if(!settling)throw gateDError('AMBIGUOUS_OPERATION','BLOCK_NONCONTIGUOUS');
+  }
   const counts=rows.map(r=>directVideos(r).length);
   if(counts.some(n=>n>16))throw Error('OBSERVATION_LIMIT');
   const mediaRows=rows.filter((r,i)=>counts[i]>0);
   gateDFrame(op,'block_observed',{mediaCandidateCount:Math.min(9,mediaRows.length),generationActive:generationActive()});
   if(mediaRows.length>1 || mediaRows.some(r=>directVideos(r).length!==1))throw gateDError('AMBIGUOUS_OPERATION','BLOCK_MULTIPLE_MEDIA_OWNERS');
+  op.pendingRoleSettling=settling;
+  if(settling) {
+    gateDFrame(op,'stabilization',{stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'PENDING_ROLE_SETTLING');
+    op.mediaStabilization=null;
+    return {user,rows,mediaRows,settling:true};
+  }
   return {user,rows,mediaRows,signature:JSON.stringify(rows.map((r,i)=>[r.id,counts[i]]))};
 }
 function sameBlock(sample,block) {
@@ -648,7 +667,7 @@ async function prepareV2(p) {
         // transient video/row replacement restored before the next poll.
         if(mutations.length){gateDFrame(op,'stabilization',{stabilizationReset:!!op.mediaStabilization,stabilizationSamples:0},'STABILIZATION_RESET');op.mediaStabilization=null;}
         const block=responseBlock(op);
-        if(op.mediaStabilization && !sameBlock(op.mediaStabilization,block)){gateDFrame(op,'stabilization',{blockSignatureChanged:true,stabilizationReset:true,stabilizationSamples:0},'STABILIZATION_RESET');op.mediaStabilization=null;}
+        if(!block.settling && op.mediaStabilization && !sameBlock(op.mediaStabilization,block)){gateDFrame(op,'stabilization',{blockSignatureChanged:true,stabilizationReset:true,stabilizationSamples:0},'STABILIZATION_RESET');op.mediaStabilization=null;}
         gateDFrame(op,'sample_after_block',{logicalUserCount:Math.min(128,op.logicalFreshUserTurnCount),stabilizationSamples:op.mediaStabilization?.samples||0});
       }
       if(op.newUsers.size>MAX_MESSAGES || op.newAssistants.size>MAX_MESSAGES)throw Error('OBSERVATION_LIMIT');
@@ -692,6 +711,10 @@ async function inspectV2(p) {
     op.sample();
     if(op.invalid)return gateDInterrupted(p,op,'OBSERVER_INVALIDATED',phase);
     phase='stabilization';
+    if(block.settling || op.pendingRoleSettling) {
+      gateDFrame(op,phase,{stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'PENDING_ROLE_SETTLING');
+      op.mediaStabilization=null;return answer(p,'running',{receipt});
+    }
     if(generationActive() || block.mediaRows.length!==1 || !nativeId(block.mediaRows[0].id)) {
       gateDFrame(op,phase,{generationActive:generationActive(),stabilizationSamples:0,stabilizationReset:!!op.mediaStabilization},'STABILIZATION_NOT_READY');
       op.mediaStabilization=null;return answer(p,'running',{receipt});

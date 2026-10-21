@@ -25,6 +25,12 @@ baseline changes, another user or overflow interrupt. The observer's historical
 assistant-ID Set is diagnostic history only, capped at 128; it never selects an
 owner or turns two assistant rows into ambiguity by itself.
 
+For future executions in 0.3.10, exactly one trailing direct shell with both role
+and ID unassigned may remain not-ready under the strict
+[pending-role settling checks](MUSE_PENDING_ROLE_SETTLING.md). It grants no block,
+assistant or media authority and resets stabilization. All recognized row/parent,
+container and ownership requirements above remain necessary before anchoring.
+
 Within this block, a direct video satisfies `video.closest(MESSAGE) === row`.
 Zero video-owning rows remains running. Multiple media rows, or multiple direct
 videos in one candidate row, fail closed. Page-global videos, nested foreign
