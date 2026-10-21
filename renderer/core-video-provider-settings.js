@@ -10,7 +10,7 @@
     const c=copy().runtimeDiagnostic;
     return '<details data-video-provider-ownership-support'+(ownershipOpen?' open':'')+'><summary>'+esc(c.ownershipTitle)+'</summary><label>'+esc(c.traceJob)+'<input data-video-provider-ownership-id value="'+esc(ownershipJob)+'" autocomplete="off" spellcheck="false"'+(ownershipPending?' disabled':'')+'></label>'+
       '<p>'+esc(c.ownershipHint)+'</p><button type="button" class="button ghost" data-video-provider-ownership-read'+(pending||diagnosticPending||tracePending||ownershipPending?' disabled':'')+'>'+esc(c.ownershipRead)+'</button>'+
-      '<p role="status">'+esc(ownershipPending?c.checking:ownershipMessage?c[ownershipMessage]:'')+'</p>'+
+      '<p role="status">'+esc(ownershipPending?c.checking:ownershipReport?.ok===false?(c.ownershipReasons[ownershipReport.reason]||c.ownershipUnavailable):ownershipMessage?c[ownershipMessage]:'')+'</p>'+
       (ownershipReport?'<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(ownershipReport,null,2))+'</pre><button type="button" class="button ghost" data-video-provider-ownership-copy'+(ownershipPending?' disabled':'')+'>'+esc(c.traceCopy)+'</button>':'')+'</details>';
   }
   function traceContent() {
@@ -138,7 +138,7 @@
     if(!/^[a-zA-Z0-9_-]{1,100}$/.test(ownershipJob)){ownershipMessage='ownershipUnavailable';paint('ownership-read');return;}
     ownershipPending=true;paint();
     try {const result=await window.desktopAPI.diagnoseMuseOwnership(ownershipJob);if(!result?.ok)throw 0;ownershipReport=result.value;}
-    catch {ownershipMessage='ownershipUnavailable';}
+    catch {ownershipReport={ok:false,reason:'UNAVAILABLE'};ownershipMessage='ownershipUnavailable';}
     finally {ownershipPending=false;paint('ownership-read');}
   }
   async function copyOwnership() {

@@ -67,6 +67,11 @@
      ['blob','https','other','none'].includes(v.sourceKind) && Number.isInteger(v.sourceChildCount) && v.sourceChildCount>=0 && v.sourceChildCount<=8 &&
      Number.isInteger(v.readyState) && v.readyState>=0 && v.readyState<=4 && Number.isInteger(v.networkState) && v.networkState>=0 && v.networkState<=3);
  }
- const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,MAX_BYTES,CHUNK_BYTES});
+ const ownershipFailureReasons=Object.freeze(['JOB_NOT_FOUND','JOB_STATE_UNSUPPORTED','OPERATION_RECORD_UNAVAILABLE','RECEIPT_UNAVAILABLE','USER_ANCHOR_MISSING','ASSISTANT_ALREADY_ANCHORED','TARGET_INSTANCE_UNAVAILABLE','TARGET_TAB_UNAVAILABLE','WORKER_INTENT_UNAVAILABLE','WORKER_RECEIPT_MISMATCH','CONTENT_RECEIVER_UNAVAILABLE','CONTENT_DIAGNOSIS_REJECTED','DIAGNOSTIC_RESULT_INVALID','RUNTIME_BUILD_MISMATCH','UNAVAILABLE','UNKNOWN']);
+ function validOwnershipFailure(d) {
+   return exact(d,['reason','tabMatch','workerIntentPresent','workerUserAnchor','workerAssistantAnchor']) && ownershipFailureReasons.includes(d.reason) &&
+     ['tabMatch','workerIntentPresent','workerUserAnchor','workerAssistantAnchor'].every(k=>[true,false,null].includes(d[k]));
+ }
+ const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,MAX_BYTES,CHUNK_BYTES});
  if(typeof module==='object' && module.exports)module.exports=api;else root.MuseReceiptV2=api;
 })(globalThis);

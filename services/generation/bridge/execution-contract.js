@@ -15,7 +15,8 @@ function validReceipt(r,operationId) {
   return exact(a,['composerCleared','sendControlTransition','generationControlObserved']) && a.composerCleared===true && typeof a.sendControlTransition==='boolean' && typeof a.generationControlObserved==='boolean' && (a.sendControlTransition || a.generationControlObserved);
 }
 function validPayload(type, p) {
-  if (!COMMANDS.has(type) || !exact(p, ["tabId", "operationId", "sceneId", "prompt", "offset", "diagnoseOwnership", "receipt", "transferId", "sequence", "mediaKind", "abort", "diagnoseAcquisition"]) || !Number.isSafeInteger(p.tabId) || p.tabId < 1 || !id(p.operationId) || !id(p.sceneId)) return false;
+  if (!COMMANDS.has(type) || !exact(p, ["tabId", "operationId", "sceneId", "prompt", "offset", "diagnoseOwnership", "ownedUserHash", "receipt", "transferId", "sequence", "mediaKind", "abort", "diagnoseAcquisition"]) || !Number.isSafeInteger(p.tabId) || p.tabId < 1 || !id(p.operationId) || !id(p.sceneId)) return false;
+  if(p.ownedUserHash!==undefined && (p.diagnoseOwnership!==true || !hash(p.ownedUserHash)))return false;
   if(p.diagnoseAcquisition!==undefined)return receiptV2.capabilityRequest(type,p);
   if(p.receipt!==undefined && (!['submitGeneration','inspectGeneration','acquireGenerationResult'].includes(type) || p.diagnoseOwnership!==undefined || !receiptV2.valid(p.receipt,p.operationId)))return false;
   if(type==='acquireGenerationResult' && p.receipt)return p.prompt===undefined && receiptV2.transferRequest(p);
@@ -29,7 +30,8 @@ function validPayload(type, p) {
   return type === "acquireGenerationResult" ? Number.isSafeInteger(p.offset) && p.offset >= 0 && p.offset <= 268435456 : p.offset === undefined;
 }
 function validResult(type, r, p) {
-  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
+  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "ownershipFailure", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
+  if(r.ownershipFailure!==undefined)return type==='inspectGeneration' && p.diagnoseOwnership===true && r.state==='interrupted' && exact(r,['operationId','sceneId','state','ownershipFailure']) && receiptV2.validOwnershipFailure(r.ownershipFailure);
   if(r.acceptanceTrace!==undefined && (type!=='submitGeneration' || p.receipt?.version!==2 || p.receipt.userStableIdHash!==undefined || r.state!=='interrupted' || r.receipt!==undefined || r.invocation?.send!=='invoked' || !receiptV2.validAcceptanceTrace(r.acceptanceTrace)))return false;
   if(r.acceptanceDiagnostic!==undefined && (type!=='submitGeneration' || p.receipt?.version!==2 || r.state!=='interrupted' || r.invocation?.send!=='invoked' || !receiptV2.validAcceptanceDiagnostic(r.acceptanceDiagnostic)))return false;
   if(r.acquisitionDiagnostic!==undefined || p.diagnoseAcquisition!==undefined)return receiptV2.capabilityRequest(type,p) && r.state==='interrupted' && exact(r,['operationId','sceneId','state','acquisitionDiagnostic']) && receiptV2.capabilityReport(r.acquisitionDiagnostic);

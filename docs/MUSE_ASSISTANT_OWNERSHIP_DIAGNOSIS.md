@@ -5,6 +5,40 @@ connection check exposes **Response ownership diagnosis**. Enter one existing
 request ID, read the report, then copy its JSON. This is separate from a job's
 Check/continue action and from the acceptance trace export.
 
+## Runtime identity and failure reports
+
+The ownership-diagnosis runtime is extension **0.3.4**, worker
+`muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1`, and content
+`muse-content-v0-3-4-contract3-receipt2-acceptance3`. Protocol 1, execution
+contract 3 and Receipt V2 are unchanged. All nine managed files must match the
+source bundle. Version 0.3.3 is outdated, including the intermediate worker
+that added V2 diagnosis without changing its marker. Restage through the normal
+support action, reload the extension, and refresh the existing Muse tab before
+using the updated diagnostic. Never retarget an old operation to a new tab.
+
+Failure now returns copyable JSON with `ok: false`, a bounded `reason` and
+`layer`, plus `instanceMatch`, `tabMatch`, `nativeUserAnchor`,
+`nativeAssistantAnchor`, `workerIntentPresent`, `workerUserAnchor` and
+`workerAssistantAnchor`. These are booleans, or null when the gate was not
+reached; null is not evidence of absence. Errors and stacks are never copied.
+Both locales explain each reason in the development support view.
+
+Gate order is native record/receipt validation, recorded instance, recorded
+tab, exact runtime/staged build, worker durable intent, worker receipt, content
+receiver, content diagnostic, native result validation. The native user hash is
+passed internally and must equal the worker's stored user hash. A native user
+anchor with a missing/different worker anchor returns
+`WORKER_RECEIPT_MISMATCH`; it never repairs either receipt. A failed earlier gate
+leaves worker fields unknown instead of bypassing the gate to read storage.
+
+Allowed reasons: `JOB_NOT_FOUND`, `JOB_STATE_UNSUPPORTED`,
+`OPERATION_RECORD_UNAVAILABLE`, `RECEIPT_UNAVAILABLE`, `USER_ANCHOR_MISSING`,
+`ASSISTANT_ALREADY_ANCHORED`, `TARGET_INSTANCE_UNAVAILABLE`,
+`TARGET_TAB_UNAVAILABLE`, `WORKER_INTENT_UNAVAILABLE`,
+`WORKER_RECEIPT_MISMATCH`, `CONTENT_RECEIVER_UNAVAILABLE`,
+`CONTENT_DIAGNOSIS_REJECTED`, `DIAGNOSTIC_RESULT_INVALID`,
+`RUNTIME_BUILD_MISMATCH`, `UNAVAILABLE`, `UNKNOWN`.
+
 `desktopAPI.diagnoseMuseOwnership(jobId)` uses a fixed trusted IPC channel,
 GenerationService, the Muse provider, and the existing execution record reader.
 It permits only running/interrupted Muse jobs with a valid durable Receipt V2,

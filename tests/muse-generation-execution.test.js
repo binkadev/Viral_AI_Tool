@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.3',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.4',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -394,7 +394,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.3',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.4',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -759,7 +759,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-3-contract3-receipt2-acceptance3');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -837,8 +837,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-3-contract3-receipt2-acceptance3');
- assert.equal(d.workerBuild,'muse-worker-v0-3-3-contract3-receipt2-acceptance3');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-4-contract3-receipt2-acceptance3');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-4-contract3-receipt2-ownershipdiag1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -981,7 +981,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}},before=JSON.stringify(stored);
  for(let i=0;i<2;i++){
    const worker=workerV2Harness(stored,content);
-   const result=await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true});
+   const result=await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash});
    assert.equal(result.ownershipDiagnostic.ownedUserMatches,1);assert.equal(result.ownershipDiagnostic.rows[0].ownedUser,true);
    assert.equal(result.ownershipDiagnostic.rows[1].videoCount,1);assert.equal(result.receipt,undefined);
    assert.equal(JSON.stringify(stored),before);assert.deepEqual(worker.calls,['inspectGeneration']);
@@ -994,12 +994,30 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
    if(scenario==='assistant anchored')copy['generation-intent:op'].receipt.assistantStableIdHash='d'.repeat(64);
    if(scenario==='wrong scene')copy['generation-intent:op'].sceneId='other';
    const snapshot=JSON.stringify(copy),worker=workerV2Harness(copy,content,scenario==='production');
-   await assert.rejects(worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true}));
+   if(scenario==='production')await assert.rejects(worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash}));
+   else assert.equal((await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash})).ownershipFailure.reason,'WORKER_RECEIPT_MISMATCH');
    assert.equal(JSON.stringify(copy),snapshot);assert.deepEqual(worker.calls,[]);
  }
  const badWorker=workerV2Harness(stored,{send:async()=>({operationId:'op',sceneId:'scene',state:'running',receipt})});
- await assert.rejects(badWorker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true}),/INVALID_DIAGNOSIS/);
+ assert.equal((await badWorker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash})).ownershipFailure.reason,'CONTENT_DIAGNOSIS_REJECTED');
  assert.equal(JSON.stringify(stored),before);
+});
+
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.4 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+ const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
+ const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
+ if(scenario==='intent absent')delete stored['generation-intent:op'];
+ if(scenario==='user absent'){delete receipt.userStableIdHash;delete receipt.acceptance;}
+ if(scenario==='hash mismatch')receipt.userStableIdHash='d'.repeat(64);
+ const content={send:async()=>{if(scenario==='receiver absent')throw Error('private receiver error');return {operationId:'op',sceneId:'scene',state:'interrupted'};}};
+ const before=JSON.stringify(stored),worker=workerV2Harness(stored,content);
+ if(scenario==='tab absent')worker.context.chrome.tabs.query=async()=>[{id:99}];
+ const p={...inspectPayload,diagnoseOwnership:true,ownedUserHash:'c'.repeat(64)};
+ const result=await worker.run('inspectGeneration',p),failure=result.ownershipFailure;
+ assert.equal(failure.reason,{'intent absent':'WORKER_INTENT_UNAVAILABLE','user absent':'WORKER_RECEIPT_MISMATCH','hash mismatch':'WORKER_RECEIPT_MISMATCH','receiver absent':'CONTENT_RECEIVER_UNAVAILABLE','diagnostic rejected':'CONTENT_DIAGNOSIS_REJECTED','tab absent':'TARGET_TAB_UNAVAILABLE'}[scenario]);
+ assert(validResult('inspectGeneration',JSON.parse(JSON.stringify(result)),p));assert.equal(JSON.stringify(stored),before);
+ if(scenario==='user absent')assert.equal(failure.workerUserAnchor,false);
+ assert(worker.calls.every(type=>type==='inspectGeneration'));assert(!JSON.stringify(result).includes('private'));
 });
 
 test('v2 actual worker/content persist each stage, refuse replay, and restore an anchored receipt after both restart',async()=>{
@@ -1143,7 +1161,9 @@ test('diagnosis reports unrelated and newest videos without authorizing acquisit
 test('ownership diagnostic protocol rejects text, URLs, arbitrary inputs and generative use',()=>{
  assert.equal(validPayload('inspectGeneration',{...inspectPayload,diagnoseOwnership:true}),true);
  assert.equal(validPayload('submitGeneration',{...operation,diagnoseOwnership:true}),false);
- assert.equal(validPayload('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'a'.repeat(64)}),false);
+ assert.equal(validPayload('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'a'.repeat(64)}),true);
+ assert.equal(validPayload('inspectGeneration',{...inspectPayload,ownedUserHash:'a'.repeat(64)}),false);
+ assert.equal(validPayload('inspectGeneration',{...inspectPayload,diagnoseOwnership:true,ownedUserHash:'raw-native-id'}),false);
  const result={operationId:'op',sceneId:'scene',state:'interrupted',ownershipDiagnostic:{receiptAvailable:true,ownedUserMatches:0,rows:[]}};
  assert.equal(validResult('inspectGeneration',result,{...inspectPayload,diagnoseOwnership:true}),true);
  for(const field of ['text','url','html'])assert.equal(validResult('inspectGeneration',{...result,ownershipDiagnostic:{...result.ownershipDiagnostic,[field]:'private'}},{...inspectPayload,diagnoseOwnership:true}),false);

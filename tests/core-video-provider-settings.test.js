@@ -81,7 +81,7 @@ test('runtime support block is development-only, bilingual, read-only, and handl
  for(const locale of ['vi','en'])for(const enabled of [false,true]){
    const listeners={},focus=[],calls=[];let complete;
    const root={innerHTML:'',setAttribute(){},querySelector:selector=>({focus:()=>focus.push(selector)})};
-   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.3',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
+   const report={readyForControlledE2E:true,expected:{extensionVersion:'0.3.4',workerBuild:'muse-worker-current',contentBuild:'muse-content-current'},runtime:{workerBuild:'muse-worker-current',contentBuild:'muse-content-current',heartbeatFresh:true,authenticated:true,composerReady:true},mismatches:[]};
    const context={state:{locale,page:'settings'},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(name,fn)=>listeners[name]=fn},window:{addEventListener(){},desktopAPI:{
      checkGenerationProvider:async()=>{calls.push('provider');return {ok:true,value:{id:'muse',enabled:true,ready:true,state:'ready'}};},
      diagnoseGenerationProviderRuntime:async id=>{assert.equal(id,'muse');calls.push('diagnose');return enabled?{ok:true,value:report}:{ok:false,errorCode:'UNAVAILABLE'};}
@@ -126,7 +126,11 @@ test('ownership support view is dev-only, reads one explicit job, prevents dupli
    click('copy');await tick();assert.deepEqual(JSON.parse(copied),report);assert(root.innerHTML.includes(c.traceCopied));
    assert(focus.includes('[data-video-provider-ownership-read]'));assert(focus.includes('[data-video-provider-ownership-copy]'));
    input.value='../bad';click('read');assert.deepEqual(calls,['existing-job']);assert(root.innerHTML.includes(c.ownershipUnavailable));assert(!root.innerHTML.includes('ownedUserMatches'));
-   input.value='existing-job';click('read');complete({ok:false,errorCode:'private error'});await tick();assert(root.innerHTML.includes(c.ownershipUnavailable));assert(!root.innerHTML.includes('private error'));
+   input.value='existing-job';click('read');complete({ok:false,errorCode:'private error'});await tick();assert(root.innerHTML.includes(c.ownershipReasons.UNAVAILABLE));assert(!root.innerHTML.includes('private error'));
+   for(const reason of require('../extensions/meta-muse-bridge/receipt-v2').ownershipFailureReasons){
+     click('read');complete({ok:true,value:{ok:false,reason,instanceMatch:true,tabMatch:true}});await tick();
+     assert(root.innerHTML.includes(c.ownershipReasons[reason]));assert(root.innerHTML.includes('data-video-provider-ownership-copy'));click('copy');await tick();assert.equal(JSON.parse(copied).reason,reason);
+   }
  }
 });
 

@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-3-contract3-receipt2-acceptance3';
+const CONTENT_BUILD='muse-content-v0-3-4-contract3-receipt2-acceptance3';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';

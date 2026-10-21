@@ -7,6 +7,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const {failure} = require("../generation-job");
 const {validPayload, validResult} = require("./execution-contract");
+const {diagnosticFailure}=require('./ownership-diagnosis');
 const {validDiagnostic,validRuntimeBuild}=require('./connection-diagnostics');
 const {readBundle,matches,stageBundle,identity:bundleIdentity}=require('./extension-bundle');
 const {sanitizeSession, instanceId, tabId, label} = require("./session-status");
@@ -68,10 +69,10 @@ class MetaMuseExtensionBridge {
       this.evidenceExpired=true;
     }
   }
-  finish(instance,ok,result) {
+  finish(instance,ok,result,reason='UNAVAILABLE') {
     const pending=this.pending.get(instance);if(!pending)return;
     this.pending.delete(instance);clearTimeout(pending.timer);
-    ok ? pending.resolve(result) : pending.reject(failure("PROVIDER_UNAVAILABLE"));
+    ok ? pending.resolve(result) : pending.reject(pending.payload?.diagnoseOwnership===true?diagnosticFailure(reason,{instanceMatch:true,tabMatch:true}):failure("PROVIDER_UNAVAILABLE"));
   }
   async handle(req,res) {
     const origin=String(req.headers.origin||"");
@@ -136,6 +137,9 @@ class MetaMuseExtensionBridge {
       const b=await body(req);
       check(exact(b,["commandId","ok","result","error"]) && text(b.commandId,80) && typeof b.ok==="boolean");
       const p=this.pending.get(s.instanceId);check(p && p.sent && p.id===b.commandId);
+      if(p.payload?.diagnoseOwnership===true && b.ok && !validResult(p.type,b.result,p.payload)) {
+        this.finish(s.instanceId,false,undefined,'DIAGNOSTIC_RESULT_INVALID');return this.reply(res,200,{ok:true});
+      }
       check(p.type ? (b.ok ? validResult(p.type,b.result,p.payload) : b.result==null) : b.result==null || (exact(b.result,["tabId","url"]) && tabId(b.result.tabId) && (b.result.url===undefined || (text(b.result.url,3000)&&museUrl(b.result.url)))));
       check(b.error==null || (exact(b.error,["code","message"]) && text(b.error.code,80) && text(b.error.message,800)));
       this.finish(s.instanceId,b.ok,b.result);return this.reply(res,200,{ok:true});
@@ -228,7 +232,18 @@ class MetaMuseExtensionBridge {
     // An observation of an existing operation must not start/reselect/prune a
     // session. Only transient command transport state is allocated here.
     if(ownershipDiagnosis) {
-      if(!this.server || this.stopped || this.now()-(this.sessions.get(target?.instanceId)?.lastSeen??-Infinity)>SESSION_TTL_MS)throw failure('PROVIDER_UNAVAILABLE');
+      if(!validPayload(type,payload) || payload.tabId!==target?.tabId)throw diagnosticFailure('DIAGNOSTIC_RESULT_INVALID');
+      const session=this.sessions.get(target?.instanceId);
+      if(!this.server || this.stopped || !session || this.now()-session.lastSeen>SESSION_TTL_MS)throw diagnosticFailure('TARGET_INSTANCE_UNAVAILABLE',{instanceMatch:false,tabMatch:false});
+      const tab=session.tabs.find(t=>t.tabId===target.tabId);
+      if(!tab)throw diagnosticFailure('TARGET_TAB_UNAVAILABLE',{instanceMatch:true,tabMatch:false});
+      const evidence={instanceMatch:true,tabMatch:true};
+      if(this.stagingFailed || session.extensionState!=='extension_connected' ||
+        tab.runtimeBuild?.workerBuild!==this.distribution.expectedWorkerBuild || tab.runtimeBuild?.contentBuild!==this.distribution.expectedContentBuild ||
+        (this.source && !this.stagedBundleVerified()))throw diagnosticFailure('RUNTIME_BUILD_MISMATCH',evidence);
+      if(!tab.contentFresh || tab.diagnostic?.museTabEvidenceFresh===false)throw diagnosticFailure('CONTENT_RECEIVER_UNAVAILABLE',evidence);
+      if(tab.authState!=='authenticated' || tab.executionContract!==3)throw diagnosticFailure('CONTENT_DIAGNOSIS_REJECTED',evidence);
+      if(this.pending.has(target.instanceId))throw diagnosticFailure('UNAVAILABLE',evidence);
     } else {await this.start();this.prune();}
     const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
     check(validPayload(type,payload) && payload.tabId===target?.tabId);

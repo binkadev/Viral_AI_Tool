@@ -35,7 +35,9 @@ test('durable V2 user-only dev diagnosis observes one existing job without any m
    f.service.jobs[0].status=status;
    const result=await f.service.diagnoseMuseOwnership(f.job.id);
    assert.equal(result.userStableIdHash,f.record.receipt.userStableIdHash);assert.equal(result.diagnostic.ownedUserMatches,1);
-   assert.deepEqual(Object.keys(f.calls.at(-1).p).sort(),['diagnoseOwnership','operationId','sceneId','tabId']);
+   assert.equal(result.ok,true);assert.equal(result.nativeUserAnchor,true);assert.equal(result.workerUserAnchor,true);
+   assert.deepEqual(Object.keys(f.calls.at(-1).p).sort(),['diagnoseOwnership','operationId','ownedUserHash','sceneId','tabId']);
+   assert.equal(f.calls.at(-1).p.ownedUserHash,f.record.receipt.userStableIdHash);
    assert.deepEqual(fs.readFileSync(f.file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
    assert.equal(f.service.jobs[0].status,status);
  }
@@ -52,12 +54,15 @@ for(const scenario of ['no user','assistant anchored','production','completed','
  if(scenario==='wrong operation')f.record.operationId='other';
  if(scenario==='legacy')f.record.receipt.version=1;
  fs.writeFileSync(f.file,JSON.stringify(f.record));const before=fs.readFileSync(f.file),jobs=fs.readFileSync(f.service.store.file);
- await assert.rejects(f.service.diagnoseMuseOwnership(f.job.id));assert.equal(f.calls.length,0);
+ const reasons={'no user':'USER_ANCHOR_MISSING','assistant anchored':'ASSISTANT_ALREADY_ANCHORED',completed:'JOB_STATE_UNSUPPORTED','wrong scene':'OPERATION_RECORD_UNAVAILABLE','wrong operation':'OPERATION_RECORD_UNAVAILABLE',legacy:'RECEIPT_UNAVAILABLE'};
+ if(scenario==='production')await assert.rejects(f.service.diagnoseMuseOwnership(f.job.id),{code:'UNAVAILABLE'});
+ else {const report=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(report.ok,false);assert.equal(report.reason,reasons[scenario]);}
+ assert.equal(f.calls.length,0);
  assert.deepEqual(fs.readFileSync(f.file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
 });
 for(const forbidden of ['text','url','html','token','nativeId'])test('ownership diagnosis rejects unbounded/private adapter data: '+forbidden,async t=>{
  const f=fixture(t);f.bridge.command=async(_,p)=>({operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',ownershipDiagnostic:{...diagnosis(),[forbidden]:'private'}});
- const before=fs.readFileSync(f.file);await assert.rejects(f.service.diagnoseMuseOwnership(f.job.id));assert.deepEqual(fs.readFileSync(f.file),before);
+ const before=fs.readFileSync(f.file),report=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(report.reason,'DIAGNOSTIC_RESULT_INVALID');assert(!JSON.stringify(report).includes('private'));assert.deepEqual(fs.readFileSync(f.file),before);
 });
 test('trusted ownership IPC validates IDs and preload exposes only a job-ID method',async t=>{
  const f=fixture(t),handlers={};require('../services/generation/generation-ipc').registerGenerationIpc({ipcMain:{handle:(k,v)=>handlers[k]=v},getService:()=>f.service,trusted:e=>e.trusted});
@@ -77,14 +82,14 @@ for(const scenario of ['different worker user','incorrect match count','receipt 
    if(scenario==='receipt unavailable')d.receiptAvailable=false;
    return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',ownershipDiagnostic:d};
  };
- const before=fs.readFileSync(f.file);await assert.rejects(f.service.diagnoseMuseOwnership(f.job.id));assert.deepEqual(fs.readFileSync(f.file),before);
+ const before=fs.readFileSync(f.file);assert.equal((await f.service.diagnoseMuseOwnership(f.job.id)).reason,'DIAGNOSTIC_RESULT_INVALID');assert.deepEqual(fs.readFileSync(f.file),before);
 });
 test('ownership bridge transport neither starts/prunes nor changes session/selection, including poll/result',async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'muse-ownership-http-'));
  const bridge=new MetaMuseExtensionBridge({userDataPath:root,developmentDiagnostics:true});await bridge.start();
  t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  const origin='chrome-extension://'+'a'.repeat(32),token='a'.repeat(64),id='profile-one';
- bridge.sessions.set(id,{instanceId:id,origin,token,lastSeen:Date.now(),extensionState:'extension_connected',tabs:[{tabId:5,authState:'authenticated',executionContract:3}]});
+ bridge.sessions.set(id,{instanceId:id,origin,token,lastSeen:Date.now(),extensionState:'extension_connected',tabs:[{tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}}]});
  bridge.sessions.set('stale',{lastSeen:0});
  bridge.selectedInstanceId=id;bridge.selectedTabId=5;
  const before=JSON.stringify([...bridge.sessions]),selection=[bridge.selectedInstanceId,bridge.selectedTabId];
@@ -96,5 +101,52 @@ test('ownership bridge transport neither starts/prunes nor changes session/selec
  await send('result',{commandId:command.id,ok:true,result:{operationId:'op',sceneId:'scene',state:'interrupted',ownershipDiagnostic:diagnosis()}});
  assert.equal((await task).ownershipDiagnostic.ownedUserMatches,1);assert.equal(JSON.stringify([...bridge.sessions]),before);assert.deepEqual([bridge.selectedInstanceId,bridge.selectedTabId],selection);
  assert.equal(bridge.pending.size,0);assert(!fs.existsSync(bridge.selectionFile));
- bridge.sessions.get(id).lastSeen=0;await assert.rejects(bridge.command('inspectGeneration',payload,{instanceId:id,tabId:5}));assert.equal(bridge.sessions.size,2);
+ const invalid=bridge.command('inspectGeneration',payload,{instanceId:id,tabId:5});
+ const rejected=assert.rejects(invalid,e=>e.ownershipDiagnosis.reason==='DIAGNOSTIC_RESULT_INVALID');
+ const second=(await send('poll')).command;
+ await send('result',{commandId:second.id,ok:true,result:{operationId:'op',sceneId:'scene',state:'interrupted',ownershipDiagnostic:{...diagnosis(),text:'private'}}});
+ await rejected;assert.equal(JSON.stringify([...bridge.sessions]),before);assert.equal(bridge.pending.size,0);
+ bridge.sessions.get(id).lastSeen=0;await assert.rejects(bridge.command('inspectGeneration',payload,{instanceId:id,tabId:5}),e=>e.ownershipDiagnosis.reason==='TARGET_INSTANCE_UNAVAILABLE');assert.equal(bridge.sessions.size,2);
+});
+test('native validation returns the first bounded gate and never queries the bridge',async t=>{
+ const f=fixture(t);
+ assert.equal((await f.service.diagnoseMuseOwnership('missing-job')).reason,'JOB_NOT_FOUND');
+ fs.writeFileSync(f.file,'invalid JSON');
+ const report=await f.service.diagnoseMuseOwnership(f.job.id);
+ assert.equal(report.reason,'OPERATION_RECORD_UNAVAILABLE');assert.equal(report.layer,'native_validation');
+ assert.equal(report.instanceMatch,null);assert.equal(f.calls.length,0);
+});
+for(const scenario of ['instance','tab','old runtime','content'])test('exact recorded target gate is bounded and never retargets: '+scenario,async t=>{
+ const f=fixture(t),bridge=new MetaMuseExtensionBridge({userDataPath:f.root,developmentDiagnostics:true});
+ // No listening socket is needed: every case rejects before allocating transport.
+ bridge.server={};bridge.start=bridge.prune=()=>{throw Error('FORBIDDEN');};
+ const tab={tabId:5,authState:'authenticated',executionContract:3,contentFresh:true,runtimeBuild:{workerBuild:bridge.distribution.expectedWorkerBuild,contentBuild:bridge.distribution.expectedContentBuild}};
+ bridge.sessions.set('profile-one',{lastSeen:Date.now(),extensionState:'extension_connected',tabs:[tab]});
+ bridge.sessions.set('unrelated',{lastSeen:Date.now(),extensionState:'extension_connected',tabs:[tab]});
+ bridge.selectedInstanceId='unrelated';bridge.selectedTabId=5;
+ if(scenario==='instance')bridge.sessions.delete('profile-one');
+ if(scenario==='tab')bridge.sessions.get('profile-one').tabs=[];
+ if(scenario==='old runtime')tab.runtimeBuild.workerBuild='muse-worker-v0-3-3-contract3-receipt2-acceptance3';
+ if(scenario==='content')tab.contentFresh=false;
+ const before=JSON.stringify([...bridge.sessions]);
+ f.bridge.command=(...args)=>bridge.command(...args);
+ const report=await f.service.diagnoseMuseOwnership(f.job.id);
+ assert.equal(report.reason,{instance:'TARGET_INSTANCE_UNAVAILABLE',tab:'TARGET_TAB_UNAVAILABLE','old runtime':'RUNTIME_BUILD_MISMATCH',content:'CONTENT_RECEIVER_UNAVAILABLE'}[scenario]);
+ assert.equal(report.instanceMatch,scenario!=='instance');assert.equal(report.tabMatch,!['instance','tab'].includes(scenario));
+ assert.equal(bridge.pending.size,0);assert.equal(JSON.stringify([...bridge.sessions]),before);assert.equal(bridge.selectedInstanceId,'unrelated');
+});
+for(const reason of ['WORKER_INTENT_UNAVAILABLE','WORKER_RECEIPT_MISMATCH','CONTENT_RECEIVER_UNAVAILABLE','CONTENT_DIAGNOSIS_REJECTED'])test('worker bounded failure reaches support JSON without receipt/job writes: '+reason,async t=>{
+ const f=fixture(t),before=fs.readFileSync(f.file),jobs=fs.readFileSync(f.service.store.file);
+ f.bridge.command=async(_,p)=>({operationId:p.operationId,sceneId:p.sceneId,state:'interrupted',ownershipFailure:{reason,tabMatch:true,workerIntentPresent:reason!=='WORKER_INTENT_UNAVAILABLE',workerUserAnchor:reason==='WORKER_RECEIPT_MISMATCH'?false:null,workerAssistantAnchor:false}});
+ const report=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(report.reason,reason);assert.equal(report.nativeUserAnchor,true);assert.equal(report.instanceMatch,true);assert.equal(report.tabMatch,true);
+ if(reason==='WORKER_RECEIPT_MISMATCH')assert.equal(report.workerUserAnchor,false);
+ assert.deepEqual(fs.readFileSync(f.file),before);assert.deepEqual(fs.readFileSync(f.service.store.file),jobs);
+});
+test('failure reports are bounded, sanitized and cannot carry raw error text or an unknown enum',async t=>{
+ const f=fixture(t);f.bridge.command=async()=>{throw Error('secret URL token account');};
+ const report=await f.service.diagnoseMuseOwnership(f.job.id);assert.equal(report.reason,'UNKNOWN');assert(!JSON.stringify(report).includes('secret'));
+ const schema=require('../extensions/meta-muse-bridge/receipt-v2');
+ const value={reason:'WORKER_RECEIPT_MISMATCH',tabMatch:true,workerIntentPresent:true,workerUserAnchor:false,workerAssistantAnchor:false};
+ assert(schema.validOwnershipFailure(value));assert(!schema.validOwnershipFailure({...value,reason:'private error'}));
+ for(const key of ['text','url','html','token','nativeId'])assert(!schema.validOwnershipFailure({...value,[key]:'private'}));
 });

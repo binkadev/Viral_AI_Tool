@@ -28,6 +28,7 @@ function createMuseProvider({ configStore, extensionBridge = null, verifyVideo =
     // Uses the selected tab's settings; do not fabricate a model identifier.
     capabilities: Object.freeze(["text-to-video"]), modelIds: Object.freeze([]),
     validateConfig, readiness,
+    ownershipDiagnosticsEnabled:()=>extensionBridge?.developmentDiagnostics===true,
     diagnoseOwnership:context=>execution.diagnoseOwnership(context),
     acceptanceTrace:context=>execution.acceptanceTrace(context),
     runtimeDiagnosis: async () => {

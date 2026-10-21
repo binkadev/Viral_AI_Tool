@@ -4,18 +4,19 @@ const {failure}=require('../generation-job');
 const {identifier}=require('../generation-request');
 const {validResult,validReceipt,validAnchoredOwnershipDiagnostic}=require('../bridge/execution-contract');
 const receiptV2=require('../../../extensions/meta-muse-bridge/receipt-v2');
+const ownershipDiagnosis=require('../bridge/ownership-diagnosis');
 function createMuseExecution(bridge,verifyVideo) {
   const locks=new Map(),cancelled=new Set(),transfers=new Map();
   const guard=c=>{if(!bridge || !identifier(c?.jobId) || !identifier(c?.sceneId) || typeof c.request?.prompt!=='string' || !path.isAbsolute(c.outputDirectory) || fs.realpathSync(c.outputDirectory)!==path.resolve(c.outputDirectory))throw failure('PROVIDER_UNAVAILABLE');};
   const recordPath=c=>path.join(c.outputDirectory,'muse-operation.json');
   const digest=c=>crypto.createHash('sha256').update(c.sceneId+'\0'+c.request.prompt).digest('hex');
-  function read(c) {
+  function read(c,{validateReceipt=true}={}) {
     const file=recordPath(c),stat=fs.lstatSync(file);
     if(!stat.isFile() || stat.isSymbolicLink() || stat.size>262144)throw failure('RECOVERY_REQUIRED');
     const r=JSON.parse(fs.readFileSync(file,'utf8'));
     if(r.operationId!==c.jobId || r.sceneId!==c.sceneId || r.digest!==digest(c) || !Number.isFinite(r.createdAt) || typeof r.target?.instanceId!=='string' || !Number.isSafeInteger(r.target.tabId))throw failure('RECOVERY_REQUIRED');
-    if(r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
-    if(r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
+    if(validateReceipt && r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
+    if(validateReceipt && r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
     return r;
   }
   function saveEvidence(c,r,result) {
@@ -139,15 +140,22 @@ function createMuseExecution(bridge,verifyVideo) {
   return {
     diagnoseOwnership:async c=>{
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
-      guard(c);const record=read(c),receipt=record.receipt;
-      if(receipt?.version!==2 || !receipt.userStableIdHash || receipt.assistantStableIdHash)throw failure('UNAVAILABLE');
+      let record;
+      try{guard(c);record=read(c,{validateReceipt:false});}catch{return ownershipDiagnosis.report('OPERATION_RECORD_UNAVAILABLE');}
+      const receipt=record.receipt,evidence={nativeUserAnchor:!!receipt?.userStableIdHash,nativeAssistantAnchor:!!receipt?.assistantStableIdHash};
+      if(receipt?.version!==2 || !receiptV2.valid(receipt,c.jobId))return ownershipDiagnosis.report('RECEIPT_UNAVAILABLE',evidence);
+      if(!receipt.userStableIdHash)return ownershipDiagnosis.report('USER_ANCHOR_MISSING',evidence);
+      if(receipt.assistantStableIdHash)return ownershipDiagnosis.report('ASSISTANT_ALREADY_ANCHORED',evidence);
       // Deliberately bypass command()/saveEvidence()/reconcile(): this response
       // describes the current document and can never extend an ownership receipt.
-      const payload={tabId:record.target.tabId,operationId:c.jobId,sceneId:c.sceneId,diagnoseOwnership:true};
-      const result=await bridge.command('inspectGeneration',payload,record.target);
+      const payload={tabId:record.target.tabId,operationId:c.jobId,sceneId:c.sceneId,diagnoseOwnership:true,ownedUserHash:receipt.userStableIdHash};
+      let result;
+      try{result=await bridge.command('inspectGeneration',payload,record.target);}catch(error){return ownershipDiagnosis.fromError(error,evidence);}
+      const targetEvidence={...evidence,instanceMatch:true,tabMatch:true};
+      if(validResult('inspectGeneration',result,payload) && result.ownershipFailure)return ownershipDiagnosis.report(result.ownershipFailure.reason,{...targetEvidence,...Object.fromEntries(Object.entries(result.ownershipFailure).filter(([,v])=>typeof v==='boolean'))});
       if(!validResult('inspectGeneration',result,payload) || Object.keys(result).some(k=>!['operationId','sceneId','state','ownershipDiagnostic'].includes(k)) ||
-        !validAnchoredOwnershipDiagnostic(result.ownershipDiagnostic,receipt.userStableIdHash))throw failure('UNAVAILABLE');
-      return {operationId:c.jobId,userStableIdHash:receipt.userStableIdHash,diagnostic:result.ownershipDiagnostic};
+        !validAnchoredOwnershipDiagnostic(result.ownershipDiagnostic,receipt.userStableIdHash))return ownershipDiagnosis.report('DIAGNOSTIC_RESULT_INVALID',targetEvidence);
+      return {...ownershipDiagnosis.report(null,{...targetEvidence,workerIntentPresent:true,workerUserAnchor:true,workerAssistantAnchor:false}),operationId:c.jobId,userStableIdHash:receipt.userStableIdHash,diagnostic:result.ownershipDiagnostic};
     },
     acceptanceTrace:c=>{
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');

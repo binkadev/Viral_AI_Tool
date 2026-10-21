@@ -144,12 +144,13 @@ class GenerationService extends EventEmitter {
   async diagnoseMuseOwnership(id) {
     if(this.stopping)throw failure('UNAVAILABLE');
     if(!identifier(id))throw failure('INVALID_REQUEST');
-    const job=this.get(id),adapter=this.registry.getProvider(job.request.providerId);
-    if(!['interrupted','running'].includes(job.status) || job.provider!=='muse' || job.request.providerId!=='muse' || typeof adapter?.diagnoseOwnership!=='function')throw failure('UNAVAILABLE');
-    const report=await adapter.diagnoseOwnership(this.context(job));
-    const {validAnchoredOwnershipDiagnostic}=require('./bridge/execution-contract');
-    if(report?.operationId!==id || !validAnchoredOwnershipDiagnostic(report.diagnostic,report.userStableIdHash))throw failure('UNAVAILABLE');
-    return clone({operationId:id,userStableIdHash:report.userStableIdHash,diagnostic:report.diagnostic});
+    const adapter=this.registry.getProvider('muse');
+    if(!adapter?.ownershipDiagnosticsEnabled?.())throw failure('UNAVAILABLE');
+    const diagnosis=require('./bridge/ownership-diagnosis');
+    let job;try{job=this.get(id);}catch{return diagnosis.report('JOB_NOT_FOUND');}
+    if(!['interrupted','running'].includes(job.status) || job.provider!=='muse' || job.request.providerId!=='muse' || typeof adapter.diagnoseOwnership!=='function')return diagnosis.report('JOB_STATE_UNSUPPORTED');
+    try{return diagnosis.sanitize(await adapter.diagnoseOwnership(this.context(job)),id);}
+    catch(error){return diagnosis.fromError(error);}
   }
 
   async acceptanceTrace(id) {
