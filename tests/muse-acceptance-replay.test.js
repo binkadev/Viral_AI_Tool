@@ -42,3 +42,14 @@ test('trace version 2 accepts one user plus a bounded assistant tail; historical
  t.version=2;const result=replay.replay(t);assert.equal(result.status,'accepted');assert.equal(result.logicalCount,1);assert.equal(result.maxConcurrent,1);
  const tooMany=structuredClone(t);tooMany.frames[0].freshAssistants=9;assert.notEqual(replay.replay(tooMany).status,'accepted');
 });
+
+for(const version of [1,2])test('historical-style wrapper carrying baseline assistant authority remains a diagnostic failure: trace v'+version,()=>{
+ const t=trace([frame(45,[event('added'),event('wrapper',20,2,{role:'assistant',position:1,directChild:false}),mount()],1,{generationActive:true})]);
+ t.version=version;const before=JSON.stringify(t);assert(replay.validTrace(t));
+ const result=replay.replay(t);assert.equal(result.status,'invalid');assert.equal(result.reason,'BASELINE_CHANGED');
+ assert.equal(result.canonicalIdentity,null);assert.equal(result.canonicalNode,null);assert.equal(JSON.stringify(t),before);
+ const receipt=require('../extensions/meta-muse-bridge/receipt-v2');
+ assert(!receipt.valid(t,'op'));assert(!receipt.valid(result,'op'));
+ const {validPayload}=require('../services/generation/bridge/execution-contract');
+ assert(!validPayload('inspectGeneration',{tabId:5,operationId:'op',sceneId:'scene',acceptanceTrace:t}));
+});

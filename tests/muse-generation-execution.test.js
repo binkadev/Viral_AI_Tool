@@ -140,7 +140,7 @@ test('live loopback contract gates selected authenticated tab and sanitizes resu
  const bridge=new MetaMuseExtensionBridge({userDataPath:root});await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const r=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,value:await r.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.6',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.7',protocolVersion:1})).value.token;
  const beat=contract=>send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,...(contract?{executionContract:contract,canSubmit:true}:{})}]});
  await beat(false);assert.equal(await bridge.executionReady(),false);
  await beat(2);assert.equal(await bridge.executionReady(),false);
@@ -397,7 +397,7 @@ test('v2 largest allowed chunk and receipt fit actual loopback body limit; rende
  await bridge.start();t.after(()=>{bridge.close();fs.rmSync(root,{recursive:true,force:true});});
  let token='';const origin='chrome-extension://'+'a'.repeat(32);
  const send=async(route,body)=>{const response=await fetch('http://127.0.0.1:'+bridge.port+'/v1/'+route+(route==='register'?'':'?instanceId=profile-one'),{method:body?'POST':'GET',headers:{Origin:origin,...(token?{'X-Viral-Muse-Token':token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:response.status,value:await response.json()};};
- token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.6',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'profile-one',profileLabel:'',browserName:'Chrome',extensionVersion:'0.3.7',protocolVersion:1})).value.token;
  await send('heartbeat',{profileLabel:'',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true,inspectionComplete:true,executionContract:3,canSubmit:true,ownershipReceiptVersion:2}]});
  const receipt=anchoredReceipt('op');receipt.baselineUserMessageIds=Array.from({length:128},(_,i)=>shaBytes('user'+i));receipt.baselineAssistantMessageIds=Array.from({length:128},(_,i)=>shaBytes('assistant'+i));
  const p={tabId:5,operationId:'op',sceneId:'scene',receipt,transferId:'transfer',sequence:0,offset:0,mediaKind:'video'},target={instanceId:'profile-one',tabId:5};
@@ -675,6 +675,75 @@ for(const transition of ['composer root','editor','send removed','send replaced'
 }
 
 const userMutation=(f,addedNodes,removedNodes,previousSibling,nextSibling=null,target=f.messageParent)=>({type:'childList',target,addedNodes,removedNodes,previousSibling,nextSibling});
+for(const role of ['assistant','user'])test('acceptance projection gives internal baseline '+role+' wrapper churn no message authority',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{
+   const row=f.rows.find(r=>r.role===role),user=f.rows.at(-1),tail=f.rows.at(-2);
+   const content={tagName:'SPAN',getAttribute:()=>null,querySelectorAll:()=>[]};
+   f.transaction(f.rows,[userMutation(f,[user],[],tail),userMutation(f,[content],[],null,null,row)]);
+ }});f.transaction(f.rows);
+ const stored={},worker=workerV2Harness(stored,f),prepared=await worker.run('prepareGeneration',inspectPayload);
+ const result=await worker.run('submitGeneration',{...operation,receipt:prepared.receipt});
+ assert.equal(result.state,'running');assert.equal(result.receipt.userStableIdHash,shaBytes('op\0user\0new-user'));
+ const trace=f.structuralTrace,frame=trace.frames[0],wrapper=frame.events.find(e=>e.event==='wrapper');
+ assert.equal(frame.baselineValid,true);assert(wrapper);assert.equal(wrapper.role,'none');assert.equal(wrapper.identity,0);assert.equal(wrapper.position,-1);
+ assert(frame.events.some(e=>e.event==='added' && e.role==='user' && e.position===trace.baseline.count && e.identity>0));
+ assert.equal(require('../extensions/meta-muse-bridge/acceptance-replay').replay(trace).status,'accepted');
+ assert.equal(stored['generation-intent:op'].receipt.userStableIdHash,result.receipt.userStableIdHash);
+ assert.equal(f.lineage.logicalCount,1);assert.equal(f.clicks,1);
+ assert.equal((await worker.run('submitGeneration',{...operation,receipt:prepared.receipt})).state,'interrupted');assert.equal(f.clicks,1);
+ await worker.run('cancelGeneration',inspectPayload);
+});
+
+for(const role of ['assistant','user'])test('acceptance projection retains actual baseline '+role+' removal authority even when prefix is restored',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{
+   const row=f.rows.find(r=>r.role===role),user=f.rows.at(-1),tail=f.rows.at(-2);
+   f.transaction(f.rows,[userMutation(f,[user],[],tail),userMutation(f,[],[row],row.previousSibling,row.nextSibling),userMutation(f,[row],[],row.previousSibling,row.nextSibling)]);
+ }});f.transaction(f.rows);
+ const prepared=await f.send('prepareGeneration',v2Payload);
+ const result=await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prepared.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.acceptanceDiagnostic.failureReason,'BASELINE_CHANGED');assert.equal(result.receipt,undefined);
+ const frame=result.acceptanceTrace.frames[0];assert.equal(frame.baselineValid,true);
+ for(const action of ['removed','added'])assert(frame.events.some(e=>e.event===action && e.role===role && e.position<2 && e.position>=0 && e.identity>0));
+ assert.equal(f.clicks,1);assert.equal(f.operationCount,0);
+});
+
+for(const change of ['native ID','role','transient native ID','prefix order'])test('acceptance projection still fails closed on baseline '+change,async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{
+   const row=f.rows[0],old=row.id;
+   let records;
+   if(change==='prefix order')f.transaction([f.rows[1],row,...f.rows.slice(2)]);
+   else {
+     if(change==='role')row.role='assistant';
+     else if(change==='native ID')row.id='changed-baseline';
+     records=[{type:'attributes',target:row,attributeName:change==='role'?'data-message-role':'data-message-id',oldValue:change==='role'?'user':change==='transient native ID'?'temporary-baseline':old}];
+     f.transaction(f.rows,records);
+   }
+ }});f.transaction(f.rows);
+ const prepared=await f.send('prepareGeneration',v2Payload);
+ const result=await f.send('submitGeneration',{...operation,observationToken:v2Payload.observationToken,receipt:prepared.receipt});
+ assert.equal(result.state,'interrupted');assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);assert.equal(f.operationCount,0);
+ assert.equal(result.acceptanceDiagnostic.failureReason,change==='transient native ID'?'IDENTITY_MUTATED':'BASELINE_CHANGED');
+ if(change!=='prefix order')assert(result.acceptanceTrace.frames[0].events.some(e=>e.event==='id_changed' && e.role!=='none' && e.identity>0));
+});
+
+test('acceptance projection preserves fresh user and assistant events through a fast status/media tail with baseline wrapper churn',async()=>{
+ const f=contentFixture({noAssistant:true,afterClick:f=>{
+   const baseline=f.rows.slice(0,-1),user=f.rows.at(-1),status=f.node('assistant','status-row'),owner=f.node('assistant','media-owner',media());
+   f.transaction([...f.rows,status,owner],[userMutation(f,[user],[],baseline.at(-1)),
+     userMutation(f,[],[],null,null,baseline[1]),userMutation(f,[status],[],user),userMutation(f,[owner],[],status)]);
+ }});f.transaction(f.rows);
+ const user=await acceptV2(f),trace=f.structuralTrace,events=trace.frames[0].events;
+ assert.equal(trace.frames[0].baselineValid,true);
+ assert.equal(events.filter(e=>e.event==='added' && e.role==='user').length,1);
+ assert.equal(events.filter(e=>e.event==='added' && e.role==='assistant').length,2);
+ assert(events.filter(e=>e.event==='added').every(e=>e.identity>0 && e.position>=trace.baseline.count));
+ assert(events.filter(e=>e.event==='wrapper').every(e=>e.role==='none' && e.identity===0 && e.position===-1));
+ assert.equal(f.lineage.logicalCount,1);assert.equal(f.lineage.maxConcurrent,1);
+ const assistant=await observeMediaV2(f,user,'media-owner');
+ assert.equal(assistant.receipt.assistantStableIdHash,shaBytes('op\0assistant\0media-owner'));
+ assert.equal(assistant.receipt.result,undefined);assert.equal(f.clicks,1);
+});
+
 function replaceOptimisticUser(f,{split=false,chain=false}={}) {
  const old=f.rows.at(-1),baseline=f.rows.slice(0,-1),tail=baseline.at(-1),canonical=f.node('user','canonical-user');
  const records=[userMutation(f,[old],[],tail)];
@@ -905,7 +974,7 @@ for(const ambiguity of ['zero user','two users','identity mutation','manual inpu
    const result=await worker.run('submitGeneration',{...operation,receipt:prep.receipt});
    assert.equal(result.state,'interrupted');assert.equal(result.invocation.send,'invoked');
    assert(receiptV2.validAcceptanceDiagnostic(result.acceptanceDiagnostic));
-   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
+   assert.equal(result.acceptanceDiagnostic.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
    assert.equal(result.receipt,undefined);assert.equal(f.clicks,1);
    assert.equal(f.operationCount,0);assert.equal(f.documentListenerCount,0);
    const restarted=workerV2Harness(stored,f),before=JSON.stringify(stored);
@@ -983,8 +1052,8 @@ test('v2 acceptance failure diagnostics persist actual builds and bounded struct
  const job=await f.service.submit(request());await until(f.service,job.id,'interrupted');
  const record=JSON.parse(fs.readFileSync(path.join(f.root,'outputs',job.id,'muse-operation.json'))),d=record.acceptanceDiagnostic;
  assert(receiptV2.validAcceptanceDiagnostic(d));
- assert.equal(d.acceptanceBuild,'muse-content-v0-3-6-contract3-receipt2-assistantblock1');
- assert.equal(d.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
+ assert.equal(d.acceptanceBuild,'muse-content-v0-3-7-contract3-receipt2-wrapper1');
+ assert.equal(d.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
  assert.equal(d.failureReason,'ACCEPTANCE_UNCERTAIN');assert.equal(d.deadlineReached,true);
  assert.equal(d.freshUserCount,0);assert.equal(d.freshAssistantCount,0);assert.equal(d.baselinePrefixValid,true);
  assert.equal(record.receipt.userStableIdHash,undefined);assert.equal(record.receipt.assistantStableIdHash,undefined);
@@ -1140,8 +1209,8 @@ for(const dev of [false,true])test('actual managed manifest enables only dev dia
  worker.context.chrome.tabs.sendMessage=async(_,m)=>m.type==='viral-ai:muse-handshake'?content.handshake():content.status();
  const [tab]=await vm.runInContext('museTabs()',worker.context);
  assert.equal(tab.runtimeBuild.diagnosticsEnabled,dev);
- assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-6-contract3-receipt2-assistantblock1');
- assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-6-contract3-receipt2-assistantblock1');
+ assert.equal(tab.runtimeBuild.workerBuild,'muse-worker-v0-3-7-contract3-receipt2-wrapper1');
+ assert.equal(tab.runtimeBuild.contentBuild,'muse-content-v0-3-7-contract3-receipt2-wrapper1');
 });
 
 test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
@@ -1173,7 +1242,7 @@ test('V2 ownership diagnostic uses the durable user anchor without receipt or DO
  assert.equal(JSON.stringify(stored),before);
 });
 
-for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.6 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
+for(const scenario of ['intent absent','user absent','hash mismatch','receiver absent','diagnostic rejected','tab absent'])test('0.3.7 worker reports the first ownership diagnostic gate without storage writes: '+scenario,async()=>{
  const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:'c'.repeat(64),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
  const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}};
  if(scenario==='intent absent')delete stored['generation-intent:op'];

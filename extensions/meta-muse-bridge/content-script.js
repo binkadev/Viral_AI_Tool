@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-6-contract3-receipt2-assistantblock1';
+const CONTENT_BUILD='muse-content-v0-3-7-contract3-receipt2-wrapper1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 const ROOT='[data-hatch-composer-root]';
@@ -179,7 +179,9 @@ function acceptanceProjection(op,mutations,rows,kind,structureValid=true) {
   const event=(node,mutation,action)=>{
     if(++visited>256)throw Error('OBSERVATION_LIMIT');
     const role=node?.getAttribute?.('data-message-role'),id=node?.getAttribute?.('data-message-id');
-    const message=['user','assistant'].includes(role),location=message?slot(node,mutation,action==='removed'):{container:ordinal(projection.container),position:-1};
+    // An internal childList target may itself be a message row. Wrapper churn
+    // carries no row authority; only actual row/identity events enter lineage.
+    const message=action!=='wrapper' && ['user','assistant'].includes(role),location=message?slot(node,mutation,action==='removed'):{container:ordinal(projection.container),position:-1};
     if(message && isBaseline(role,id))location.position=op.baseline.findIndex(r=>r.role===role && r.id===id);
     const result={mutation:mutation?.type==='attributes'?'attribute':mutation?.type==='childList'?'childList':'none',event:message?action:'wrapper',role:message?role:'none',
       node:ordinal(node),identity:message?identity(id):0,parent:ordinal(mutation?.target||node?.parentNode),...location,

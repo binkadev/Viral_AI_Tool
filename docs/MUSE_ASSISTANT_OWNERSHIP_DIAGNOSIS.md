@@ -7,9 +7,9 @@ Check/continue action and from the acceptance trace export.
 
 ## Runtime identity and failure reports
 
-The ownership-diagnosis runtime is extension **0.3.6**, worker
-`muse-worker-v0-3-6-contract3-receipt2-assistantblock1`, and content
-`muse-content-v0-3-6-contract3-receipt2-assistantblock1`. Protocol 1, execution
+The ownership-diagnosis runtime is extension **0.3.7**, worker
+`muse-worker-v0-3-7-contract3-receipt2-wrapper1`, and content
+`muse-content-v0-3-7-contract3-receipt2-wrapper1`. Protocol 1, execution
 contract 3 and Receipt V2 are unchanged. All nine managed files must match the
 effective bundle, including the deterministic unpackaged-development manifest
 overlay described in [distribution](MUSE_EXTENSION_DISTRIBUTION.md).
