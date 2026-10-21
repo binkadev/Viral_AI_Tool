@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-13-contract3-receipt2-baselinewindow1';
+const WORKER_BUILD='muse-worker-v0-3-14-contract3-receipt2-replacementdiag1';
 if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;

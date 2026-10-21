@@ -3,6 +3,8 @@
 First shipped in 0.3.11. Version 0.3.12 adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md).
 Current 0.3.13 retains unsafe identity diagnostics while excluding only
 [proven safe head pruning](MUSE_BASELINE_PREFIX_WINDOW.md) from baseline-change churn.
+Version 0.3.14 adds the synchronous replacement comparison group below; all
+ownership and prefix-pruning decisions remain those of 0.3.13.
 
 Original 0.3.11 executing builds:
 
@@ -92,6 +94,37 @@ sentinel); mutation/node traversal has a budget of 256. Overflow records
 Mutation flags describe only the observed batch; false does not prove that no
 earlier unobserved mutation occurred. Unavailable candidate facts are null.
 
+The 0.3.14 content build (`muse-content-v0-3-14-contract3-receipt2-replacementdiag1`)
+adds four nullable booleans to the same first historical event:
+
+- `replacementNativeIdMatchesSubmittedUser`: direct equality of the unique
+  candidate's current native ID with `op.submittedUserId`.
+- `replacementRoleMatchesOwnedUser`: whether that candidate currently has role
+  `user`.
+- `replacementCandidateStillMounted`: candidate `isConnected` observation.
+- `replacementCandidateStillInContainer`: membership in the original prepared
+  container.
+
+All four are null when there is no unique candidate or the diagnostic scan
+overflows. A detached/transient candidate may report false for mounted/container
+membership. This is the bounded first-event sample, not a later live census.
+No raw ID crosses the bridge. There is no `replacementOwnedHashMatchesReceipt`
+field: adding an asynchronous hash would affect mutation-observer timing, so
+only synchronous attribute/structural comparisons are recorded.
+
+Validators accept these four fields only as a complete boolean/null group.
+Legacy 0.3.11–0.3.13 events without the group remain valid and unchanged; missing
+historical facts are never filled in. Partial groups, private fields, hashes or
+execution-input promotion are rejected. Existing worker/native first-only
+persistence and support sanitization carry the optional group unchanged.
+
+Same-position replacement with the same ID still fails the exact-owned-node
+guard. Different-ID replacement still fails the existing logical-user guard.
+Multiple candidates remain ambiguous. None of these booleans enters Gate C,
+Gate D, the post-anchor window predicate, receipt hashing, result discovery or
+acquisition. No original receipt/anchor is rewritten and no operation retargets.
+Historical E2E #13 is not retried, reinterpreted or retrofitted by this release.
+
 Elapsed buckets: `under_1s`, `1_to_10s`, `10_to_60s`, `over_60s`. Mutation buckets:
 `zero`, `one_to_four`, `five_or_more`. No wall-clock timestamp is exported.
 
@@ -113,4 +146,4 @@ references/native IDs remain inside the extension's existing observation boundar
 All regressions use isolated DOM/worker/native fixtures. No real Muse execution,
 historical recovery/acquisition, staging or browser interaction is authorized by
 this change. A future E2E requires separate authorization after manual staging
-and read-only preflight of the complete current 0.3.13 bundle.
+and read-only preflight of the complete current 0.3.14 bundle.

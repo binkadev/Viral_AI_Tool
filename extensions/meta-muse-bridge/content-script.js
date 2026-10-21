@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-13-contract3-receipt2-baselinewindow1';
+const CONTENT_BUILD='muse-content-v0-3-14-contract3-receipt2-replacementdiag1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -216,8 +216,11 @@ function sampleUserAnchorChurn(op,mutations=[],baselinePrefixPruned=false) {
       anchoredSequenceIndexValid:index>=0 && index===a.index,freshLogicalUserCount:Math.min(128,recognized.filter(fresh).length),replacementUserCandidateCount:Math.min(128,candidates.size),
       replacementSameParent:candidate?candidate.parentNode===a.parent:null,replacementSameSequencePosition:candidate?candidateIndex>=0 && candidateIndex===a.index:null,
       replacementImmediatelyAfterBaseline:candidate?candidateIndex>0 && sequence[candidateIndex-1]===op.baselineTail:null,replacementHasValidNativeId:candidate?nativeId(candidate.getAttribute('data-message-id')):null,
+      replacementNativeIdMatchesSubmittedUser:candidate?candidate.getAttribute('data-message-id')===op.submittedUserId:null,
+      replacementRoleMatchesOwnedUser:candidate?candidate.getAttribute('data-message-role')==='user':null,
+      replacementCandidateStillMounted:candidate?candidate.isConnected===true:null,replacementCandidateStillInContainer:candidate?a.container.contains(candidate):null,
       mutationObservedOnAnchoredNode:touched,anchoredIdAttributeChanged:idChanged,anchoredRoleAttributeChanged:roleChanged,anchoredNodeRemoved:removed,replacementNodeAdded:added.size>0,generationActive:generationActive()};
-    if(overflow)for(const k of [...MuseReceiptV2.userChurnBools,...MuseReceiptV2.userChurnCounts])d[k]=null;
+    if(overflow)for(const k of [...MuseReceiptV2.userChurnBools,...MuseReceiptV2.userChurnCounts,...MuseReceiptV2.userChurnReplacementBools])d[k]=null;
     if(MuseReceiptV2.validUserAnchorChurn(d))op.userAnchorChurn=d;
   }catch{} // No new invalidation, waiting, identity hash, or receipt promotion.
 }

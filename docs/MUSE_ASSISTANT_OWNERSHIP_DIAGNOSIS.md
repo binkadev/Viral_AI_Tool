@@ -13,9 +13,9 @@ for trace bounds, reasons, persistence and the unchanged transient-state behavio
 
 ## Runtime identity and failure reports
 
-The ownership-diagnosis runtime is extension **0.3.13**, worker
-`muse-worker-v0-3-13-contract3-receipt2-baselinewindow1`, and content
-`muse-content-v0-3-13-contract3-receipt2-baselinewindow1`. See also the separate persisted
+The ownership-diagnosis runtime is extension **0.3.14**, worker
+`muse-worker-v0-3-14-contract3-receipt2-replacementdiag1`, and content
+`muse-content-v0-3-14-contract3-receipt2-replacementdiag1`. See also the separate persisted
 [user churn diagnostic](MUSE_USER_ANCHOR_CHURN.md) and
 [baseline drift diagnostic](MUSE_BASELINE_DRIFT.md), plus nonterminal
 [verified prefix-window evidence](MUSE_BASELINE_PREFIX_WINDOW.md). Protocol 1, execution

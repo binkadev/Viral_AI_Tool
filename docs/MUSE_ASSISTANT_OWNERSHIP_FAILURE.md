@@ -8,11 +8,12 @@ missing-role wait described in [pending role settling](MUSE_PENDING_ROLE_SETTLIN
 Version 0.3.11 adds separate [post-anchor user churn evidence](MUSE_USER_ANCHOR_CHURN.md).
 Version 0.3.12 adds separate [baseline drift evidence](MUSE_BASELINE_DRIFT.md),
 without changing ownership or settling behavior.
-Current 0.3.13 additionally permits only [verified post-anchor head pruning](MUSE_BASELINE_PREFIX_WINDOW.md).
+Version 0.3.13 additionally permits only [verified post-anchor head pruning](MUSE_BASELINE_PREFIX_WINDOW.md).
+Current 0.3.14 adds only the [replacement diagnostic boolean group](MUSE_USER_ANCHOR_CHURN.md), without changing those decisions.
 Executing markers:
 
-- `muse-worker-v0-3-13-contract3-receipt2-baselinewindow1`
-- `muse-content-v0-3-13-contract3-receipt2-baselinewindow1`
+- `muse-worker-v0-3-14-contract3-receipt2-replacementdiag1`
+- `muse-content-v0-3-14-contract3-receipt2-replacementdiag1`
 
 ## Scope and timing
 
