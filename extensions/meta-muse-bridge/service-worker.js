@@ -204,9 +204,18 @@ async function execute(c) {
   if(p.diagnoseOwnership===true) {
     const saved=(await chrome.storage.local.get('generation-intent:'+p.operationId))['generation-intent:'+p.operationId];
     if(!saved || saved.tabId!==p.tabId)throw Error('RECEIPT_UNAVAILABLE');
-    payload.ownedUserHash=saved.receipt?.submittedUserMessageId || null;
+    if(saved.receipt?.version===2) {
+      if(saved.sceneId!==p.sceneId || !MuseReceiptV2.valid(saved.receipt,p.operationId) || !saved.receipt.userStableIdHash || saved.receipt.assistantStableIdHash)throw Error('RECEIPT_UNAVAILABLE');
+      payload.ownedUserHash=saved.receipt.userStableIdHash;
+    } else payload.ownedUserHash=saved.receipt?.submittedUserMessageId || null;
   }
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:type,payload});
+  if(p.diagnoseOwnership===true) {
+    // A diagnosis is never an evidence upgrade, regardless of the response.
+    if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId || result.state!=='interrupted' ||
+      !result.ownershipDiagnostic || Object.keys(result).some(k=>!['operationId','sceneId','state','ownershipDiagnostic'].includes(k)))throw Error('INVALID_DIAGNOSIS');
+    return result;
+  }
   if(['running','result'].includes(result?.state)) {
     const r=result.receipt,hash=v=>typeof v==='string' && /^[a-f0-9]{64}$/.test(v);
     const keys=['version','operationId','baselineUserMessageIds','baselineAssistantMessageIds','submittedUserMessageId','acceptance'];

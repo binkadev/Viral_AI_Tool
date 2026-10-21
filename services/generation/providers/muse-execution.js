@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {failure}=require('../generation-job');
 const {identifier}=require('../generation-request');
-const {validResult,validReceipt}=require('../bridge/execution-contract');
+const {validResult,validReceipt,validAnchoredOwnershipDiagnostic}=require('../bridge/execution-contract');
 const receiptV2=require('../../../extensions/meta-muse-bridge/receipt-v2');
 function createMuseExecution(bridge,verifyVideo) {
   const locks=new Map(),cancelled=new Set(),transfers=new Map();
@@ -137,6 +137,18 @@ function createMuseExecution(bridge,verifyVideo) {
     const task=Promise.resolve().then(fn).finally(()=>locks.delete(c.jobId));locks.set(c.jobId,task);return task;
   }
   return {
+    diagnoseOwnership:async c=>{
+      if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
+      guard(c);const record=read(c),receipt=record.receipt;
+      if(receipt?.version!==2 || !receipt.userStableIdHash || receipt.assistantStableIdHash)throw failure('UNAVAILABLE');
+      // Deliberately bypass command()/saveEvidence()/reconcile(): this response
+      // describes the current document and can never extend an ownership receipt.
+      const payload={tabId:record.target.tabId,operationId:c.jobId,sceneId:c.sceneId,diagnoseOwnership:true};
+      const result=await bridge.command('inspectGeneration',payload,record.target);
+      if(!validResult('inspectGeneration',result,payload) || Object.keys(result).some(k=>!['operationId','sceneId','state','ownershipDiagnostic'].includes(k)) ||
+        !validAnchoredOwnershipDiagnostic(result.ownershipDiagnostic,receipt.userStableIdHash))throw failure('UNAVAILABLE');
+      return {operationId:c.jobId,userStableIdHash:receipt.userStableIdHash,diagnostic:result.ownershipDiagnostic};
+    },
     acceptanceTrace:c=>{
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
       guard(c);const record=read(c);

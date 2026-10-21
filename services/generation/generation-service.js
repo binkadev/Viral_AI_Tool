@@ -141,6 +141,17 @@ class GenerationService extends EventEmitter {
     return sanitizeReport(await adapter.runtimeDiagnosis());
   }
 
+  async diagnoseMuseOwnership(id) {
+    if(this.stopping)throw failure('UNAVAILABLE');
+    if(!identifier(id))throw failure('INVALID_REQUEST');
+    const job=this.get(id),adapter=this.registry.getProvider(job.request.providerId);
+    if(!['interrupted','running'].includes(job.status) || job.provider!=='muse' || job.request.providerId!=='muse' || typeof adapter?.diagnoseOwnership!=='function')throw failure('UNAVAILABLE');
+    const report=await adapter.diagnoseOwnership(this.context(job));
+    const {validAnchoredOwnershipDiagnostic}=require('./bridge/execution-contract');
+    if(report?.operationId!==id || !validAnchoredOwnershipDiagnostic(report.diagnostic,report.userStableIdHash))throw failure('UNAVAILABLE');
+    return clone({operationId:id,userStableIdHash:report.userStableIdHash,diagnostic:report.diagnostic});
+  }
+
   async acceptanceTrace(id) {
     if(this.stopping)throw failure('UNAVAILABLE');
     if(!identifier(id))throw failure('INVALID_REQUEST');

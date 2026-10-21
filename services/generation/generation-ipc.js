@@ -45,6 +45,10 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
       if(!identifier(payload))throw 0;
       return service.acceptanceTrace(payload);
     },
+    "ownership-diagnosis": (service,payload) => {
+      if(!identifier(payload))throw 0;
+      return service.diagnoseMuseOwnership(payload);
+    },
     "provider-session-open": (service, payload) => {
       if (!identifier(payload)) throw 0;
       return service.providerSession(payload, true);

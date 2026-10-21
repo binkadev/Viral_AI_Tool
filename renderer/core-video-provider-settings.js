@@ -5,6 +5,14 @@
   let status = null, session = null, pending = false, failed = false, supportOpen = false;
   let runtimeReport=null,diagnosticAvailable=false,diagnosticPending=false,diagnosticFailed=false;
   let traceReport=null,traceJob='',tracePending=false,traceMessage='',traceOpen=false;
+  let ownershipReport=null,ownershipJob='',ownershipPending=false,ownershipMessage='',ownershipOpen=false;
+  function ownershipContent() {
+    const c=copy().runtimeDiagnostic;
+    return '<details data-video-provider-ownership-support'+(ownershipOpen?' open':'')+'><summary>'+esc(c.ownershipTitle)+'</summary><label>'+esc(c.traceJob)+'<input data-video-provider-ownership-id value="'+esc(ownershipJob)+'" autocomplete="off" spellcheck="false"'+(ownershipPending?' disabled':'')+'></label>'+
+      '<p>'+esc(c.ownershipHint)+'</p><button type="button" class="button ghost" data-video-provider-ownership-read'+(pending||diagnosticPending||tracePending||ownershipPending?' disabled':'')+'>'+esc(c.ownershipRead)+'</button>'+
+      '<p role="status">'+esc(ownershipPending?c.checking:ownershipMessage?c[ownershipMessage]:'')+'</p>'+
+      (ownershipReport?'<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(ownershipReport,null,2))+'</pre><button type="button" class="button ghost" data-video-provider-ownership-copy'+(ownershipPending?' disabled':'')+'>'+esc(c.traceCopy)+'</button>':'')+'</details>';
+  }
   function traceContent() {
     const c=copy().runtimeDiagnostic;
     return '<details data-video-provider-trace-support'+(traceOpen?' open':'')+'><summary>'+esc(c.traceTitle)+'</summary><label>'+esc(c.traceJob)+'<input data-video-provider-trace-id value="'+esc(traceJob)+'" autocomplete="off" spellcheck="false"'+(tracePending?' disabled':'')+'></label>'+
@@ -19,7 +27,7 @@
       '<p role="status">'+esc(diagnosticPending?c.checking:diagnosticFailed?c.unavailable:r?.readyForControlledE2E?c.ready:c.notReady)+'</p>'+
       (r?'<dl><dt>'+esc(c.worker)+'</dt><dd>'+esc(r.runtime.workerBuild===r.expected.workerBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.content)+'</dt><dd>'+esc(r.runtime.contentBuild===r.expected.contentBuild?c.current:c.unproven)+'</dd><dt>'+esc(c.session)+'</dt><dd>'+esc(r.runtime.heartbeatFresh && r.runtime.authenticated && r.runtime.composerReady?c.current:c.unproven)+'</dd></dl>'+
       '<details><summary>'+esc(c.details)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(r,null,2))+'</pre></details>':'')+
-      '<button type="button" class="button ghost" data-video-provider-diagnose'+(diagnosticPending||pending||tracePending?' disabled':'')+'>'+esc(c.check)+'</button>'+traceContent()+'</section>';
+      '<button type="button" class="button ghost" data-video-provider-diagnose'+(diagnosticPending||pending||tracePending||ownershipPending?' disabled':'')+'>'+esc(c.check)+'</button>'+traceContent()+ownershipContent()+'</section>';
   }
   function content() {
     const c = copy();
@@ -64,12 +72,13 @@
     const keepFocus = focus || (active?.matches?.("[data-video-provider-open]") ? "open" : active?.matches?.("[data-video-provider-enable]") ? "enable" : active?.matches?.("[data-video-provider-check]") ? "check" : null);
     supportOpen = Boolean(root.querySelector("[data-video-provider-support]")?.open);
     traceOpen = Boolean(root.querySelector('[data-video-provider-trace-support]')?.open);
+    ownershipOpen = Boolean(root.querySelector('[data-video-provider-ownership-support]')?.open);
     root.innerHTML = content();
     root.setAttribute("aria-busy", String(pending));
     if (keepFocus) root.querySelector("[data-video-provider-"+keepFocus+"]")?.focus({preventScroll:true});
   }
   async function refresh(enabled, focus, open = false, selection = null, setup = false, store = false) {
-    if (pending || diagnosticPending || tracePending) return;
+    if (pending || diagnosticPending || tracePending || ownershipPending) return;
     pending = true; failed = false; runtimeReport=null; paint();
     try {
       const result = typeof enabled === "boolean"
@@ -96,7 +105,7 @@
     finally { pending = false; paint(focus); await diagnose(); }
   }
   async function diagnose(focus) {
-    if(diagnosticPending || pending || tracePending || typeof window.desktopAPI.diagnoseGenerationProviderRuntime!=='function')return;
+    if(diagnosticPending || pending || tracePending || ownershipPending || typeof window.desktopAPI.diagnoseGenerationProviderRuntime!=='function')return;
     diagnosticPending=true;diagnosticFailed=false;runtimeReport=null;paint();
     try {
       const result=await window.desktopAPI.diagnoseGenerationProviderRuntime('muse');
@@ -106,7 +115,7 @@
     finally {diagnosticPending=false;paint(focus);}
   }
   async function readTrace() {
-    if(!diagnosticAvailable || tracePending || diagnosticPending || pending)return;
+    if(!diagnosticAvailable || tracePending || diagnosticPending || pending || ownershipPending)return;
     traceJob=(document.getElementById('video-provider-settings')?.querySelector('[data-video-provider-trace-id]')?.value||'').trim();
     traceReport=null;traceMessage='';
     if(!/^[a-zA-Z0-9_-]{1,100}$/.test(traceJob)){traceMessage='traceUnavailable';paint('trace-read');return;}
@@ -122,10 +131,29 @@
     catch {traceMessage='traceCopyFailed';}
     finally {tracePending=false;paint('trace-copy');}
   }
+  async function readOwnership() {
+    if(!diagnosticAvailable || pending || diagnosticPending || tracePending || ownershipPending)return;
+    ownershipJob=(document.getElementById('video-provider-settings')?.querySelector('[data-video-provider-ownership-id]')?.value||'').trim();
+    ownershipReport=null;ownershipMessage='';
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(ownershipJob)){ownershipMessage='ownershipUnavailable';paint('ownership-read');return;}
+    ownershipPending=true;paint();
+    try {const result=await window.desktopAPI.diagnoseMuseOwnership(ownershipJob);if(!result?.ok)throw 0;ownershipReport=result.value;}
+    catch {ownershipMessage='ownershipUnavailable';}
+    finally {ownershipPending=false;paint('ownership-read');}
+  }
+  async function copyOwnership() {
+    if(!diagnosticAvailable || !ownershipReport || ownershipPending)return;
+    ownershipPending=true;
+    try {await navigator.clipboard.writeText(JSON.stringify(ownershipReport,null,2));ownershipMessage='traceCopied';}
+    catch {ownershipMessage='traceCopyFailed';}
+    finally {ownershipPending=false;paint('ownership-copy');}
+  }
   window.ViralVideoProviderSettings = {html};
   function install() {
     document.addEventListener("click", event => {
-      if (event.target?.closest?.("[data-video-provider-trace-read]")) readTrace();
+      if (event.target?.closest?.("[data-video-provider-ownership-read]")) readOwnership();
+      else if (event.target?.closest?.("[data-video-provider-ownership-copy]")) copyOwnership();
+      else if (event.target?.closest?.("[data-video-provider-trace-read]")) readTrace();
       else if (event.target?.closest?.("[data-video-provider-trace-copy]")) copyTrace();
       else if (event.target?.closest?.("[data-video-provider-diagnose]")) diagnose('diagnose');
       else if (event.target?.closest?.("[data-video-provider-open]")) refresh(undefined,"open",true);

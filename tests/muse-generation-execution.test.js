@@ -974,6 +974,34 @@ function workerV2Harness(stored,content,production=false) {
  return {calls,context:c,run:async(type,p)=>{c.command={id:'cmd',type,payload:p};return vm.runInContext('execute(command)',c);}};
 }
 
+test('V2 ownership diagnostic uses the durable user anchor without receipt or DOM mutation, even after worker restart',async()=>{
+ const content=contentFixture({empty:true,draftLength:17}),user=content.node('user','owned-user'),assistant=content.node('assistant','unproven-assistant',media());
+ user.nextElementSibling=assistant;content.replace([user,assistant]);
+ const receipt={version:2,operationId:'op',baselineUserMessageIds:['a'.repeat(64)],baselineAssistantMessageIds:['b'.repeat(64)],userStableIdHash:shaBytes('op\0user\0owned-user'),acceptance:{baselineIntact:true,uniqueUserTurn:true,composerCleared:true,sendControlTransition:true,generationControlObserved:true}};
+ const stored={'generation-intent:op':{version:2,tabId:5,sceneId:'scene',receipt}},before=JSON.stringify(stored);
+ for(let i=0;i<2;i++){
+   const worker=workerV2Harness(stored,content);
+   const result=await worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true});
+   assert.equal(result.ownershipDiagnostic.ownedUserMatches,1);assert.equal(result.ownershipDiagnostic.rows[0].ownedUser,true);
+   assert.equal(result.ownershipDiagnostic.rows[1].videoCount,1);assert.equal(result.receipt,undefined);
+   assert.equal(JSON.stringify(stored),before);assert.deepEqual(worker.calls,['inspectGeneration']);
+   assert.equal(content.clicks,0);assert.equal(content.status().devEvidence.composerEmpty,false);assert.equal(content.lineage,null);
+   assert(!JSON.stringify(result).includes('owned-user'));assert(!JSON.stringify(result).includes('https://'));
+ }
+ for(const scenario of ['no user','assistant anchored','wrong scene','production']){
+   const copy=JSON.parse(before);
+   if(scenario==='no user'){delete copy['generation-intent:op'].receipt.userStableIdHash;delete copy['generation-intent:op'].receipt.acceptance;}
+   if(scenario==='assistant anchored')copy['generation-intent:op'].receipt.assistantStableIdHash='d'.repeat(64);
+   if(scenario==='wrong scene')copy['generation-intent:op'].sceneId='other';
+   const snapshot=JSON.stringify(copy),worker=workerV2Harness(copy,content,scenario==='production');
+   await assert.rejects(worker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true}));
+   assert.equal(JSON.stringify(copy),snapshot);assert.deepEqual(worker.calls,[]);
+ }
+ const badWorker=workerV2Harness(stored,{send:async()=>({operationId:'op',sceneId:'scene',state:'running',receipt})});
+ await assert.rejects(badWorker.run('inspectGeneration',{...inspectPayload,diagnoseOwnership:true}),/INVALID_DIAGNOSIS/);
+ assert.equal(JSON.stringify(stored),before);
+});
+
 test('v2 actual worker/content persist each stage, refuse replay, and restore an anchored receipt after both restart',async()=>{
  const stored={},content=contentFixture(),worker=workerV2Harness(stored,content),key='generation-intent:op';
  const prep=await worker.run('prepareGeneration',inspectPayload);

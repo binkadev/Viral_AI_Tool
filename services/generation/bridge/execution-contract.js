@@ -67,6 +67,11 @@ function validOwnershipDiagnostic(d) {
   return exact(d,['receiptAvailable','ownedUserMatches','rows']) && typeof d.receiptAvailable==='boolean' && Number.isInteger(d.ownedUserMatches) && d.ownedUserMatches>=0 && d.ownedUserMatches<=128 && Array.isArray(d.rows) && d.rows.length<=256 && d.rows.every(r=>
     exact(r,['id','role','ownedUser','parentIndex','nextSiblingIndex','ancestors','candidates','linkage','videoCount','sourceTypes']) && hash(r.id) && ['user','assistant'].includes(r.role) && typeof r.ownedUser==='boolean' && Number.isInteger(r.parentIndex) && r.parentIndex>=0 && r.parentIndex<256 && Number.isInteger(r.nextSiblingIndex) && r.nextSiblingIndex>=-1 && r.nextSiblingIndex<d.rows.length && Array.isArray(r.ancestors) && r.ancestors.length<=4 && r.ancestors.every(a=>exact(a,['attribute','value']) && ['data-message-id','data-item-id','data-turn-id','data-response-id','data-thread-id','data-conversation-item-id','data-conversation-id','data-response-group-id','data-media-id','data-video-id','data-result-id'].includes(a.attribute) && hash(a.value)) && validCandidates(r.candidates) && validLinkage(r.linkage) && Number.isInteger(r.videoCount) && r.videoCount>=0 && r.videoCount<=16 && Array.isArray(r.sourceTypes) && r.sourceTypes.length<=16 && r.sourceTypes.every(v=>['https','blob','other','empty'].includes(v)));
 }
+function validAnchoredOwnershipDiagnostic(d,ownedUserHash) {
+  return hash(ownedUserHash) && validOwnershipDiagnostic(d) && d.receiptAvailable===true &&
+    d.rows.every(r=>r.ownedUser===(r.role==='user' && r.id===ownedUserHash)) &&
+    d.ownedUserMatches===d.rows.filter(r=>r.ownedUser).length;
+}
 function validCandidates(c) {
   return c===undefined || Array.isArray(c) && c.length<=187 && c.every(a=>exact(a,['scope','attribute','value']) && ['message','media'].includes(a.scope) && ['data-message-id','data-item-id','data-turn-id','data-response-id','data-thread-id','data-conversation-item-id','data-conversation-id','data-response-group-id','data-media-id','data-video-id','data-result-id'].includes(a.attribute) && hash(a.value));
 }
@@ -76,4 +81,4 @@ function validLinkage(entries) {
     Number.isInteger(e.depth) && e.depth>=0 && e.depth<=6 && Number.isInteger(e.mediaIndex) && e.mediaIndex>=-1 && e.mediaIndex<16 &&
     ['data-message-id','data-item-id','data-turn-id','data-response-id','data-thread-id','data-conversation-item-id','data-conversation-id','data-response-group-id','data-media-id','data-video-id','data-result-id','data-attachment-id','data-asset-id','data-generation-id','data-request-id','data-response-to','data-response-to-id','data-reply-to','data-reply-to-id','data-parent-id','data-parent-message-id','data-user-message-id'].includes(e.attribute) && hash(e.value));
 }
-module.exports = { COMMANDS, validPayload, validResult, validReceipt, validOwnershipDiagnostic };
+module.exports = { COMMANDS, validPayload, validResult, validReceipt, validOwnershipDiagnostic, validAnchoredOwnershipDiagnostic };

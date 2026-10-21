@@ -40,7 +40,7 @@
     "test:core-scene-plan-persistence": "node tests/core-scene-plan-persistence.test.js",
     "test:generation-visual-harness": "node --test tests/generation-visual-harness.test.js",
     "test:generation-progress": "node tests/core-generation-progress.test.js",
-    "test:muse-execution": "node --test tests/muse-generation-execution.test.js tests/muse-acceptance-replay.test.js",
+    "test:muse-execution": "node --test tests/muse-generation-execution.test.js tests/muse-acceptance-replay.test.js tests/muse-ownership-diagnostic.test.js",
     "test:muse-extension": "node --test tests/muse-extension-readiness.test.js",
     "test:muse-browser": "node --test tests/muse-browser-discovery.test.js tests/muse-browser-bridge.test.js",
     "test:muse-foundation": "node --test tests/muse-foundation.test.js tests/core-video-provider-settings.test.js",

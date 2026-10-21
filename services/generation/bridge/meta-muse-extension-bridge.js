@@ -82,7 +82,9 @@ class MetaMuseExtensionBridge {
       res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");return this.reply(res,204,{});
     }
     check(typeof req.url==="string" && req.url.length<512 && req.url.startsWith("/v1/"));
-    const url=new URL(req.url,"http://127.0.0.1");this.prune();
+    const url=new URL(req.url,"http://127.0.0.1");
+    const ownershipTransport=['/v1/poll','/v1/result'].includes(url.pathname) && this.pending.get(url.searchParams.get('instanceId'))?.payload?.diagnoseOwnership===true;
+    if(!ownershipTransport)this.prune();
     if(req.method==="GET" && url.pathname==="/v1/ping") return this.reply(res,200,{ok:true,bridge:"meta-muse-extension",serverId:this.serverId});
     if(req.method==="POST" && url.pathname==="/v1/register") {
       const b=await body(req);
@@ -97,7 +99,7 @@ class MetaMuseExtensionBridge {
     check([...url.searchParams.keys()].every(k=>k==="instanceId") && url.searchParams.getAll("instanceId").length===1);
     const s=this.sessions.get(url.searchParams.get("instanceId"));
     const token=req.headers["x-viral-muse-token"];
-    if(!s || (origin && s.origin!==origin) || typeof token!=="string" || token.length!==s.token.length || !crypto.timingSafeEqual(Buffer.from(token),Buffer.from(s.token))) return this.reply(res,401,{ok:false,error:"session-required"});
+    if(!s || (ownershipTransport && this.now()-s.lastSeen>SESSION_TTL_MS) || (origin && s.origin!==origin) || typeof token!=="string" || token.length!==s.token.length || !crypto.timingSafeEqual(Buffer.from(token),Buffer.from(s.token))) return this.reply(res,401,{ok:false,error:"session-required"});
     if(req.method==="POST" && url.pathname==="/v1/heartbeat") {
       const b=await body(req);
       check(exact(b,["profileLabel","browserName","tabs"]) && text(b.profileLabel,120) && b.browserName==="Chrome" && Array.isArray(b.tabs) && b.tabs.length<=20);
@@ -222,7 +224,12 @@ class MetaMuseExtensionBridge {
   }
   async command(type,payload,target) {
     if((payload?.diagnoseAcquisition!==undefined || payload?.diagnoseOwnership!==undefined) && !this.developmentDiagnostics)throw failure('INVALID_REQUEST');
-    await this.start();this.prune();
+    const ownershipDiagnosis=type==='inspectGeneration' && payload?.diagnoseOwnership===true;
+    // An observation of an existing operation must not start/reselect/prune a
+    // session. Only transient command transport state is allocated here.
+    if(ownershipDiagnosis) {
+      if(!this.server || this.stopped || this.now()-(this.sessions.get(target?.instanceId)?.lastSeen??-Infinity)>SESSION_TTL_MS)throw failure('PROVIDER_UNAVAILABLE');
+    } else {await this.start();this.prune();}
     const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
     check(validPayload(type,payload) && payload.tabId===target?.tabId);
     if(this.stagingFailed || (this.source && !this.stagedBundleVerified()) || s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");

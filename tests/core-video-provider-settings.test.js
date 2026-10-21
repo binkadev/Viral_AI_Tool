@@ -105,6 +105,31 @@ test('runtime support block is development-only, bilingual, read-only, and handl
  }
 });
 
+test('ownership support view is dev-only, reads one explicit job, prevents duplicates and only copies sanitized diagnosis',async()=>{
+ for(const locale of ['vi','en'])for(const enabled of [true,false]){
+   const listeners={},calls=[],focus=[];let complete,copied;
+   const input={value:'existing-job'},root={innerHTML:'',setAttribute(){},querySelector:s=>s==='[data-video-provider-ownership-id]'?input:s==='[data-video-provider-ownership-support]'?{open:true}:{focus:()=>focus.push(s)}};
+   const report={operationId:'existing-job',userStableIdHash:'a'.repeat(64),diagnostic:{receiptAvailable:true,ownedUserMatches:1,rows:[]}};
+   const context={state:{locale,page:'settings'},navigator:{clipboard:{writeText:async text=>copied=text}},document:{readyState:'complete',activeElement:null,getElementById:()=>root,addEventListener:(n,fn)=>listeners[n]=fn},window:{addEventListener(){},desktopAPI:{
+     checkGenerationProvider:async()=>({ok:true,value:{id:'muse',ready:true,state:'ready'}}),
+     diagnoseGenerationProviderRuntime:async()=>enabled?{ok:true,value:{expected:{},runtime:{},readyForControlledE2E:false}}:{ok:false,errorCode:'UNAVAILABLE'},
+     diagnoseMuseOwnership:id=>{calls.push(id);return new Promise(resolve=>complete=resolve);}
+   }}};
+   vm.runInNewContext(fs.readFileSync('renderer/i18n.js','utf8'),context);vm.runInNewContext(fs.readFileSync('renderer/core-video-provider-settings.js','utf8'),context);await tick();
+   const c=context.window.I18N.messages[locale].videoProviders.runtimeDiagnostic;
+   assert.equal(root.innerHTML.includes('data-video-provider-ownership-support'),enabled);
+   const click=action=>listeners.click({target:{closest:s=>s==='[data-video-provider-ownership-'+action+']'?{}:null}});
+   if(!enabled){click('read');assert.deepEqual(calls,[]);continue;}
+   assert(root.innerHTML.includes(c.ownershipTitle));assert(root.innerHTML.includes(c.ownershipHint));assert(!root.innerHTML.includes('undefined'));
+   click('read');click('read');assert.deepEqual(calls,['existing-job']);assert(root.innerHTML.includes(c.checking));
+   complete({ok:true,value:report});await tick();assert(root.innerHTML.includes('ownedUserMatches'));assert(root.innerHTML.includes('data-video-provider-ownership-support open'));
+   click('copy');await tick();assert.deepEqual(JSON.parse(copied),report);assert(root.innerHTML.includes(c.traceCopied));
+   assert(focus.includes('[data-video-provider-ownership-read]'));assert(focus.includes('[data-video-provider-ownership-copy]'));
+   input.value='../bad';click('read');assert.deepEqual(calls,['existing-job']);assert(root.innerHTML.includes(c.ownershipUnavailable));assert(!root.innerHTML.includes('ownedUserMatches'));
+   input.value='existing-job';click('read');complete({ok:false,errorCode:'private error'});await tick();assert(root.innerHTML.includes(c.ownershipUnavailable));assert(!root.innerHTML.includes('private error'));
+ }
+});
+
 test('support trace view reads an explicit job, preserves focus and copies sanitized JSON without execution',async()=>{
  for(const locale of ['vi','en']){
    const listeners={},calls=[],focus=[];let complete,copied;
