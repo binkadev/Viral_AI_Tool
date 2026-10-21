@@ -3744,16 +3744,8 @@ async function addFiles() {
 
 function addSourceFiles(files) {
 
-  const jobs = files.map((file) => ({
-    id: makeJobId("source"),
-    name: file.name,
-    lang: "",
-    status: "queued",
-    progress: 0,
-    time: t("common.now"),
-    sourcePath: file.path,
-    fileState: "available",
-    mediaState: "reading"
+  const jobs = files.map(file => window.ViralCoreMediaLibraryModel.sourceJob(file, {
+    id: makeJobId("source"), time: t("common.now")
   }));
 
   jobs.slice().reverse().forEach(job => state.jobs.unshift(job));

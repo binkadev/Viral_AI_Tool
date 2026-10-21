@@ -65,6 +65,12 @@ function safeAsset(value) {
   return value && /^[a-f0-9-]{36}\.mp4$/i.test(value.fileName) ? { fileName: value.fileName } : null;
 }
 
+function safeOutputVerification(value) {
+  if(value.version!==1 || !Number.isSafeInteger(value.size) || value.size<12 ||
+      !/^[a-f0-9]{64}$/.test(value.sha256))throw failure('STORE_UNAVAILABLE');
+  return {version:1,size:value.size,sha256:value.sha256};
+}
+
 class GenerationStore {
   constructor(root) {
     this.root = root;
@@ -112,6 +118,7 @@ class GenerationStore {
           estimate,
           usage: safeUsage(job.usage),
           output: asset ? { fileName: asset.fileName } : null,
+          ...(job.outputVerification ? { outputVerification: safeOutputVerification(job.outputVerification) } : {}),
           error: errorCode ? { code: errorCode } : null,
           retryOf: validUuid(job.retryOf) ? job.retryOf : null,
           attempts: safeAttempts(job.attempts, job.createdAt),

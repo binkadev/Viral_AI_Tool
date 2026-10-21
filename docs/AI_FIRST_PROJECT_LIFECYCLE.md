@@ -76,6 +76,51 @@ Existing generation/media jobs retain their existing project scoping. Preview
 restoration tracks source objects rather than permanently caching file paths,
 so reopening a retained project can restore its local preview again.
 
+## Prospective generated-video handoff
+
+Newly admitted video jobs from Create AI (and explicit new retry jobs) enroll
+their exact job/project/scene identity through `registerGenerationJob`. The
+schema-4 workflow has an additive optional `generationOutputs` reference list:
+`{jobId, sceneId, assetId}`. Missing lists mean no enrolled jobs, not permission
+to import historical output. Existing snapshot/registry versions and source
+semantics are unchanged. No historical migration, generation-history scan, or
+E2E #14 backfill occurs.
+
+`core-generated-media.js` observes only enrolled job IDs through the existing
+job/output read APIs. It uses existing job-change events and one restart/focus
+read, with concurrent reads coalesced per job; there is no polling scheduler or
+provider recovery call. Only a completed video with matching job/project/scene,
+native publication integrity evidence, and usable local video metadata can
+attach. GenerationService fingerprints newly published files with SHA-256 and
+size, retains that evidence in its job store, and checks it on output reads.
+Legacy output reads remain available for explicit import, but do not assert
+the new automatic-attachment verification capability.
+
+The handoff normalizes one `origin: "generated"` asset through the existing
+media-library model. Asset identity is `generation:<jobId>` with the provider's
+asset identity set to the generation job ID; the workflow reference retains
+scene association. `sourceJob()` is shared with ordinary video import and
+creates the existing Studio source record. An empty AI project selects its
+first real source; an existing source/editor selection remains selected.
+The already app-owned MP4 is referenced in place, never copied or downloaded.
+
+Asset, source, and attachment reference commit together to the original
+project's registry snapshot. A failed write leaves runtime unchanged and does
+not report attachment success. Completion of generation remains independent
+and truthful. If the target project is inactive, its snapshot is updated
+without changing the active project or UI. The normal media-restore path
+resolves its preview on activation/navigation; no special Studio button is
+required. Attached references prevent repeat registration across events,
+rerenders and restart, including after a user deliberately removes media.
+
+Pending enrolled references survive restart and require only local output
+observation to finish handoff. If enrollment itself cannot be persisted, the
+running renderer reports attachment failure and retains the admitted identity
+for a local Refresh attempt. An app exit before enrollment is durable does not
+authorize a history scan on next launch; explicit user import remains separate.
+Neither local attachment failure nor Refresh submits or acquires a generation.
+All customer-facing attachment failure copy is provided in VI and EN.
+
 Tests exercise the real renderer persistence and Create AI functions in a VM
 with simulated storage and submission responses. They cover creation,
 concurrent clicks, storage failures, migration, restart, and source/media

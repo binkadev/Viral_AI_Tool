@@ -100,7 +100,24 @@ class GenerationService extends EventEmitter {
     if(job.status!=='completed' || job.output?.fileName!==fileName || job.asset?.fileName!==fileName)throw failure('ASSET_UNAVAILABLE');
     const directory=this.context(job).outputDirectory,filePath=path.join(directory,fileName);
     if(fs.lstatSync(filePath).isSymbolicLink() || !fs.statSync(filePath).isFile() || fs.statSync(filePath).size<12 || fs.realpathSync(directory)!==path.resolve(directory))throw failure('ASSET_UNAVAILABLE');
-    return {jobId:job.id,projectId:job.projectId,sceneId:job.sceneId,fileName,path:filePath};
+    const evidence=job.outputVerification;
+    // Older outputs remain available to explicit import actions, but are not
+    // eligible for the prospective automatic project attachment contract.
+    let verified=false;
+    if(evidence) {
+      const size=fs.statSync(filePath).size;
+      if(evidence.version!==1 || evidence.size!==size ||
+          evidence.sha256!==this.outputDigest(filePath))throw failure('ASSET_UNAVAILABLE');
+      verified=true;
+    }
+    return {jobId:job.id,projectId:job.projectId,sceneId:job.sceneId,fileName,path:filePath,verified};
+  }
+
+  outputDigest(filePath) {
+    const hash=createHash('sha256'),buffer=Buffer.alloc(1024*1024),fd=fs.openSync(filePath,'r');
+    try { let count;while((count=fs.readSync(fd,buffer,0,buffer.length,null))>0)hash.update(buffer.subarray(0,count)); }
+    finally {fs.closeSync(fd);}
+    return hash.digest('hex');
   }
 
   activeCount() {
@@ -391,6 +408,7 @@ class GenerationService extends EventEmitter {
           progress: 100,
           asset: { fileName },
           output: { fileName },
+          outputVerification: { version: 1, size: fs.statSync(outputPath).size, sha256: this.outputDigest(outputPath) },
           errorCode: null,
           error: null,
           completedAt,

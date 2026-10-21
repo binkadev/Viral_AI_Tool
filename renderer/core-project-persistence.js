@@ -259,6 +259,9 @@
   function hydrateRetainedState() {
     const current = appState();
     if (!current || !currentSnapshot) return;
+    if (!Array.isArray(current.generationOutputs)) {
+      current.generationOutputs = model.clone(currentSnapshot.workflow.generationOutputs, []);
+    }
     if (!current.scenePlan && currentSnapshot.scenePlan) {
       current.scenePlan = model.clone(currentSnapshot.scenePlan);
     }
@@ -347,6 +350,58 @@
       projectKind: p.projectKind, updatedAt: p.updatedAt, hasSource: !!p.source }));
   }
 
+  // Registry writes target an explicit project and never change selection.
+  // Build first, commit atomically, then project the committed active state.
+  function updateProjectMedia(projectId, update) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const active = registry.activeProjectId === projectId;
+    if (active && !flush("before-generated-media")) throw Error("PROJECT_SAVE_FAILED");
+    const stored = registry.projects.find(item => item.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    const next = update(model.clone(stored));
+    if (JSON.stringify(next) === JSON.stringify(stored)) return model.clone(stored);
+    try {
+      writeRegistry({ ...registry, projects: registry.projects.map(item => item.projectId === projectId ? next : item) });
+    } catch (error) {
+      dispatchSaveFailure("generated-media", error);
+      throw error;
+    }
+    if (active) {
+      currentSnapshot = next;
+      const current = appState();
+      const jobs = current.jobs || [];
+      current.jobs = next.workflow.jobs.map(job => jobs.find(existing => existing.id === job.id) || model.clone(job));
+      current.media = model.clone(next.media);
+      current.generationOutputs = model.clone(next.workflow.generationOutputs);
+      projectLegacyProjection(next);
+      presentProject("generated-media", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+        detail: { reason: "generated-media", projectId }
+      })));
+    }
+    return model.clone(next);
+  }
+
+  function registerGenerationJob(job) {
+    if (!/^[a-zA-Z0-9_-]{1,160}$/.test(job?.id || "") || job.kind !== "video") throw Error("PROJECT_GENERATION_INVALID");
+    return updateProjectMedia(job.projectId, snapshot => {
+      if (job.sceneId && !snapshot.scenePlan?.scenes?.some(scene => scene.id === job.sceneId)) throw Error("PROJECT_SCENE_NOT_FOUND");
+      const entries = snapshot.workflow.generationOutputs || [];
+      const existing = entries.find(item => item.jobId === job.id);
+      if (existing && existing.sceneId !== job.sceneId) throw Error("PROJECT_GENERATION_MISMATCH");
+      if (!existing) snapshot.workflow.generationOutputs = [...entries, { jobId: job.id, sceneId: job.sceneId, assetId: null }];
+      return snapshot;
+    });
+  }
+
+  function generationOutputJobs() {
+    return registry.projects.flatMap(project => (project.workflow.generationOutputs || []).map(entry => ({ ...entry, projectId: project.projectId })));
+  }
+
+  function attachGeneratedOutput(job, output, meta) {
+    return updateProjectMedia(job.projectId, snapshot => model.attachGeneratedOutput(snapshot, job, output, meta));
+  }
+
   function assertSwitchSafe() {
     const current = appState();
     const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
@@ -364,7 +419,7 @@
     const projected = model.toLegacyState(snapshot, {});
     const runtime = { projectId: snapshot.projectId, projectName: snapshot.projectName,
       page: snapshot.source ? "ai-video" : "ai-create" };
-    for (const key of ["output", "renderOptions", "jobs", "media", "scenePlan"]) runtime[key] = model.clone(projected[key]);
+    for (const key of ["output", "renderOptions", "jobs", "media", "scenePlan", "generationOutputs"]) runtime[key] = model.clone(projected[key]);
     // Prepare all project-owned state before the registry commit. Global provider
     // catalogs/configuration survive, while old jobs/results/assignments do not.
     for (const key of ["speech", "translation", "voice"]) {
@@ -602,6 +657,9 @@
     registryKey: REGISTRY_KEY,
     registrySchemaVersion: REGISTRY_SCHEMA_VERSION,
     listProjects,
+    registerGenerationJob,
+    generationOutputJobs,
+    attachGeneratedOutput,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
     openProject,

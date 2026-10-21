@@ -101,6 +101,8 @@
 
   function workflowFromState(state) {
     return {
+      // Additive, opt-in references for newly admitted generation jobs only.
+      generationOutputs: generationOutputs(state?.generationOutputs),
       output: String(state?.output || ""),
       generationBrief: String(state?.generationBrief || "").slice(0, 8000),
       renderOptions: {
@@ -133,6 +135,17 @@
       },
       jobs: safeJobs(state?.jobs)
     };
+  }
+
+  function generationOutputs(input) {
+    const seen = new Set();
+    return (Array.isArray(input) ? input : []).filter(entry => {
+      if (!/^[a-zA-Z0-9_-]{1,160}$/.test(entry?.jobId || "") || seen.has(entry.jobId)) return false;
+      if (entry.sceneId !== null && !/^[a-zA-Z0-9_-]{1,160}$/.test(entry.sceneId || "")) return false;
+      seen.add(entry.jobId);
+      return true;
+    }).map(entry => ({ jobId: entry.jobId, sceneId: entry.sceneId,
+      assetId: entry.assetId === "generation:" + entry.jobId ? entry.assetId : null }));
   }
 
   function normalizeSelection(value) {
@@ -194,6 +207,7 @@
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
       generationBrief: snapshot.workflow?.generationBrief,
+      generationOutputs: snapshot.workflow?.generationOutputs,
       renderOptions: snapshot.workflow?.renderOptions,
       speech: snapshot.workflow?.speech,
       translation: snapshot.workflow?.translation,
@@ -334,6 +348,7 @@
       ...clone(existing, {}),
       page: migrated.source ? "ai-video" : "ai-create",
       output: workflow.output,
+      generationOutputs: clone(workflow.generationOutputs, []),
       media: clone(migrated.media, emptyMedia()),
       renderOptions: clone(workflow.renderOptions, {}),
       speech: clone(workflow.speech, {}),
@@ -368,6 +383,48 @@
     return JSON.stringify(stable);
   }
 
+  function attachGeneratedOutput(snapshot, job, output, meta) {
+    const entry = snapshot.workflow.generationOutputs?.find(item => item.jobId === job.id);
+    if (!entry || job.projectId !== snapshot.projectId || job.sceneId !== entry.sceneId ||
+        (entry.sceneId && !snapshot.scenePlan?.scenes?.some(scene => scene.id === entry.sceneId))) throw Error("PROJECT_GENERATION_MISMATCH");
+    if (job.status !== "completed" || job.kind !== "video" ||
+        job.asset?.fileName !== job.id + ".mp4" || job.output?.fileName !== job.asset.fileName ||
+        output?.verified !== true || output.jobId !== job.id || output.projectId !== snapshot.projectId ||
+        output.sceneId !== entry.sceneId || output.fileName !== job.output.fileName ||
+        ![meta?.duration, meta?.width, meta?.height].every(value => Number.isFinite(value) && value > 0)) throw Error("GENERATED_OUTPUT_UNVERIFIED");
+    if (entry.assetId) return snapshot;
+    const next = clone(snapshot), assetId = "generation:" + job.id;
+    const localIdentity = value => String(value || "").replace(/\\/g, "/").toLowerCase();
+    if (next.media.assets.some(asset => asset.id !== assetId && asset.localPath &&
+        localIdentity(asset.localPath) === localIdentity(output.path))) throw Error("GENERATED_MEDIA_DUPLICATE");
+    const added = mediaModel.addAssets(next.media, [{ id: assetId, kind: "video", origin: "generated",
+      provider: job.provider, providerAssetId: job.id, name: output.fileName, localPath: output.path,
+      status: "ready", fileState: "available", meta: { ...meta, mime: "video/mp4" } }]);
+    const asset = added.library.assets.find(item => item.id === assetId);
+    if (!asset?.localPath || asset.localPath !== output.path) throw Error("GENERATED_MEDIA_UNAVAILABLE");
+    next.media = added.library;
+    const sourceId = "generation-source:" + job.id;
+    if (!next.workflow.jobs.some(item => item.id === sourceId)) {
+      if (next.workflow.jobs.length >= 100) throw Error("PROJECT_SOURCE_CAPACITY");
+      const source = mediaModel.sourceJob({ name: asset.name, path: asset.localPath }, {
+        id: sourceId, projectId: job.projectId, sceneId: job.sceneId, generationJobId: job.id, assetId, meta });
+      // Keep an existing editor/source selection. An empty AI project selects
+      // its first real video through the very same source path as an import.
+      if (next.source) next.workflow.jobs.push(source);
+      else {
+        next.workflow.jobs.unshift(source);
+        next.source = sourceFromState({ jobs: next.workflow.jobs });
+        next.media.selectedAssetId = asset.id;
+        next.editor = normalizeEditor({ ...next.editor, playback: {
+          position: 0, sourceIdentity: next.source.identity, sourcePath: next.source.path
+        } }, next.source);
+      }
+    }
+    next.workflow.generationOutputs.find(item => item.jobId === job.id).assetId = assetId;
+    next.updatedAt = new Date().toISOString();
+    return next;
+  }
+
   return {
     CURRENT_SCHEMA_VERSION,
     SNAPSHOT_KEY,
@@ -385,6 +442,7 @@
     createDraftProject,
     toLegacyState,
     legacyUiProjection,
-    semanticSignature
+    semanticSignature,
+    attachGeneratedOutput
   };
 });

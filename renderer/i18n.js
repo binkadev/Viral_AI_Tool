@@ -260,6 +260,7 @@ window.I18N = (() => {
   "noScenes": "Chưa có kế hoạch cảnh",
   "noScenesBody": "Kế hoạch cảnh hiện có sẽ xuất hiện ở đây. Yêu cầu tạo tư liệu vẫn được theo dõi độc lập; không tự tạo cảnh mẫu.",
   "loadError": "Chưa tải được tiến trình. Dự án vẫn được giữ lại. Chọn Cập nhật để thử lại.",
+  "attachmentError": "Chưa thêm được video vào dự án. Kết quả tạo video vẫn được giữ lại. Kiểm tra tệp và dung lượng lưu trữ rồi chọn Cập nhật.",
   "actionError": "Chưa xác nhận được thao tác. Trạng thái hiện tại vẫn được giữ lại. Cập nhật rồi thử lại.",
   "states": {
     "queued": "Chờ xử lý",
@@ -1696,6 +1697,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "noScenes": "No scene plan yet",
   "noScenesBody": "Your existing scene plan will appear here. Media generation is tracked independently; no sample scenes are created.",
   "loadError": "Progress could not be loaded. Your project is safe. Choose Refresh to try again.",
+  "attachmentError": "The video could not be added to the project. The generation result is retained. Check the file and available storage, then choose Refresh.",
   "actionError": "The action could not be confirmed. The current state is preserved. Refresh and try again.",
   "states": {
     "queued": "Queued",

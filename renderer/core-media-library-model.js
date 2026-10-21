@@ -258,6 +258,13 @@
     };
   }
 
+  // Both imported and generated files use the same Studio source record.
+  // Registration references an existing local file; it never copies bytes.
+  function sourceJob(file, { id, time = "", ...association } = {}) {
+    return { id, name: file.name, lang: "", status: "queued", progress: 0,
+      time, sourcePath: file.path, fileState: "available", mediaState: "reading", ...association };
+  }
+
   return {
     LIBRARY_SCHEMA_VERSION,
     MAX_PROJECT_ASSETS,
@@ -271,6 +278,7 @@
     normalizeLibrary,
     restartSafeAsset,
     assetIdentity,
+    sourceJob,
     addAssets,
     removeAsset,
     updateAsset

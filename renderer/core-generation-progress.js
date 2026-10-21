@@ -37,6 +37,8 @@
       if (version !== requestVersion || identity() !== id) return;
       if (!list?.ok || !Array.isArray(list.value)) throw new Error('unavailable');
       jobs=model.scoped(list.value,id);
+      if (selectedId) await window.ViralCoreGeneratedMedia?.observe(selectedId);
+      if (version !== requestVersion || identity() !== id) return;
       ready=status?.ok === true && status.value?.ready === true && status.value?.state === 'ready';
       selectedId=jobs.some(j=>j.id===selectedId) ? selectedId : jobs[0]?.id || null;
       outputPath=null;
@@ -51,7 +53,7 @@
         if (version !== requestVersion || identity() !== id) return;
         if (Number(probe?.duration)>0 && Number(probe?.width)>0 && Number(probe?.height)>0) outputPath=candidate;
       }
-      error='';
+      error=window.ViralCoreGeneratedMedia?.status(selected()?.id)==='error'?'attachmentError':'';
     } catch { if (version===requestVersion) { error='loadError'; ready=false; outputPath=null; } }
     finally { if (version===requestVersion) { loading=false; paint(); } }
   }
@@ -88,6 +90,11 @@
     if (name==='studio') {
       await refresh();
       if (outputPath && model.verified(selected())) {
+        const attachment=window.ViralCoreGeneratedMedia?.status(selected().id);
+        if (attachment && attachment!=='untracked') {
+          if (attachment!=='attached') { error='attachmentError';paint();return; }
+          state.page='ai-video';render();return;
+        }
         const existing=state.jobs.find(j=>j.sourcePath===outputPath);
         if(!existing && typeof addSourceFiles==='function')addSourceFiles([{name:selected().output.fileName,path:outputPath}]);
         else if(existing)state.jobs=[existing,...state.jobs.filter(j=>j!==existing)];
@@ -110,6 +117,7 @@
         result=await window.desktopAPI.retryGeneration({id:job.id,idempotencyKey:retryKey});
       } else result=await window.desktopAPI[name==='cancel'?'cancelGeneration':'recoverGeneration'](job.id);
       if (!result?.ok) throw new Error('action');
+      if (name==='retry' && result.value?.id) await window.ViralCoreGeneratedMedia?.track(result.value);
       if (identity()===id) selectedId=result.value?.id||job.id;
       await refresh();
     } catch { error='actionError'; }
@@ -129,6 +137,13 @@
     const changed=()=>{if(state.page==='generation-progress') refresh();};
     unsubscribe=window.desktopAPI?.onGenerationChanged?.(changed);
     window.addEventListener('focus',changed);
+    // Attachment notifications update presentation only. Starting another
+    // observation here would turn a persistent write failure into a retry loop.
+    window.addEventListener('viral-ai:generation-attachment-changed',event=>{
+      if(selected()?.id!==event.detail?.jobId)return;
+      error=window.ViralCoreGeneratedMedia?.status(event.detail.jobId)==='error'?'attachmentError':'';
+      paint();
+    });
     for(const event of ['viral-ai:core-state-changed','viral-ai:project-snapshot-restored']) window.addEventListener(event,changed);
     window.addEventListener('beforeunload',()=>unsubscribe?.(),{once:true});
     window.desktopAPI?.getDevGenerationFixture?.().then(fixture=>{
