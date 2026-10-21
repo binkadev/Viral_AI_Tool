@@ -4,9 +4,24 @@ const { contextBridge, ipcRenderer } = require('electron');
 const developmentSupport = typeof ipcRenderer.sendSync === 'function' &&
   ipcRenderer.sendSync('generation:development-diagnostics') === true;
 
+// Static DEV-only fault, installed before persistence captures the native setter.
+// Main authority requires unpackaged + non-production + exact fixture/session.
+if (typeof ipcRenderer.sendSync === 'function' && ipcRenderer.sendSync('dev:handoff-storage-fault') === 'dev-handoff-registry-fault-v1') {
+  contextBridge.executeInMainWorld({ func: () => {
+    const nativeSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (this === localStorage && key === 'viral-ai-core-project-registry-v1' && window.__devHandoffFailRegistry === true) {
+        throw new DOMException('DEV registry write failure', 'QuotaExceededError');
+      }
+      return nativeSet.call(this, key, value);
+    };
+  } });
+}
+
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
   getDevGenerationFixture: () => ipcRenderer.invoke('dev:generation-fixture'),
+  getDevHandoffFixture: (action, payload) => ipcRenderer.invoke('dev:generated-handoff', action, payload),
   onGenerationChanged: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => {

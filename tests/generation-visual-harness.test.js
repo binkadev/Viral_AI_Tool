@@ -19,7 +19,11 @@ test("production and packaged startup cannot load or return a fixture for any re
     let handler;
     vm.runInNewContext(fs.readFileSync("startup-main.js","utf8"), {
       require(name) {
-        if (name === "electron") return {app, BrowserWindow:{}, ipcMain:{handle(channel,fn){assert.equal(channel,"dev:generation-fixture");handler=fn;}}};
+        if (name === "electron") return {app, BrowserWindow:{}, ipcMain:{handle(channel,fn){
+          assert(["dev:generation-fixture", "dev:generated-handoff"].includes(channel));
+          if (channel === "dev:generation-fixture") handler=fn;
+          else assert.equal(fn.constructor.name, "AsyncFunction");
+        }}};
         if (["path","url"].includes(name)) return require(name);
         assert.fail("Production loaded " + name);
       }, process:{env}, console:{warn(){}}

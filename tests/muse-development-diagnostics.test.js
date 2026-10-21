@@ -43,7 +43,10 @@ for(const development of [false,true])test('main authority controls preload owne
  const untrusted={trusted:false};sync(untrusted);assert.equal(untrusted.returnValue,false);
  let api;const calls=[];
  vm.runInNewContext(fs.readFileSync('preload.js','utf8'),{process:{argv:['--development-diagnostics']},localStorage:{getItem:()=>true},require:name=>{
-   assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(_,v)=>api=v},ipcRenderer:{sendSync:channel=>{assert.equal(channel,'generation:development-diagnostics');return event.returnValue;},invoke:(...args)=>calls.push(args)}};
+   assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(_,v)=>api=v},ipcRenderer:{sendSync:channel=>{
+     if(channel==='dev:handoff-storage-fault')return false; // Independent DEV fixture authority, never ownership authority.
+     assert.equal(channel,'generation:development-diagnostics');return event.returnValue;
+   },invoke:(...args)=>calls.push(args)}};
  }});
  assert.equal(typeof api.diagnoseMuseOwnership,development?'function':'undefined');
  const result=await handlers['generation:ownership-diagnosis']({trusted:true},'job');assert.equal(result.ok,development);assert.equal(invoked,development?1:0);

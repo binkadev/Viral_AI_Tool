@@ -2,6 +2,36 @@
 
 const { app, BrowserWindow } = require("electron");
 
+// Isolate storage BEFORE lock/session initialization; DEV code is not shipped.
+let devHandoff = null;
+if (app.isPackaged === false && process.env.NODE_ENV !== "production" &&
+    ["completed", "persistence-failure", "tampered", "noncompleted", "legacy"].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
+    /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(process.env.VIRAL_AI_DEV_HANDOFF_SESSION || "")) {
+  devHandoff = require("./dev/generated-handoff-harness").setup(app, process.env);
+}
+require("electron").ipcMain.handle("dev:generated-handoff", async (event, action, payload) => {
+  if (!devHandoff || app.isPackaged !== false || process.env.NODE_ENV === "production") return null;
+  const { pathToFileURL } = require("url"), path = require("path");
+  if (event.senderFrame !== event.sender.mainFrame ||
+      event.senderFrame.url !== pathToFileURL(path.join(__dirname, "renderer", "index.html")).href) return null;
+  return devHandoff.command?.(action, payload) ?? null;
+});
+if (devHandoff) app.on("web-contents-created", (_event, contents) => {
+  contents.once("did-finish-load", () => {
+    const path = require("path"), { pathToFileURL } = require("url");
+    if (contents.getURL() !== pathToFileURL(path.join(__dirname, "renderer", "index.html")).href) return;
+    contents.executeJavaScript(require("fs").readFileSync(path.join(__dirname, "dev", "generated-handoff-renderer.js"), "utf8"))
+      .catch(error => console.error("[DEV handoff]", error));
+  });
+});
+require("electron").ipcMain.on?.("dev:handoff-storage-fault", event => {
+  const path = require("path"), { pathToFileURL } = require("url");
+  const allowed = Boolean(devHandoff?.mode === "persistence-failure" && app.isPackaged === false &&
+    process.env.NODE_ENV !== "production" && event.senderFrame === event.sender.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, "renderer", "index.html")).href);
+  event.returnValue = allowed ? "dev-handoff-registry-fault-v1" : false;
+});
+
 // The fixture module is excluded from release files and never loaded in production.
 let devGenerationFixture = null;
 if (app.isPackaged === false && process.env.NODE_ENV !== "production" &&
