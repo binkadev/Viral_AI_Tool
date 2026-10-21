@@ -7,6 +7,7 @@ const receiptV2=require('../../../extensions/meta-muse-bridge/receipt-v2');
 const ownershipDiagnosis=require('../bridge/ownership-diagnosis');
 function createMuseExecution(bridge,verifyVideo) {
   const locks=new Map(),cancelled=new Set(),transfers=new Map();
+  const manual=require('./muse-manual-recovery').createManualRecovery({bridge,verifyVideo,busy:id=>locks.size>0 || transfers.size>0});
   const guard=c=>{if(!bridge || !identifier(c?.jobId) || !identifier(c?.sceneId) || typeof c.request?.prompt!=='string' || !path.isAbsolute(c.outputDirectory) || fs.realpathSync(c.outputDirectory)!==path.resolve(c.outputDirectory))throw failure('PROVIDER_UNAVAILABLE');};
   const recordPath=c=>path.join(c.outputDirectory,'muse-operation.json');
   const digest=c=>crypto.createHash('sha256').update(c.sceneId+'\0'+c.request.prompt).digest('hex');
@@ -51,58 +52,12 @@ function createMuseExecution(bridge,verifyVideo) {
   async function acquire(c,r) {
     if(typeof verifyVideo!=='function')throw failure('ASSET_UNAVAILABLE');
     if(r.receipt?.version!==2 || !r.receipt.result)throw failure('RECOVERY_REQUIRED');
-    const fileName=c.jobId+'.mp4',output=path.join(c.outputDirectory,fileName),partial=path.join(c.outputDirectory,c.jobId+'.partial.mp4');
-    let fd,created=false,transfer,transferDone=false;
-    const clearPartial=()=>{if(fs.existsSync(partial)){const s=fs.lstatSync(partial);if(!s.isFile() || s.isSymbolicLink())throw failure('ASSET_UNAVAILABLE');fs.unlinkSync(partial);}};
-    try {
-      if(fs.existsSync(output)) {
-        if(fs.lstatSync(output).isSymbolicLink())throw failure('ASSET_UNAVAILABLE');
-        await verifyRecorded(c,r,output);await verify(output);
-        if(cancelled.has(c.jobId))throw failure('RECOVERY_REQUIRED');
-        clearPartial();return {status:'completed',fileName};
-      }
-      await c.onVerifying?.();
-      const disk=fs.statfsSync(c.outputDirectory);
-      if(disk.bavail*disk.bsize<receiptV2.MAX_BYTES+64*1024*1024)throw failure('RESOURCE_UNAVAILABLE');
-      transfer={transferId:crypto.randomUUID(),sequence:0,offset:0,mediaKind:'video',receipt:r.receipt,controller:new AbortController()};
-      transfers.set(c.jobId,transfer);
-      // A partial from an interrupted acquisition is owned by this same operation.
-      clearPartial();
-      fd=fs.openSync(partial,'wx',0o600);created=true;
-      let offset=0;const checksum=crypto.createHash('sha256'),started=Date.now();
-      do {
-        if(cancelled.has(c.jobId) || Date.now()-started>300000)throw failure('RECOVERY_REQUIRED');
-        const extra={transferId:transfer.transferId,sequence:transfer.sequence,mediaKind:'video',receipt:r.receipt,offset};
-        let timer,onAbort;
-        const result=await Promise.race([command('acquireGenerationResult',c,r,extra),new Promise((_,reject)=>{
-          onAbort=()=>reject(failure('RECOVERY_REQUIRED'));transfer.controller.signal.addEventListener('abort',onAbort,{once:true});
-          timer=setTimeout(()=>reject(failure('PROVIDER_TIMEOUT')),20000);
-        })]).finally(()=>{clearTimeout(timer);transfer.controller.signal.removeEventListener('abort',onAbort);});
-        if(cancelled.has(c.jobId) || Date.now()-started>300000)throw failure('RECOVERY_REQUIRED');
-        if(result.state!=='result')throw failure('ASSET_UNAVAILABLE');
-        const bytes=Buffer.from(result.data,'base64');
-        if(bytes.toString('base64')!==result.data || crypto.createHash('sha256').update(bytes).digest('hex')!==result.chunkHash)throw failure('ASSET_UNAVAILABLE');
-        checksum.update(bytes);transferDone=result.done;transfer.sequence++;transfer.offset=offset+bytes.length;
-        let written=0;while(written<bytes.length)written+=fs.writeSync(fd,bytes,written,bytes.length-written);
-        offset+=bytes.length;
-      } while(!transferDone);
-      fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
-      await verify(partial);
-      if(cancelled.has(c.jobId))throw failure('RECOVERY_REQUIRED');
-      const verifiedOutput={fileName,size:offset,sha256:checksum.digest('hex'),userStableIdHash:r.receipt.userStableIdHash,assistantStableIdHash:r.receipt.assistantStableIdHash};
-      // Record before exclusive publication: a crash after linking can reuse
-      // only these exact verified bytes, never an arbitrary preexisting file.
-      persistRecord(c,r,{verifiedOutput});
-      fs.linkSync(partial,output); // Exclusive publication; never overwrite.
-      return {status:'completed',fileName};
-    } finally {
-      if(fd!==undefined)fs.closeSync(fd);if(created)try{fs.unlinkSync(partial);}catch{}
-      if(transfer) {
-        transfers.delete(c.jobId);const {controller,...payload}=transfer;
-        // Best effort; content also aborts on disconnect/15-second idle expiry.
-        if(!transferDone)try{await bridge.command('acquireGenerationResult',{tabId:r.target.tabId,operationId:c.jobId,sceneId:c.sceneId,...payload,abort:true},r.target);}catch{}
-      }
-    }
+    const result=await require('./bounded-acquisition').acquireBounded(c,r,{
+      verifyVideo,cancelled,transfers,command,persistRecord,verifyRecorded,bridge,
+      commandName:'acquireGenerationResult',
+      verifiedIdentity:r=>({userStableIdHash:r.receipt.userStableIdHash,assistantStableIdHash:r.receipt.assistantStableIdHash})
+    });
+    return {status:result.status,fileName:result.fileName};
   }
   function persistRecord(c,r,patch) {
     const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
@@ -115,13 +70,6 @@ function createMuseExecution(bridge,verifyVideo) {
       v.userStableIdHash!==r.receipt.userStableIdHash || v.assistantStableIdHash!==r.receipt.assistantStableIdHash || !/^[a-f0-9]{64}$/.test(v.sha256))throw failure('ASSET_UNAVAILABLE');
     const h=crypto.createHash('sha256');for await(const chunk of fs.createReadStream(file))h.update(chunk);
     if(h.digest('hex')!==v.sha256)throw failure('ASSET_UNAVAILABLE');
-  }
-  async function verify(file) {
-    const stat=fs.lstatSync(file);if(!stat.isFile() || stat.isSymbolicLink() || stat.size<12)throw failure('ASSET_UNAVAILABLE');
-    const header=Buffer.alloc(12),fd=fs.openSync(file,'r');
-    try{fs.readSync(fd,header,0,12,0);}finally{fs.closeSync(fd);}
-    if(header.toString('ascii',4,8)!=='ftyp')throw failure('ASSET_UNAVAILABLE');
-    await verifyVideo(file);
   }
   async function reconcile(c) {
     guard(c);const r=read(c);
@@ -145,6 +93,12 @@ function createMuseExecution(bridge,verifyVideo) {
     const task=Promise.resolve().then(fn).finally(()=>locks.delete(c.jobId));locks.set(c.jobId,task);return task;
   }
   return {
+    listRecoveryCandidates:c=>manual.list(c),
+    revealRecoveryCandidate:(c,id)=>manual.reveal(c,id),
+    confirmRecoveryCandidate:(c,id,persist)=>manual.confirm(c,id,persist),
+    dismissRecovery:c=>manual.dismiss(c),
+    cancelRecovery:c=>manual.cancel(c),
+    verifyRecoveryOutput:c=>manual.verifyLocal(c),
     diagnoseOwnership:async c=>{
       if(!bridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
       let record;

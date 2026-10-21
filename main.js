@@ -512,7 +512,7 @@ app.whenReady().then(() => {
   });
   try {
     const handoff = app.isPackaged === false && process.env.NODE_ENV !== 'production' &&
-      ['completed', 'persistence-failure', 'tampered', 'noncompleted', 'legacy'].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
+      ['completed', 'persistence-failure', 'tampered', 'noncompleted', 'legacy', 'manual-recovery'].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
       /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(process.env.VIRAL_AI_DEV_HANDOFF_SESSION || '');
     if (handoff) {
       generationService = require('./dev/generated-handoff-harness').runtime(app, process.env).service;
@@ -525,7 +525,7 @@ app.whenReady().then(() => {
       developmentDiagnostics: !app.isPackaged });
     museExtensionBridge.start().catch(() => {});
     registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge,
-      verifyVideo:async file=>{const media=await probeVideo(file);if(!(media.duration>0 && media.width>0 && media.height>0))throw Error('ASSET_UNAVAILABLE');} }));
+      verifyVideo:async file=>{const media=await probeVideo(file);if(!(media.duration>0 && media.width>0 && media.height>0))throw Error('ASSET_UNAVAILABLE');return media;} }));
     generationService = new GenerationService({ root, registry, providerConfigStore });
     }
   } catch {}

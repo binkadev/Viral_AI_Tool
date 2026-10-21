@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-14-contract3-receipt2-replacementdiag1';
+const CONTENT_BUILD='muse-content-v0-3-15-contract3-receipt2-manual1';
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
 const operations=new Map();
 // Released observers retain only bounded diagnostic data until a later inspect.
@@ -517,6 +517,7 @@ function startAcceptanceProjection(op,original) {
     if(op.baselineNodes.every(node=>container.contains?.(node))){op.projection.container=container;break;}
   }
   if(op.projection.container)nodes.set(op.projection.container,++op.projection.nextNode);
+  manualRecovery?.retain(op.preparedReceipt.operationId,op);
   const baseline={count:op.baseline.length,container:nodes.get(op.projection.container)||0,tailIdentity:ids.get(op.baseline.at(-1).id)};
   op.projection.tailIdentity=baseline.tailIdentity;
   // Version 1 traces retain their original single-assistant replay semantics.
@@ -770,6 +771,7 @@ function releaseV2(id,op) {
   if(operations.get(id)===op)operations.delete(id);
 }
 async function prepareV2(p) {
+  manualRecovery?.prepare(p);
   if(operations.has(p.operationId) || operations.size>=32 || transfers.size || [...operations.values()].some(op=>op.v2Reserved && !op.invalid && !op.receipt?.result))return answer(p,'interrupted');
   const op={sceneId:p.sceneId,invalid:false,v2Reserved:true,observationToken:p.observationToken};
   operations.set(p.operationId,op);
@@ -975,6 +977,7 @@ async function ownedVideo(p) {
 }
 async function acquireV2(p) {
   if(!MuseReceiptV2.transferRequest(p))return answer(p,'interrupted');
+  manualRecovery?.controller.revoke();
   let t=transfers.get(p.transferId);
   if(t && (t.operationId!==p.operationId || t.sceneId!==p.sceneId))return answer(p,'interrupted');
   if(p.abort){if(t)closeTransfer(t);return answer(p,'interrupted');}
@@ -1001,6 +1004,11 @@ async function acquireV2(p) {
     if(t.controller.signal.aborted || Date.now()-t.started>300000 || t.offset!==p.offset || t.sequence!==p.sequence ||
       !MuseReceiptV2.extendsReceipt(t.receipt,p.receipt) || await ownedVideo(p)!==t.video || t.video.currentSrc!==t.source)throw Error('TRANSFER_CHANGED');
     t.busy=true;clearTimeout(t.timer);t.timer=setTimeout(()=>closeTransfer(t),15000);
+    return await readBoundedVideoChunk(t,p,async()=>await ownedVideo(p)===t.video && t.video.currentSrc===t.source,{receipt:p.receipt});
+  } catch {if(t)closeTransfer(t);return answer(p,'interrupted');}
+}
+// Both authorized resolvers use the same bounded reader, sequence and tombstones.
+async function readBoundedVideoChunk(t,p,revalidate,fields) {
     const bytes=new Uint8Array(MuseReceiptV2.CHUNK_BYTES);let size=0;
     while(size<bytes.length && !t.ended) {
       if(!t.pending.length) {
@@ -1013,21 +1021,25 @@ async function acquireV2(p) {
       const take=Math.min(bytes.length-size,t.pending.length);
       bytes.set(t.pending.subarray(0,take),size);size+=take;t.pending=t.pending.subarray(take);
     }
-    if(t.controller.signal.aborted || Date.now()-t.started>300000 || await ownedVideo(p)!==t.video || t.video.currentSrc!==t.source)throw Error('TRANSFER_CHANGED');
+    if(t.controller.signal.aborted || Date.now()-t.started>300000 || !await revalidate())throw Error('TRANSFER_CHANGED');
     const total=t.offset+size;
     if(total>MuseReceiptV2.MAX_BYTES || t.expected!==null && (total>t.expected || t.ended && total!==t.expected))throw Error('LIMIT');
     const chunk=bytes.subarray(0,size);
     const chunkHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',chunk))].map(v=>v.toString(16).padStart(2,'0')).join('');
     let binary='';for(let i=0;i<size;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));
-    const result=answer(p,'result',{receipt:p.receipt,transferId:t.id,sequence:p.sequence,offset:p.offset,total:t.ended?total:null,done:t.ended,chunkHash,data:btoa(binary)});
+    const result=answer(p,'result',{...fields,transferId:t.id,sequence:p.sequence,offset:p.offset,total:t.ended?total:null,done:t.ended,chunkHash,data:btoa(binary)});
     t.offset=total;t.sequence++;t.busy=false;
     if(t.ended)closeTransfer(t);
     return result;
-  } catch {if(t)closeTransfer(t);return answer(p,'interrupted');}
 }
+const manualRecovery=typeof installMuseManualRecovery==='function'?installMuseManualRecovery({composer,visible,generationActive,STOP,transfers,closedTransfers,closeTransfer,readChunk:readBoundedVideoChunk,autoBusy:()=>[...transfers.values()].some(t=>!t.manual) || [...operations.values()].some(op=>op.v2Reserved && !op.invalid)}):null;
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(sender.id!==chrome.runtime.id || location.origin!=='https://muse.ai' || window.top!==window)return false;
-  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics});return false;}
+  if(message?.type==='viral-ai:muse-manual-recovery' && manualRecovery) {
+    if(!MuseManualRecoveryContract.request(message.command,message.payload,{content:true}))return false;
+    manualRecovery.execute(message.command,message.payload).then(reply);return true;
+  }
+  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics,manualRecoveryVersion:1});return false;}
   if(message?.type==='viral-ai:muse-status'){
     try{reply(status());}catch{reply({sampledAt:Date.now(),composerReady:false,inspectionComplete:false,contentError:'STATUS_EXCEPTION'});}
     return false;
@@ -1058,6 +1070,7 @@ function connect() {
     if(!chrome.runtime.id)return;
     const port=chrome.runtime.connect({name:'viral-ai-muse-tab'});activePort=port;
     port.onDisconnect.addListener(()=>{
+      manualRecovery?.controller.reset();
       for(const t of transfers.values())closeTransfer(t);
       for(const [id,op] of operations)releaseV2(id,op);
       activePort=null;
@@ -1070,5 +1083,5 @@ function reconnectOnVisible() {
 }
 document.addEventListener?.('visibilitychange',reconnectOnVisible);
 window.addEventListener?.('pageshow',reconnectOnVisible);
-window.addEventListener?.('pagehide',()=>{clearTimeout(reconnectTimer);const port=activePort;activePort=null;reconnectAttempts=4;port?.disconnect();});
+window.addEventListener?.('pagehide',()=>{manualRecovery?.controller.reset();clearTimeout(reconnectTimer);const port=activePort;activePort=null;reconnectAttempts=4;port?.disconnect();});
 connect();

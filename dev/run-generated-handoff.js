@@ -4,7 +4,7 @@ const fs = require("node:fs"), path = require("node:path"), os = require("node:o
 const { spawn } = require("node:child_process"), { randomUUID } = require("node:crypto");
 async function run(mode = "completed", verify = false) {
   if (process.env.NODE_ENV === "production") throw Error("DEV harness unavailable in production");
-  if (!["completed", "persistence-failure", "tampered", "noncompleted", "legacy"].includes(mode)) throw Error("Invalid DEV mode");
+  if (!["completed", "persistence-failure", "tampered", "noncompleted", "legacy", "manual-recovery"].includes(mode)) throw Error("Invalid DEV mode");
   const session = randomUUID(), root = path.join(os.tmpdir(), "viral-ai-handoff-" + session);
   const env = { ...process.env, VIRAL_AI_DEV_HANDOFF_FIXTURE: mode, VIRAL_AI_DEV_HANDOFF_SESSION: session,
     VIRAL_AI_DEV_HANDOFF_AUTOCLOSE: verify ? "1" : "0" };
@@ -23,7 +23,7 @@ async function run(mode = "completed", verify = false) {
   await launch();
   const first = JSON.parse(fs.readFileSync(path.join(root, "first-pass.json"), "utf8"));
   if (!first.ok) throw Error(JSON.stringify(first));
-  if (mode === "completed") {
+  if (["completed", "manual-recovery"].includes(mode)) {
     await launch(); // Same profile/identity, actual new Electron process.
     const restarted = JSON.parse(fs.readFileSync(path.join(root, "restart-pass.json"), "utf8"));
     if (!restarted.ok) throw Error(JSON.stringify(restarted));

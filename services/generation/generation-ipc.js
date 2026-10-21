@@ -14,7 +14,9 @@ const SAFE_CODES = new Set([
   "DUPLICATE_JOB",
   "JOB_NOT_FOUND",
   "RETRY_UNSAFE",
-  "UNAVAILABLE"
+  "UNAVAILABLE",
+  "RECOVERY_CHANGED",
+  "RECOVERY_TOO_MANY"
 ]);
 
 function registerGenerationIpc({ ipcMain, getService, trusted, developmentDiagnostics=false }) {
@@ -27,6 +29,24 @@ function registerGenerationIpc({ ipcMain, getService, trusted, developmentDiagno
   };
 
   const handlers = {
+    "recovery-candidates": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.listRecoveryCandidates(payload);
+    },
+    "recovery-reveal": (service,payload)=>{
+      const C=require('../../extensions/meta-muse-bridge/manual-recovery-contract');
+      if(!C.exact(payload,['jobId','candidateId']) || !identifier(payload.jobId) || !C.opaque(payload.candidateId))throw 0;
+      return service.revealRecoveryCandidate(payload.jobId,payload.candidateId);
+    },
+    "recovery-confirm": (service,payload)=>{
+      const C=require('../../extensions/meta-muse-bridge/manual-recovery-contract');
+      if(!C.exact(payload,['jobId','candidateId']) || !identifier(payload.jobId) || !C.opaque(payload.candidateId))throw 0;
+      return service.confirmRecoveryCandidate(payload.jobId,payload.candidateId);
+    },
+    "recovery-dismiss": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.dismissRecovery(payload);
+    },
     status: (service, payload) => noPayload(service, payload, current => current.readiness()),
     providers: (service, payload) => noPayload(service, payload, async current => {
       const status = await current.readiness();

@@ -1,6 +1,6 @@
 "use strict";
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const FILES=Object.freeze(['manifest.json','acceptance-replay.js','receipt-v2.js','service-worker.js','content-script.js','popup.html','popup.js','popup.css','strings.js']);
+const FILES=Object.freeze(['manifest.json','acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','manual-recovery.js','content-manual-recovery.js','worker-manual-recovery.js','service-worker.js','content-script.js','popup.html','popup.js','popup.css','strings.js']);
 function check(ok){if(!ok)throw Object.assign(Error('Invalid managed extension bundle'),{code:'INVALID_REQUEST'});}
 function safeDirectory(directory) {
   const absolute=path.resolve(directory),parsed=path.parse(absolute);
@@ -30,7 +30,7 @@ function readBundle(source,config,{developmentDiagnostics=false}={}) {
   check(manifest.version_name===undefined);
   check(manifest.version===config.expectedExtensionVersion && manifest.manifest_version===3 &&
     manifest.background?.service_worker==='service-worker.js' && manifest.action?.default_popup==='popup.html' &&
-    JSON.stringify(manifest.content_scripts?.flatMap(s=>s.js))===JSON.stringify(['acceptance-replay.js','receipt-v2.js','content-script.js']));
+    JSON.stringify(manifest.content_scripts?.flatMap(s=>s.js))===JSON.stringify(['acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','manual-recovery.js','content-manual-recovery.js','content-script.js']));
   const marker=(file,name)=>files.find(f=>f.file===file).data.toString('utf8').match(new RegExp("const "+name+"='([^']+)'"))?.[1];
   const workerBuild=marker('service-worker.js','WORKER_BUILD'),contentBuild=marker('content-script.js','CONTENT_BUILD');
   check(workerBuild===config.expectedWorkerBuild && contentBuild===config.expectedContentBuild);

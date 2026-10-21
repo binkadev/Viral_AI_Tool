@@ -6,7 +6,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const {failure} = require("../generation-job");
-const {validPayload, validResult} = require("./execution-contract");
+const {validPayload:automaticPayload, validResult:automaticResult} = require("./execution-contract");
+const manualContract=require('../../../extensions/meta-muse-bridge/manual-recovery-contract');
+const validPayload=(type,p)=>manualContract.commands.includes(type)?manualContract.request(type,p):automaticPayload(type,p);
+const validResult=(type,r,p)=>manualContract.commands.includes(type)?manualContract.result(type,r,p):automaticResult(type,r,p);
 const {diagnosticFailure}=require('./ownership-diagnosis');
 const {validDiagnostic,validRuntimeBuild}=require('./connection-diagnostics');
 const {readBundle,matches,stageBundle,identity:bundleIdentity}=require('./extension-bundle');
@@ -107,7 +110,7 @@ class MetaMuseExtensionBridge {
       const ids=new Set();
       const tabs=b.tabs.map(t=>{
         // Legacy 0.1.0 metadata is bounded then discarded, never stored or returned.
-        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild","manualRecoveryVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
         if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
         if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
         const evidence=t.devEvidence;
@@ -119,7 +122,7 @@ class MetaMuseExtensionBridge {
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
+        return {manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
           ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),contentFresh:!!validEvidence,composerDetected:validEvidence?evidence.root && evidence.editor && evidence.actionSlot:null,
           generationActive:validEvidence?evidence.generationActive:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection}:{})};
       });
@@ -250,8 +253,9 @@ class MetaMuseExtensionBridge {
     const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
     check(validPayload(type,payload) && payload.tabId===target?.tabId);
     if(this.stagingFailed || (this.source && !this.stagedBundleVerified()) || s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");
+    if(manualContract.commands.includes(type) && (tab.manualRecoveryVersion!==1 || tab.runtimeBuild?.workerBuild!==this.distribution.expectedWorkerBuild || tab.runtimeBuild?.contentBuild!==this.distribution.expectedContentBuild))throw failure('PROVIDER_UNAVAILABLE');
     let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});
-    const timer=setTimeout(()=>this.finish(s.instanceId,false),type==='acquireGenerationResult'?70000:this.commandTimeoutMs);
+    const timer=setTimeout(()=>this.finish(s.instanceId,false),['acquireGenerationResult','acquireRecoveryCandidate'].includes(type)?70000:this.commandTimeoutMs);
     this.pending.set(s.instanceId,{id:crypto.randomUUID(),type,payload,promise,resolve,reject,timer,sent:false});
     return promise;
   }

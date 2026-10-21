@@ -1,6 +1,6 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-14-contract3-receipt2-replacementdiag1';
-if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js');
+const WORKER_BUILD='muse-worker-v0-3-15-contract3-receipt2-manual1';
+if(typeof importScripts==='function')importScripts('acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js');
 const WORKER_EPOCH=crypto.randomUUID();
 let observationEpoch=WORKER_EPOCH;
 const PORTS=Array.from({length:11},(_,i)=>32147+i), MUSE_URL="https://muse.ai/";
@@ -68,7 +68,7 @@ async function museTabs() {
     diagnostic.workerBuild=WORKER_BUILD;
     diagnostic.contentBuild=/^muse-content-[a-z0-9-]{1,64}$/.test(handshake?.buildMarker||'')?handshake.buildMarker:'unreported';
     diagnostic.generationActive=status?.devEvidence?.generationActive===true;
-    return {tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
+    return {manualRecoveryVersion:fresh && handshake?.manualRecoveryVersion===1?1:null,tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
       runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported',diagnosticsEnabled:developmentDiagnostics && errorCode==='NONE' && fresh && handshake?.diagnosticsEnabled===true},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
   }));
 }
@@ -136,6 +136,7 @@ chrome.alarms.onAlarm.addListener(a=>{if(a.name==="viral-ai-muse-heartbeat")run(
 chrome.alarms.create('viral-ai-muse-heartbeat',{periodInMinutes:0.5});
 run();
 
+const manualWorker=typeof createMuseManualWorker==='function'?createMuseManualWorker({C:MuseManualRecoveryContract,epoch:()=>observationEpoch+'_'+(bridge?.serverId||'offline'),send:(tab,message)=>chrome.tabs.sendMessage(tab,message),focus:openMuse}):null;
 const executionTypes=new Set(['submitGeneration','inspectGeneration','acquireGenerationResult','cancelGeneration','prepareGeneration']);
 const claimed=new Set();
 let v2Tail=Promise.resolve();
@@ -144,6 +145,9 @@ async function execute(c) {
   if(c.type==='openMuse') {
     if(!p || Object.keys(p).some(k=>k!=='tabId'))throw Error('INVALID');
     return openMuse(p.tabId);
+  }
+  if(manualWorker && MuseManualRecoveryContract.commands.includes(c.type)) {
+    const task=v2Tail.then(()=>manualWorker.execute(c.type,p));v2Tail=task.catch(()=>{});return task;
   }
   if(!executionTypes.has(c.type) || !p || Object.keys(p).some(k=>!['tabId','operationId','sceneId','prompt','offset','diagnoseOwnership','ownedUserHash','receipt','transferId','sequence','mediaKind','abort','diagnoseAcquisition'].includes(k)) ||
     !Number.isSafeInteger(p.tabId) || !/^[a-zA-Z0-9_-]{1,100}$/.test(p.operationId||'') || !/^[a-zA-Z0-9_-]{1,100}$/.test(p.sceneId||''))throw Error('INVALID');
@@ -250,6 +254,7 @@ async function executeV2(c) {
   if(c.type==='prepareGeneration') {
     if(saved)return interrupted();
     // Reserve before talking to the page; even a lost prepare is not replayed.
+    manualWorker?.retain(p);
     saved={tabId:p.tabId,sceneId:p.sceneId,version:2};
     await chrome.storage.local.set({[key]:saved});
   } else {

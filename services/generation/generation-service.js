@@ -42,6 +42,8 @@ class GenerationService extends EventEmitter {
     this.monitors=new Map();
     this.recovering=new Map();
     this.epochs=new Map();
+    this.manualConfirmations=new Map();
+    this.manualSelectionJob=null;
 
     const recovered = this.jobs.map(job => RESTART_INTERRUPTED.has(job.status)
       ? {
@@ -49,7 +51,8 @@ class GenerationService extends EventEmitter {
           status: "interrupted",
           errorCode: "RECOVERY_REQUIRED",
           error: { code: "RECOVERY_REQUIRED" },
-          attempts: updateAttempt(job, { status: "interrupted" })
+          attempts: job.outputResolution?job.attempts:updateAttempt(job, { status: "interrupted" }),
+          ...(job.outputResolution?{outputResolution:{...job.outputResolution,phase:'interrupted',publication:'pending'}}:{})
         }
       : job);
     if (JSON.stringify(recovered) !== JSON.stringify(this.jobs)) {
@@ -118,6 +121,85 @@ class GenerationService extends EventEmitter {
     try { let count;while((count=fs.readSync(fd,buffer,0,buffer.length,null))>0)hash.update(buffer.subarray(0,count)); }
     finally {fs.closeSync(fd);}
     return hash.digest('hex');
+  }
+
+  recoveryJob(id) {
+    if(!identifier(id) || this.stopping)throw failure('INVALID_REQUEST');
+    const job=this.get(id);
+    if(job.provider!=='muse' || job.request.providerId!=='muse' || job.manualRecovery?.version!==1 || job.manualRecovery.eligible!==true || job.status!=='interrupted' || this.hasActiveMuseJob(id) || this.recovering.has(id))throw failure('RECOVERY_CHANGED');
+    return job;
+  }
+
+  async listRecoveryCandidates(id) {
+    return this.serial(async()=>{
+      const job=this.recoveryJob(id);
+      if(this.manualSelectionJob && this.manualSelectionJob!==id || this.manualConfirmations.size)throw failure('RECOVERY_CHANGED');
+      this.manualSelectionJob=id;
+      try{return await this.registry.getProvider(job.provider).listRecoveryCandidates(this.context(job));}
+      catch(error){this.manualSelectionJob=null;throw error;}
+    });
+  }
+
+  async revealRecoveryCandidate(id,candidateId) {
+    if(!require('../../extensions/meta-muse-bridge/manual-recovery-contract').opaque(candidateId))throw failure('INVALID_REQUEST');
+    const job=this.recoveryJob(id);
+    if(this.manualSelectionJob!==id || this.manualConfirmations.size)throw failure('RECOVERY_CHANGED');
+    return this.registry.getProvider(job.provider).revealRecoveryCandidate(this.context(job),candidateId);
+  }
+
+  confirmRecoveryCandidate(id,candidateId) {
+    const C=require('../../extensions/meta-muse-bridge/manual-recovery-contract');
+    if(!identifier(id) || !C.opaque(candidateId))return Promise.reject(failure('INVALID_REQUEST'));
+    const pending=this.manualConfirmations.get(id);
+    if(pending)return pending.candidateId===candidateId?pending.promise:Promise.reject(failure('RECOVERY_CHANGED'));
+    const existing=this.get(id);
+    if(existing.status==='completed' && existing.outputResolution?.candidateAuditId===candidateId)return Promise.resolve(this.publicJob(existing));
+    const entry={candidateId,promise:null};this.manualConfirmations.set(id,entry);
+    entry.promise=this.finalizeRecovery(id,candidateId).finally(()=>{this.manualConfirmations.delete(id);this.manualSelectionJob=null;});
+    return entry.promise;
+  }
+
+  async finalizeRecovery(id,candidateId) {
+    const job=this.recoveryJob(id),epoch=this.epochs.get(id)||0;
+    if(this.manualSelectionJob!==id)throw failure('RECOVERY_CHANGED');
+    const adapter=this.registry.getProvider(job.provider),context=this.context(job);
+    const current=()=>{
+      const value=this.get(id);
+      if(this.stopping || (this.epochs.get(id)||0)!==epoch || !['interrupted','verifying'].includes(value.status) || this.hasActiveMuseJob(id))throw failure('RECOVERY_CHANGED');
+      return value;
+    };
+    const persist=resolution=>{
+      const value=current();
+      require('./output-resolution').validate(resolution,value);
+      return this.commit({...value,outputResolution:resolution,updatedAt:new Date().toISOString()});
+    };
+    context.onVerifying=()=>{
+      const value=current();
+      this.commit(transition(value,'verifying',{progress:null}));
+      this.runtimeActive.add(id);
+    };
+    try {
+      const result=await adapter.confirmRecoveryCandidate(context,candidateId,persist),value=current(),resolution=value.outputResolution;
+      if(result.status!=='completed' || resolution?.phase!=='published' || resolution.publication!=='published')throw failure('ASSET_UNAVAILABLE');
+      const file=path.join(context.outputDirectory,id+'.mp4'),v=resolution.verified,stat=fs.lstatSync(file);
+      if(stat.isSymbolicLink() || !stat.isFile() || fs.realpathSync(context.outputDirectory)!==path.resolve(context.outputDirectory) || stat.size!==v.size || this.outputDigest(file)!==v.sha256)throw failure('ASSET_UNAVAILABLE');
+      // Finalization preserves the original automatic attempt, error and evidence
+      // in outputResolution. It is not a successful/retried automatic attempt.
+      return this.commit(transition(value,'completed',{progress:100,output:{fileName:v.fileName},asset:{fileName:v.fileName},outputVerification:{version:1,size:v.size,sha256:v.sha256},
+        error:null,errorCode:null,completedAt:new Date().toISOString()}));
+    }catch(error){
+      const value=this.get(id);
+      if(value.status==='verifying')this.commit(transition(value,'interrupted',{errorCode:'RECOVERY_REQUIRED',error:{code:'RECOVERY_REQUIRED'}}));
+      throw error;
+    }
+  }
+
+  async dismissRecovery(id) {
+    const job=this.recoveryJob(id);
+    if(this.manualConfirmations.has(id))throw failure('RECOVERY_CHANGED');
+    try {await this.registry.getProvider(job.provider).dismissRecovery(this.context(job));}
+    finally {if(this.manualSelectionJob===id)this.manualSelectionJob=null;}
+    return this.publicJob(this.get(id));
   }
 
   activeCount() {
@@ -238,7 +320,8 @@ class GenerationService extends EventEmitter {
       sceneId: job.sceneId,
       request: clone(job.request),
       modelId: job.modelId,
-      outputDirectory: path.join(this.root, "outputs", job.id)
+      outputDirectory: path.join(this.root, "outputs", job.id),
+      ...(job.manualRecovery?{manualRecovery:clone(job.manualRecovery)}:{})
     };
   }
 
@@ -262,6 +345,7 @@ class GenerationService extends EventEmitter {
         : ready.modelIds;
       let route;
       if(request.providerId==='muse') {
+        if(this.manualConfirmations.size)throw failure('DUPLICATE_JOB');
         if(!ready.providers.some(p=>p.id==='muse' && p.ready))throw failure('PROVIDER_UNAVAILABLE');
         if(this.hasActiveMuseJob())throw failure('DUPLICATE_JOB');
         route={model:{id:null,provider:'muse'},estimate:{modelId:null,provider:'muse',known:false,providerCredits:null,estimatedUsd:null,pricingKind:'unknown',durationSeconds:null,resolution:null}};
@@ -269,6 +353,12 @@ class GenerationService extends EventEmitter {
       if (!this.registry.getProvider(route.model.provider)) throw failure("PROVIDER_UNAVAILABLE");
 
       const job = createJob(request, route, retryOf);
+      if(job.provider==='muse')job.manualRecovery={version:1,eligible:true};
+      if(job.provider==='muse' && this.manualSelectionJob) {
+        const old=this.get(this.manualSelectionJob);
+        this.registry.getProvider('muse')?.cancelRecovery?.(this.context(old));
+        this.manualSelectionJob=null;
+      }
       this.commit(job);
       this.runtimeActive.add(job.id);
       setImmediate(() => this.execute(job.id).catch(() => {}));
@@ -450,6 +540,10 @@ class GenerationService extends EventEmitter {
   }
 
   async cancel(id) {
+    if(this.manualSelectionJob===id || this.manualConfirmations.has(id)) {
+      this.registry.getProvider(this.get(id).provider)?.cancelRecovery?.(this.context(this.get(id)));
+      this.manualSelectionJob=null;
+    }
     this.epochs.set(id,(this.epochs.get(id)||0)+1);
     const state = await this.serial(() => {
       const current = this.get(id);
@@ -510,6 +604,24 @@ class GenerationService extends EventEmitter {
   async recoverOnce(id) {
     const epoch=this.epochs.get(id)||0;
     const initial = this.get(id);
+    if(this.manualSelectionJob===id || this.manualConfirmations.has(id))return initial;
+    if(initial.outputResolution) {
+      // Explicit local finalization only. Never restore a browser capability or
+      // reacquire remote bytes after restart.
+      if(initial.status!=='interrupted' || !initial.outputResolution.verified || this.hasActiveMuseJob(id))return initial;
+      try {
+        const context=this.context(initial),v=initial.outputResolution.verified,file=path.join(context.outputDirectory,id+'.mp4'),s=fs.lstatSync(file);
+        if(s.isSymbolicLink() || !s.isFile() || s.size!==v.size || this.outputDigest(file)!==v.sha256 || fs.realpathSync(context.outputDirectory)!==path.resolve(context.outputDirectory))return initial;
+        await this.registry.getProvider(initial.provider)?.verifyRecoveryOutput(context);
+        return await this.serial(()=>{
+          const value=this.get(id);
+          if(value.status!=='interrupted' || (this.epochs.get(id)||0)!==epoch || this.hasActiveMuseJob(id) || this.outputDigest(file)!==v.sha256)return value;
+          const verifying=transition(value,'verifying');
+          return this.commit(transition(verifying,'completed',{progress:100,output:{fileName:v.fileName},asset:{fileName:v.fileName},outputVerification:{version:1,size:v.size,sha256:v.sha256},
+            outputResolution:{...value.outputResolution,phase:'published',publication:'published'},error:null,errorCode:null,completedAt:new Date().toISOString()}));
+        });
+      }catch{return this.get(id);}
+    }
     if (initial.status === "queued") {
       if (this.stopping) return initial;
       this.runtimeActive.add(id);

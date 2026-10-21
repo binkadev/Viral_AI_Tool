@@ -11,7 +11,7 @@ const { createJob, transition } = require("../services/generation/generation-job
 const { normalizeRequest } = require("../services/generation/generation-request");
 const { probeVideo } = require("../services/ffmpeg");
 
-const MODES = ["completed", "persistence-failure", "tampered", "noncompleted", "legacy"];
+const MODES = ["completed", "persistence-failure", "tampered", "noncompleted", "legacy", "manual-recovery"];
 const uuid = value => typeof value === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value);
 let current = null;
 function enabled(app, env) {
@@ -60,6 +60,7 @@ async function makeVideo(file) {
 function runtime(app, env) {
   if (!enabled(app, env) || !current || app.getPath("userData") !== current.root) throw Error("DEV harness unavailable");
   if (current.service) return current;
+  if(current.mode==='manual-recovery')return require('./manual-recovery-desktop').runtime(app,env,current,makeVideo);
   const service = new GenerationService({ root: path.join(current.root, "generation") });
   const identityFile = path.join(current.root, "identity.json");
   let identity = fs.existsSync(identityFile) ? JSON.parse(fs.readFileSync(identityFile, "utf8")) : null;

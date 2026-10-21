@@ -7,6 +7,9 @@
   const identity = () => visualFixture?.projectId || window.ViralCoreProjectPersistence?.snapshot?.()?.projectId || null;
   let jobs = [], projectId = null, selectedId = null, ready = false, loading = false, error = '', busy = false;
   let requestVersion = 0, outputPath = null, retryKey = null, retryJobId = null, unsubscribe;
+  let recovery=null,recoveryError='',recoveryTimer=null,recoveryFocus=null,confirmingRecovery=false,cancelledRecovery=false;
+  const recoveryCopy=()=>window.I18N.messages[state.locale==='en'?'en':'vi'].manualRecovery;
+  const formatRecovery=(value,fields)=>value.replace(/\{(\w+)\}/g,(_,key)=>String(fields[key]??''));
   function selected() { return jobs.find(j=>j.id === selectedId) || jobs[0] || null; }
   function plan() {
     const input = visualFixture ? {sourceType:'script', scenes:copy().visualScenes.map((scene,i)=>({
@@ -19,9 +22,16 @@
     if (state.page !== 'generation-progress') return;
     const viewport = document.getElementById('page'), top = viewport.scrollTop;
     const focus = document.activeElement?.getAttribute('data-generation-action');
+    const focusedRecovery=document.activeElement?.getAttribute('data-recovery-action');
+    if(focusedRecovery)recoveryFocus={action:focusedRecovery,candidate:document.activeElement.getAttribute('data-candidate')};
     render();
     viewport.scrollTop = top;
     if (focus) viewport.querySelector('[data-generation-action="'+focus+'"]')?.focus({preventScroll:true});
+    if(recoveryFocus && !busy) {
+      const selector='[data-recovery-action="'+recoveryFocus.action+'"]'+(recoveryFocus.candidate?'[data-candidate="'+recoveryFocus.candidate+'"]':'');
+      (viewport.querySelector(selector)||viewport.querySelector('[data-recovery-action="list"]'))?.focus({preventScroll:true});
+      recoveryFocus=null;
+    }
   }
   async function refresh() {
     if (visualFixture) {
@@ -29,7 +39,11 @@
       projectId=visualFixture.projectId; ready=false; loading=false; outputPath=null; paint(); return;
     }
     const id = identity(), version = ++requestVersion;
-    if (id !== projectId) { jobs=[]; selectedId=null; outputPath=null; retryKey=null; projectId=id; }
+    if (id !== projectId) {
+      if(recovery && !busy)window.desktopAPI.dismissRecovery(recovery.jobId).catch(()=>{});
+      if(!busy){recovery=null;clearTimeout(recoveryTimer);recoveryError='';}
+      jobs=[]; selectedId=null; outputPath=null; retryKey=null; projectId=id;
+    }
     if (!id) { loading=false; paint(); return; }
     loading=true;
     try {
@@ -57,7 +71,55 @@
     } catch { if (version===requestVersion) { error='loadError'; ready=false; outputPath=null; } }
     finally { if (version===requestVersion) { loading=false; paint(); } }
   }
-  function button(action,label) { return '<button type="button" class="button ghost" data-generation-action="'+action+'"'+(busy || (visualFixture && action!=='refresh' && action!=='create')?' disabled':'')+'>'+esc(label)+'</button>'; }
+  function button(action,label) { return '<button type="button" class="button ghost" data-generation-action="'+action+'"'+((busy && !(confirmingRecovery && action==='cancel')) || (visualFixture && action!=='refresh' && action!=='create')?' disabled':'')+'>'+esc(label)+'</button>'; }
+  function recoveryPanel(job) {
+    if(job?.provider!=='muse' || job.status!=='interrupted' || job.manualRecovery?.version!==1 || job.manualRecovery.eligible!==true)return '';
+    const c=recoveryCopy(),session=recovery?.jobId===job.id?recovery:null;
+    return '<section class="generation-recovery" aria-labelledby="recovery-title"><h3 id="recovery-title">'+esc(c.status)+'</h3><p>'+esc(c.explanation)+'</p>'+
+      (recoveryError?'<p role="alert">'+esc(c[recoveryError])+'</p>':'')+
+      (session?'<p>'+esc(c.expires)+'</p><div class="generation-recovery-candidates">'+session.candidates.map((candidate,i)=>'<article><h4>'+esc(formatRecovery(c.candidate,{number:i+1}))+'</h4><p>'+esc(formatRecovery(c.details,{width:candidate.width,height:candidate.height,duration:candidate.duration.toFixed(1)}))+'</p><p>'+esc(candidate.available?c.available:c.unavailable)+'</p><div class="generation-actions"><button type="button" class="button ghost" data-recovery-action="view" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !candidate.available?' disabled':'')+'>'+esc(c.view)+'</button><button type="button" class="button primary" data-recovery-action="confirm" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !session.revealed.has(candidate.candidateId) || Date.now()>=session.expiresAt?' disabled':'')+'>'+esc(c.confirm)+'</button></div></article>').join('')+'</div>'+(session.candidates.length?'':'<p>'+esc(c.empty)+'</p>'):'')+
+      '<div class="generation-actions">'+(!session?'<button type="button" class="button ghost" data-recovery-action="list"'+(busy?' disabled':'')+'>'+esc(c.review)+'</button>':'')+'<button type="button" class="button ghost" data-recovery-action="dismiss"'+(busy?' disabled':'')+'>'+esc(c.dismiss)+'</button><button type="button" class="button ghost" data-recovery-action="open"'+(busy?' disabled':'')+'>'+esc(c.open)+'</button></div></section>';
+  }
+  async function recoveryAction(name,candidateId) {
+    const job=selected(),id=job?.id,originalProject=identity();
+    if(busy || !job || job.projectId!==originalProject || job.status!=='interrupted' || job.manualRecovery?.version!==1)return;
+    busy=true;recoveryError='';cancelledRecovery=false;paint();
+    try {
+      let response;
+      if(name==='list') {
+        response=await window.desktopAPI.listRecoveryCandidates(id);
+        if(!response?.ok)throw response;
+        if(identity()!==originalProject || selected()?.id!==id){await window.desktopAPI.dismissRecovery(id);return;}
+        recovery={...response.value,jobId:id,revealed:new Set()};
+        clearTimeout(recoveryTimer);recoveryTimer=setTimeout(()=>{if(recovery?.jobId===id){recovery=null;recoveryError='changed';window.desktopAPI.dismissRecovery(id).catch(()=>{});paint();}},Math.max(0,recovery.expiresAt-Date.now()));
+      }else if(name==='view') {
+        if(recovery?.jobId!==id)throw Error('stale');
+        response=await window.desktopAPI.revealRecoveryCandidate(id,candidateId);
+        if(!response?.ok || response.value?.candidateId!==candidateId || response.value.revealed!==true)throw response;
+        if(recovery?.jobId===id)recovery.revealed.add(candidateId);
+      }else if(name==='confirm') {
+        if(recovery?.jobId!==id || !recovery.revealed.has(candidateId) || Date.now()>=recovery.expiresAt)throw Error('stale');
+        clearTimeout(recoveryTimer);
+        confirmingRecovery=true;cancelledRecovery=false;paint();
+        response=await window.desktopAPI.confirmRecoveryCandidate(id,candidateId);
+        if(!response?.ok)throw response;
+        recovery=null;
+        await window.ViralCoreGeneratedMedia?.observe(id);
+        await refresh();
+      }else if(name==='dismiss') {
+        response=await window.desktopAPI.dismissRecovery(id);
+        if(!response?.ok)throw response;
+        recovery=null;clearTimeout(recoveryTimer);
+      }else if(name==='open') {
+        response=await window.desktopAPI.openGenerationProviderSession('muse');
+        if(!response?.ok)throw response;
+      }
+    }catch(error) {
+      recoveryError=cancelledRecovery?'':error?.errorCode==='RECOVERY_TOO_MANY'?'tooMany':error?.errorCode==='RECOVERY_CHANGED'?'changed':'error';
+      recovery=null;clearTimeout(recoveryTimer);
+      await window.desktopAPI.dismissRecovery(id).catch(()=>{});
+    }finally{confirmingRecovery=false;busy=false;paint();}
+  }
   function page() {
     const base=copy(), currentStage=visualFixture ? visualFixture.stage - 1 : 3;
     const stageCopy=base.workflowCopy[currentStage];
@@ -68,7 +130,8 @@
     const stageStates=visualFixture ? visualFixture.stageStates : model.stages(job,p,state);
     const rows=model.scenes(p,projectId===identity()?jobs:[]);
     return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(base.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button(info.recoveryBlocked?'new-request':'create',info.recoveryBlocked?c.newRequest:c.create)+'</header>'+
-      '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.verified(job)?button('studio',c.studio):'')+'</div></section>'+
+      '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:info.complete&&job.outputResolution?.mode==='user-confirmed'?recoveryCopy().completed:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.verified(job)?button('studio',c.studio):'')+'</div></section>'+
+      recoveryPanel(job)+
       (visualFixture?'<p class="generation-notice" role="status">'+esc(c.visualNotice)+'</p>':'')+
       (error?'<p class="generation-notice" role="alert">'+esc(c[error])+'</p>':'')+
       (job?.provider==='muse' && job.status==='interrupted'?'<p class="generation-notice" role="status">'+esc(info.recoveryBlocked?c.acceptanceUnproven:c.museInterrupted)+'</p>':'')+
@@ -104,7 +167,7 @@
     }
     if (visualFixture) return;
     const job=selected(), id=identity();
-    if (busy || !job || job.projectId!==id || !['cancel','retry','recover'].includes(name)) return;
+    if ((busy && !(confirmingRecovery && name==='cancel')) || !job || job.projectId!==id || !['cancel','retry','recover'].includes(name)) return;
     busy=true; paint();
     try {
       const fresh=await window.desktopAPI.getGenerationJob(job.id);
@@ -112,6 +175,7 @@
       const permissions=model.describe(fresh.value,ready,jobs.some(j=>j.id!==job.id && [...model.active,'interrupted'].includes(j.status)));
       if (!permissions[name]) throw new Error('not allowed');
       let result;
+      if(name==='cancel' && confirmingRecovery)cancelledRecovery=true;
       if (name==='retry') {
         if (retryJobId!==job.id) {retryKey=window.crypto.randomUUID();retryJobId=job.id;}
         result=await window.desktopAPI.retryGeneration({id:job.id,idempotencyKey:retryKey});
@@ -121,7 +185,7 @@
       if (identity()===id) selectedId=result.value?.id||job.id;
       await refresh();
     } catch { error='actionError'; }
-    finally {busy=false;paint();}
+    finally {busy=confirmingRecovery;paint();}
   }
   function install() {
     pages['generation-progress']=page;
@@ -129,6 +193,8 @@
     window.ViralGenerationProgress={open:async id=>{selectedId=id;projectId=identity();state.page='generation-progress';render();document.getElementById('page').scrollTop=0;await refresh();}};
     document.addEventListener('click',e=>{
       const target=e.target instanceof Element?e.target:null;
+      const recoveryControl=target?.closest('[data-recovery-action]');
+      if(recoveryControl && !recoveryControl.disabled)recoveryAction(recoveryControl.dataset.recoveryAction,recoveryControl.dataset.candidate);
       const control=target?.closest('[data-generation-action]');
       if(control&&!control.disabled) action(control.dataset.generationAction);
       if(target?.closest('[data-page="generation-progress"]')) refresh();

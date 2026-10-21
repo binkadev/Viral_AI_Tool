@@ -50,7 +50,7 @@
       try {
         await api.getDevHandoffFixture("complete");
         await controller.observe(job.id);
-        if (fixture.mode !== "completed") {
+        if (!["completed", "manual-recovery"].includes(fixture.mode)) {
           check("noPartialPublication", JSON.stringify(registry().projects.find(p => p.projectId === job.projectId)) ===
             JSON.stringify(JSON.parse(before).projects.find(p => p.projectId === job.projectId)));
           check("noFalseAttached", controller.status(job.id) !== "attached");

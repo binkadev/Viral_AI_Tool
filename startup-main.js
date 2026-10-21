@@ -5,7 +5,7 @@ const { app, BrowserWindow } = require("electron");
 // Isolate storage BEFORE lock/session initialization; DEV code is not shipped.
 let devHandoff = null;
 if (app.isPackaged === false && process.env.NODE_ENV !== "production" &&
-    ["completed", "persistence-failure", "tampered", "noncompleted", "legacy"].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
+    ["completed", "persistence-failure", "tampered", "noncompleted", "legacy", "manual-recovery"].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
     /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(process.env.VIRAL_AI_DEV_HANDOFF_SESSION || "")) {
   devHandoff = require("./dev/generated-handoff-harness").setup(app, process.env);
 }

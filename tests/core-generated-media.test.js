@@ -88,6 +88,25 @@ function harness(data = initial(), options = {}) {
   };
 }
 
+test('user-confirmed completion uses the original project/scene, normal source and dedupe without copying browser provenance into AssetRef',async()=>{
+  const h=harness(),resolved={...job,provider:'muse',outputResolution:{version:1,mode:'user-confirmed',automaticOwnershipVerified:false},attempts:[{number:1,status:'interrupted'}]};
+  h.job=resolved;await h.window.ViralCoreGeneratedMedia.track(resolved);await h.drain();
+  h.api.openProject('project-b');await Promise.all([h.window.ViralCoreGeneratedMedia.observe(job.id),h.window.ViralCoreGeneratedMedia.observe(job.id)]);await h.drain();
+  const original=JSON.parse(h.data.get(KEY)).projects.find(p=>p.projectId===job.projectId);
+  assert.equal(original.media.assets.length,1);assert.equal(original.workflow.generationOutputs.length,1);assert.equal(original.workflow.jobs.length,1);
+  assert.equal(original.workflow.jobs[0].sceneId,job.sceneId);assert.equal(h.api.activeProjectId(),'project-b');
+  assert(!JSON.stringify(original).includes('outputResolution'));assert(!JSON.stringify(original).includes('automaticOwnershipVerified'));
+  const next=harness(h.data);next.job=resolved;next.api.openProject(job.projectId);await next.drain();next.state.page='ai-video';next.c.render();assert(next.markup.includes('preview-video'));
+});
+
+test('user-confirmed verified completion survives a Project attachment persistence failure without execution',async()=>{
+  const h=harness(),resolved={...job,provider:'muse',outputResolution:{version:1,mode:'user-confirmed',automaticOwnershipVerified:false}};
+  h.job=resolved;h.fail=true;await h.window.ViralCoreGeneratedMedia.track(resolved);await h.drain();
+  assert.equal(h.window.ViralCoreGeneratedMedia.status(job.id),'error');assert.equal(resolved.status,'completed');assert.equal(resolved.outputResolution.mode,'user-confirmed');
+  assert(!h.calls.some(c=>['submitGeneration','recoverGeneration','cancelGeneration','acquireGenerationResult'].includes(c[0])));
+  h.fail=false;await h.window.ViralCoreGeneratedMedia.observe(job.id);await h.drain();assert.equal(h.window.ViralCoreGeneratedMedia.status(job.id),'attached');
+});
+
 test("completed video registers canonical generated asset and Studio source before ordinary navigation", async () => {
   const data = initial(), registry = JSON.parse(data.get(KEY));
   registry.projects[0].editor.panels.leftCollapsed = true;

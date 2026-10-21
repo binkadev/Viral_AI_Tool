@@ -96,6 +96,8 @@ class GenerationStore {
         }
         ids.add(job.id);
         const request = normalizeRequest(job.request);
+        if(job.manualRecovery!==undefined && (model.provider!=='muse' || request.providerId!=='muse'))throw failure('STORE_UNAVAILABLE');
+        if(job.outputResolution!==undefined && (job.manualRecovery?.version!==1 || job.manualRecovery.eligible!==true))throw failure('STORE_UNAVAILABLE');
         const progress = validProgress(job.progress) ? job.progress : 0;
         const estimate = safeEstimate(job.estimate, model.id, request);
         const asset = safeAsset(job.asset || job.output);
@@ -128,7 +130,9 @@ class GenerationStore {
           completedAt: Number.isFinite(Date.parse(job.completedAt)) ? job.completedAt : null,
           cancelledAt: Number.isFinite(Date.parse(job.cancelledAt)) ? job.cancelledAt : null,
           errorCode,
-          asset
+          asset,
+          ...(job.manualRecovery===undefined?{}:{manualRecovery:require('./output-resolution').eligibility(job.manualRecovery)}),
+          ...(job.outputResolution===undefined?{}:{outputResolution:require('./output-resolution').validate(job.outputResolution,{id:job.id,projectId:request.projectId,sceneId:request.sceneId})})
         };
       });
     } catch (error) {
@@ -140,6 +144,12 @@ class GenerationStore {
   save(jobs) {
     let fd;
     try {
+      for(const job of jobs) {
+        if(job.manualRecovery!==undefined && (job.provider!=='muse' || job.request.providerId!=='muse'))throw failure('STORE_UNAVAILABLE');
+        if(job.outputResolution!==undefined && job.manualRecovery?.eligible!==true)throw failure('STORE_UNAVAILABLE');
+        if(job.manualRecovery!==undefined)require('./output-resolution').eligibility(job.manualRecovery);
+        if(job.outputResolution!==undefined)require('./output-resolution').validate(job.outputResolution,job);
+      }
       fs.mkdirSync(this.root, { recursive: true });
       fd = fs.openSync(this.file + ".tmp", "w", 0o600);
       fs.writeFileSync(fd, JSON.stringify({ version: 1, jobs }));
