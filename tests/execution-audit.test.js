@@ -10,6 +10,8 @@ const {ProviderRegistry}=require('../services/generation/provider-registry');
 const {createJob}=require('../services/generation/generation-job');
 const {normalizeRequest}=require('../services/generation/generation-request');
 const uuid=()=>crypto.randomUUID(),json=v=>JSON.parse(JSON.stringify(v));
+function deferred(){let resolve,reject;const d={settled:false};d.promise=new Promise((yes,no)=>{resolve=yes;reject=no;});d.resolve=v=>{d.settled=true;resolve(v);};d.reject=e=>{d.settled=true;reject(e);};return d;}
+const turn=()=>new Promise(resolve=>setImmediate(resolve));
 const media={duration:1,width:160,height:90};
 const bytes=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(64)]);
 function root(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'execution-audit-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
@@ -99,13 +101,14 @@ test('renderer cannot override project, scene, source, asset or append arbitrary
 test('telemetry disk failures throughout real automatic execution do not fail generation or attachment',async t=>{const f=await auto(t);f.service.executionJournal.write=()=>{throw Error('disk');};const j=await complete(f),p=projectFixture(j,f.service);p.api.registerGenerationJob(j);p.api.attachGeneratedOutput(j,f.service.output(j.id),media);assert.equal(p.persisted().media.assets.length,1);assert.equal(f.service.get(j.id).status,'completed');assert.equal(f.content.clicks,1);assert.equal(f.service.executionAuditReport(j.id).coverage.state,'partial');});
 
 async function manual(t){const f=require('../dev/manual-recovery-fixture').createFixture({root:root(t),bytes,verifyVideo:async()=>media,executionAudit:true});t.after(()=>f.close());const j=await f.admit(uuid(),uuid());return {...f,fixture:f,job:j};}
-test('manual content session/reveal, durable confirmation and shared acquisition yield complete truthful audit',async t=>{
+test('manual recovery records its facts with partial coverage when binding races committed intent',async t=>{
  const f=await manual(t),s=await f.service.listRecoveryCandidates(f.job.id),candidate=s.candidates[1].candidateId;
  await f.service.revealRecoveryCandidate(f.job.id,candidate);const j=await f.service.confirmRecoveryCandidate(f.job.id,candidate),p=projectFixture(j,f.service);
  p.api.registerGenerationJob(j);p.api.attachGeneratedOutput(j,f.service.output(j.id),media);await f.drainAudit();const r=f.service.executionAuditReport(j.id);
- assert.equal(r.coverage.state,'complete',JSON.stringify(r.coverage));
- for(const type of ['generation.admitted','submit.requested','submit.committed','manual.session_opened','manual.candidate_revealed','manual.candidate_confirmed','acquisition.started','acquisition.completed','output.published','project.attachment_reported','job.terminal'])assert.equal(r.counters[type].total,1,type);
- for(const type of ['submit.invocation_observed','submit.acceptance_proven','ownership.completed'])assert.equal(r.counters[type].total,0,type);
+ assert.equal(r.coverage.state,'partial',JSON.stringify(r.coverage));assert(r.coverage.reasons.includes('sequence_gap'));
+ for(const type of ['generation.admitted','submit.requested','submit.committed','manual.session_opened','manual.candidate_revealed','manual.candidate_confirmed','acquisition.started','acquisition.completed','output.published','project.attachment_reported','job.terminal'])assert.equal(r.counters[type].recorded,1,type);
+ for(const type of ['submit.invocation_observed','submit.acceptance_proven','ownership.completed'])assert.equal(r.counters[type].recorded,0,type);
+ for(const type of A.TYPES)assert.equal(r.counters[type].total,null,type);
  assert.equal(r.events.find(e=>e.type==='acquisition.started').detail.mode,'user-confirmed');assert.equal(r.events.find(e=>e.type==='output.published').detail.mode,'user-confirmed');
  assert.equal(j.attempts[0].status,'interrupted');assert.equal(f.fixture.fetches,1);assert.equal(j.outputResolution.mode,'user-confirmed');
  assert(!JSON.stringify(r).includes(candidate));assert(!JSON.stringify(r).includes(s.selectionSessionId));assert(!JSON.stringify(r).includes('blob:'));
@@ -134,7 +137,16 @@ test('authenticated telemetry endpoint validates target binding and never dispat
 });
 test('audit capability and bundle retain execution/receipt/manual contracts and Chrome permissions',()=>{const manifest=require('../extensions/meta-muse-bridge/manifest.json');assert.equal(manifest.version,'0.3.16');assert.deepEqual(manifest.permissions,['storage','alarms']);assert.deepEqual(manifest.host_permissions,['https://muse.ai/*','http://127.0.0.1/*']);assert(manifest.content_scripts[0].js.includes('execution-audit.js'));for(const name of ['content-script.js','service-worker.js']){const s=fs.readFileSync('extensions/meta-muse-bridge/'+name,'utf8');assert(s.includes('contract3-receipt2-manual1-audit1'));}const c=contentFixture({storage:memoryStorage()});assert.equal(c.handshake().executionAuditVersion,1);assert.equal(c.handshake().contractVersion,3);assert.equal(c.handshake().manualRecoveryVersion,1);});
 test('hung and rejected telemetry observers have a bounded wait and mark a gap',async()=>{let gaps=0;await W.settle(new Promise(()=>{}),()=>gaps++,5);await W.settle(Promise.reject(Error('storage')),()=>gaps++,5);assert.equal(gaps,2);});
-test('hanging worker witness does not block the existing committed submit or content click',async t=>{const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());f.workerAudit.observe=()=>new Promise(()=>{});const j=await f.admit();assert.equal(j.status,'running');assert.equal(f.content.clicks,1);await f.drain();assert(f.service.executionAuditReport(j.id).coverage.reasons.includes('sequence_gap'));assert.equal(f.calls.filter(c=>c==='submitGeneration').length,1);});
+test('pending worker witness leaves totals unknown while submit and click complete',async t=>{
+ const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
+ const pending=deferred();t.after(()=>pending.resolve());
+ // Disable the telemetry watchdog: an awaited observer could never escape via a timeout.
+ f.wc.MuseExecutionAudit.settle=p=>Promise.resolve(p).catch(()=>{});
+ f.workerAudit.observe=()=>pending.promise;
+ const j=await f.admit();assert.equal(j.status,'running');assert.equal(f.content.clicks,1);assert.equal(pending.settled,false);
+ await f.drain();const report=f.service.executionAuditReport(j.id);assert.equal(report.coverage.state,'partial');assert.equal(report.counters['submit.committed'].total,null);
+ assert.equal(f.calls.filter(c=>c==='submitGeneration').length,1);
+});
 test('concurrent binding cannot reset a source sequence or lose an occurrence',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'worker'}),j=job(),binding={jobId:j.id,auditId:j.executionAudit.auditId};await Promise.all([w.bind(binding),w.bind(binding)]);await w.observe(j.id,'submit.committed');await w.bind(binding);await w.observe(j.id,'submit.committed');const p=Object.values(storage.data)[0];assert.deepEqual(p.events.map(e=>e.sourceSequence),[1,2]);});
 test('older identical witness delivery after a newer checkpoint is a harmless replay',t=>{const {audit,job:j}=fixture(t),p=packet(j);p.events=[occurrence('content',p.sourceEpoch,1,'submit.invocation_observed',{outcome:'returned'})];p.watermark=1;assert(audit.ingest(j,p));const old=json(p);p.events=[occurrence('content',p.sourceEpoch,2,'manual.session_opened',{sessionAlias:uuid()})];p.watermark=2;assert(audit.ingest(j,p));assert(audit.ingest(j,old));assert(!audit.report(j).coverage.reasons.includes('sequence_gap'));assert.equal(count(audit,j,'submit.invocation_observed'),1);});
 test('DEV runner rejects production and is excluded from the packaged app',async()=>{const {run}=require('../dev/run-execution-audit'),previous=process.env.NODE_ENV;try{process.env.NODE_ENV='production';await assert.rejects(run(),/unavailable in production/);}finally{if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}const pkg=require('../package.json');assert(!pkg.build.files.some(f=>f.startsWith('dev/') || f.startsWith('tests/') || f==='**/*'));assert(!fs.readFileSync('main.js','utf8').includes('run-execution-audit'));});
@@ -145,3 +157,166 @@ test('native submit request event follows actual adapter dispatch invocation',as
 test('failed authoritative acceptance save emits no acceptance proof despite a real click',async t=>{const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());const rename=fs.renameSync;try{fs.renameSync=(from,to)=>{if(String(to).endsWith('muse-operation.json') && JSON.parse(fs.readFileSync(from)).receipt?.userStableIdHash)throw Error('DEV acceptance persistence');return rename(from,to);};const j=await f.admit(),r=f.service.executionAuditReport(j.id);assert.equal(j.status,'interrupted');assert.equal(f.content.clicks,1);assert.equal(r.counters['submit.acceptance_proven'].recorded,0);assert.equal(r.counters['ownership.completed'].recorded,0);}finally{fs.renameSync=rename;}});
 test('failed authoritative ownership save emits no ownership completion or transfer',async t=>{const f=await auto(t),rename=fs.renameSync;try{fs.renameSync=(from,to)=>{if(String(to).endsWith('muse-operation.json') && JSON.parse(fs.readFileSync(from)).receipt?.result)throw Error('DEV ownership persistence');return rename(from,to);};let j=f.job;for(let i=0;i<6 && j.status!=='interrupted';i++)j=await f.service.recover(j.id);const r=f.service.executionAuditReport(j.id);assert.equal(j.status,'interrupted');assert.equal(r.counters['submit.acceptance_proven'].recorded,1);assert.equal(r.counters['ownership.completed'].recorded,0);assert.equal(r.counters['acquisition.started'].recorded,0);}finally{fs.renameSync=rename;}});
 test('failed authoritative terminal save changes neither status nor terminal audit fact',async t=>{const s=await admissionService(t),j=await s.submit(request());s.store.save=()=>{throw Error('DEV job save');};assert.throws(()=>s.commit({...j,status:'failed'}));assert.equal(s.get(j.id).status,'queued');assert.equal(s.executionAuditReport(j.id).counters['job.terminal'].recorded,0);});
+
+for(const stage of ['worker bind','route read','route write','content bind','drain'])test('poll executes and returns its result before deferred audit '+stage,async t=>{
+ const vm=require('node:vm'),f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
+ const gate=deferred(),entered=deferred();t.after(()=>gate.resolve(false));
+ const hold=()=>{entered.resolve();return gate.promise;};
+ // No audit watchdog can release a regression that accidentally awaits setup.
+ f.wc.MuseExecutionAudit.settle=p=>Promise.resolve(p).catch(()=>{});
+ const command={id:uuid(),type:'openMuse',payload:{tabId:5},audit:{jobId:uuid(),auditId:uuid()}};
+ f.wc.testCommand=command;f.wc.results=[];f.wc.started=[];
+ if(stage==='worker bind')f.workerAudit.bind=hold;
+ if(stage==='route read'){const get=f.storage.get;let reads=0;f.storage.get=k=>k===null && ++reads===2?hold():get(k);}
+ if(stage==='route write'){const set=f.storage.set;f.storage.set=v=>Object.keys(v).some(k=>k.startsWith('execution-audit-v1:route:'))?hold():set(v);}
+ if(stage==='content bind')f.wc.chrome.tabs.sendMessage=hold;
+ // poll also initiates a separate drain; hold both without serializing execution.
+ if(stage==='drain')f.workerAudit.drain=hold;
+ else f.workerAudit.drain=async()=>true;
+ vm.runInContext(`navigator.userAgent='Chrome/DEV';bridge={port:1,token:'local',serverId:'local'};
+ connect=async()=>bridge;identity=async()=>({instanceId:'local'});museTabs=async()=>[];
+ request=async(port,path,options)=>{if(path.startsWith('/v1/poll'))return {command:testCommand};if(path.startsWith('/v1/result'))results.push(options.body);return {};};
+ execute=async c=>{started.push(c.id);return {state:'test-result'};};`,f.wc);
+ const polling=vm.runInContext('poll()',f.wc);
+ await entered.promise;await turn();
+ assert.deepEqual(Array.from(f.wc.started),[command.id]);assert.equal(f.wc.results.length,1);assert.equal(f.wc.results[0].result.state,'test-result');
+ assert.equal(await polling,true);assert.equal(gate.settled,false);
+ f.wc.navigator.userAgent='Edg/DEV';
+});
+
+for(const source of ['worker','content'])test(source+' delayed binding flushes a queued occurrence only after its checkpoint succeeds',async t=>{
+ const {audit,job:j}=fixture(t),storage=memoryStorage(),get=storage.get,gate=deferred();let reads=0;
+ storage.get=async k=>{reads++;await gate.promise;return get(k);};
+ const w=W.create({storage,source}),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
+ // Content may receive the invocation before even the bind message arrives.
+ w.observe(j.id,type,detail);const binding=w.bind({jobId:j.id,auditId:j.executionAudit.auditId});
+ w.observe(j.id,type,detail);
+ assert.equal(reads,1);await turn();assert.deepEqual(storage.data,{});assert.equal(gate.settled,false);
+ assert.equal(audit.report(j).counters[type].total,null);
+ gate.resolve();assert.equal(await binding,true);await w.flush();
+ const p=Object.values(storage.data)[0];assert.equal(p.events.length,2);assert.equal(p.events[0].type,type);assert.equal(p.gap,false);
+ await w.drain(async p=>({persisted:audit.ingest(j,p)}));assert.equal(count(audit,j,type),2);
+});
+
+for(const source of ['worker','content'])test(source+' queued witness waits only inside telemetry for initial checkpoint storage',async()=>{
+ const storage=memoryStorage(),set=storage.set,gate=deferred(),entered=deferred(),jobId=uuid();
+ storage.set=async v=>{entered.resolve();await gate.promise;return set(v);};
+ const w=W.create({storage,source}),binding=w.bind({jobId,auditId:uuid()});await entered.promise;
+ w.observe(jobId,source==='worker'?'submit.committed':'submit.invocation_observed',source==='worker'?{}:{outcome:'returned'});
+ await turn();assert.deepEqual(storage.data,{});gate.resolve();assert(await binding);await w.flush();assert.equal(Object.values(storage.data)[0].events.length,1);
+});
+
+for(const source of ['worker','content'])test(source+' pre-bind overflow preserves the bounded events and reports a gap',async()=>{
+ const storage=memoryStorage(),w=W.create({storage,source}),jobId=uuid(),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
+ for(let i=0;i<W.MAX_RECORDS+1;i++)w.observe(jobId,type,detail);
+ assert(await w.bind({jobId,auditId:uuid()}));await w.flush();const p=Object.values(storage.data)[0];assert.equal(p.events.length,W.MAX_RECORDS);assert(p.gap);
+});
+
+for(const source of ['worker','content'])test(source+' pre-bind overflow and failed bind retain truthful partial coverage',async t=>{
+ const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source}),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
+ for(let i=0;i<W.MAX_RECORDS+1;i++)w.observe(j.id,type,detail);
+ const get=storage.get;storage.get=async()=>{throw Error('offline');};assert.equal(await w.bind({jobId:j.id,auditId:j.executionAudit.auditId}),false);
+ storage.get=get;assert.equal(await w.bind({jobId:j.id,auditId:j.executionAudit.auditId}),true);await w.flush();
+ assert(Object.values(storage.data)[0].gap);assert.equal(Object.values(storage.data)[0].events.length,0,'failed bind discards telemetry, never replays execution');
+ await w.drain(async p=>({persisted:audit.ingest(j,p)}));const r=audit.report(j);assert.equal(r.coverage.state,'partial');assert.equal(r.counters[type].total,null);assert(r.coverage.reasons.includes('sequence_gap'));
+});
+
+test('pre-bind capacity is bounded across jobs and overflow damages later coverage',async()=>{
+ const storage=memoryStorage(),w=W.create({storage,source:'worker'}),ids=Array.from({length:W.MAX_STREAMS+1},uuid);
+ for(const id of ids)w.observe(id,'submit.committed');
+ const last=ids.at(-1);assert(await w.bind({jobId:last,auditId:uuid()}));await w.flush();
+ assert(Object.values(storage.data)[0].gap);assert.equal(Object.values(storage.data)[0].events.length,0);
+});
+
+test('lost pre-bind memory on restart remains missing coverage with unknown totals',async t=>{
+ const {audit,job:j}=fixture(t),storage=memoryStorage(),old=W.create({storage,source:'worker'});old.observe(j.id,'submit.committed');
+ await W.create({storage,source:'worker'}).drain(async p=>({persisted:audit.ingest(j,p)}));audit.record(j,'job.terminal',{status:'failed'},{close:true});
+ const r=audit.report(j);assert.equal(r.coverage.state,'partial');assert.equal(r.counters['submit.committed'].recorded,0);assert.equal(r.counters['submit.committed'].total,null);
+});
+
+test('real worker and content witnesses survive binding delayed until after submit result',async t=>{
+ const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
+ const gate=deferred(),contentBound=deferred(),get=f.storage.get,send=f.wc.chrome.tabs.sendMessage;t.after(()=>gate.resolve());
+ f.wc.MuseExecutionAudit.settle=p=>Promise.resolve(p).catch(()=>{});
+ f.storage.get=async k=>{if(k===null)await gate.promise;return get(k);};
+ f.wc.chrome.tabs.sendMessage=async(id,m)=>{const result=await send(id,m);if(m.type==='viral-ai:muse-audit-bind')contentBound.resolve();return result;};
+ const j=await f.admit();assert.equal(j.status,'running');assert.equal(f.content.clicks,1);assert.equal(gate.settled,false);
+ const before=f.service.executionAuditReport(j.id);assert.equal(before.counters['submit.committed'].total,null);assert.equal(before.counters['submit.invocation_observed'].total,null);
+ gate.resolve();await contentBound.promise;await f.drain();const after=f.service.executionAuditReport(j.id);
+ assert.equal(after.counters['submit.committed'].recorded,1);assert.equal(after.counters['submit.invocation_observed'].recorded,1);assert.equal(after.events.find(e=>e.type==='submit.invocation_observed').detail.outcome,'returned');
+ assert.equal(after.coverage.state,'partial','late binding cannot certify continuity across a possible document/process loss');
+ assert.equal(f.content.clicks,1);assert.equal(f.calls.filter(c=>c==='submitGeneration').length,1);
+});
+
+test('restart followed by empty rebinding cannot turn lost pre-bind witnesses into known zero',async t=>{
+ const vm=require('node:vm'),f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
+ const gate=deferred(),get=f.storage.get;t.after(()=>gate.resolve());
+ f.wc.MuseExecutionAudit.settle=p=>Promise.resolve(p).catch(()=>{});
+ f.storage.get=async k=>{if(k===null)await gate.promise;return get(k);};
+ const j=await f.admit();assert.equal(j.status,'running');assert.equal(f.content.clicks,1);
+ // A fresh worker/document keeps only authoritative storage; neither memory queue survived.
+ const next=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>next.close());
+ const intentKey='generation-intent:'+j.id;next.storage.data[intentKey]=json(f.storage.data[intentKey]);
+ next.wc.command={id:uuid(),type:'inspectGeneration',payload:{tabId:5,operationId:j.id},audit:{jobId:j.id,auditId:j.executionAudit.auditId}};
+ await vm.runInContext('prepareExecutionAudit(command)',next.wc);await next.workerAudit.flush();
+ const p=Object.values(next.storage.data).find(v=>v.source==='worker');assert(p.gap);assert.equal(p.events.length,0);
+ assert(f.service.ingestExecutionWitness(json(p),{instanceId:'audit-fixture',tabId:5}).persisted);
+ const report=f.service.executionAuditReport(j.id);assert.equal(report.coverage.state,'partial');assert.equal(report.counters['submit.committed'].total,null);
+ assert.equal(next.content.clicks,0);assert.equal(next.calls.length,0);
+});
+
+for(const mode of ['pending storage','audit storage rejection','bind rejection','content bind rejection','witness rejection','drain rejection'])test(mode+' cannot change submit, authoritative invoked intent, or replay safety',async t=>{
+ const vm=require('node:vm'),f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
+ const gate=deferred(),committed=deferred();t.after(()=>gate.resolve());let delivered=false,payload;
+ f.wc.MuseExecutionAudit.settle=(p,onGap)=>Promise.resolve(p).catch(()=>onGap?.());
+ const set=f.storage.set;
+ f.storage.set=async values=>{
+   if(mode==='pending storage' && Object.entries(values).some(([k,p])=>k.startsWith(W.PREFIX+'worker:') && p.watermark>0))await gate.promise;
+   if(mode==='audit storage rejection' && Object.entries(values).some(([k,p])=>k.startsWith(W.PREFIX+'worker:') && p.watermark>0))throw Error('audit quota');
+   const result=await set(values);
+   if(Object.entries(values).some(([k,p])=>k.startsWith('generation-intent:') && p.invoked))committed.resolve();
+   return result;
+ };
+ if(mode==='bind rejection')f.workerAudit.bind=()=>Promise.reject(Error('bind failure'));
+ if(mode==='witness rejection')f.workerAudit.observe=()=>Promise.reject(Error('witness failure'));
+ if(mode==='drain rejection')f.workerAudit.drain=()=>Promise.reject(Error('drain failure'));
+ const send=f.wc.chrome.tabs.sendMessage;
+ f.wc.chrome.tabs.sendMessage=async(id,m)=>{
+   if(mode==='content bind rejection' && m.type==='viral-ai:muse-audit-bind')throw Error('content bind failure');
+   if(m.type==='viral-ai:muse-execution' && m.command==='submitGeneration'){
+     delivered=true;payload=m.payload;assert.equal(f.storage.data['generation-intent:'+payload.operationId].invoked,true);
+   }
+   return send(id,m);
+ };
+ const admitting=f.admit();await committed.promise;await turn();
+ assert.equal(delivered,true,'content delivery occurs on the next event loop turn with telemetry still unresolved');assert.equal(gate.settled,false);
+ const j=await admitting;assert.equal(j.status,'running');assert.equal(f.content.clicks,1);assert.equal(gate.settled,false);
+ const {observationToken,...originalPayload}=payload;
+ f.wc.replay={id:uuid(),type:'submitGeneration',payload:originalPayload};assert.equal((await vm.runInContext('execute(replay)',f.wc)).state,'interrupted');assert.equal(f.content.clicks,1);
+ gate.resolve();await f.workerAudit.flush();
+ // Drain failures are telemetry-only; use the same source's normal drain for reporting.
+ if(mode==='drain rejection')f.workerAudit.drain=async()=>false;
+ await f.drain();assert.equal(f.service.get(j.id).status,'running');
+ if(mode.includes('rejection'))assert.equal(f.service.executionAuditReport(j.id).coverage.state,'partial');
+});
+
+test('content click and returned/threw_unknown witnesses survive unresolved content audit storage',async()=>{
+ for(const clickThrows of [false,true]){
+   const storage=memoryStorage(),gate=deferred(),get=storage.get;
+   storage.get=async k=>{await gate.promise;return get(k);};
+   const f=contentFixture({storage,clickThrows}),jobId=uuid(),binding=f.audit.bind({jobId,auditId:uuid()});
+   const result=await f.send('submitGeneration',{operationId:jobId,sceneId:'scene',prompt:'Synthetic prompt'});
+   assert.equal(gate.settled,false);assert.equal(f.clicks,1);assert.equal(result.state,clickThrows?'interrupted':'running');assert.deepEqual(storage.data,{});
+   gate.resolve();assert(await binding);await f.audit.flush();
+   const p=Object.values(storage.data)[0];assert.equal(p.events[0].detail.outcome,clickThrows?'threw_unknown':'returned');
+ }
+});
+
+test('final fresh validation to click contains no await; executeV2 and poll never await telemetry',()=>{
+ const content=fs.readFileSync('extensions/meta-muse-bridge/content-script.js','utf8'),worker=fs.readFileSync('extensions/meta-muse-bridge/service-worker.js','utf8');
+ const guard=content.indexOf('const current=composer();',content.indexOf("invocation.reason='composer-changed'")),click=content.indexOf('button.click();',guard);
+ assert(guard>=0 && click>guard);assert(!/\bawait\b/.test(content.slice(guard,click)));
+ const submit=worker.slice(worker.indexOf('async function executeV2'));
+ assert(!/\bawait\s+[^;\n]*(?:[Aa]udit|ExecutionAudit)/.test(submit));
+ assert(!/prepareExecutionAuditSafely\(c\)\s*\.then/.test(worker));assert(worker.includes('const execution=execute(c).finally'));
+});

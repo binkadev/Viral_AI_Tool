@@ -127,7 +127,7 @@ async function automaticFixture({root,bytes,verifyVideo,clickThrows=false,lostSu
     command:async(type,p,target)=>{
       if(target.instanceId!=='audit-fixture' || target.tabId!==5)throw Error('DEV wrong target');calls.push(type);
       wc.command={id:crypto.randomUUID(),type,payload:p,audit:bindings.get(p.operationId)};
-      await vm.runInContext('prepareExecutionAuditSafely(command)',wc);
+      vm.runInContext('prepareExecutionAuditSafely(command)',wc);
       const result=await vm.runInContext('execute(command)',wc);
       if(lostSubmit && type==='submitGeneration')throw Error('DEV lost response');
       return JSON.parse(JSON.stringify(result));

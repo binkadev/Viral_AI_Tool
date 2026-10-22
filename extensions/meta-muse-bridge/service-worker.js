@@ -19,14 +19,19 @@ async function prepareExecutionAudit(c) {
     await chrome.storage.local.set({[auditRoutePrefix+c.audit.jobId]:{tabId:c.payload.tabId,auditId:c.audit.auditId}});
     const boundContent=await chrome.tabs.sendMessage(c.payload.tabId,{type:'viral-ai:muse-audit-bind',binding:c.audit});
     if(!boundContent?.ok)workerAudit.gap(c.audit.jobId);
+    // A late/restarted binding cannot prove that an earlier in-memory witness survived.
+    // Read intent only to damage telemetry coverage, never to decide delivery.
+    const intentKey='generation-intent:'+c.audit.jobId;
+    if((await chrome.storage.local.get(intentKey))[intentKey]?.invoked)workerAudit.gap(c.audit.jobId);
     await workerAudit.drain(async packet=>{const r=(await chrome.storage.local.get(auditRoutePrefix+packet.jobId))[auditRoutePrefix+packet.jobId];return r?forwardExecutionAudit(packet,r.tabId):{persisted:false};});
   }catch{try{workerAudit?.gap(c.audit?.jobId);}catch{}}
 }
-async function prepareExecutionAuditSafely(c) {
+function prepareExecutionAuditSafely(c) {
   try {
     const pending=prepareExecutionAudit(c);
-    if(typeof MuseExecutionAudit==='object')await MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(c.audit?.jobId),500);
-    else await pending;
+    // Timeouts damage coverage only; neither setup nor its watchdog gates execution.
+    if(typeof MuseExecutionAudit==='object')void MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(c.audit?.jobId),500);
+    else pending.catch(()=>{});
   }catch{}
 }
 async function forwardExecutionAudit(packet,tabId) {
@@ -148,7 +153,8 @@ async function poll() {
       // Keep heartbeats alive while the content script acquires a video.
       const auditJob=c.payload?.operationId;
       auditActivity.set(auditJob,(auditActivity.get(auditJob)||0)+1);
-      const execution=prepareExecutionAuditSafely(c).then(()=>execute(c)).finally(()=>{
+      prepareExecutionAuditSafely(c);
+      const execution=execute(c).finally(()=>{
         const left=(auditActivity.get(auditJob)||1)-1;
         if(left)auditActivity.set(auditJob,left);else auditActivity.delete(auditJob);
       }).then(result=>request(b.port,"/v1/result"+suffix,{token:b.token,body:{commandId:c.id,ok:true,result,error:null}}),
@@ -324,7 +330,7 @@ async function executeV2(c) {
     if(c.type==='submitGeneration') {
       if(saved.localCancelled || saved.invoked || saved.receipt.userStableIdHash || p.receipt.userStableIdHash)return interrupted();
       saved={...saved,invoked:true};await chrome.storage.local.set({[key]:saved});
-      try{const pending=workerAudit?.observe(p.operationId,'submit.committed');if(typeof MuseExecutionAudit==='object')await MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(p.operationId));}catch{try{workerAudit?.gap(p.operationId);}catch{}}
+      try{const pending=workerAudit?.observe(p.operationId,'submit.committed');if(typeof MuseExecutionAudit==='object')void MuseExecutionAudit.settle(pending,()=>workerAudit?.gap(p.operationId));}catch{try{workerAudit?.gap(p.operationId);}catch{}}
     } else if(!saved.receipt.userStableIdHash)return interrupted();
   }
   const receipt=saved.receipt;

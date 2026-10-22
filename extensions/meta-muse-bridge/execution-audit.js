@@ -14,7 +14,8 @@
   }
   function create({ storage, source, uuid = () => crypto.randomUUID(), canClose = () => true }) {
     if (!['worker', 'content'].includes(source)) throw Error('Invalid witness source');
-    const epoch = uuid(), live = new Map(), aliases = new Map(), damaged = new Set(), binding = new Map(); let tail = Promise.resolve();
+    const epoch = uuid(), live = new Map(), aliases = new Map(), damaged = new Set(), binding = new Map(), pending = new Map();
+    let tail = Promise.resolve(), prebindLoss = false;
     const key = packet => PREFIX + source + ':' + packet.jobId + ':' + packet.sourceEpoch;
     const enqueue = fn => { const task = tail.then(fn); tail = task.catch(() => {}); return task.catch(() => false); };
     function persist(packet) {
@@ -26,7 +27,7 @@
         if (live.has(binding.jobId)) return live.get(binding.jobId).auditId === binding.auditId;
         const all = await storage.get(null);
         if (Object.keys(all).filter(k => k.startsWith(PREFIX + source + ':')).length >= MAX_STREAMS) return false;
-        const p = { version: 1, jobId: binding.jobId, auditId: binding.auditId, source, sourceEpoch: epoch, watermark: 0, closed: false, gap: damaged.has(binding.jobId), events: [] };
+        const p = { version: 1, jobId: binding.jobId, auditId: binding.auditId, source, sourceEpoch: epoch, watermark: 0, closed: false, gap: prebindLoss || damaged.has(binding.jobId), events: [] };
         live.set(p.jobId, p); return await persist(p);
       } catch { gap(binding?.jobId);return false; }
     }
@@ -34,18 +35,40 @@
       if(!value || !id(value.jobId))return Promise.resolve(false);
       if(binding.has(value.jobId))return binding.get(value.jobId);
       if(binding.size>=MAX_STREAMS)return Promise.resolve(false);
-      const pending=bindOnce(value).finally(()=>binding.delete(value.jobId));binding.set(value.jobId,pending);return pending;
+      const task=bindOnce(value).then(ok=>{
+        const events=pending.get(value.jobId);pending.delete(value.jobId);
+        if(!ok){gap(value.jobId);return false;}
+        // Flush telemetry only after the initial checkpoint is durable. Never send/retry a command.
+        for(const e of events || [])record(live.get(value.jobId),e.type,e.detail);
+        return true;
+      }).finally(()=>binding.delete(value.jobId));binding.set(value.jobId,task);return task;
     }
     function observe(jobId, type, detail = {}) {
       try {
-        const p = live.get(jobId); if (!p) return;
+        if(!id(jobId))return;
+        const p = live.get(jobId);
+        if(!p || binding.has(jobId)) {
+          if(!valid(source,type,detail)){gap(jobId);return;}
+          if(!pending.has(jobId)) {
+            if(pending.size>=MAX_STREAMS){prebindLoss=true;gap(jobId);return;}
+            pending.set(jobId,[]);
+          }
+          const events=pending.get(jobId);
+          if(events.length>=MAX_RECORDS){gap(jobId);return;}
+          events.push({type,detail:clone(detail)});return;
+        }
+        return record(p,type,detail);
+      } catch {gap(jobId);}
+    }
+    function record(p, type, detail) {
+      try {
         if (!valid(source, type, detail)) { p.gap = true; return persist(p); }
         if (p.closed) { p.gap = true; persist(p); return; }
         const e = { eventId: uuid(), source, sourceEpoch: epoch, sourceSequence: ++p.watermark, type, detail: clone(detail) };
         if (p.events.length >= MAX_RECORDS || JSON.stringify(p).length + JSON.stringify(e).length > MAX_BYTES - 1024) p.gap = true;
         else p.events.push(e);
         return persist(p);
-      } catch {gap(jobId);}
+      } catch {gap(p?.jobId);}
     }
     function alias(jobId, privateIdentity) {
       // A random alias has no relationship to a candidate capability or node.
@@ -82,7 +105,7 @@
         } catch { return false; }
       });
     }
-    function gap(jobId) { try { if(id(jobId) && damaged.size<MAX_STREAMS)damaged.add(jobId);const p=live.get(jobId);if(p){p.gap=true;return persist(p);} } catch {} }
+    function gap(jobId) { try { if(id(jobId)){if(damaged.size<MAX_STREAMS)damaged.add(jobId);else prebindLoss=true;}const p=live.get(jobId);if(p){p.gap=true;return persist(p);} } catch {} }
     return { bind, observe, alias, drain, gap, flush: () => tail, epoch };
   }
   async function settle(pending, onGap, timeout=250) {
