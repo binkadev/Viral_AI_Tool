@@ -17,6 +17,54 @@ function fixture(locale) {
   vm.runInContext(source,c);
   return {c,calls,candidate,open:()=>c.window.ViralGenerationProgress.open(job.id),get markup(){return markup;},job:()=>job};
 }
+test('manual recovery preserves UTF-8 Vietnamese copy, placeholders and existing English copy',()=>{
+  assert(require('node:buffer').isUtf8(fs.readFileSync('renderer/i18n.js')));
+  const {messages,t}=fixture('vi').c.window.I18N;
+  const expectedVi={
+    status:'Tạo video cần xác nhận',
+    explanation:'Ứng dụng chưa xác nhận được video nào thuộc yêu cầu này. Bạn có thể xem và chọn video muốn dùng.',
+    review:'Xem và chọn video',
+    view:'Xem trong Muse',
+    confirm:'Dùng video này cho cảnh này',
+    dismiss:'Không dùng video nào',
+    open:'Mở Muse',
+    changed:'Video đã thay đổi hoặc không còn khả dụng. Hãy xem và chọn lại.',
+    completed:'Đã xong · Bạn đã xác nhận',
+    candidate:'Video {number}',
+    available:'Có thể dùng',
+    unavailable:'Không còn khả dụng',
+    empty:'Chưa có video có thể dùng. Hãy kiểm tra Muse rồi xem và chọn lại.',
+    tooMany:'Có quá nhiều video để chọn an toàn. Hãy thu gọn các video đang hiển thị trong Muse rồi thử lại.',
+    expires:'Lựa chọn có hiệu lực trong 2 phút. Hãy xem video trong Muse trước khi xác nhận.',
+    error:'Chưa lưu hoặc lấy được video đã chọn. Cảnh này chưa có video mới. Hãy kiểm tra kết nối và dung lượng trống rồi chọn lại.',
+    details:'{width} × {height} · {duration} giây'
+  };
+  const expectedEn={
+    status:'Video needs confirmation',
+    explanation:'The app could not confirm which video belongs to this request. Review and choose the video you want to use.',
+    review:'Review candidates',
+    view:'View in Muse',
+    confirm:'Use this video for this scene',
+    dismiss:'Use none',
+    open:'Open Muse',
+    changed:'This video changed or is unavailable. Review and select it again.',
+    completed:'Done ? Confirmed by you',
+    candidate:'Candidate {number}',
+    available:'Available',
+    unavailable:'Unavailable',
+    empty:'No available videos. Check Muse, then review and select again.',
+    tooMany:'Too many candidates to review safely. Reduce the videos currently displayed in Muse and try again.',
+    expires:'Selection expires in 2 minutes. View the video in Muse before confirming.',
+    error:'The selected video could not be saved or acquired. This scene has no new video. Check the connection and free space, then select again.',
+    details:'{width} ? {height} ? {duration} seconds'
+  };
+  assert.deepEqual(Object.keys(messages.vi.manualRecovery),Object.keys(expectedVi));
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.vi.manualRecovery)),expectedVi);
+  for(const [key,value] of Object.entries(messages.vi.manualRecovery))assert(!/[?\uFFFD]/u.test(value),key);
+  assert.equal(t('vi','manualRecovery.candidate',{number:2}),'Video 2');
+  assert.equal(t('vi','manualRecovery.details',{width:160,height:90,duration:1}),'160 × 90 · 1 giây');
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.en.manualRecovery)),expectedEn);
+});
 for(const locale of ['vi','en'])test(locale+' exact reveal gates confirmation, all copy externalized and completion truthful',async()=>{
   const f=fixture(locale),copy=f.c.window.I18N.messages[locale].manualRecovery;
   await f.open();assert(f.markup.includes(copy.status));assert(f.markup.includes(copy.explanation));assert.equal(f.calls.length,0);
