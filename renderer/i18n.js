@@ -1,6 +1,24 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      productionModes: {
+        title: "Chuẩn bị tư liệu dự án", mode: "Chế độ", assisted: "Có kiểm tra", auto: "Tự động",
+        assistedDescription: "Hệ thống chuẩn bị tư liệu cho từng cảnh, bạn kiểm tra và chọn kết quả.",
+        autoDescription: "Hệ thống tự chuẩn bị và chọn tư liệu cho các cảnh. Các trường hợp không an toàn sẽ yêu cầu bạn xử lý.",
+        start: "Bắt đầu", pause: "Tạm dừng", resume: "Tiếp tục", stop: "Dừng tự động", review: "Xem cảnh",
+        idle: "Chưa chạy.", running: "Đang chuẩn bị tư liệu.", paused: "Đã tạm dừng; thao tác đã nhận vẫn có thể chạy xong.",
+        needs_attention: "Một số cảnh cần bạn xử lý.", cancelled: "Đã dừng tự động.", materialsReady: "Tư liệu đã sẵn sàng.", reviewReady: "Tư liệu đã được chuẩn bị để kiểm tra.",
+        counts: "Sẵn sàng: {ready}/{total} cảnh · Cần kiểm tra: {review} · Cần xử lý: {attention}.", scene: "Cảnh {number}",
+        checking: "Đang kiểm tra {scene}.", sourcing: "Đang tìm tư liệu cho {scene}.", waiting: "Đang chờ kết quả AI cho {scene}.",
+        reviewScene: "{scene}: cần kiểm tra", attentionScene: "{scene}: cần xử lý",
+        stopNote: "Dừng tự động không hủy yêu cầu AI đã gửi. Kết quả vẫn có thể được gắn vào cảnh; ứng dụng sẽ không tự chạy cảnh tiếp theo.",
+        noSource: "Chưa có nguồn tư liệu phù hợp. Thêm tư liệu hoặc cập nhật kế hoạch cảnh rồi bắt đầu lại.",
+        brokenSelection: "Tư liệu đang chọn không dùng được. Hãy liên kết lại tệp hoặc chọn tư liệu khác trong cảnh.",
+        uncertain: "Chưa xác nhận được yêu cầu AI đã được nhận. Ứng dụng không tự gửi lại; hãy kiểm tra Tiến trình tạo video.",
+        recovery: "Yêu cầu AI cần kiểm tra thủ công. Mở Tiến trình tạo video để xem hướng xử lý; ứng dụng không tự khôi phục.",
+        generationFailed: "Chưa có kết quả AI dùng được cho cảnh. Kiểm tra Tiến trình tạo video hoặc thêm tư liệu thủ công.",
+        operationFailed: "Chưa xác nhận được tư liệu đã lưu đúng cảnh. Kiểm tra tư liệu cảnh, kết nối và dung lượng trống trước khi tiếp tục."
+      },
       sceneActions: {
         title: "Tư liệu theo kế hoạch", query: "Truy vấn đã lên kế hoạch", kind: "Loại tư liệu", video: "Video", image: "Ảnh",
         find: "Tìm tư liệu", generate: "Tạo tư liệu AI", another: "Tạo thêm tư liệu AI", prompt: "Prompt tạo video",
@@ -1521,6 +1539,24 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      productionModes: {
+        title: "Prepare project materials", mode: "Mode", assisted: "Assisted", auto: "Auto",
+        assistedDescription: "Prepare materials scene by scene while you review and choose the result.",
+        autoDescription: "Prepare and select scene materials automatically. Unsafe cases require your attention.",
+        start: "Start", pause: "Pause", resume: "Resume", stop: "Stop automation", review: "View scene",
+        idle: "Not started.", running: "Preparing materials.", paused: "Paused; already admitted work may still finish.",
+        needs_attention: "Some scenes need your attention.", cancelled: "Automation stopped.", materialsReady: "Materials ready.", reviewReady: "Materials prepared for review.",
+        counts: "Ready: {ready}/{total} scenes · Review: {review} · Attention: {attention}.", scene: "Scene {number}",
+        checking: "Checking {scene}.", sourcing: "Sourcing materials for {scene}.", waiting: "Waiting for AI output for {scene}.",
+        reviewScene: "{scene}: review required", attentionScene: "{scene}: attention required",
+        stopNote: "Stopping automation does not revoke an already submitted AI request. Its result may still attach to the scene; no further scene starts automatically.",
+        noSource: "No suitable material source is available. Add media or update the scene plan, then start again.",
+        brokenSelection: "The selected media is unavailable. Relink its file or choose other media in the scene.",
+        uncertain: "The AI request could not be confirmed as accepted. The app will not resend it; check Generation progress.",
+        recovery: "The AI request needs manual attention. Open Generation progress for recovery options; the app will not recover it automatically.",
+        generationFailed: "No usable AI result is available for this scene. Check Generation progress or add media manually.",
+        operationFailed: "Media could not be confirmed as saved to the right scene. Check scene materials, connection and free disk space before continuing."
+      },
       sceneActions: {
         title: "Planned scene materials", query: "Planned query", kind: "Material type", video: "Video", image: "Image",
         find: "Find materials", generate: "Generate AI material", another: "Generate another AI material", prompt: "Video generation prompt",

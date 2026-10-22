@@ -438,7 +438,7 @@
     if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
     next.mediaAssembly = model.mediaAssemblyModel[operation](next.mediaAssembly, sceneId,
       ...(operation === "clearSelection" ? [] : [assetId]),
-      { scenes, assets, now: Date.now(), selectionSource: "manual", selectIfEmpty: options.selectIfEmpty === true });
+      { scenes, assets, now: Date.now(), selectionSource: operation === "selectCandidate" && options.selectionSource === "auto" ? "auto" : "manual", selectIfEmpty: options.selectIfEmpty === true });
     // Pure no-ops (including capacity and duplicate adds) need no write or event.
     if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return model.clone(currentSnapshot);
     next.updatedAt = new Date().toISOString();
@@ -457,6 +457,7 @@
     return mutateSceneMaterial("addCandidate", sceneId, assetId, options);
   }
   function selectSceneMaterial(sceneId, assetId, options = {}) {
+    if (options.selectionSource !== undefined && !["manual", "auto"].includes(options.selectionSource)) throw Error("PROJECT_SELECTION_SOURCE_INVALID");
     return mutateSceneMaterial("selectCandidate", sceneId, assetId, options);
   }
   function removeSceneMaterialCandidate(sceneId, assetId, options = {}) {
