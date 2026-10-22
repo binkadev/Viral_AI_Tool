@@ -1,9 +1,11 @@
 {
   "name": "viral-ai-tool",
-  "version": "0.14.1-beta.1",
+  "version": "0.14.1-beta.2",
   "description": "Viral AI Tool desktop video automation studio",
   "main": "startup-main.js",
-  "author": { "name": "Viral AI Tool" },
+  "author": {
+    "name": "Viral AI Tool"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
@@ -94,7 +96,8 @@
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:media-assembly && npm run test:core-commercial-guard && npm run test:startup-shell && npm run test:core-product-shell && npm run test:core-ai-create && npm run test:generation-router && npm run test:generation-runtime && npm run test:muse-foundation && npm run test:muse-browser && npm run test:muse-extension && npm run test:muse-execution && npm run test:muse-manual-recovery && npm run test:generation-progress && npm run test:generation-visual-harness && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:core-scene-plan && npm run test:core-scene-plan-persistence && npm run test:media-local-files && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy && npm run test:core-editor-observer-storm"
+    "test:core-commercial": "npm run test:media-assembly && npm run test:core-commercial-guard && npm run test:startup-shell && npm run test:core-product-shell && npm run test:core-ai-create && npm run test:generation-router && npm run test:generation-runtime && npm run test:muse-foundation && npm run test:muse-browser && npm run test:muse-extension && npm run test:muse-execution && npm run test:muse-manual-recovery && npm run test:generation-progress && npm run test:generation-visual-harness && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:core-scene-plan && npm run test:core-scene-plan-persistence && npm run test:media-local-files && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy && npm run test:core-editor-observer-storm",
+    "test:private-beta-updater": "node --test tests/private-beta-updater.test.js tests/private-beta-shell.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
@@ -105,11 +108,29 @@
     "afterPack": "scripts/verify-muse-package.js",
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
-    "directories": { "output": "release" },
-    "files": ["startup-main.js", "main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "extensions/**/*", "release-info.json"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "startup-main.js",
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "services/**/*",
+      "extensions/**/*",
+      "release-info.json"
+    ],
     "win": {
       "icon": "assets/icon.ico",
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "executableName": "Viral AI Tool",
       "requestedExecutionLevel": "asInvoker"
     },
@@ -132,9 +153,20 @@
       "node_modules/sherpa-onnx-win-x64/**",
       "services/speech/local-worker.js"
     ],
-    "copyright": "Copyright © 2026 Viral AI Tool"
+    "copyright": "Copyright © 2026 Viral AI Tool",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "binkadev",
+        "repo": "Viral_AI_Tool",
+        "channel": "beta",
+        "releaseType": "prerelease"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": false
   },
   "dependencies": {
+    "electron-updater": "6.6.2",
     "ffmpeg-static": "5.3.0",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"

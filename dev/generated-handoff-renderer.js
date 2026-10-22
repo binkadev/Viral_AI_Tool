@@ -99,8 +99,12 @@
     await new Promise(resolve => setTimeout(resolve, 0));
     check("focusIdempotent", unique());
     verifyCounts(persistence.snapshot());
-    // Click the ordinary shell navigation; no generation handoff button/player.
-    const studio = document.querySelector('[data-page="ai-video"]');
+    // Private Beta enters the same Studio contextually from the active Project.
+    // The global legacy Studio navigation is deliberately hidden in that shell.
+    if (document.documentElement.dataset.privateBeta === "true") {
+      state.page = "ai-create"; render();
+    }
+    const studio = document.querySelector('[data-page="ai-video"]') || document.querySelector('[data-ai-route="ai-video"]');
     check("ordinaryStudioNavigation", !!studio);
     studio.click();
     await wait(() => {

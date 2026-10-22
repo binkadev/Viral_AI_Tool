@@ -32,7 +32,7 @@ const cloudConfigStore = fs.readFileSync(
   "utf8"
 );
 
-const privateBeta = info.source === "private-beta" && info.channel === "preview";
+const privateBeta = info.source === "private-beta" && info.channel === "beta";
 assert((privateBeta ? /^\d+\.\d+\.\d+-beta\.\d+$/ : /^\d+\.\d+\.\d+$/).test(pkg.version), "Version must match the release channel.");
 assert.strictEqual(pkg.build?.appId, "com.viralai.tool");
 assert.strictEqual(pkg.build?.productName, "Viral AI Tool");
@@ -52,7 +52,7 @@ assert.strictEqual(
 
 assert.strictEqual(info.schemaVersion, 1);
 assert(
-  ["development", "preview", "stable"].includes(info.channel),
+  ["development", "preview", "beta", "stable"].includes(info.channel),
   "release-info channel is invalid."
 );
 assert(

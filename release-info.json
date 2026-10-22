@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "channel": "preview",
-  "commit": "46dbcc16dace401fa919a35605846b75c8bf4a73",
-  "builtAt": "2026-10-22T10:43:09.458Z",
+  "channel": "beta",
+  "commit": null,
+  "builtAt": "2026-10-22T11:24:59.951Z",
   "source": "private-beta",
   "updateManifestUrl": null,
   "releasePageUrl": null,

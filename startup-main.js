@@ -2,6 +2,25 @@
 
 const { app, BrowserWindow } = require("electron");
 
+// A loopback-only packaged verification session must retain its temporary
+// profile when NSIS relaunches without Chromium command-line switches.
+if (app.isPackaged && process.env.VIRAL_AI_UPDATE_TEST_PROFILE) {
+  try {
+    const profile = require("./services/update/private-beta-updater").verificationProfile({
+      packaged: app.isPackaged, feed: process.env.VIRAL_AI_UPDATE_TEST_URL,
+      profile: process.env.VIRAL_AI_UPDATE_TEST_PROFILE, tempPath: require("os").tmpdir()
+    });
+    if (!profile) throw Error("UPDATE_TEST_PROFILE_INVALID");
+    app.setPath("userData", profile);
+    const port = process.env.VIRAL_AI_UPDATE_TEST_DEBUG_PORT;
+    if (port) {
+      if (!/^\d{1,5}$/.test(port) || Number(port) < 1024 || Number(port) > 65535) throw Error("UPDATE_TEST_PORT_INVALID");
+      app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+      app.commandLine.appendSwitch("remote-debugging-port", port);
+    }
+  } catch { app.exit(1); }
+}
+
 // Isolate storage BEFORE lock/session initialization; DEV code is not shipped.
 let devHandoff = null;
 if (app.isPackaged === false && process.env.NODE_ENV !== "production" &&

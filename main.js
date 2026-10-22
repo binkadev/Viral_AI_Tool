@@ -53,6 +53,9 @@ const {
 } = require('./services/update/windows-signature');
 const { createDiagnosticLogger } = require('./services/diagnostics/logger');
 const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
+const { PrivateBetaUpdater } = require('./services/update/private-beta-updater');
+const { registerPrivateBetaUpdateIpc } = require('./services/update/private-beta-ipc');
+let privateBetaUpdater;
 
 const { GenerationService } = require('./services/generation/generation-service');
 const { registerGenerationIpc } = require('./services/generation/generation-ipc');
@@ -85,7 +88,7 @@ function releaseInfo() {
     if (raw && typeof raw === 'object') metadata = raw;
   } catch {}
 
-  const allowedChannels = new Set(['development', 'preview', 'stable']);
+  const allowedChannels = new Set(['development', 'preview', 'beta', 'stable']);
   const channel = allowedChannels.has(String(metadata.channel || '').toLowerCase())
     ? String(metadata.channel).toLowerCase()
     : 'development';
@@ -364,6 +367,7 @@ async function runBackgroundUpdateCheck() {
   const current = releaseInfo();
   if (
     !app.isPackaged ||
+    current.source === 'private-beta' ||
     !current.updateManifestUrl ||
     !["stable", "preview"].includes(current.channel)
   ) {
@@ -424,7 +428,11 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => {
-      runBackgroundUpdateCheck().catch(() => {});
+      if (privateBetaUpdater) {
+        privateBetaUpdater.startupCheck().catch(() => {});
+      } else {
+        runBackgroundUpdateCheck().catch(() => {});
+      }
     }, 12000);
   });
 
@@ -484,6 +492,36 @@ app.whenReady().then(() => {
     electron: process.versions.electron,
     node: process.versions.node
   });
+
+  if (releaseInfo().source === 'private-beta') {
+    privateBetaUpdater = new PrivateBetaUpdater({
+      updater: app.isPackaged ? require('electron-updater').autoUpdater : null,
+      packaged: app.isPackaged,
+      version: app.getVersion(),
+      preferencesPath: path.join(app.getPath('userData'), 'update-preferences.json'),
+      testUrl: process.env.VIRAL_AI_UPDATE_TEST_URL,
+      activeWork: getActiveWorkCount,
+      prepareInstall: async () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return false;
+        // Fixed local code, never renderer-supplied script. Storage failure,
+        // unscoped project work, a hung renderer or a missing project API vetoes.
+        const barrier = mainWindow.webContents.executeJavaScript(`(() => {
+          const api = window.ViralCoreProjectPersistence;
+          if (!api || typeof state === 'undefined') return false;
+          const busy = new Set(['validating','preparing','uploading','queued','processing','translating','generating','downloading','rendering','planning','cancelling']);
+          if ([state.speech?.job,state.translation?.job,state.voice?.job,state.scenePlan?.plannerJob,...(state.jobs || []).filter(job => job.isRenderOutput)].some(job => busy.has(job?.status))) return false;
+          return !api.storageError() && !api.unsupportedSchemaVersion() && (!api.activeProjectId() || !!api.flush('before-update-install'));
+        })()`);
+        let timer;
+        try { return await Promise.race([barrier, new Promise(resolve => { timer = setTimeout(() => resolve(false), 4000); })]) === true; }
+        catch { return false; }
+        finally { clearTimeout(timer); }
+      }
+    });
+    privateBetaUpdater.on('state', snapshot => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('updates:state-changed', snapshot);
+    });
+  }
 
   sessionStore = createSessionStore({
     userDataPath: app.getPath('userData'),
@@ -640,6 +678,7 @@ ipcMain.handle('diagnostics:export', async () => {
 
 ipcMain.handle('app:check-update', async () => {
   const current = releaseInfo();
+  if (current.source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
 
   if (!current.updateManifestUrl) {
     return {
@@ -675,6 +714,7 @@ ipcMain.handle('app:check-update', async () => {
 
 ipcMain.handle('app:download-update', async (event) => {
   const current = releaseInfo();
+  if (current.source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
 
   if (activeUpdateDownloadController) {
     return {
@@ -741,6 +781,7 @@ ipcMain.handle('app:download-update', async (event) => {
 });
 
 ipcMain.handle('app:cancel-update-download', async () => {
+  if (releaseInfo().source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
   if (!activeUpdateDownloadController) {
     return { ok: true, data: { cancelled: false } };
   }
@@ -757,6 +798,7 @@ ipcMain.handle('app:cancel-update-download', async () => {
 });
 
 ipcMain.handle('app:launch-update', async () => {
+  if (releaseInfo().source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
   if (getActiveWorkCount() > 0) {
     return {
       ok: false,
@@ -1742,6 +1784,12 @@ ipcMain.handle('files:select-replacement-video', async () => {
 ipcMain.handle('video:file-url', async (_event, inputPath) => {
   const safePath = assertVideoPath(inputPath);
   return pathToFileURL(safePath).href;
+});
+
+registerPrivateBetaUpdateIpc({ ipcMain, service: () => privateBetaUpdater, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
 });
 
 registerGenerationIpc({ ipcMain, getService: () => generationService, developmentDiagnostics: !app.isPackaged, trusted: event =>

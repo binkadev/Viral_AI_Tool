@@ -36,9 +36,13 @@ function verify(archive) {
   }
   if (info.source === "private-beta") {
     assert.match(pkg.version, /^\d+\.\d+\.\d+-beta\.\d+$/);
-    assert.equal(info.channel, "preview");
+    assert.equal(info.channel, "beta");
+    assert.equal(info.commit, null);
     assert.equal(info.updateManifestUrl, null);
     assert.equal(info.releasePageUrl, null);
+    assert.equal(pkg.dependencies["electron-updater"], "6.6.2");
+    assert(has("node_modules/electron-updater/out/main.js"), "Updater must ship as a runtime dependency");
+    for (const name of ["services/update/private-beta-updater.js", "services/update/private-beta-ipc.js", "renderer/core-private-beta.js", "renderer/core-private-beta-model.js", "renderer/core-private-beta.css"]) assert(has(name), "Missing Beta runtime: " + name);
   }
   return { version: pkg.version, channel: info.channel, relativeImports: imports, rendererAssets: "complete", nativeHelpers: "present" };
 }

@@ -13,7 +13,7 @@ function check(name, ok, detail) {
   checks.push({ name, ok: Boolean(ok), detail: String(detail || "") });
 }
 
-const privateBeta = releaseInfo.source === "private-beta" && releaseInfo.channel === "preview";
+const privateBeta = releaseInfo.source === "private-beta" && releaseInfo.channel === "beta";
 check("Version format", (privateBeta ? /^\d+\.\d+\.\d+-beta\.\d+$/ : /^\d+\.\d+\.\d+$/).test(pkg.version), pkg.version);
 check(
   "Lockfile version",
@@ -61,6 +61,7 @@ const commands = [
   ["Timeline interaction sync", ["npm", ["run", "test:core-editor-timeline-interactions"]]]
 ];
 if (privateBeta) commands.unshift(["Private Beta packaging", ["npm", ["run", "test:private-beta"]]]);
+if (privateBeta) commands.unshift(["Private Beta updater", ["npm", ["run", "test:private-beta-updater"]]]);
 
 for (const [name, [command, args]] of commands) {
   const bin = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;

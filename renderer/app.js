@@ -2808,7 +2808,7 @@ async function loadReleaseInfo({ rerender = false } = {}) {
 
 function releaseChannelLabel(channel) {
   const value = String(channel || "").toLowerCase();
-  if (value === "preview" && state.release.info?.source === "private-beta") return t("settings.releasePrivateBeta");
+  if (value === "beta") return t("settings.releasePrivateBeta");
   if (value === "stable") return t("settings.releaseStable");
   if (value === "preview") return t("settings.releasePreview");
   return t("settings.releaseDevelopment");

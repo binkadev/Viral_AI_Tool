@@ -1,6 +1,24 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      betaUpdates: {
+        product: "Viral AI Tool", identity: "Beta nội bộ", title: "Cập nhật", current: "Phiên bản hiện tại", channel: "Kênh",
+        lastChecked: "Lần kiểm tra gần nhất", never: "Chưa kiểm tra", automatic: "Tự kiểm tra cập nhật khi mở ứng dụng",
+        check: "Kiểm tra cập nhật", download: "Tải cập nhật", cancel: "Dừng tải", install: "Cài đặt & khởi động lại", later: "Để sau",
+        notice: "Có bản cập nhật mới", view: "Xem cập nhật", notes: "Nội dung cập nhật", packagedOnly: "Kiểm tra cập nhật khả dụng trong bản cài ứng dụng.",
+        states: { idle: "Sẵn sàng kiểm tra cập nhật.", checking: "Đang kiểm tra…", available: "Có phiên bản mới.", "not-available": "Bạn đang dùng phiên bản mới nhất.", downloading: "Đang tải…", downloaded: "Bản cập nhật đã sẵn sàng.", installing: "Đang cài đặt và khởi động lại…", error: "Chưa cập nhật được. Bạn có thể thử kiểm tra lại." },
+        errors: {
+          UPDATE_CONFIGURATION: "Chưa thiết lập được cập nhật. Bạn vẫn có thể làm việc; hãy liên hệ hỗ trợ để nhận bản cài mới.",
+          UPDATE_CHANNEL_REJECTED: "Bản cập nhật không thuộc kênh đang dùng. Ứng dụng chưa tải bản này; hãy kiểm tra lại sau.",
+          UPDATE_REQUEST_FAILED: "Chưa kiểm tra hoặc tải được cập nhật. Bạn vẫn có thể làm việc; hãy kiểm tra kết nối, dung lượng trống rồi thử lại.",
+          UPDATE_VERIFICATION: "Chưa xác minh được bản tải về. Ứng dụng chưa cài đặt; hãy kiểm tra và tải lại.",
+          UPDATE_WORK_ACTIVE: "Vẫn còn công việc đang chạy. Chưa cài cập nhật; hãy chờ xử lý xong rồi thử lại.",
+          UPDATE_SAVE_REQUIRED: "Dự án chưa sẵn sàng để đóng. Chưa cài cập nhật; hãy chờ xử lý xong và lưu dự án rồi thử lại.",
+          UPDATE_INSTALL_FAILED: "Chưa mở được bước cài đặt. Dữ liệu vẫn được giữ; hãy thử cài lại sau.",
+          UPDATE_PREFERENCES_FAILED: "Chưa lưu được lựa chọn kiểm tra cập nhật. Hãy kiểm tra dung lượng trống rồi thử lại.",
+          UPDATE_INVALID_REQUEST: "Chưa thực hiện được thao tác cập nhật. Hãy mở lại Cài đặt rồi thử lại."
+        }
+      },
       sceneMaterials: {
         title: "Tư liệu cảnh", scene: "Cảnh {number}", candidateCount: "{count} phương án", use: "Dùng", inUse: "Đang dùng",
         add: "Thêm từ dự án", projectMedia: "Tư liệu dự án", chooseAsset: "Chọn tư liệu", selectScene: "Chọn một cảnh để xem tư liệu.",
@@ -1449,6 +1467,24 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      betaUpdates: {
+        product: "Viral AI Tool", identity: "Private Beta", title: "Updates", current: "Current version", channel: "Channel",
+        lastChecked: "Last checked", never: "Not checked yet", automatic: "Check for updates when the app opens",
+        check: "Check for updates", download: "Download update", cancel: "Cancel download", install: "Install & Restart", later: "Later",
+        notice: "An update is available", view: "View update", notes: "Release notes", packagedOnly: "Update checks are available in the installed app.",
+        states: { idle: "Ready to check for updates.", checking: "Checking…", available: "A new version is available.", "not-available": "You are using the latest version.", downloading: "Downloading…", downloaded: "Update ready.", installing: "Installing and restarting…", error: "The update could not complete. You can check again." },
+        errors: {
+          UPDATE_CONFIGURATION: "Updates could not be configured. You can keep working; contact support for a new installer.",
+          UPDATE_CHANNEL_REJECTED: "This update belongs to a different channel. It has not been downloaded; check again later.",
+          UPDATE_REQUEST_FAILED: "The update could not be checked or downloaded. You can keep working; check your connection and free disk space, then try again.",
+          UPDATE_VERIFICATION: "The download could not be verified. Nothing was installed; check for updates and download again.",
+          UPDATE_WORK_ACTIVE: "Work is still running. The update has not been installed; wait for it to finish and try again.",
+          UPDATE_SAVE_REQUIRED: "Your project is not ready to close. The update has not been installed; finish processing and save your project, then try again.",
+          UPDATE_INSTALL_FAILED: "The installer could not be opened. Your data is retained; try installing again later.",
+          UPDATE_PREFERENCES_FAILED: "Your update preference could not be saved. Check free disk space and try again.",
+          UPDATE_INVALID_REQUEST: "The update action could not run. Open Settings again and retry."
+        }
+      },
       sceneMaterials: {
         title: "Scene materials", scene: "Scene {number}", candidateCount: "{count} candidates", use: "Use", inUse: "In use",
         add: "Add from project", projectMedia: "Project media", chooseAsset: "Choose material", selectScene: "Select a scene to view its materials.",
