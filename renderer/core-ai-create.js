@@ -245,6 +245,7 @@
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
       '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></div></header>' +
       (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '"><span>' + esc(format(c.activeProject, { projectName: activeProject.projectName })) + '</span><span>' + esc(projectType(activeProject)) + '</span></div>' : '') +
+      (activeProject ? window.ViralCoreProjectScenes?.surface?.() || '' : '') +
       '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
       '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
       '<div class="core-ai-controls core-ai-strategy-grid">' +
@@ -373,7 +374,8 @@
         submissionKey = null;
         updateGenerationControls();
       });
-      window.addEventListener("viral-ai:core-state-changed", () => {
+      window.addEventListener("viral-ai:core-state-changed", event => {
+        if (event?.detail?.reason === "project-scene") { updateGenerationControls(); return; }
         refreshReadiness();
         renderWorkspace();
       });

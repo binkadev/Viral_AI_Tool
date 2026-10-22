@@ -1,6 +1,16 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      projectScenes: {
+        selectedActions: "Thao tác với cảnh đang chọn",
+        title: "Các cảnh", scene: "Cảnh {number}", add: "Thêm cảnh", up: "Lên", down: "Xuống", delete: "Xóa cảnh",
+        manual: "Cảnh tự tạo", materials: "{count} tư liệu", materialOne: "1 tư liệu", inUse: "Đang dùng ✓",
+        confirmTitle: "Xóa cảnh này?",
+        confirmBody: "Nội dung và liên kết tư liệu của cảnh này sẽ bị xóa. Tư liệu vẫn được giữ trong Thư viện dự án.",
+        lastScene: "Dự án cần ít nhất một cảnh.", limit: "Dự án đã có đủ 2.000 cảnh. Hãy xóa một cảnh trước khi thêm.",
+        busy: "Đang lập kế hoạch cảnh. Hãy chờ xử lý xong rồi thử lại.",
+        saveFailed: "Chưa lưu được thay đổi cảnh. Dự án vẫn giữ trạng thái trước đó. Hãy kiểm tra dung lượng trống rồi thử lại."
+      },
       betaUpdates: {
         product: "Viral AI Tool", identity: "Beta nội bộ", title: "Cập nhật", current: "Phiên bản hiện tại", channel: "Kênh",
         lastChecked: "Lần kiểm tra gần nhất", never: "Chưa kiểm tra", automatic: "Tự kiểm tra cập nhật khi mở ứng dụng",
@@ -1467,6 +1477,16 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      projectScenes: {
+        selectedActions: "Selected scene actions",
+        title: "Scenes", scene: "Scene {number}", add: "Add scene", up: "Move up", down: "Move down", delete: "Delete scene",
+        manual: "Manual scene", materials: "{count} materials", materialOne: "1 material", inUse: "In use ✓",
+        confirmTitle: "Delete this scene?",
+        confirmBody: "This scene's content and media assignments will be removed. Its media will remain in the Project Library.",
+        lastScene: "A project needs at least one scene.", limit: "This project has reached 2,000 scenes. Delete a scene before adding another.",
+        busy: "The scene plan is being prepared. Wait until it finishes, then try again.",
+        saveFailed: "Your scene changes could not be saved. The project still has its previous state. Check available storage, then try again."
+      },
       betaUpdates: {
         product: "Viral AI Tool", identity: "Private Beta", title: "Updates", current: "Current version", channel: "Channel",
         lastChecked: "Last checked", never: "Not checked yet", automatic: "Check for updates when the app opens",

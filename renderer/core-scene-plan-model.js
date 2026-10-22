@@ -217,13 +217,13 @@
     };
   }
 
-  function normalizePlan(input, { restartSafe = false } = {}) {
+  function normalizePlan(input, { restartSafe = false, now = Date.now() } = {}) {
     const source = input && typeof input === "object" ? input : {};
     const seen = new Set();
     const scenes = [];
     for (const candidate of Array.isArray(source.scenes) ? source.scenes : []) {
       if (scenes.length >= MAX_SCENES) break;
-      const scene = normalizeScene(candidate, scenes.length);
+      const scene = normalizeScene(candidate, scenes.length, now);
       if (!scene || seen.has(scene.id)) continue;
       seen.add(scene.id);
       scenes.push(scene);
@@ -231,7 +231,7 @@
     scenes.sort((a, b) => a.order - b.order || a.start - b.start || a.id.localeCompare(b.id));
     scenes.forEach((scene, index) => { scene.order = index; });
     const selectedSceneId = text(source.selectedSceneId, 512) || null;
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date(now).toISOString();
     return {
       schemaVersion: SCENE_PLAN_SCHEMA_VERSION,
       sourceType: text(source.sourceType, 20).toLowerCase() === "script" ? "script" : "transcript",
@@ -363,6 +363,57 @@
     return normalizePlan(plan, { restartSafe: true });
   }
 
+  // Editing changes production order only. Source timing and ownership stay on
+  // the same stable Scene IDs. A missing clock uses persisted time, never RNG.
+  function editingPlan(plan, options = {}) {
+    const now = finite(options.now, Date.parse(plan?.updatedAt) || 0);
+    return { current: normalizePlan(plan, { now }), now };
+  }
+
+  function editedPlan(current, scenes, selectedSceneId, now) {
+    return normalizePlan({ ...current,
+      scenes: scenes.map((scene, order) => ({ ...scene, order })),
+      selectedSceneId, updatedAt: new Date(now).toISOString()
+    }, { now });
+  }
+
+  function addScene(plan, scene, options = {}) {
+    const { current, now } = editingPlan(plan, options);
+    const id = typeof scene?.id === "string" ? scene.id.trim() : "";
+    if (!id || id !== scene.id || id.length > 512 || current.scenes.length >= MAX_SCENES || current.scenes.some(item => item.id === id)) return current;
+    const index = options.index === undefined ? current.scenes.length : options.index;
+    if (!Number.isInteger(index) || index < 0 || index > current.scenes.length) return current;
+    const added = normalizeScene({ ...scene, id, sceneState: "draft",
+      provenance: { origin: "manual" } }, index, now);
+    const scenes = current.scenes.slice();
+    scenes.splice(index, 0, added);
+    return editedPlan(current, scenes, options.select === false ? current.selectedSceneId || id : id, now);
+  }
+
+  function selectScene(plan, sceneId, options = {}) {
+    const { current, now } = editingPlan(plan, options);
+    if (!current.scenes.some(scene => scene.id === sceneId) || current.selectedSceneId === sceneId) return current;
+    return editedPlan(current, current.scenes, sceneId, now);
+  }
+
+  function moveScene(plan, sceneId, targetIndex, options = {}) {
+    const { current, now } = editingPlan(plan, options);
+    const index = current.scenes.findIndex(scene => scene.id === sceneId);
+    if (index < 0 || !Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= current.scenes.length || index === targetIndex) return current;
+    const scenes = current.scenes.slice();
+    scenes.splice(targetIndex, 0, scenes.splice(index, 1)[0]);
+    return editedPlan(current, scenes, current.selectedSceneId, now);
+  }
+
+  function removeScene(plan, sceneId, options = {}) {
+    const { current, now } = editingPlan(plan, options);
+    const index = current.scenes.findIndex(scene => scene.id === sceneId);
+    if (index < 0 || current.scenes.length <= 1) return current;
+    const scenes = current.scenes.filter(scene => scene.id !== sceneId);
+    const selected = current.selectedSceneId === sceneId ? scenes[Math.min(index, scenes.length - 1)].id : current.selectedSceneId;
+    return editedPlan(current, scenes, selected, now);
+  }
+
   return {
     SCENE_PLAN_SCHEMA_VERSION,
     MAX_SCENES,
@@ -386,6 +437,10 @@
     createPlanFromTranscript,
     isStale,
     updateScene,
+    addScene,
+    selectScene,
+    removeScene,
+    moveScene,
     restartSafePlan
   };
 });

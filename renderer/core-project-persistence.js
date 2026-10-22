@@ -466,6 +466,65 @@
     return mutateSceneMaterial("clearSelection", sceneId, null, options);
   }
 
+  // Capture pending non-Scene state through the normal snapshot path, retaining
+  // committed Scene authority. Publish only after one atomic registry write.
+  function mutateProjectScene(operation, sceneId, value, options = {}) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const projectId = options.projectId;
+    if (!projectId || projectId !== registry.activeProjectId) throw Error("PROJECT_MISMATCH");
+    const current = appState(), sceneModel = window.ViralCoreScenePlanModel;
+    if (!current || currentSnapshot?.projectId !== projectId || current.projectId && current.projectId !== projectId ||
+        !sceneModel || !model.mediaAssemblyModel) throw Error("PROJECT_STATE_UNAVAILABLE");
+    for (const key of ["scenePlan", "mediaAssembly"]) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    }
+    const captured = { ...current,
+      scenePlan: model.clone(currentSnapshot.scenePlan),
+      mediaAssembly: model.clone(currentSnapshot.mediaAssembly) };
+    const next = model.buildSnapshot(captured, editorState(current), currentSnapshot);
+    if (!next || next.projectId !== projectId) throw Error("PROJECT_STATE_UNAVAILABLE");
+    next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+    const plan = next.scenePlan;
+    if (sceneModel.ACTIVE_PLANNER_STATES.has(plan.plannerJob.status)) throw Error("PROJECT_SCENE_BUSY");
+    if (operation !== "addScene" && !plan.scenes.some(scene => scene.id === sceneId)) throw Error("PROJECT_SCENE_NOT_FOUND");
+    if (operation === "removeScene" && plan.scenes.length <= 1) throw Error("PROJECT_FINAL_SCENE");
+    const now = Date.now();
+    if (operation === "addScene") {
+      if (plan.scenes.length >= sceneModel.MAX_SCENES) throw Error("PROJECT_SCENE_LIMIT");
+      const scene = { ...(value || {}) };
+      if (!Object.prototype.hasOwnProperty.call(scene, "id")) scene.id = window.crypto?.randomUUID?.();
+      if (typeof scene.id !== "string" || !scene.id.trim() || scene.id !== scene.id.trim() || scene.id.length > 512) throw Error("PROJECT_SCENE_ID_INVALID");
+      if (plan.scenes.some(item => item.id === scene.id)) throw Error("PROJECT_SCENE_DUPLICATE");
+      next.scenePlan = sceneModel.addScene(plan, scene, { ...options, now });
+    } else if (operation === "moveScene") {
+      if (!Number.isInteger(value) || value < 0 || value >= plan.scenes.length) throw Error("PROJECT_SCENE_INDEX_INVALID");
+      next.scenePlan = sceneModel.moveScene(plan, sceneId, value, { now });
+    } else next.scenePlan = sceneModel[operation](plan, sceneId, { now });
+    next.mediaAssembly = model.mediaAssemblyModel.normalizeAssembly(next.mediaAssembly,
+      { scenes: next.scenePlan.scenes, assets: next.media.assets });
+    if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return model.clone(currentSnapshot);
+    next.updatedAt = new Date(now).toISOString();
+    const livePlan = model.clone(next.scenePlan), liveAssembly = model.clone(next.mediaAssembly);
+    const projection = compatibilityValues(next);
+    try { saveSnapshot(next); }
+    catch (error) { dispatchSaveFailure("project-scene", error); throw error; }
+    currentSnapshot = next;
+    current.scenePlan = livePlan;
+    current.mediaAssembly = liveAssembly;
+    projectLegacyProjection(next, projection);
+    presentProject("project-scene", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+      detail: { reason: "project-scene", projectId, sceneId: next.scenePlan.selectedSceneId }
+    })));
+    return model.clone(next);
+  }
+
+  function addProjectScene(scene = {}, options = {}) { return mutateProjectScene("addScene", null, scene, options); }
+  function selectProjectScene(sceneId, options = {}) { return mutateProjectScene("selectScene", sceneId, null, options); }
+  function removeProjectScene(sceneId, options = {}) { return mutateProjectScene("removeScene", sceneId, null, options); }
+  function moveProjectScene(sceneId, targetIndex, options = {}) { return mutateProjectScene("moveScene", sceneId, targetIndex, options); }
+
   function assertSwitchSafe() {
     const current = appState();
     const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
@@ -728,6 +787,10 @@
     selectSceneMaterial,
     removeSceneMaterialCandidate,
     clearSceneMaterialSelection,
+    addProjectScene,
+    selectProjectScene,
+    removeProjectScene,
+    moveProjectScene,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
     openProject,

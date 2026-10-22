@@ -200,6 +200,7 @@
     panel.innerHTML =
       '<div class="core-assets-head"><strong>' + t("assets") + '</strong><button type="button" data-assets-collapse>‹</button></div>' +
       '<div class="core-assets-body">' +
+        (window.ViralCoreProjectScenes?.surface?.() || '') +
         '<section class="core-scene-materials" data-scene-materials tabindex="-1" aria-label="' + escapeMaterial(materialText("title")) + '"></section>' +
         sectionLabel("project") +
         '<button type="button" class="core-asset-item core-source-asset" data-source-asset>' +
