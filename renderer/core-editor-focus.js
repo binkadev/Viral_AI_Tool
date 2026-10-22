@@ -25,7 +25,7 @@
     const page = document.getElementById("page");
     const grid = page?.querySelector(".editor-grid");
     if (!(page instanceof HTMLElement) || !(grid instanceof HTMLElement)) return;
-    if (!grid.querySelector(".preview-video, .core-player-media")) return;
+    if (!grid.querySelector(".preview-video, .core-player-media, [data-project-preview]")) return;
 
     const head = grid.previousElementSibling instanceof HTMLElement && grid.previousElementSibling.classList.contains("section-head")
       ? grid.previousElementSibling

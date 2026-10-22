@@ -13,6 +13,7 @@
   const timelineSegmentCaches = new WeakMap();
   let activeVideo = null;
   let rafId = 0;
+  let projectPreview = null;
 
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch { return fallback; }
@@ -91,6 +92,7 @@
   }
 
   function seekVideo(video, time, { forceScroll = true } = {}) {
+    if (projectPreview?.active() || projectPreview?.owns(video)) return;
     if (!video) return;
     const target = model.clampTime(time, video.duration);
     if (Math.abs(Number(video.currentTime || 0) - target) > 0.002) video.currentTime = target;
@@ -312,10 +314,12 @@
   }
 
   function updateFromPlayback(video, { forceScroll = false } = {}) {
+    if (projectPreview?.active() || projectPreview?.owns(video)) return;
     if (!video || video !== activeVideo) return;
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
-      // video.currentTime is the single source of truth for player, timeline and transcript.
+      // Legacy source mode uses media time. Project mode delegates all clock,
+      // controls and timeline authority to projectPreview and never enters here.
       const current = model.clampTime(video.currentTime, video.duration);
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const controls = controlsFor(video);
@@ -339,6 +343,7 @@
 
   function startFrameSync(video) {
     stopFrameSync(video);
+    if (projectPreview?.active() || projectPreview?.owns(video)) return;
     if (typeof video.requestVideoFrameCallback !== "function" || video.paused || video.ended) return;
     const tick = () => {
       if (video !== activeVideo || video.paused || video.ended) {
@@ -395,6 +400,7 @@
     host.appendChild(controls);
 
     controls.querySelector("[data-core-play]")?.addEventListener("click", async () => {
+      if (!video || projectPreview?.active()) return;
       if (video.paused) {
         try { await video.play(); } catch {}
       } else {
@@ -405,6 +411,7 @@
 
     const seek = controls.querySelector("[data-core-seek]");
     seek?.addEventListener("input", () => {
+      if (!video || projectPreview?.active()) return;
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       if (!duration) return;
       seekVideo(video, (Number(seek.value) / 1000) * duration);
@@ -416,6 +423,7 @@
 
   function enhanceVideo(video) {
     if (!(video instanceof HTMLVideoElement)) return;
+    if (projectPreview?.active() || projectPreview?.owns(video)) return;
     const host = video.closest(".preview");
     if (!host) return;
     activeVideo = video;
@@ -457,6 +465,7 @@
     });
 
     video.addEventListener("loadedmetadata", () => {
+      if (projectPreview?.active() || projectPreview?.owns(video)) return;
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         host.style.setProperty("--core-video-ratio", video.videoWidth + " / " + video.videoHeight);
         host.dataset.videoRatio = (video.videoWidth / video.videoHeight).toFixed(4);
@@ -483,6 +492,13 @@
   const observer = new MutationObserver(() => scan());
   const start = () => {
     const page = document.getElementById("page");
+    if (window.ViralCoreInstallProjectPlayer && page) {
+      projectPreview = window.ViralCoreInstallProjectPlayer({ makeControls, releaseLegacy() {
+        cancelAnimationFrame(rafId);
+        if (activeVideo) { stopFrameSync(activeVideo); activeVideo.pause(); activeVideo = null; }
+      } });
+      window.ViralCorePlayer = { projectPreview };
+    }
     if (page) observer.observe(page, { childList: true, subtree: true });
     scan();
   };
@@ -491,6 +507,7 @@
   else start();
 
   window.addEventListener("viral-ai:transcript-workstation-ready", () => {
+    if (projectPreview?.active()) return;
     if (!activeVideo) return;
     invalidateTranscriptCache(activeVideo);
     enhanceTranscriptRows(activeVideo);

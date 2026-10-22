@@ -311,7 +311,7 @@
 
     const video = grid.querySelector("video.preview-video, video.core-player-media");
     const source = currentSource();
-    if (!video && !source) return;
+    if (!video && !source && !window.ViralCorePlayer?.projectPreview?.active()) return;
 
     const panel = ensurePanel(grid);
     updatePanel(panel, grid);

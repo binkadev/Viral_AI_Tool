@@ -165,6 +165,7 @@
   }
 
   function syncSurface(video) {
+    if (window.ViralCorePlayer?.projectPreview?.owns(video)) return;
     if (!(video instanceof HTMLVideoElement)) return;
     const host = hostFor(video);
     if (!(host instanceof HTMLElement)) return;
@@ -200,6 +201,7 @@
   }
 
   function wire(video) {
+    if (window.ViralCorePlayer?.projectPreview?.owns(video)) return;
     if (!(video instanceof HTMLVideoElement)) return;
     syncSurface(video);
     if (wired.has(video)) return;

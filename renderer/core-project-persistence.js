@@ -196,7 +196,7 @@
 
   function currentVideo() {
     const video = document.querySelector("#page .core-editor-focus-section video.preview-video, #page .core-editor-focus-section video.core-player-media, #page video.preview-video, #page video.core-player-media");
-    return video instanceof HTMLVideoElement && video.isConnected ? video : null;
+    return video instanceof HTMLVideoElement && video.isConnected && video.dataset?.coreProjectPreview !== "true" ? video : null;
   }
 
   function currentTimelineScroll() {
@@ -749,7 +749,10 @@
       "viral-ai:transcript-edit",
       "viral-ai:editor-segment-selected",
       "viral-ai:player-seek"
-    ].forEach(name => window.addEventListener(name, () => schedule(name)));
+    ].forEach(name => window.addEventListener(name, event => {
+      if (event?.detail?.authority === "project-preview") return;
+      schedule(name);
+    }));
 
     [
       "viral-ai:editor-preview-preserved",

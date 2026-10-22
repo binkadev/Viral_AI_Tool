@@ -68,7 +68,7 @@
     navItems.splice(0, navItems.length, ...navItems.filter(item => item.group || model.primary.has(item.id)));
     const previousRender = render;
     render = function(...args) {
-      const source = Boolean(window.ViralCoreProjectPersistence?.snapshot()?.source?.path) && state.jobs?.some(job => job.sourcePath && !job.isRenderOutput);
+      const source = Boolean(window.ViralCoreProjectPersistence?.snapshot()?.source?.path) && state.jobs?.some(job => job.sourcePath && !job.isRenderOutput) || window.ViralCorePlayer?.projectPreview?.hasProject?.();
       state.page = model.route(state.page, { source, contextualImport });
       if (state.page !== "download") contextualImport = false;
       const result = previousRender(...args); identify(); settings();

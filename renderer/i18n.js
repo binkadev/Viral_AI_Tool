@@ -1,6 +1,18 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      projectPreview: {
+        title: "Xem trước dự án", sequence: "Phát theo thứ tự cảnh và tư liệu đã chọn",
+        clipLabel: "{scene} · {status}",
+        play: "Phát", pause: "Tạm dừng", position: "Vị trí xem trước dự án", fullscreen: "Toàn màn hình", scene: "Cảnh {number}",
+        playing: "Đang phát", paused: "Đã tạm dừng", loading: "Đang mở tư liệu…", ended: "Đã phát hết", ready: "Sẵn sàng",
+        "missing-media": "Cảnh này chưa có tư liệu để xem trước. Hãy chọn tư liệu trong Tư liệu cảnh.",
+        "missing-file": "Không tìm thấy tệp của cảnh này. Hãy liên kết lại hoặc chọn tư liệu khác.",
+        "duration-unresolved": "Chưa xác định được thời lượng cảnh này. Hãy kiểm tra thời lượng tư liệu hoặc cảnh trước khi phát tiếp.",
+        unavailable: "Chưa mở được tư liệu của cảnh này. Hãy kiểm tra tệp hoặc chọn tư liệu khác.",
+        "play-rejected": "Chưa phát được tư liệu của cảnh tiếp theo. Hãy nhấn Phát để thử lại.",
+        timingPending: "Chờ xác định mốc thời gian", active: "Đang xem trước", projectTimeline: "Trình tự cảnh của dự án"
+      },
       projectScenes: {
         selectedActions: "Thao tác với cảnh đang chọn",
         title: "Các cảnh", scene: "Cảnh {number}", add: "Thêm cảnh", up: "Lên", down: "Xuống", delete: "Xóa cảnh",
@@ -1477,6 +1489,18 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      projectPreview: {
+        title: "Project preview", sequence: "Play scenes in order using their selected media",
+        clipLabel: "{scene} · {status}",
+        play: "Play", pause: "Pause", position: "Project preview position", fullscreen: "Fullscreen", scene: "Scene {number}",
+        playing: "Playing", paused: "Paused", loading: "Opening media…", ended: "Playback ended", ready: "Ready",
+        "missing-media": "This scene does not have preview media yet. Choose media in Scene Materials.",
+        "missing-file": "This scene's file could not be found. Relink it or choose other media.",
+        "duration-unresolved": "This scene's duration is not known yet. Check the media or scene duration before continuing.",
+        unavailable: "This scene's media could not be opened. Check the file or choose other media.",
+        "play-rejected": "The next scene could not start playing. Press Play to try again.",
+        timingPending: "Timing pending", active: "Previewing", projectTimeline: "Project scene sequence"
+      },
       projectScenes: {
         selectedActions: "Selected scene actions",
         title: "Scenes", scene: "Scene {number}", add: "Add scene", up: "Move up", down: "Move down", delete: "Delete scene",

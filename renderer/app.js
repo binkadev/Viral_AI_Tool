@@ -1874,9 +1874,11 @@ function aiVideoPage() {
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
 
-  const sourceName = source?.name || t("media.noVideo");
-  const sourceMeta = source ? mediaMetaText(source) : "";
-  const preview = source?.previewUrl
+  const sourceName = window.ViralCorePlayer?.projectPreview?.hasProject?.() ? t("projectPreview.title") : source?.name || t("media.noVideo");
+  const sourceMeta = window.ViralCorePlayer?.projectPreview?.hasProject?.() ? t("projectPreview.sequence") : source ? mediaMetaText(source) : "";
+  const preview = window.ViralCorePlayer?.projectPreview?.hasProject?.()
+    ? '<div class="preview preview-real"></div>'
+    : source?.previewUrl
     ? '<div class="preview preview-real"><video class="preview-video" controls preload="metadata" src="' + source.previewUrl + '"></video></div>'
     : '<div class="preview"><div class="preview-center"><div class="preview-play">▶</div><div class="preview-label">' + t("media.previewHint") + '</div></div></div>';
 

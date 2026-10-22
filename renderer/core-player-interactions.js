@@ -43,6 +43,7 @@
   }
 
   function seekFromPointer(track, video, clientX) {
+    if (window.ViralCorePlayer?.projectPreview?.active()) return false;
     if (!(track instanceof HTMLElement) || !(video instanceof HTMLVideoElement)) return;
     const duration = durationFor(video);
     if (!duration) return;
@@ -107,6 +108,7 @@
     host.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight");
 
     host.addEventListener("keydown", async event => {
+      if (window.ViralCorePlayer?.projectPreview?.active()) return;
       const target = event.target;
       if (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true'], [contenteditable='plaintext-only']")) return;
 

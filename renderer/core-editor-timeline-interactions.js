@@ -18,6 +18,7 @@
   }
 
   function durationFor(video) {
+    if (window.ViralCorePlayer?.projectPreview?.active()) return window.ViralCorePlayer.projectPreview.runtime.snapshot().duration;
     const nativeDuration = Number(video?.duration);
     if (Number.isFinite(nativeDuration) && nativeDuration > 0) return nativeDuration;
     const hint = Number(video?.dataset?.coreDurationHint || 0);
@@ -29,6 +30,7 @@
   }
 
   function seek(video, time) {
+    if (window.ViralCorePlayer?.projectPreview?.active()) { window.ViralCorePlayer.projectPreview.runtime.seek(time); return true; }
     if (!(video instanceof HTMLVideoElement)) return false;
     const duration = durationFor(video);
     if (!duration) return false;
@@ -60,7 +62,7 @@
   }
 
   function revealPlayhead(dock, video, { center = false, force = false } = {}) {
-    if (!(dock instanceof HTMLElement) || !(video instanceof HTMLVideoElement)) return;
+    if (!(dock instanceof HTMLElement) || !(video instanceof HTMLVideoElement) && !window.ViralCorePlayer?.projectPreview?.active()) return;
     const { scroll, stage } = scrollParts(dock);
     if (!(scroll instanceof HTMLElement) || !(stage instanceof HTMLElement)) return;
     if (!force && Date.now() - lastManualScrollAt < 1800) return;
@@ -68,7 +70,7 @@
     const duration = durationFor(video);
     if (!duration || scroll.scrollWidth <= scroll.clientWidth + 2) return;
 
-    const ratio = clamp(Number(video.currentTime || 0) / duration, 0, 1);
+    const ratio = clamp(Number(window.ViralCorePlayer?.projectPreview?.active() ? window.ViralCorePlayer.projectPreview.runtime.snapshot().currentTime : video.currentTime || 0) / duration, 0, 1);
     const x = ratio * stage.scrollWidth;
     const left = scroll.scrollLeft;
     const right = left + scroll.clientWidth;
@@ -134,9 +136,10 @@
   }
 
   function seekFromEvent(stage, event) {
+    if (window.ViralCorePlayer?.projectPreview?.active() && (!stage.isConnected || !editorPage()?.contains(stage))) return false;
     const page = editorPage();
     const video = activeVideo(page);
-    if (!(video instanceof HTMLVideoElement)) return false;
+    if (!(video instanceof HTMLVideoElement) && !window.ViralCorePlayer?.projectPreview?.active()) return false;
     const segmentStart = segmentTime(event.target);
     const time = segmentStart == null ? pointerTime(stage, video, event.clientX) : segmentStart;
     if (time == null) return false;
@@ -169,9 +172,9 @@
       if (!(event instanceof PointerEvent) || event.button !== 0) return;
       // Subtitle clips keep click-to-select behavior. Drag scrubbing is available on
       // ruler, V1/A1 and empty lane space where it does not fight text selection.
-      if (event.target instanceof Element && event.target.closest(".core-bottom-segment")) return;
+      if (event.target instanceof Element && event.target.closest(".core-bottom-segment, [data-project-scene-clip]")) return;
       const video = activeVideo();
-      if (!(video instanceof HTMLVideoElement) || !durationFor(video)) return;
+      if (!(video instanceof HTMLVideoElement) && !window.ViralCorePlayer?.projectPreview?.active() || !durationFor(video)) return;
 
       activeScrub = { dock, stage, pointerId: event.pointerId };
       dock.classList.add("is-scrubbing");
@@ -220,7 +223,7 @@
     input.addEventListener("input", () => {
       const video = activeVideo();
       const duration = durationFor(video);
-      const ratio = duration ? clamp(Number(video.currentTime || 0) / duration, 0, 1) : 0;
+      const ratio = duration ? clamp(Number(window.ViralCorePlayer?.projectPreview?.active() ? window.ViralCorePlayer.projectPreview.runtime.snapshot().currentTime : video?.currentTime || 0) / duration, 0, 1) : 0;
       const beforeX = ratio * stage.scrollWidth;
       const viewportOffset = beforeX - scroll.scrollLeft;
       stage.classList.add("is-zooming");
@@ -266,6 +269,7 @@
     if (!(video instanceof HTMLVideoElement) || wiredVideos.has(video)) return;
     wiredVideos.add(video);
     const update = event => {
+      if (window.ViralCorePlayer?.projectPreview?.owns(video)) return;
       const currentDock = editorPage()?.querySelector?.(".core-editor-bottom-dock");
       if (!(currentDock instanceof HTMLElement)) return;
       if (event.type === "seeked" || event.type === "loadedmetadata") {

@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   probeVideo: inputPath => ipcRenderer.invoke('video:probe', inputPath),
   createThumbnail: inputPath => ipcRenderer.invoke('video:thumbnail', inputPath),
   getVideoUrl: inputPath => ipcRenderer.invoke('video:file-url', inputPath),
+  getMediaPreviewUrl: payload => ipcRenderer.invoke('media:preview-url', payload),
   preflightExport: payload => ipcRenderer.invoke('video:preflight-export', payload),
   preflightLocalizedExport: payload => ipcRenderer.invoke('video:preflight-localized-export', payload),
   renderVideo: payload => ipcRenderer.invoke('video:render', payload),

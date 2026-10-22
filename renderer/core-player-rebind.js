@@ -108,6 +108,7 @@
   }
 
   function refresh(video) {
+    if (window.ViralCorePlayer?.projectPreview?.owns(video)) return;
     if (!(video instanceof HTMLVideoElement)) return;
     const host = video.closest(".preview");
     if (!(host instanceof HTMLElement)) return;
@@ -198,6 +199,7 @@
     if (playButton instanceof HTMLButtonElement && !wiredPlayButtons.has(playButton)) {
       wiredPlayButtons.add(playButton);
       playButton.addEventListener("click", async event => {
+        if (window.ViralCorePlayer?.projectPreview?.active()) return;
         const currentVideo = currentSurfaceVideo(host, video);
         if (!(currentVideo instanceof HTMLVideoElement)) return;
         event.preventDefault();
@@ -215,6 +217,7 @@
     if (seek instanceof HTMLInputElement && !wiredSeeks.has(seek)) {
       wiredSeeks.add(seek);
       seek.addEventListener("input", event => {
+        if (window.ViralCorePlayer?.projectPreview?.active()) return;
         const currentVideo = currentSurfaceVideo(host, video);
         const duration = effectiveDuration(currentVideo);
         event.stopImmediatePropagation();

@@ -68,6 +68,7 @@
   }
 
   function sync(video) {
+    if (window.ViralCorePlayer?.projectPreview?.owns(video)) return;
     if (!isAuthoritativeVideo(video)) return;
     const duration = durationFor(video);
     const current = duration > 0 ? clamp(Number(video.currentTime || 0), 0, duration) : Math.max(0, Number(video.currentTime || 0));
@@ -140,6 +141,7 @@
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
     window.addEventListener("viral-ai:player-seek", event => {
+      if (window.ViralCorePlayer?.projectPreview?.active()) return;
       const video = currentVideo();
       if (!video) return;
       const target = Number(event?.detail?.currentTime);

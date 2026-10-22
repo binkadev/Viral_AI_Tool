@@ -375,6 +375,7 @@
   }
 
   function sync(dock, video) {
+    if (window.ViralCorePlayer?.projectPreview?.active()) { window.ViralCorePlayer.projectPreview.sync(); return; }
     if (!(dock instanceof HTMLElement) || !(video instanceof HTMLVideoElement)) return;
     const duration = durationFor(video);
     const current = clamp(video.currentTime || 0, 0, duration || 0);
@@ -445,6 +446,7 @@
     if (video instanceof HTMLVideoElement) wireVideo(dock, video);
     dockTranscript(page, dock);
     page.classList.add("core-editor-docked-page");
+    window.ViralCorePlayer?.projectPreview?.sync();
   }
 
   function queue() {

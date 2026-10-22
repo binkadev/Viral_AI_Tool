@@ -1786,6 +1786,12 @@ ipcMain.handle('video:file-url', async (_event, inputPath) => {
   return pathToFileURL(safePath).href;
 });
 
+require('./services/media/preview-url').registerPreviewIpc({ ipcMain, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
 registerPrivateBetaUpdateIpc({ ipcMain, service: () => privateBetaUpdater, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&

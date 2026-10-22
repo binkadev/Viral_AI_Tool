@@ -10,6 +10,7 @@
   }
 
   function previewSnapshot() {
+    if (window.ViralCorePlayer?.projectPreview?.active()) return null;
     const preview = document.querySelector("#page .preview.preview-real");
     const video = preview?.querySelector("video.preview-video, video.core-player-media");
     if (!(preview instanceof HTMLElement) || !(video instanceof HTMLVideoElement)) return null;

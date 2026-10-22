@@ -31,7 +31,8 @@
     const silent = video.muted || Number(video.volume) <= 0.001;
 
     if (button instanceof HTMLButtonElement) {
-      button.innerHTML = volumeIcon(silent);
+      const icon = volumeIcon(silent);
+      if (button.dataset.volumeIcon !== String(silent)) { button.innerHTML = icon; button.dataset.volumeIcon = String(silent); }
       button.setAttribute("aria-label", silent ? copy.unmute : copy.mute);
       button.title = silent ? copy.unmute : copy.mute;
       button.setAttribute("aria-pressed", silent ? "true" : "false");
