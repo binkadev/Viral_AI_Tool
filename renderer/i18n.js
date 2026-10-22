@@ -1,6 +1,24 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      projectMedia: {
+        importMedia: "Nhập tư liệu", importScene: "Nhập tư liệu vào cảnh", searchScene: "Tìm tư liệu cho cảnh", addScene: "Thêm vào cảnh",
+        projectLibrary: "Tư liệu dự án ({count})", remove: "Xóa khỏi thư viện", removeNamed: "Xóa {name} khỏi thư viện",
+        projectSearch: "Tư liệu tải về chỉ được thêm vào thư viện của dự án này.",
+        sceneSearch: "Tư liệu tải về được thêm vào cảnh đã chọn lúc mở tìm kiếm. Bấm Dùng trong Tư liệu cảnh để đổi lựa chọn.",
+        importing: "Đang chọn tư liệu…", added: "Đã thêm tư liệu. Nếu thêm vào cảnh, bấm Dùng để chọn tư liệu muốn xem trước.",
+        cancelled: "Đã hủy thêm tư liệu. Thư viện và tư liệu cảnh không thay đổi.",
+        duplicate: "Tư liệu đã có trong dự án. Ứng dụng giữ nguyên bản đã thêm, không tạo bản trùng.",
+        "scene-failed": "Đã lưu tư liệu vào dự án nhưng chưa thêm được vào cảnh ban đầu. Kiểm tra cảnh và số phương án rồi thêm từ dự án.",
+        "library-only": "Đã lưu vào thư viện dự án. Tư liệu âm thanh chưa dùng làm hình ảnh cho cảnh.",
+        "partial-import": "Đã lưu các tệp hợp lệ; một số tệp không đọc được hoặc không được hỗ trợ. Kiểm tra tư liệu và cảnh trước khi thử lại.",
+        projectChanged: "Dự án đã đổi. Chưa thêm tư liệu vào dự án mới; hãy mở lại thao tác trong đúng dự án.",
+        saveFailed: "Chưa lưu được tư liệu. Lựa chọn trong cảnh chưa đổi; hãy kiểm tra dung lượng trống rồi thử lại.",
+        invalidFiles: "Chưa đọc được tư liệu đã chọn. Thư viện chưa đổi; kiểm tra tệp và quyền đọc rồi thử lại.",
+        capacity: "Dự án đã đủ 500 tư liệu. Chưa thêm tệp mới; xóa một tư liệu khỏi thư viện rồi thử lại.",
+        removed: "Đã xóa khỏi thư viện và bỏ liên kết trong cảnh. Tệp gốc vẫn được giữ nguyên.",
+        kind: { video: "Video", image: "Ảnh", audio: "Âm thanh" }, origin: { source: "Video nguồn", local: "Đã nhập", stock: "Kho tư liệu", generated: "Đã tạo" }
+      },
       projectPreview: {
         title: "Xem trước dự án", sequence: "Phát theo thứ tự cảnh và tư liệu đã chọn",
         clipLabel: "{scene} · {status}",
@@ -1489,6 +1507,24 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      projectMedia: {
+        importMedia: "Import media", importScene: "Import media into scene", searchScene: "Find media for scene", addScene: "Add to scene",
+        projectLibrary: "Project media ({count})", remove: "Remove from library", removeNamed: "Remove {name} from library",
+        projectSearch: "Downloaded media is added only to this project's library.",
+        sceneSearch: "Downloaded media is added to the scene captured when search opened. Choose Use in Scene materials to change selection.",
+        importing: "Choosing media…", added: "Media added. For scene candidates, choose Use to select the media you want to preview.",
+        cancelled: "Adding media was cancelled. The library and scene materials are unchanged.",
+        duplicate: "This media is already in the project. The existing asset is kept without creating a duplicate.",
+        "scene-failed": "Media was saved to the project but could not be added to the original scene. Check the scene and candidate limit, then add from project.",
+        "library-only": "Saved to the project library. Audio cannot be used as a scene's primary visual material.",
+        "partial-import": "Valid files were saved; some files could not be read or are unsupported. Check the media and scene before retrying.",
+        projectChanged: "The project changed. Media was not added to the new project; reopen the action in the intended project.",
+        saveFailed: "Media could not be saved. Scene selection has not changed; check free disk space and try again.",
+        invalidFiles: "The selected media could not be read. The library has not changed; check the files and read permissions, then retry.",
+        capacity: "This project already has 500 assets. No new files were added; remove an asset from the library and retry.",
+        removed: "Removed from the library and scene links. The original file is unchanged.",
+        kind: { video: "Video", image: "Image", audio: "Audio" }, origin: { source: "Source video", local: "Imported", stock: "Stock media", generated: "Generated" }
+      },
       projectPreview: {
         title: "Project preview", sequence: "Play scenes in order using their selected media",
         clipLabel: "{scene} · {status}",

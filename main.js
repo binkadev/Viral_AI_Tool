@@ -1792,6 +1792,12 @@ require('./services/media/preview-url').registerPreviewIpc({ ipcMain, trusted: e
     event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
 });
 
+require('./services/media/local-picker').registerProjectMediaPicker({ ipcMain, dialog, parent: () => mainWindow, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
 registerPrivateBetaUpdateIpc({ ipcMain, service: () => privateBetaUpdater, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&

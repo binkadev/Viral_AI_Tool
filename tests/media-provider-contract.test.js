@@ -61,8 +61,14 @@ assert.deepStrictEqual(
     code: "MEDIA_PROVIDER_UNAVAILABLE",
     details: { provider: "PEXELS", secret: "do-not-leak" }
   })),
-  { code: "MEDIA_PROVIDER_UNAVAILABLE", details: { provider: "pexels" } }
+  // The existing public boundary intentionally retains only a validation field;
+  // provider details and raw responses stay behind the backend boundary.
+  { code: "MEDIA_PROVIDER_UNAVAILABLE", details: {} }
 );
+
+assert.deepStrictEqual(contract.publicSearchError(Object.assign(new Error("private"), {
+  code: "MEDIA_SEARCH_INVALID", details: { field: "kind", provider: "PEXELS", secret: "private" }
+})), { code: "MEDIA_SEARCH_INVALID", details: { field: "kind" } });
 
 assert.deepStrictEqual(
   contract.publicSearchError(Object.assign(new Error("sensitive"), {

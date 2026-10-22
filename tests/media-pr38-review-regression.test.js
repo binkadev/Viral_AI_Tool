@@ -12,9 +12,10 @@ const closeCancel = main.indexOf("mediaDesktopController?.cancelAll()");
 const closeDrain = main.indexOf("await waitForWorkToStop();");
 assert(closeCancel >= 0 && closeCancel < closeDrain, "confirmed close must cancel media work before drain wait");
 
-assert(discovery.includes("addAcquiredAsset(rawAsset, expectedProjectId)"));
-assert(discovery.includes("currentProjectId() !== expectedProjectId"), "completion must verify originating project before mutating state");
-assert(discovery.includes('error: "MEDIA_PROJECT_CHANGED"'));
+assert(discovery.includes("ViralCoreProjectPersistence?.activeProjectId"));
+assert(discovery.includes("projectMedia().current(context)"), "completion must verify the captured Project operation before durable admission");
+assert(discovery.includes('code: "PROJECT_CHANGED"'));
+assert(!discovery.includes('source?.id') && !discovery.includes('source?.sourcePath'), "stock ownership must never derive from source jobs");
 assert(discovery.includes("acquisitionErrorKey(active.error)"), "download failures must use stable actionable copy mapping");
 
 for (const key of [

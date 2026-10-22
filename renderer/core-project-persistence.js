@@ -525,6 +525,77 @@
   function removeProjectScene(sceneId, options = {}) { return mutateProjectScene("removeScene", sceneId, null, options); }
   function moveProjectScene(sceneId, targetIndex, options = {}) { return mutateProjectScene("moveScene", sceneId, targetIndex, options); }
 
+  // Manual/local/stock admission is active-project-only. Capture pending brief,
+  // workflow/editor/Scene changes through normal snapshot capture, while the
+  // committed media library owns asset identity (never an optimistic live copy).
+  // One registry write precedes every live publication; Scene enrollment remains
+  // a separate Block 1 transaction and may fail without rolling back a valid asset.
+  function mutateProjectMedia(operation, value, options = {}) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const projectId = options.projectId, current = appState();
+    if (!projectId || projectId !== registry.activeProjectId) throw Error("PROJECT_MISMATCH");
+    const libraryModel = window.ViralCoreMediaLibraryModel;
+    if (!current || currentSnapshot?.projectId !== projectId || current.projectId && current.projectId !== projectId ||
+        !libraryModel || !model.mediaAssemblyModel) throw Error("PROJECT_STATE_UNAVAILABLE");
+    for (const key of ["media", "mediaAssembly"]) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    }
+    const captured = { ...current, media: model.clone(currentSnapshot.media),
+      scenePlan: model.clone(current.scenePlan ?? currentSnapshot.scenePlan),
+      mediaAssembly: model.clone(current.mediaAssembly ?? currentSnapshot.mediaAssembly) };
+    const next = model.buildSnapshot(captured, editorState(current), currentSnapshot);
+    if (!next || next.projectId !== projectId) throw Error("PROJECT_STATE_UNAVAILABLE");
+    next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+    const added = [], duplicates = [], assets = [], now = Date.now();
+    if (operation === "add") {
+      if (!Array.isArray(value) || value.length > libraryModel.MAX_PROJECT_ASSETS) throw Error("PROJECT_MEDIA_INVALID");
+      const pending = [], identities = new Map(next.media.assets.map(a => [libraryModel.assetIdentity(a), a]));
+      const ids = new Map(next.media.assets.map(a => [a.id, libraryModel.assetIdentity(a)]));
+      for (const raw of value) {
+        if (!raw || !libraryModel.KINDS.includes(raw.kind) || !libraryModel.ORIGINS.includes(raw.origin)) throw Error("PROJECT_MEDIA_INVALID");
+        const asset = libraryModel.normalizeAsset(raw, next.media.assets.length + pending.length, now);
+        const identity = libraryModel.assetIdentity(asset);
+        if (ids.has(asset.id) && ids.get(asset.id) !== identity) throw Error("PROJECT_MEDIA_ID_CONFLICT");
+        if (identities.has(identity)) { duplicates.push(identities.get(identity)); assets.push(identities.get(identity)); continue; }
+        identities.set(identity, asset); ids.set(asset.id, identity); pending.push(asset); assets.push(asset);
+      }
+      // Preflight the whole batch: no partial additions, silent truncation or eviction.
+      if (next.media.assets.length + pending.length > libraryModel.MAX_PROJECT_ASSETS) throw Error("PROJECT_MEDIA_LIMIT");
+      const result = libraryModel.addAssets(next.media, pending, now);
+      next.media = result.library; added.push(...result.added);
+    } else {
+      const id = value?.assetId;
+      if (!next.media.assets.some(a => a.id === id)) throw Error("PROJECT_ASSET_NOT_FOUND");
+      if (operation === "remove") next.media = libraryModel.removeAsset(next.media, id);
+      else {
+        next.media = libraryModel.updateAsset(next.media, id, value.patch, now);
+        const identities = next.media.assets.map(libraryModel.assetIdentity);
+        if (new Set(identities).size !== identities.length) throw Error("PROJECT_MEDIA_ID_CONFLICT");
+        assets.push(next.media.assets.find(a => a.id === id));
+      }
+    }
+    next.mediaAssembly = model.mediaAssemblyModel.normalizeAssembly(next.mediaAssembly,
+      { scenes: next.scenePlan.scenes, assets: next.media.assets });
+    const result = () => model.clone({ projectId, added, duplicates, assets, media: next.media });
+    if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return result();
+    next.updatedAt = new Date(now).toISOString();
+    const liveMedia = model.clone(next.media), liveAssembly = model.clone(next.mediaAssembly), projection = compatibilityValues(next);
+    try { saveSnapshot(next); }
+    catch (error) { dispatchSaveFailure("project-media", error); throw error; }
+    currentSnapshot = next; current.media = liveMedia; current.mediaAssembly = liveAssembly;
+    projectLegacyProjection(next, projection);
+    presentProject("project-media", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+      detail: { reason: "project-media", projectId, addedAssetIds: added.map(a => a.id) }
+    })));
+    return result();
+  }
+  function addProjectMediaAssets(assets, options = {}) { return mutateProjectMedia("add", assets, options); }
+  function addProjectMediaAsset(asset, options = {}) { return addProjectMediaAssets([asset], options); }
+  function updateProjectMediaAsset(assetId, patch, options = {}) { return mutateProjectMedia("update", { assetId, patch }, options); }
+  function removeProjectMediaAsset(assetId, options = {}) { return mutateProjectMedia("remove", { assetId }, options); }
+
   function assertSwitchSafe() {
     const current = appState();
     const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
@@ -794,6 +865,10 @@
     selectProjectScene,
     removeProjectScene,
     moveProjectScene,
+    addProjectMediaAssets,
+    addProjectMediaAsset,
+    updateProjectMediaAsset,
+    removeProjectMediaAsset,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
     openProject,
