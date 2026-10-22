@@ -2,6 +2,13 @@
 
 All notable product and release-engineering changes are tracked here.
 
+## 0.14.1-beta.1 — First private Windows Beta
+
+- Package the existing Project v5 / MediaAssembly foundation with Electron 38.2.0 and the existing x64 NSIS installer.
+- Identify this build as Private Beta in the existing version surface; remote update and release URLs are unset.
+- Retain user data on ordinary uninstall. This unsigned build is for private testing, with no public release or automatic updating.
+- Muse extension 0.3.18 and all execution, receipt, recovery and audit contracts remain unchanged.
+
 ## 0.14.0 — Production hardening & Windows release baseline
 
 ### Product

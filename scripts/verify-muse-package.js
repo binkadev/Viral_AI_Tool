@@ -14,6 +14,10 @@ function verify(archive) {
   if (manifest.version_name !== undefined) throw Error("Packaged Muse extension must not enable development diagnostics");
   if (config.expectedExtensionVersion !== manifest.version) throw Error("Muse version contract mismatch");
 }
-module.exports = async context => verify(path.join(context.appOutDir, "resources", "app.asar"));
+module.exports = async context => {
+  const archive = path.join(context.appOutDir, "resources", "app.asar");
+  verify(archive);
+  require("./verify-private-beta-package").verify(archive);
+};
 module.exports.verify = verify;
 if (require.main === module) {verify(process.argv[2] || path.join(__dirname, "../release/win-unpacked/resources/app.asar"));process.stdout.write("Packaged Muse extension verified\n");}
