@@ -1,6 +1,20 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      sceneActions: {
+        title: "Tư liệu theo kế hoạch", query: "Truy vấn đã lên kế hoạch", kind: "Loại tư liệu", video: "Video", image: "Ảnh",
+        find: "Tìm tư liệu", generate: "Tạo tư liệu AI", another: "Tạo thêm tư liệu AI", prompt: "Prompt tạo video",
+        noQuery: "Cảnh này chưa có truy vấn tìm tư liệu. Bạn vẫn có thể nhập hoặc tìm thủ công trong Tư liệu cảnh.",
+        noKind: "Cảnh này chưa có loại tư liệu hình ảnh phù hợp để tìm.",
+        noPrompt: "Cảnh này chưa có prompt tạo video. Bạn vẫn có thể thêm tư liệu thủ công.",
+        videoOnly: "Tạo tư liệu AI hiện chỉ hỗ trợ cảnh có video; chưa hỗ trợ tạo ảnh.",
+        idle: "", generating: "Đang gửi yêu cầu tạo video…", submitted: "Đã gửi yêu cầu cho cảnh này. Xem kết quả trong Tiến trình tạo video.",
+        busy: "Đã có yêu cầu tương tự hoặc dịch vụ đang bận. Yêu cầu mới chưa được gửi thêm; hãy kiểm tra tiến trình.",
+        unavailable: "Chưa gửi được yêu cầu tạo video. Tư liệu cảnh chưa đổi; hãy kiểm tra kết nối và thiết lập dịch vụ rồi thử lại.",
+        uncertain: "Chưa xác nhận được yêu cầu đã được nhận hay chưa. Ứng dụng không tự gửi lại; hãy kiểm tra Tiến trình tạo video trước khi tạo yêu cầu mới.",
+        attachmentFailed: "Yêu cầu đã được nhận nhưng chưa gắn được kết quả vào cảnh ban đầu. Hãy kiểm tra cảnh và Tiến trình tạo video; ứng dụng không tạo lại video.",
+        progressUnavailable: "Đã gửi yêu cầu nhưng chưa mở được tiến trình. Mở Tiến trình tạo video để kiểm tra kết quả."
+      },
       projectMedia: {
         importMedia: "Nhập tư liệu", importScene: "Nhập tư liệu vào cảnh", searchScene: "Tìm tư liệu cho cảnh", addScene: "Thêm vào cảnh",
         projectLibrary: "Tư liệu dự án ({count})", remove: "Xóa khỏi thư viện", removeNamed: "Xóa {name} khỏi thư viện",
@@ -1507,6 +1521,20 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      sceneActions: {
+        title: "Planned scene materials", query: "Planned query", kind: "Material type", video: "Video", image: "Image",
+        find: "Find materials", generate: "Generate AI material", another: "Generate another AI material", prompt: "Video generation prompt",
+        noQuery: "This scene does not have a media search query yet. You can still import or search manually in Scene materials.",
+        noKind: "This scene has no supported visual material type to search.",
+        noPrompt: "This scene does not have a video generation prompt yet. You can still add materials manually.",
+        videoOnly: "AI material generation currently supports video scenes only; image generation is unavailable.",
+        idle: "", generating: "Submitting video request…", submitted: "Request submitted for this scene. View the result in Generation progress.",
+        busy: "A similar request exists or the service is busy. No additional request was sent; check Generation progress.",
+        unavailable: "The video request could not be submitted. Scene materials are unchanged; check your connection and service settings, then try again.",
+        uncertain: "We could not confirm whether the request was accepted. The app will not resend it automatically; check Generation progress before creating a new request.",
+        attachmentFailed: "The request was accepted but its result could not be attached to the original scene. Check the scene and Generation progress; the app will not generate the video again.",
+        progressUnavailable: "The request was submitted but progress could not open. Open Generation progress to check its result."
+      },
       projectMedia: {
         importMedia: "Import media", importScene: "Import media into scene", searchScene: "Find media for scene", addScene: "Add to scene",
         projectLibrary: "Project media ({count})", remove: "Remove from library", removeNamed: "Remove {name} from library",

@@ -22,6 +22,8 @@
   let inertSnapshot = [];
   const acquisitions = new Map();
   let drawerContext = null;
+  let plannedSearch = null;
+  let manualFilters = { query: "", kind: "video", orientation: "any" };
   const projectMedia = () => window.ViralCoreProjectMedia;
   const sourceText = (key, vars) => tc("projectMedia." + key, vars);
 
@@ -141,6 +143,7 @@
   }
 
   async function acquireToProject(result) {
+    if (plannedSearch && !plannedSearch.targetKinds.includes(result?.kind)) return;
     const identity = acquisitionKey(result);
     if (!resultIdentity(result)) return;
     if (acquisitions.has(identity) && acquisitions.get(identity).state !== "failed") return;
@@ -296,6 +299,7 @@
           '<div class="core-media-search-input"><span aria-hidden="true">⌕</span><input type="search" data-media-query autocomplete="off" /></div>' +
           '<button class="core-media-search-button" type="submit" data-media-search></button>' +
         '</form>' +
+        '<label class="core-media-planned-query" data-media-planned hidden><span></span><select data-media-planned-query></select></label>' +
         '<div class="core-media-filters">' +
           '<label><span data-media-type-label></span><select data-media-kind><option value="video"></option><option value="image"></option></select></label>' +
           '<label><span data-media-orientation-label></span><select data-media-orientation><option value="any"></option><option value="portrait"></option><option value="landscape"></option><option value="square"></option></select></label>' +
@@ -310,6 +314,11 @@
     drawer.querySelector("[data-media-form]")?.addEventListener("submit", event => {
       event.preventDefault();
       runSearch({ append: false, page: 1 });
+    });
+    drawer.querySelector("[data-media-planned-query]").addEventListener("change", event => {
+      if (!plannedSearch?.queries.includes(event.target.value)) return;
+      drawer.querySelector("[data-media-query]").value = event.target.value;
+      // Selecting a planned query does not start background work; Search is explicit.
     });
     drawer.querySelector("[data-media-results]")?.addEventListener("click", event => {
       const target = event.target instanceof Element ? event.target.closest("[data-media-action]") : null;
@@ -362,8 +371,7 @@
     if (typeLabel) typeLabel.textContent = t("mediaType");
     if (orientationLabel) orientationLabel.textContent = t("orientation");
     if (kind instanceof HTMLSelectElement) {
-      kind.options[0].textContent = t("video");
-      kind.options[1].textContent = t("images");
+      for (const option of kind.options) option.textContent = t(option.value === "image" ? "images" : "video");
     }
     if (orientation instanceof HTMLSelectElement) {
       orientation.options[0].textContent = t("any");
@@ -481,6 +489,10 @@
           provider: "auto"
         };
     const query = context.query;
+    if (plannedSearch && (!plannedSearch.queries.includes(query) || !plannedSearch.targetKinds.includes(context.kind))) {
+      cancelActiveSearch(); ++activeRequest;
+      renderNotice("projectChanged"); return;
+    }
 
     cancelActiveSearch();
     const requestNumber = ++activeRequest;
@@ -547,7 +559,7 @@
       }
 
       const data = payload?.data && typeof payload.data === "object" ? payload.data : payload;
-      const received = Array.isArray(data?.results) ? data.results : [];
+      const received = (Array.isArray(data?.results) ? data.results : []).filter(result => !plannedSearch || result.kind === context.kind);
       lastResults = append ? mergeResults(lastResults, received) : mergeResults([], received);
       nextPage = Number.isFinite(Number(data?.nextPage)) && Number(data.nextPage) > 0 ? Number(data.nextPage) : null;
       searchContext = context;
@@ -564,6 +576,10 @@
   function open(detail = {}) {
     const drawer = ensureDrawer();
     if (!drawer.classList.contains("hidden")) return;
+    const orchestration = detail.authority === "scene-orchestration";
+    if (orchestration && (!window.ViralSceneOrchestration?.runtime.acceptsSearch(detail.context) ||
+        detail.context.projectId !== detail.projectId || detail.context.sceneId !== detail.sceneId)) return;
+    plannedSearch = orchestration ? detail.context : null;
     try { drawerContext = projectMedia().begin({ projectId: detail.projectId || currentProjectId(), sceneId: detail.sceneId || null, intent: detail.sceneId ? "candidate" : "project" }); }
     catch { window.dispatchEvent(new CustomEvent("viral-ai:project-media-feedback", { detail: { projectId: currentProjectId(), status: "failed", code: "PROJECT_CHANGED" } })); return; }
     opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -573,10 +589,29 @@
     makeBackgroundInert(drawer);
     document.documentElement.classList.add("core-media-discovery-open");
     const kind = drawer.querySelector("[data-media-kind]");
-    if (kind instanceof HTMLSelectElement && ["video", "image"].includes(detail.kind)) kind.value = detail.kind;
+    if (kind instanceof HTMLSelectElement) {
+      kind.replaceChildren(...(plannedSearch?.targetKinds || ["video", "image"]).map(value => {
+        const option = document.createElement("option"); option.value = value; option.textContent = t(value === "image" ? "images" : "video"); return option;
+      }));
+      if (plannedSearch) kind.value = plannedSearch.kind;
+      else kind.value = ["video", "image"].includes(detail.kind) ? detail.kind : manualFilters.kind;
+    }
+    const planned = drawer.querySelector("[data-media-planned]"), query = drawer.querySelector("[data-media-query]");
+    planned.hidden = !plannedSearch; query.readOnly = !!plannedSearch;
+    if (plannedSearch) {
+      planned.querySelector("span").textContent = tc("sceneActions.query");
+      const choices = planned.querySelector("select"); choices.setAttribute("aria-label", tc("sceneActions.query"));
+      choices.replaceChildren(...plannedSearch.queries.map(value => { const option = document.createElement("option"); option.value = value; option.textContent = value; return option; }));
+      choices.value = plannedSearch.query; query.value = plannedSearch.query;
+      drawer.querySelector("[data-media-orientation]").value = plannedSearch.orientation;
+    } else {
+      query.value = manualFilters.query;
+      drawer.querySelector("[data-media-orientation]").value = manualFilters.orientation;
+    }
     renderState("empty", "emptyTitle", "emptyBody");
     renderNotice(drawerContext.sceneId ? "sceneSearch" : "projectSearch");
     requestAnimationFrame(() => drawer.querySelector("[data-media-query]")?.focus?.());
+    if (plannedSearch) runSearch(); // The explicit Scene Find click is authority.
   }
 
   function close() {
@@ -593,6 +628,9 @@
     restoreBackground();
     const context = drawerContext;
     projectMedia()?.finish(drawerContext); drawerContext = null;
+    const searchOwner = plannedSearch; plannedSearch = null;
+    if (!searchOwner) manualFilters = { query: drawer.querySelector("[data-media-query]").value,
+      kind: drawer.querySelector("[data-media-kind]").value, orientation: drawer.querySelector("[data-media-orientation]").value };
     const target = opener;
     opener = null;
     requestAnimationFrame(() => {
@@ -600,9 +638,11 @@
       else if (context?.projectId === currentProjectId()) {
         const scene = window.ViralCoreProjectPersistence?.snapshot()?.scenePlan?.selectedSceneId;
         const fallback = context.sceneId === scene ? document.querySelector('[data-scene-material-action="stock"]') : null;
-        (fallback || document.querySelector("[data-find-media]"))?.focus();
+        const planned = searchOwner && context.sceneId === scene ? document.querySelector('[data-scene-action="find"]') : null;
+        (planned || fallback || document.querySelector("[data-find-media]"))?.focus();
       }
     });
+    if (searchOwner) window.dispatchEvent(new CustomEvent("viral-ai:scene-search-closed", { detail: searchOwner }));
   }
 
   if (typeof window.desktopAPI?.onMediaAcquisitionProgress === "function") {
