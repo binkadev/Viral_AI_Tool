@@ -1,5 +1,5 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-16-contract3-receipt2-manual1-audit1';
+const WORKER_BUILD='muse-worker-v0-3-17-contract3-receipt2-manual1-audit1';
 if(typeof importScripts==='function')importScripts('execution-audit.js','acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js');
 const auditActivity=new Map();
 const workerAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'worker',canClose:id=>!auditActivity.get(id)}):null;}catch{return null;}})();
@@ -338,6 +338,8 @@ async function executeV2(c) {
   const payload={...p,...(receipt?{receipt}:{}),observationToken:observationEpoch+'_'+(bridge?.serverId||'offline')};
   const result=await chrome.tabs.sendMessage(p.tabId,{type:'viral-ai:muse-execution',command:c.type,payload});
   if(result?.operationId!==p.operationId || result?.sceneId!==p.sceneId)return interrupted();
+  if(Object.hasOwn(result,'manualInterferenceDiagnostic') && !MuseReceiptV2.validManualInterferenceDiagnostic(result.manualInterferenceDiagnostic))delete result.manualInterferenceDiagnostic;
+  if(result.assistantOwnershipFailure!==undefined)result.assistantOwnershipFailure=MuseReceiptV2.assistantFailureEvidence(result.assistantOwnershipFailure);
   if(result.baselineWindow!==undefined && (c.type!=='inspectGeneration' || result.state!=='running' || !receipt?.userStableIdHash || receipt.assistantStableIdHash ||
     !MuseReceiptV2.validBaselineWindow(result.baselineWindow) || Object.keys(result).some(k=>!['operationId','sceneId','state','receipt','baselineWindow'].includes(k))))return interrupted();
   if(result.assistantOwnershipFailure!==undefined || result.userAnchorChurn!==undefined || result.baselineDrift!==undefined) {
@@ -350,7 +352,10 @@ async function executeV2(c) {
     const latest=(await chrome.storage.local.get(key))[key];
     const patch={};
     for(const [field,valid] of [['assistantOwnershipFailure',MuseReceiptV2.validAssistantFailure],['userAnchorChurn',MuseReceiptV2.validUserAnchorChurn],['baselineDrift',MuseReceiptV2.validBaselineDrift]])if(result[field]!==undefined) {
-      if(latest?.[field] && valid(latest[field]))result[field]=latest[field];else patch[field]=result[field];
+      if(latest?.[field] && valid(latest[field])) {
+        // Keep first failure evidence; forward only optional data for that same failure.
+        if(field!=='assistantOwnershipFailure' || JSON.stringify(MuseReceiptV2.assistantFailureCore(result[field]))!==JSON.stringify(MuseReceiptV2.assistantFailureCore(latest[field])))result[field]=latest[field];
+      }else patch[field]=field==='assistantOwnershipFailure'?MuseReceiptV2.assistantFailureCore(result[field]):result[field];
     }
     if(Object.keys(patch).length)await chrome.storage.local.set({[key]:{...latest,...patch}});
   }

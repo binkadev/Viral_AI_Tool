@@ -39,7 +39,7 @@ There are no cancellation, reconciliation, chunk, progress, heartbeat, polling, 
 
 ## Extension witnesses and delivery
 
-Extension 0.3.16 advertises `executionAuditVersion = 1`. Its worker/content markers are `muse-worker-v0-3-16-contract3-receipt2-manual1-audit1` and `muse-content-v0-3-16-contract3-receipt2-manual1-audit1`. Contract 3, Receipt V2, manualRecoveryVersion 1 and Chrome permissions are unchanged.
+Extension 0.3.17 advertises `executionAuditVersion = 1`. Its worker/content markers are `muse-worker-v0-3-17-contract3-receipt2-manual1-audit1` and `muse-content-v0-3-17-contract3-receipt2-manual1-audit1`. Contract 3, Receipt V2, manualRecoveryVersion 1 and Chrome permissions are unchanged. The optional first-interaction failure diagnostic is documented in [MUSE_INTERACTION_DIAGNOSTICS.md](MUSE_INTERACTION_DIAGNOSTICS.md); it adds no audit event or coverage change.
 
 The shared extension module has a separate `execution-audit-v1:` storage namespace, up to 16 retained streams per source, 32 occurrences / 24 KiB per stream, source epochs/cursors, and stable occurrence IDs across delivery. Audit aliases are random and memory-only mappings from private capabilities; alias exhaustion also marks a gap. A bounded routing record contains only the tab ID and audit ID for telemetry delivery. Routing and buffer state are never consulted by execution.
 

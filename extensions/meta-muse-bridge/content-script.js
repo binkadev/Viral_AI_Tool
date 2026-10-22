@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-16-contract3-receipt2-manual1-audit1';
+const CONTENT_BUILD='muse-content-v0-3-17-contract3-receipt2-manual1-audit1';
 const contentAuditActivity=new Map();
 const contentAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'content',canClose:id=>!contentAuditActivity.get(id)}):null;}catch{return null;}})();
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
@@ -226,6 +226,47 @@ function sampleUserAnchorChurn(op,mutations=[],baselinePrefixPruned=false) {
     if(MuseReceiptV2.validUserAnchorChurn(d))op.userAnchorChurn=d;
   }catch{} // No new invalidation, waiting, identity hash, or receipt promotion.
 }
+function captureManualInterference(op,event,known,sendStartedAt,lastSample) {
+  // Observer only. Never sample/resolve ownership, read text, or await storage here.
+  if(op.manualInteractionCaptured)return;
+  op.manualInteractionCaptured=true;
+  try {
+    let targetCategory='unknown';
+    try {
+      const raw=typeof event.composedPath==='function'?event.composedPath():[event.target];
+      if(Array.isArray(raw) && raw.length>0 && raw.length<=32) {
+        const path=raw.slice(0,32),inside=node=>!!node && path.some(n=>n===node || !!n?.nodeType && node.contains?.(n));
+        if(inside(known.editor))targetCategory='composer-editor';
+        else if(inside(known.slot))targetCategory='composer-action';
+        else if(path.some(n=>n?.tagName==='VIDEO'))targetCategory='video';
+        else if(path.some(n=>n?.getAttribute?.('data-message-item')!==null && n?.getAttribute?.('data-message-item')!==undefined))targetCategory='message-row';
+        else if(inside(op.projection?.container))targetCategory='conversation-container';
+        else if(event.target?.isConnected===true && event.target.nodeType===1)targetCategory='other';
+      }
+    }catch{targetCategory='unknown';}
+    const sampled=!!lastSample,boolean=v=>typeof v==='boolean'?v:null;
+    const diagnostic={version:1,eventType:event.type,targetCategory,
+      observationStage:op.receipt?.userStableIdHash?'post-acceptance':sendStartedAt!==null?'acceptance':'pre-send',
+      snapshotKind:sampled?'last-sampled':'unavailable',duringGenerationActive:sampled?boolean(lastSample.generationActive):null,
+      composerChanged:null,structureChanged:null,ownedUserPresent:sampled?boolean(lastSample.ownedUserPresent):null};
+    if(MuseReceiptV2.validManualInterferenceDiagnostic(diagnostic))op.manualInterferenceDiagnostic=diagnostic;
+  }catch{}
+}
+function interactionFailureEvidence(op,failure) {
+  try {
+    const diagnostic=op?.manualInterferenceDiagnostic;
+    if(failure?.terminalReason==='MANUAL_INTERFERENCE' && MuseReceiptV2.validManualInterferenceDiagnostic(diagnostic))
+      return {...failure,manualInterferenceDiagnostic:{...diagnostic}};
+  }catch{}
+  return failure;
+}
+function interactionSubmitEvidence(op) {
+  try {
+    if(MuseReceiptV2.validManualInterferenceDiagnostic(op?.manualInterferenceDiagnostic))
+      return {manualInterferenceDiagnostic:{...op.manualInterferenceDiagnostic}};
+  }catch{}
+  return {};
+}
 function gateDFrame(op,phase,patch={},terminalReason=null,terminal=false) {
   if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || op.assistantFailure || op.pendingAssistantFailure)return;
   op.assistantStartedAt??=Date.now();
@@ -247,7 +288,8 @@ function retainAssistantFailure(id,op) {
   if(!op?.receipt?.userStableIdHash || op.receipt.assistantStableIdHash || (!op.assistantFailure && !op.pendingAssistantFailure && !op.userAnchorChurn && !op.baselineDrift))return;
   const old=assistantFailures.get(id);
   if((old?.failure || old?.pending && !op.assistantFailure) && (old.churn || !op.userAnchorChurn) && (old.drift || !op.baselineDrift))return;
-  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:old?.failure||op.assistantFailure,pending:old?.pending||op.pendingAssistantFailure,churn:old?.churn||op.userAnchorChurn,drift:old?.drift||op.baselineDrift});
+  assistantFailures.set(id,{sceneId:op.sceneId,userHash:op.receipt.userStableIdHash,failure:old?.failure||interactionFailureEvidence(op,op.assistantFailure),pending:old?.pending||op.pendingAssistantFailure,churn:old?.churn||op.userAnchorChurn,drift:old?.drift||op.baselineDrift,
+    manualInterferenceDiagnostic:old?.manualInterferenceDiagnostic||op.manualInterferenceDiagnostic});
   while(assistantFailures.size>MAX_ASSISTANT_FAILURES)assistantFailures.delete(assistantFailures.keys().next().value);
 }
 function gateDInterrupted(p,op,reason,phase='precheck') {
@@ -256,7 +298,7 @@ function gateDInterrupted(p,op,reason,phase='precheck') {
   const churn=previous?.churn||op?.userAnchorChurn;
   const drift=previous?.drift||op?.baselineDrift;
   const churnEvidence={...(churn?{userAnchorChurn:churn}:{}),...(drift?{baselineDrift:drift}:{})};
-  if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:previous.failure,...churnEvidence});}
+  if(previous?.failure){if(op)releaseV2(p.operationId,op);return answer(p,'interrupted',{assistantOwnershipFailure:interactionFailureEvidence(op,previous.failure),...churnEvidence});}
   const evidence=op?.receipt?.userStableIdHash?op:{sceneId:p.sceneId,receipt:p.receipt};
   const pending=evidence.pendingAssistantFailure||previous?.pending;
   evidence.assistantAcknowledged=true;
@@ -267,7 +309,7 @@ function gateDInterrupted(p,op,reason,phase='precheck') {
   }else gateDFrame(evidence,phase,{},reason,true);
   retainAssistantFailure(p.operationId,evidence);
   if(op)releaseV2(p.operationId,op);
-  return answer(p,'interrupted',{...(evidence.assistantFailure?{assistantOwnershipFailure:evidence.assistantFailure}:{}),...churnEvidence});
+  return answer(p,'interrupted',{...(evidence.assistantFailure?{assistantOwnershipFailure:interactionFailureEvidence(op||previous,evidence.assistantFailure)}:{}),...churnEvidence});
 }
 function afterBaseline(op,allowPending=false) {
   const rows=structure(allowPending);
@@ -655,7 +697,7 @@ async function submit(p) {
   let inserting=false,sendButton=null,sendStartedAt=null;
   // insertText can synchronously emit a trusted input event. Only that exact
   // own insertion is exempt; trusted clicks/keys and later input still abort.
-  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor)){gateDFrame(op,'sample_before_block',{},'MANUAL_INTERFERENCE',true);op.invalid=true;op.observerInvalidation||='MANUAL_INTERFERENCE';op.manualInterferenceObserved=true;}};
+  const disturbed=e=>{if(e.isTrusted && !(inserting && e.type==='input' && e.target===c.editor)){const lastSample=op.assistantState;gateDFrame(op,'sample_before_block',{},'MANUAL_INTERFERENCE',true);op.invalid=true;op.observerInvalidation||='MANUAL_INTERFERENCE';op.manualInterferenceObserved=true;captureManualInterference(op,e,c,sendStartedAt,lastSample);}};
   for(const type of ['input','click','keydown'])c.root.addEventListener(type,disturbed,true);
   try {
     invocation.reason='composer-changed';
@@ -747,6 +789,7 @@ async function submit(p) {
     op.invalid=true;releaseV2(p.operationId,op);
     const acceptanceTrace=op.acceptanceTrace;
     return answer(p,'interrupted',{invocation,...(acceptanceDiagnostic?{acceptanceDiagnostic}:{}),
+      ...interactionSubmitEvidence(op),
       ...(prepared && invocation.send==='invoked' && !op.receipt?.userStableIdHash && MuseAcceptanceReplay.validTrace(acceptanceTrace)?{acceptanceTrace}:{})});
   }
   finally {if(op.invalid)releaseV2(p.operationId,op);for(const type of ['input','click','keydown'])c.root.removeEventListener(type,disturbed,true);}

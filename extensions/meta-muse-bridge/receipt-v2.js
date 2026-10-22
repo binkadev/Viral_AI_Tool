@@ -101,17 +101,46 @@
      typeof f.stabilizationReset==='boolean' && typeof f.terminal==='boolean' &&
      (f.terminal?assistantReasons.includes(f.terminalReason) && !assistantObservations.includes(f.terminalReason):f.terminalReason===null || assistantObservations.includes(f.terminalReason));
  }
+ const interactionKeys=['version','eventType','targetCategory','observationStage','snapshotKind','duringGenerationActive','composerChanged','structureChanged','ownedUserPresent'];
+ function validManualInterferenceDiagnostic(d) {
+   return exact(d,interactionKeys) && Object.keys(d).length===interactionKeys.length && d.version===1 &&
+     ['input','click','keydown','pointerdown'].includes(d.eventType) &&
+     ['composer-editor','composer-action','message-row','video','conversation-container','page-navigation','other','unknown'].includes(d.targetCategory) &&
+     ['pre-send','acceptance','post-acceptance','unknown'].includes(d.observationStage) && ['last-sampled','fresh','unavailable'].includes(d.snapshotKind) &&
+     ['duringGenerationActive','composerChanged','structureChanged','ownedUserPresent'].every(k=>d[k]===null || typeof d[k]==='boolean');
+ }
+ // Optional observer data cannot invalidate the existing failure/receipt evidence.
+ function assistantFailureCore(d) {
+   if(!d || !Object.hasOwn(d,'manualInterferenceDiagnostic'))return d;
+   const {manualInterferenceDiagnostic,...core}=d;return core;
+ }
+ function assistantFailureEvidence(d) {
+   const core=assistantFailureCore(d);
+   if(!validAssistantFailure(core))return core;
+   try {
+     const diagnostic=d.manualInterferenceDiagnostic;
+     if(core.terminalReason==='MANUAL_INTERFERENCE' && validManualInterferenceDiagnostic(diagnostic))
+       return {...core,manualInterferenceDiagnostic:{...diagnostic}};
+   }catch{}
+   return core;
+ }
  function validAssistantFailure(d) {
-   return exact(d,['version','build','terminalReason','terminalPhase','frames']) && Object.keys(d).length===5 && d.version===1 &&
+   const hasDiagnostic=d && Object.hasOwn(d,'manualInterferenceDiagnostic');
+   if(hasDiagnostic && (d.terminalReason!=='MANUAL_INTERFERENCE' || !validManualInterferenceDiagnostic(d.manualInterferenceDiagnostic)))return false;
+   return exact(d,['version','build','terminalReason','terminalPhase','frames','manualInterferenceDiagnostic']) && Object.keys(d).length===(hasDiagnostic?6:5) && d.version===1 &&
      /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && Array.isArray(d.frames) && d.frames.length>0 && d.frames.length<=ASSISTANT_TRACE_MAX_FRAMES &&
      d.frames.every((f,i)=>validAssistantFrame(f) && f.terminal===(i===d.frames.length-1)) &&
      d.frames.at(-1).terminalReason===d.terminalReason && d.frames.at(-1).phase===d.terminalPhase;
  }
  function assistantFailureSummary(d) {
-   return validAssistantFailure(d)?{version:d.version,build:d.build,terminalReason:d.terminalReason,terminalPhase:d.terminalPhase,frameCount:d.frames.length,lastFrame:{...d.frames.at(-1)}}:null;
+   d=assistantFailureEvidence(d);
+   return validAssistantFailure(d)?{version:d.version,build:d.build,terminalReason:d.terminalReason,terminalPhase:d.terminalPhase,frameCount:d.frames.length,lastFrame:{...d.frames.at(-1)},
+     ...(d.manualInterferenceDiagnostic?{manualInterferenceDiagnostic:{...d.manualInterferenceDiagnostic}}:{})}:null;
  }
  function validAssistantSummary(d) {
-   return d===null || exact(d,['version','build','terminalReason','terminalPhase','frameCount','lastFrame']) && Object.keys(d).length===6 &&
+   const hasDiagnostic=d && Object.hasOwn(d,'manualInterferenceDiagnostic');
+   return d===null || exact(d,['version','build','terminalReason','terminalPhase','frameCount','lastFrame','manualInterferenceDiagnostic']) && Object.keys(d).length===(hasDiagnostic?7:6) &&
+     (!hasDiagnostic || d.terminalReason==='MANUAL_INTERFERENCE' && validManualInterferenceDiagnostic(d.manualInterferenceDiagnostic)) &&
      d.version===1 && /^muse-content-[a-z0-9-]{1,64}$/.test(d.build||'') && Number.isInteger(d.frameCount) && d.frameCount>=1 && d.frameCount<=ASSISTANT_TRACE_MAX_FRAMES &&
      validAssistantFrame(d.lastFrame) && d.lastFrame.terminal && d.lastFrame.terminalReason===d.terminalReason && d.lastFrame.phase===d.terminalPhase;
  }
@@ -152,6 +181,7 @@
      ['survivingSuffixOrderValid','survivingIdentityValid','survivingRoleValid'].every(k=>d[k]===true);
  }
  const api=Object.freeze({valid,extendsReceipt,transferRequest,transferResult,capabilityRequest,capabilityReport,validAcceptanceDiagnostic,validAcceptanceTrace:replay.validTrace,acceptanceFailureReasons,ownershipFailureReasons,validOwnershipFailure,
+   validManualInterferenceDiagnostic,assistantFailureCore,assistantFailureEvidence,
    ASSISTANT_TRACE_MAX_FRAMES,assistantPhases,assistantReasons,assistantSequenceCounts,assistantSequenceBools,assistantMismatchCategories,emptyAssistantSequence,
    validAssistantFrame,validAssistantFailure,assistantFailureSummary,validAssistantSummary,userChurnKinds,userChurnBools,userChurnCounts,userChurnReplacementBools,validUserAnchorChurn,
    baselineDriftKinds,baselineDriftCounts,baselineDriftBools,validBaselineDrift,validBaselineWindow,MAX_BYTES,CHUNK_BYTES});

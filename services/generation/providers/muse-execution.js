@@ -18,7 +18,9 @@ function createMuseExecution(bridge,verifyVideo) {
     const r=JSON.parse(fs.readFileSync(file,'utf8'));
     if(r.operationId!==c.jobId || r.sceneId!==c.sceneId || r.digest!==digest(c) || !Number.isFinite(r.createdAt) || typeof r.target?.instanceId!=='string' || !Number.isSafeInteger(r.target.tabId))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.receipt && !validReceipt(r.receipt,c.jobId))throw failure('RECOVERY_REQUIRED');
+    if(Object.hasOwn(r,'manualInterferenceDiagnostic') && !receiptV2.validManualInterferenceDiagnostic(r.manualInterferenceDiagnostic))delete r.manualInterferenceDiagnostic;
     if(validateReceipt && r.acceptanceTrace && !receiptV2.validAcceptanceTrace(r.acceptanceTrace))throw failure('RECOVERY_REQUIRED');
+    if(r.assistantOwnershipFailure!==undefined)r.assistantOwnershipFailure=receiptV2.assistantFailureEvidence(r.assistantOwnershipFailure);
     if(validateReceipt && r.assistantOwnershipFailure!==undefined && !receiptV2.validAssistantFailure(r.assistantOwnershipFailure))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.userAnchorChurn!==undefined && !receiptV2.validUserAnchorChurn(r.userAnchorChurn))throw failure('RECOVERY_REQUIRED');
     if(validateReceipt && r.baselineDrift!==undefined && !receiptV2.validBaselineDrift(r.baselineDrift))throw failure('RECOVERY_REQUIRED');
@@ -47,14 +49,23 @@ function createMuseExecution(bridge,verifyVideo) {
     if(type==='submitGeneration')safeObserve(c,'submit.requested');
     const result=await pending;
     if(!validResult(type,result,payload))throw failure('RECOVERY_REQUIRED');
+    if(result.assistantOwnershipFailure!==undefined)result.assistantOwnershipFailure=receiptV2.assistantFailureEvidence(result.assistantOwnershipFailure);
     const diagnosticPatch={};
-    for(const field of ['assistantOwnershipFailure','userAnchorChurn','baselineDrift','baselineWindow'])if(result[field] && !r[field])diagnosticPatch[field]=result[field];
+    for(const field of ['assistantOwnershipFailure','userAnchorChurn','baselineDrift','baselineWindow'])if(result[field] && !r[field])diagnosticPatch[field]=field==='assistantOwnershipFailure'?receiptV2.assistantFailureCore(result[field]):result[field];
     if(Object.keys(diagnosticPatch).length)persistRecord(c,r,diagnosticPatch);
+    // The existing core failure save above retains its original behavior. This
+    // optional augmentation is best-effort and never changes execution/receipt state.
+    if(diagnosticPatch.assistantOwnershipFailure && result.assistantOwnershipFailure?.manualInterferenceDiagnostic) {
+      try{persistRecord(c,r,{assistantOwnershipFailure:result.assistantOwnershipFailure});}catch{}
+    }
     if(result.invocation) {
       // Private evidence only. Transport errors leave invocation unknown.
       const temp=recordPath(c)+'.'+crypto.randomUUID()+'.tmp';let fd;
       try {const evidence={invocation:result.invocation,...(result.acceptanceDiagnostic?{acceptanceDiagnostic:result.acceptanceDiagnostic}:{}),...(result.acceptanceTrace?{acceptanceTrace:result.acceptanceTrace}:{})};fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({...r,...evidence}));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,recordPath(c));Object.assign(r,evidence);}
       finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
+    }
+    if(type==='submitGeneration' && result.state==='interrupted' && !r.manualInterferenceDiagnostic && receiptV2.validManualInterferenceDiagnostic(result.manualInterferenceDiagnostic)) {
+      try{persistRecord(c,r,{manualInterferenceDiagnostic:{...result.manualInterferenceDiagnostic}});}catch{}
     }
     if(['prepared','running','result'].includes(result.state))saveEvidence(c,r,result);
     return result;

@@ -24,7 +24,7 @@ function createFixture({root,bytes,verifyVideo,executionAudit=false}) {
   const context={document,window,location:{origin:'https://muse.ai',get href(){return href;}},URL,TextEncoder,crypto:crypto.webcrypto,AbortController,Uint8Array,btoa,console,
     Date:{now:()=>clock},setTimeout:(f,ms)=>{const t=setTimeout(f,ms);if(ms>=15000)t.unref();return t;},clearTimeout,setInterval:(f,ms)=>{const t=setInterval(f,ms);t.unref();return t;},clearInterval,
     getComputedStyle:()=>({display:'block',visibility:'visible'}),MutationObserver:class {constructor(fn){this.fn=fn;}observe(){observers.add(this.fn);}disconnect(){observers.delete(this.fn);}},
-    chrome:{storage:{local:auditStorage},runtime:{id:'fixture',getManifest:()=>({version:'0.3.16'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
+    chrome:{storage:{local:auditStorage},runtime:{id:'fixture',getManifest:()=>({version:'0.3.17'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
     fetch:async(source)=>{
       fetches++;calls.push({type:'fetch',sourceIndex:[...sources.keys()].indexOf(source)});
       onFetch?.();
@@ -65,7 +65,7 @@ function createFixture({root,bytes,verifyVideo,executionAudit=false}) {
     return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted'};
   };
   const wc={crypto:crypto.webcrypto,TextEncoder,setTimeout,clearTimeout,navigator:{userAgent:'Edg/1'},chrome:{
-    runtime:{id:'fixture',getManifest:()=>({version:'0.3.16'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+    runtime:{id:'fixture',getManifest:()=>({version:'0.3.17'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
     storage:{local:auditStorage},
     tabs:{query:async()=>[{id:5,windowId:7}],update:async(id,p)=>{focus.push(['tab',id]);return {id,windowId:7};},sendMessage:contentSend},windows:{update:async id=>focus.push(['window',id])},alarms:{create(){},onAlarm:{addListener(){}}}}};
   vm.createContext(wc);

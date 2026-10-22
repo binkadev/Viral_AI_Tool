@@ -65,7 +65,9 @@ function contentFixture(options={}) {
    replaceComposer:()=>{currentRoot.isConnected=false;currentRoot={...root,isConnected:true};},
    replaceEditor:()=>{currentEditor=Object.defineProperties({},Object.getOwnPropertyDescriptors(editor));},
    replaceSend:()=>{activeButton={...base()};},removeSend:()=>{activeButton=null;},
-   foreign:type=>{for(const fn of documentEvents.get(type)||[])fn({isTrusted:true,type,target:currentEditor});},
+   // Synthetic branch/path coverage only; this does not simulate browser trust.
+   foreign:(type,event={})=>{for(const fn of documentEvents.get(type)||[])fn({isTrusted:true,type,target:currentEditor,...event});},
+   composerEvent:(type,event={})=>events[type]?.({isTrusted:true,type,target:currentEditor,...event}),
    get documentListenerCount(){return ['input','click','keydown','pointerdown'].reduce((n,type)=>n+(documentEvents.get(type)?.size||0),0);},
    get rows(){return rows;},captureTransferClose:()=>vm.runInNewContext('(()=>{const t=[...transfers.values()][0];return ()=>closeTransfer(t);})()',c),
    get tombstones(){return Array.from(vm.runInNewContext('[...closedTransfers]',c));},get operationCount(){return vm.runInNewContext('operations.size',c);},get transferCount(){return vm.runInNewContext('transfers.size',c);},

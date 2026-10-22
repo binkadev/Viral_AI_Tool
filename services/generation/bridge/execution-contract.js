@@ -30,13 +30,13 @@ function validPayload(type, p) {
   return type === "acquireGenerationResult" ? Number.isSafeInteger(p.offset) && p.offset >= 0 && p.offset <= 268435456 : p.offset === undefined;
 }
 function validResult(type, r, p) {
-  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "ownershipFailure", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace", "assistantOwnershipFailure", "userAnchorChurn", "baselineDrift", "baselineWindow"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
+  if (!exact(r, ["operationId", "sceneId", "state", "offset", "total", "data", "confirmed", "receipt", "assistantMessageId", "invocation", "ownershipDiagnostic", "ownershipFailure", "transferId", "sequence", "done", "chunkHash", "acquisitionDiagnostic", "acceptanceDiagnostic", "acceptanceTrace", "assistantOwnershipFailure", "userAnchorChurn", "baselineDrift", "baselineWindow", "manualInterferenceDiagnostic"]) || r.operationId !== p.operationId || r.sceneId !== p.sceneId) return false;
   if(r.baselineWindow!==undefined && (type!=='inspectGeneration' || p.diagnoseOwnership || p.diagnoseAcquisition || r.state!=='running' ||
     !receiptV2.valid(p.receipt,p.operationId) || !p.receipt.userStableIdHash || p.receipt.assistantStableIdHash || !receiptV2.validBaselineWindow(r.baselineWindow)))return false;
   if(r.assistantOwnershipFailure!==undefined || r.userAnchorChurn!==undefined || r.baselineDrift!==undefined)return type==='inspectGeneration' && !p.diagnoseOwnership && !p.diagnoseAcquisition &&
     receiptV2.valid(p.receipt,p.operationId) && !!p.receipt.userStableIdHash && !p.receipt.assistantStableIdHash && r.state==='interrupted' &&
     exact(r,['operationId','sceneId','state','assistantOwnershipFailure','userAnchorChurn','baselineDrift']) &&
-    (r.assistantOwnershipFailure===undefined || receiptV2.validAssistantFailure(r.assistantOwnershipFailure)) &&
+    (r.assistantOwnershipFailure===undefined || receiptV2.validAssistantFailure(receiptV2.assistantFailureCore(r.assistantOwnershipFailure))) &&
     (r.userAnchorChurn===undefined || receiptV2.validUserAnchorChurn(r.userAnchorChurn)) &&
     (r.baselineDrift===undefined || receiptV2.validBaselineDrift(r.baselineDrift));
   if(r.ownershipFailure!==undefined)return type==='inspectGeneration' && p.diagnoseOwnership===true && r.state==='interrupted' && exact(r,['operationId','sceneId','state','ownershipFailure']) && receiptV2.validOwnershipFailure(r.ownershipFailure);
