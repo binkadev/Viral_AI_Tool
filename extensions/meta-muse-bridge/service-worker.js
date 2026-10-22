@@ -1,9 +1,9 @@
 "use strict";
-const WORKER_BUILD='muse-worker-v0-3-17-contract3-receipt2-manual1-audit1';
+const WORKER_BUILD='muse-worker-v0-3-18-contract3-receipt2-manual1-audit2';
 if(typeof importScripts==='function')importScripts('execution-audit.js','acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js');
 const auditActivity=new Map();
 const workerAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'worker',canClose:id=>!auditActivity.get(id)}):null;}catch{return null;}})();
-const auditRoutePrefix='execution-audit-v1:route:';
+const auditRoutePrefix='execution-audit-v2:route:';
 const auditPrepared=new Map();
 async function prepareExecutionAudit(c) {
   // Optional envelope metadata is never forwarded into an execution payload.
@@ -124,7 +124,7 @@ async function museTabs() {
     diagnostic.workerBuild=WORKER_BUILD;
     diagnostic.contentBuild=/^muse-content-[a-z0-9-]{1,64}$/.test(handshake?.buildMarker||'')?handshake.buildMarker:'unreported';
     diagnostic.generationActive=status?.devEvidence?.generationActive===true;
-    return {executionAuditVersion:fresh && workerAudit && handshake?.executionAuditVersion===1?1:null,manualRecoveryVersion:fresh && handshake?.manualRecoveryVersion===1?1:null,tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
+    return {executionAuditVersion:fresh && workerAudit && handshake?.executionAuditVersion===2?2:null,manualRecoveryVersion:fresh && handshake?.manualRecoveryVersion===1?1:null,tabId:tab.id,url:MUSE_URL,composerReady:fresh && status?.composerReady===true,canSubmit:fresh && compatible && status?.canSubmit===true,inspectionComplete:fresh && status?.inspectionComplete===true,executionContract:fresh && compatible?3:null,ownershipReceiptVersion:fresh && status?.ownershipReceiptVersion===2?2:null,
       runtimeBuild:{workerBuild:WORKER_BUILD,contentBuild:errorCode==='NONE' && fresh && handshake?.contractVersion===3?diagnostic.contentBuild:'unreported',diagnosticsEnabled:developmentDiagnostics && errorCode==='NONE' && fresh && handshake?.diagnosticsEnabled===true},devEvidence:fresh?status?.devEvidence:undefined,...(developmentDiagnostics?{devConnection:diagnostic}:{})};
   }));
 }
@@ -250,7 +250,12 @@ async function execute(c) {
     return r;
   }
   if(c.type==='prepareGeneration' || p.receipt) {
-    const task=v2Tail.then(()=>executeV2(c));v2Tail=task.catch(()=>{});return task;
+    const task=v2Tail.then(()=>executeV2(c));
+    if(c.type==='submitGeneration') {
+      const sealed=()=>{try{const p=workerAudit?.sealSubmission(c.payload.operationId);p?.catch?.(()=>workerAudit?.gap(c.payload.operationId));}catch{try{workerAudit?.gap(c.payload.operationId);}catch{}}};
+      task.then(sealed,sealed);
+    }
+    v2Tail=task.catch(()=>{});return task;
   }
   // Never let a v2 record fall back into legacy submission/acquisition.
   if(c.type==='acquireGenerationResult' || c.type==='submitGeneration') {

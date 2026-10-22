@@ -24,7 +24,7 @@ function createFixture({root,bytes,verifyVideo,executionAudit=false}) {
   const context={document,window,location:{origin:'https://muse.ai',get href(){return href;}},URL,TextEncoder,crypto:crypto.webcrypto,AbortController,Uint8Array,btoa,console,
     Date:{now:()=>clock},setTimeout:(f,ms)=>{const t=setTimeout(f,ms);if(ms>=15000)t.unref();return t;},clearTimeout,setInterval:(f,ms)=>{const t=setInterval(f,ms);t.unref();return t;},clearInterval,
     getComputedStyle:()=>({display:'block',visibility:'visible'}),MutationObserver:class {constructor(fn){this.fn=fn;}observe(){observers.add(this.fn);}disconnect(){observers.delete(this.fn);}},
-    chrome:{storage:{local:auditStorage},runtime:{id:'fixture',getManifest:()=>({version:'0.3.17'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
+    chrome:{storage:{local:auditStorage},runtime:{id:'fixture',getManifest:()=>({version:'0.3.18'}),onMessage:{addListener(){}},connect:()=>({onDisconnect:{addListener(){}}})}},
     fetch:async(source)=>{
       fetches++;calls.push({type:'fetch',sourceIndex:[...sources.keys()].indexOf(source)});
       onFetch?.();
@@ -65,13 +65,13 @@ function createFixture({root,bytes,verifyVideo,executionAudit=false}) {
     return {operationId:p.operationId,sceneId:p.sceneId,state:'interrupted'};
   };
   const wc={crypto:crypto.webcrypto,TextEncoder,setTimeout,clearTimeout,navigator:{userAgent:'Edg/1'},chrome:{
-    runtime:{id:'fixture',getManifest:()=>({version:'0.3.17'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+    runtime:{id:'fixture',getManifest:()=>({version:'0.3.18'}),onConnect:{addListener(){}},onMessage:{addListener(){}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
     storage:{local:auditStorage},
     tabs:{query:async()=>[{id:5,windowId:7}],update:async(id,p)=>{focus.push(['tab',id]);return {id,windowId:7};},sendMessage:contentSend},windows:{update:async id=>focus.push(['window',id])},alarms:{create(){},onAlarm:{addListener(){}}}}};
   vm.createContext(wc);
   vm.runInContext([...(executionAudit?['execution-audit.js']:[]),'acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js','service-worker.js'].map(f=>fs.readFileSync(path.join(__dirname,'../extensions/meta-muse-bridge',f),'utf8')).join(';\n'),wc);
   const bridge={executionReady:async()=>true,receiptV2Ready:async()=>true,executionTarget:async()=>({instanceId:'fixture-instance',tabId:5}),
-    observeExecutionAudit:(c,target)=>{if(executionAudit)auditBindings.set(c.jobId,{jobId:c.jobId,auditId:c.executionAudit.auditId});},
+    observeExecutionAudit:(c,target)=>{if(executionAudit)auditBindings.set(c.jobId,{version:c.executionAudit.version,jobId:c.jobId,auditId:c.executionAudit.auditId});},
     command:async(type,p,target)=>{if(target.instanceId!=='fixture-instance' || target.tabId!==5)throw Error('Wrong pinned instance');calls.push({type,p:JSON.parse(JSON.stringify(p))});wc.command={id:crypto.randomUUID(),type,payload:p,...(executionAudit?{audit:auditBindings.get(p.operationId)}:{})};if(executionAudit)await vm.runInContext('prepareExecutionAuditSafely(command)',wc);return await vm.runInContext('execute(command)',wc);}};
   const registry=new ProviderRegistry(),provider=createMuseProvider({configStore:{read:()=>({enabled:true})},extensionBridge:bridge,verifyVideo});registry.register(provider);
   const service=new GenerationService({root,registry}),originalSave=service.store.save.bind(service.store);

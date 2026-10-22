@@ -122,7 +122,7 @@ class MetaMuseExtensionBridge {
         check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild","manualRecoveryVersion","executionAuditVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
         if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
         if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
-        check(t.executionAuditVersion===undefined || t.executionAuditVersion===null || t.executionAuditVersion===1);
+        check(t.executionAuditVersion===undefined || t.executionAuditVersion===null || t.executionAuditVersion===2);
         const evidence=t.devEvidence;
         const validEvidence=evidence && exact(evidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) &&
           ['root','editor','actionSlot','generationActive'].every(k=>typeof evidence[k]==='boolean') && Object.values(evidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128));
@@ -132,7 +132,7 @@ class MetaMuseExtensionBridge {
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {executionAuditVersion:t.executionAuditVersion===1?1:null,manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
+        return {executionAuditVersion:t.executionAuditVersion===2?2:null,manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
           ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),contentFresh:!!validEvidence,composerDetected:validEvidence?evidence.root && evidence.editor && evidence.actionSlot:null,
           generationActive:validEvidence?evidence.generationActive:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection}:{})};
       });
@@ -200,7 +200,7 @@ class MetaMuseExtensionBridge {
     const receivers=sessions.flatMap((s,sessionIndex)=>s.tabs.map((t,receiverIndex)=>{
       const d=t.diagnostic;
       return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
-        executionAuditVersion:t.executionAuditVersion===1?1:null,reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
+        executionAuditVersion:t.executionAuditVersion===2?2:null,reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
         diagnosticsEnabled:t.runtimeBuild?.diagnosticsEnabled===true,contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
         freshness:d?.museTabEvidenceAgeBucket||(t.contentFresh?'fresh':'absent'),authenticated:d?d.authenticatedEvidencePresent===true:t.authState==='authenticated',composerDetected:d?d.composerDetected===true:t.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
     }));
@@ -276,7 +276,7 @@ class MetaMuseExtensionBridge {
   observeExecutionAudit(c,target) {
     try {
       if(!c.executionAudit)return;
-      const binding={jobId:c.jobId,auditId:require('../execution-audit').marker(c.executionAudit).auditId};
+      const binding={version:c.executionAudit.version,jobId:c.jobId,auditId:require('../execution-audit').marker(c.executionAudit).auditId};
       if(this.auditBindings.size>=256 && !this.auditBindings.has(c.jobId))this.auditBindings.delete(this.auditBindings.keys().next().value);
       this.auditBindings.set(c.jobId,{binding,target:{instanceId:target.instanceId,tabId:target.tabId}});
     }catch{}

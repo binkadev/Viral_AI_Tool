@@ -125,7 +125,7 @@ async function automaticFixture({root,bytes,verifyVideo,clickThrows=false,lostSu
   vm.createContext(wc);vm.runInContext(['execution-audit.js','acceptance-replay.js','receipt-v2.js','manual-recovery-contract.js','worker-manual-recovery.js','service-worker.js'].map(f=>fs.readFileSync(path.join('extensions/meta-muse-bridge',f),'utf8')).join(';\n'),wc);
   wc.auditDeliver=deliver;vm.runInContext('forwardExecutionAudit=async packet=>auditDeliver(packet)',wc);
   const bridge={executionReady:async()=>true,receiptV2Ready:async()=>true,executionTarget:async()=>({instanceId:'audit-fixture',tabId:5}),
-    observeExecutionAudit:(c,target)=>bindings.set(c.jobId,{jobId:c.jobId,auditId:c.executionAudit.auditId}),
+    observeExecutionAudit:(c,target)=>bindings.set(c.jobId,{version:c.executionAudit.version,jobId:c.jobId,auditId:c.executionAudit.auditId}),
     command:async(type,p,target)=>{
       if(target.instanceId!=='audit-fixture' || target.tabId!==5)throw Error('DEV wrong target');calls.push(type);
       wc.command={id:crypto.randomUUID(),type,payload:p,audit:bindings.get(p.operationId)};

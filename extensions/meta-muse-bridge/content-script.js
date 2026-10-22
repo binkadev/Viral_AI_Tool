@@ -1,5 +1,5 @@
 "use strict";
-const CONTENT_BUILD='muse-content-v0-3-17-contract3-receipt2-manual1-audit1';
+const CONTENT_BUILD='muse-content-v0-3-18-contract3-receipt2-manual1-audit2';
 const contentAuditActivity=new Map();
 const contentAudit=(()=>{try{return typeof MuseExecutionAudit==='object'?MuseExecutionAudit.create({storage:chrome.storage.local,source:'content',canClose:id=>!contentAuditActivity.get(id)}):null;}catch{return null;}})();
 const developmentDiagnostics=chrome.runtime.getManifest().version_name==='development-diagnostics';
@@ -1104,7 +1104,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
       if(left)contentAuditActivity.set(auditJob,left);else contentAuditActivity.delete(auditJob);
     }).then(reply);return true;
   }
-  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics,manualRecoveryVersion:1,executionAuditVersion:contentAudit?1:null});return false;}
+  if(message?.type==='viral-ai:muse-handshake'){reply({contractVersion:3,buildMarker:CONTENT_BUILD,diagnosticsEnabled:developmentDiagnostics,manualRecoveryVersion:1,executionAuditVersion:contentAudit?2:null});return false;}
   if(message?.type==='viral-ai:muse-status'){
     try{reply(status());}catch{reply({sampledAt:Date.now(),composerReady:false,inspectionComplete:false,contentError:'STATUS_EXCEPTION'});}
     return false;
@@ -1126,7 +1126,10 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(type==='acquireGenerationResult' && (!Number.isSafeInteger(p.offset) || p.offset<0 || p.offset>268435456))return false;
   contentAuditActivity.set(p.operationId,(contentAuditActivity.get(p.operationId)||0)+1);
   Promise.resolve().then(()=>type==='prepareGeneration'?prepareV2(p):type==='submitGeneration'?submit(p):type==='inspectGeneration'?inspect(p):type==='acquireGenerationResult'?acquire(p):cancelLocal(p))
-    .finally(()=>{const left=(contentAuditActivity.get(p.operationId)||1)-1;if(left)contentAuditActivity.set(p.operationId,left);else contentAuditActivity.delete(p.operationId);})
+    .finally(()=>{
+      const left=(contentAuditActivity.get(p.operationId)||1)-1;if(left)contentAuditActivity.set(p.operationId,left);else contentAuditActivity.delete(p.operationId);
+      if(type==='submitGeneration')try{const pending=contentAudit?.sealSubmission(p.operationId);pending?.catch?.(()=>contentAudit?.gap(p.operationId));}catch{try{contentAudit?.gap(p.operationId);}catch{}}
+    })
     .then(reply,()=>reply(answer(p,'interrupted')));return true;
 });
 let reconnectAttempts=0,reconnectTimer=null,activePort=null;

@@ -16,9 +16,9 @@ const media={duration:1,width:160,height:90};
 const bytes=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(64)]);
 function root(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'execution-audit-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
 function job(){const request=normalizeRequest({projectId:uuid(),sceneId:uuid(),providerId:'muse',idempotencyKey:uuid(),prompt:'SECRET PRIVATE PROMPT'});
- return {...createJob(request,{model:{id:null,provider:'muse'},estimate:{}},null),executionAudit:{version:1,auditId:uuid()}};}
+ return {...createJob(request,{model:{id:null,provider:'muse'},estimate:{}},null),executionAudit:{version:2,auditId:uuid()}};}
 function fixture(t,options){const j=job(),audit=new A.ExecutionAudit(root(t),options);audit.admit(j);return {job:j,audit,file:audit.file(j)};}
-function packet(j,source='content',events=[],options={}){return {version:1,jobId:j.id,auditId:j.executionAudit.auditId,source,sourceEpoch:uuid(),watermark:events.length,closed:false,gap:false,events,...options};}
+function packet(j,source='content',events=[],options={}){return {version:2,submissionSeal:null,jobId:j.id,auditId:j.executionAudit.auditId,source,sourceEpoch:uuid(),watermark:events.length,closed:false,gap:false,events,...options};}
 function occurrence(source,sourceEpoch,sourceSequence,type,detail={}){return {eventId:uuid(),source,sourceEpoch,sourceSequence,type,detail};}
 async function admissionService(t){const registry=new ProviderRegistry();registry.register({id:'muse',modelIds:[],executionMode:'single-scene-session',displayName:'DEV',validateConfig(){},preflight:async()=>({ready:true}),start:async()=>{},reconcile:async()=>{},cancel:async()=>{},capabilities:['text-to-video'],readiness:async()=>({id:'muse',ready:true,enabled:true,state:'ready'})});
  const service=new GenerationService({root:root(t),registry});service.execute=async()=>{};return service;}
@@ -30,7 +30,7 @@ test('new admission gets a validated durable marker; event follows the job save'
  const s=await admissionService(t),save=s.store.save.bind(s.store);let committed=false;
  s.store.save=jobs=>{assert(!fs.existsSync(path.join(s.root,'audit',jobs.at(-1).id+'.json')));save(jobs);committed=true;};
  const admit=s.executionJournal.admit.bind(s.executionJournal);s.executionJournal.admit=j=>{assert(committed);assert.equal(s.store.load().at(-1).executionAudit.auditId,j.executionAudit.auditId);admit(j);};
- const j=await s.submit(request());assert.equal(A.marker(j.executionAudit).version,1);assert.equal(s.executionAuditReport(j.id).counters['generation.admitted'].recorded,1);
+ const j=await s.submit(request());assert.equal(A.marker(j.executionAudit).version,2);assert.equal(s.executionAuditReport(j.id).counters['generation.admitted'].recorded,1);
  assert.equal(s.store.load()[0].executionAudit.auditId,j.executionAudit.auditId);
 });
 test('authoritative admission save failure emits no admission journal',async t=>{const s=await admissionService(t);s.store.save=()=>{throw Error('authoritative');};await assert.rejects(s.submit(request()));assert(!fs.existsSync(path.join(s.root,'audit')));});
@@ -42,8 +42,8 @@ test('historical jobs #1–#16 stay byte-identical without markers or journals',
  const before=JSON.stringify(next.jobs);await next.submit(request());assert.equal(JSON.stringify(next.jobs.slice(0,16)),before);
  assert.equal(fs.readdirSync(path.join(s.root,'audit')).filter(f=>f.endsWith('.json')).length,1);
 });
-for(const value of [{version:2,auditId:uuid()},{version:1,auditId:'../file'},{version:1,auditId:uuid(),token:'secret'}])test('store quarantines malformed audit marker without blocking authoritative jobs '+JSON.stringify(Object.keys(value)),t=>{
- const dir=root(t),store=new GenerationStore(dir),j=job();j.executionAudit=value;store.save([j]);const loaded=store.load()[0];assert.deepEqual(loaded.executionAudit,{version:1,auditId:null});assert.equal(new A.ExecutionAudit(dir).report(loaded).coverage.state,'unavailable');assert(!fs.readFileSync(store.file,'utf8').includes('secret'));assert(!fs.existsSync(path.join(dir,'audit')));
+for(const value of [{version:3,auditId:uuid()},{version:1,auditId:'../file'},{version:1,auditId:uuid(),token:'secret'}])test('store quarantines malformed audit marker without blocking authoritative jobs '+JSON.stringify(Object.keys(value)),t=>{
+ const dir=root(t),store=new GenerationStore(dir),j=job();j.executionAudit=value;store.save([j]);const loaded=store.load()[0];assert.deepEqual(loaded.executionAudit,{version:2,auditId:null});assert.equal(new A.ExecutionAudit(dir).report(loaded).coverage.state,'unavailable');assert(!fs.readFileSync(store.file,'utf8').includes('secret'));assert(!fs.existsSync(path.join(dir,'audit')));
 });
 test('missing prospective journal is unavailable, never reconstructed',t=>{const {audit,job:j,file}=fixture(t);fs.unlinkSync(file);assert.equal(audit.report(j).coverage.state,'unavailable');audit.record(j,'submit.requested');assert(!fs.existsSync(file));});
 test('genuine second native submit occurrence remains a second event',t=>{const {audit,job:j}=fixture(t);audit.record(j,'submit.requested');audit.record(j,'submit.requested');assert.equal(count(audit,j,'submit.requested'),2);assert.equal(audit.report(j).counters['submit.requested'].total,null);});
@@ -57,18 +57,18 @@ for(const source of ['worker','content'])test(source+' restart leaves an unclose
 test('native restart reports an unresolved native epoch without writing or replaying',t=>{const {audit,job:j,file}=fixture(t),before=fs.readFileSync(file);const restarted=new A.ExecutionAudit(path.dirname(path.dirname(file)));assert(restarted.report(j).coverage.reasons.includes('epoch_unclosed'));assert.deepEqual(fs.readFileSync(file),before);});
 for(const source of ['worker','content'])test(source+' witness survives suspension, lost ACK and redelivery without actions',async t=>{
  const {audit,job:j}=fixture(t),storage=memoryStorage(),first=W.create({storage,source}),type=source==='worker'?'submit.committed':'submit.invocation_observed';
- await first.bind({jobId:j.id,auditId:j.executionAudit.auditId});await first.observe(j.id,type,source==='worker'?{}:{outcome:'returned'});
+ await first.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await first.observe(j.id,type,source==='worker'?{}:{outcome:'returned'});
  let delivered;await first.drain(async p=>{delivered=json(p);assert(audit.ingest(j,p));return {persisted:false};});assert(Object.keys(storage.data).length);
  const restarted=W.create({storage,source});await restarted.drain(async p=>({persisted:audit.ingest(j,p)}));assert.equal(count(audit,j,type),1);assert.equal(audit.report(j).coverage.state,'partial');assert.equal(Object.keys(storage.data).length,0);assert.equal(delivered.events[0].eventId,audit.report(j).events.at(-1).eventId);
 });
-test('witness ACK never deletes events created during in-flight delivery',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});
+test('witness ACK never deletes events created during in-flight delivery',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});
  await w.drain(async p=>{w.observe(j.id,'submit.invocation_observed',{outcome:'returned'});return {persisted:audit.ingest(j,p)};});await w.flush();assert.equal(Object.values(storage.data)[0].events.length,1);await w.drain(async p=>({persisted:audit.ingest(j,p)}));assert.equal(count(audit,j,'submit.invocation_observed'),1);
 });
-test('native ACK failure retains witness and retries only telemetry',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});const before=json(storage.data);await w.drain(async()=>{throw Error('offline');});assert.deepEqual(storage.data,before);});
-test('witness capacity preserves old records and sends an explicit gap',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});for(let i=0;i<W.MAX_RECORDS+2;i++)w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});await w.flush();const p=Object.values(storage.data)[0];assert.equal(p.events.length,W.MAX_RECORDS);assert.equal(p.watermark,W.MAX_RECORDS+2);assert(p.gap);await w.drain(async p=>({persisted:audit.ingest(j,p)}));assert(audit.report(j).coverage.reasons.includes('sequence_gap'));});
-test('witness persistence failures are swallowed; recovered packet stays gapped',async()=>{const storage=memoryStorage(),base=storage.set;let fail=false;storage.set=async v=>{if(fail)throw Error('quota');return base(v);};const w=W.create({storage,source:'worker'}),j=job();await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});fail=true;await w.observe(j.id,'submit.committed');fail=false;await w.gap(j.id);assert(Object.values(storage.data)[0].gap);});
-test('witness refuses privacy-unsafe detail instead of persisting it',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid(),candidateToken:'SECRET',url:'blob:https://muse.ai/SECRET'});const s=JSON.stringify(storage.data);assert(!s.includes('SECRET'));assert(Object.values(storage.data)[0].gap);});
-test('closure waits for quiescence and a second persisted checkpoint',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage();let busy=true;const w=W.create({storage,source:'content',canClose:()=>!busy});await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(Object.values(storage.data)[0].closed,false);busy=false;await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(audit.report(j).streams.find(s=>s.source==='content').closed,false);await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(audit.report(j).streams.find(s=>s.source==='content').closed,true);});
+test('native ACK failure retains witness and retries only telemetry',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});const before=json(storage.data);await w.drain(async()=>{throw Error('offline');});assert.deepEqual(storage.data,before);});
+test('witness capacity preserves old records and sends an explicit gap',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});for(let i=0;i<W.MAX_RECORDS+2;i++)w.observe(j.id,'manual.session_opened',{sessionAlias:uuid()});await w.flush();const p=Object.values(storage.data)[0];assert.equal(p.events.length,W.MAX_RECORDS);assert.equal(p.watermark,W.MAX_RECORDS+2);assert(p.gap);await w.drain(async p=>({persisted:audit.ingest(j,p)}));assert(audit.report(j).coverage.reasons.includes('sequence_gap'));});
+test('witness persistence failures are swallowed; recovered packet stays gapped',async()=>{const storage=memoryStorage(),base=storage.set;let fail=false;storage.set=async v=>{if(fail)throw Error('quota');return base(v);};const w=W.create({storage,source:'worker'}),j=job();await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});fail=true;await w.observe(j.id,'submit.committed');fail=false;await w.gap(j.id);assert(Object.values(storage.data)[0].gap);});
+test('witness refuses privacy-unsafe detail instead of persisting it',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await w.observe(j.id,'manual.session_opened',{sessionAlias:uuid(),candidateToken:'SECRET',url:'blob:https://muse.ai/SECRET'});const s=JSON.stringify(storage.data);assert(!s.includes('SECRET'));assert(Object.values(storage.data)[0].gap);});
+test('closure waits for quiescence and a second persisted checkpoint',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage();let busy=true;const w=W.create({storage,source:'content',canClose:()=>!busy});await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(Object.values(storage.data)[0].closed,false);busy=false;await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(audit.report(j).streams.find(s=>s.source==='content').closed,false);await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert.equal(audit.report(j).streams.find(s=>s.source==='content').closed,true);});
 for(const method of ['writeFileSync','fsyncSync','renameSync'])test(method+' telemetry failure leaves execution observers fail-open',t=>{
  const dir=root(t),j=job();let fail=false;const io={...fs,[method]:(...args)=>{if(fail)throw Error('DEV disk failure');return fs[method](...args);}},audit=new A.ExecutionAudit(dir,{io});audit.admit(j);fail=true;assert.equal(audit.record(j,'submit.requested'),false);fail=false;audit.record(j,'submit.requested');assert.equal(audit.report(j).coverage.state,'partial');assert(audit.report(j).coverage.reasons.includes('write_failed'));
 });
@@ -127,7 +127,7 @@ test('authenticated telemetry endpoint validates target binding and never dispat
  const {MetaMuseExtensionBridge}=require('../services/generation/bridge/meta-muse-extension-bridge'),f=await auto(t),bridge=new MetaMuseExtensionBridge({userDataPath:root(t)});t.after(()=>bridge.close());bridge.executionAuditSink=(p,target)=>f.service.ingestExecutionWitness(p,target);await bridge.start();
  const origin='chrome-extension://'+'a'.repeat(32),url='http://127.0.0.1:'+bridge.port;let token='';
  async function send(route,body,auth=token){const r=await fetch(url+'/v1/'+route,{method:'POST',headers:{origin,'content-type':'application/json',...(auth?{'X-Viral-Muse-Token':auth}:{})},body:JSON.stringify(body)});return {status:r.status,value:await r.json()};}
- token=(await send('register',{instanceId:'audit-fixture',profileLabel:'DEV',browserName:'Chrome',extensionVersion:'0.3.17',protocolVersion:1})).value.token;
+ token=(await send('register',{instanceId:'audit-fixture',profileLabel:'DEV',browserName:'Chrome',extensionVersion:'0.3.18',protocolVersion:1})).value.token;
  await send('heartbeat?instanceId=audit-fixture',{profileLabel:'DEV',browserName:'Chrome',tabs:[{tabId:5,url:'https://muse.ai/',composerReady:true}]});
  const p=packet(f.job),before=f.calls.length;
  assert.equal((await send('audit?instanceId=audit-fixture',{tabId:5,packet:p},'0'.repeat(64))).status,401);
@@ -135,7 +135,7 @@ test('authenticated telemetry endpoint validates target binding and never dispat
  assert.equal((await send('audit?instanceId=audit-fixture',{tabId:5,packet:{...p,auditId:uuid()}})).value.persisted,false);
  assert.equal((await send('audit?instanceId=audit-fixture',{tabId:5,packet:p})).value.persisted,true);assert.equal(f.calls.length,before);assert.equal(f.content.clicks,1);
 });
-test('audit capability and bundle retain execution/receipt/manual contracts and Chrome permissions',()=>{const manifest=require('../extensions/meta-muse-bridge/manifest.json');assert.equal(manifest.version,'0.3.17');assert.deepEqual(manifest.permissions,['storage','alarms']);assert.deepEqual(manifest.host_permissions,['https://muse.ai/*','http://127.0.0.1/*']);assert(manifest.content_scripts[0].js.includes('execution-audit.js'));for(const name of ['content-script.js','service-worker.js']){const s=fs.readFileSync('extensions/meta-muse-bridge/'+name,'utf8');assert(s.includes('contract3-receipt2-manual1-audit1'));}const c=contentFixture({storage:memoryStorage()});assert.equal(c.handshake().executionAuditVersion,1);assert.equal(c.handshake().contractVersion,3);assert.equal(c.handshake().manualRecoveryVersion,1);});
+test('audit capability and bundle retain execution/receipt/manual contracts and Chrome permissions',()=>{const manifest=require('../extensions/meta-muse-bridge/manifest.json');assert.equal(manifest.version,'0.3.18');assert.deepEqual(manifest.permissions,['storage','alarms']);assert.deepEqual(manifest.host_permissions,['https://muse.ai/*','http://127.0.0.1/*']);assert(manifest.content_scripts[0].js.includes('execution-audit.js'));for(const name of ['content-script.js','service-worker.js']){const s=fs.readFileSync('extensions/meta-muse-bridge/'+name,'utf8');assert(s.includes('contract3-receipt2-manual1-audit2'));}const c=contentFixture({storage:memoryStorage()});assert.equal(c.handshake().executionAuditVersion,2);assert.equal(c.handshake().contractVersion,3);assert.equal(c.handshake().manualRecoveryVersion,1);});
 test('hung and rejected telemetry observers have a bounded wait and mark a gap',async()=>{let gaps=0;await W.settle(new Promise(()=>{}),()=>gaps++,5);await W.settle(Promise.reject(Error('storage')),()=>gaps++,5);assert.equal(gaps,2);});
 test('pending worker witness leaves totals unknown while submit and click complete',async t=>{
  const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());
@@ -147,11 +147,11 @@ test('pending worker witness leaves totals unknown while submit and click comple
  await f.drain();const report=f.service.executionAuditReport(j.id);assert.equal(report.coverage.state,'partial');assert.equal(report.counters['submit.committed'].total,null);
  assert.equal(f.calls.filter(c=>c==='submitGeneration').length,1);
 });
-test('concurrent binding cannot reset a source sequence or lose an occurrence',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'worker'}),j=job(),binding={jobId:j.id,auditId:j.executionAudit.auditId};await Promise.all([w.bind(binding),w.bind(binding)]);await w.observe(j.id,'submit.committed');await w.bind(binding);await w.observe(j.id,'submit.committed');const p=Object.values(storage.data)[0];assert.deepEqual(p.events.map(e=>e.sourceSequence),[1,2]);});
+test('concurrent binding cannot reset a source sequence or lose an occurrence',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'worker'}),j=job(),binding={version:2,jobId:j.id,auditId:j.executionAudit.auditId};await Promise.all([w.bind(binding),w.bind(binding)]);await w.observe(j.id,'submit.committed');await w.bind(binding);await w.observe(j.id,'submit.committed');const p=Object.values(storage.data)[0];assert.deepEqual(p.events.map(e=>e.sourceSequence),[1,2]);});
 test('older identical witness delivery after a newer checkpoint is a harmless replay',t=>{const {audit,job:j}=fixture(t),p=packet(j);p.events=[occurrence('content',p.sourceEpoch,1,'submit.invocation_observed',{outcome:'returned'})];p.watermark=1;assert(audit.ingest(j,p));const old=json(p);p.events=[occurrence('content',p.sourceEpoch,2,'manual.session_opened',{sessionAlias:uuid()})];p.watermark=2;assert(audit.ingest(j,p));assert(audit.ingest(j,old));assert(!audit.report(j).coverage.reasons.includes('sequence_gap'));assert.equal(count(audit,j,'submit.invocation_observed'),1);});
 test('DEV runner rejects production and is excluded from the packaged app',async()=>{const {run}=require('../dev/run-execution-audit'),previous=process.env.NODE_ENV;try{process.env.NODE_ENV='production';await assert.rejects(run(),/unavailable in production/);}finally{if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}const pkg=require('../package.json');assert(!pkg.build.files.some(f=>f.startsWith('dev/') || f.startsWith('tests/') || f==='**/*'));assert(!fs.readFileSync('main.js','utf8').includes('run-execution-audit'));});
-test('bounded alias exhaustion explicitly degrades coverage rather than silently losing correlation',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});for(let i=0;i<161;i++)w.alias(j.id,'private-capability-'+i);await w.flush();const p=Object.values(storage.data)[0];assert(p.gap);assert(!JSON.stringify(p).includes('private-capability'));});
-test('in-flight closure ACK cannot erase newer gap metadata',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({jobId:j.id,auditId:j.executionAudit.auditId});await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));await w.drain(async p=>{w.gap(j.id);return {persisted:audit.ingest(j,p),close:true};});await w.flush();assert.equal(Object.keys(storage.data).length,1);assert(Object.values(storage.data)[0].gap);await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert(audit.report(j).coverage.reasons.includes('sequence_gap'));assert.equal(Object.keys(storage.data).length,0);});
+test('bounded alias exhaustion explicitly degrades coverage rather than silently losing correlation',async()=>{const storage=memoryStorage(),w=W.create({storage,source:'content'}),j=job();await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});for(let i=0;i<161;i++)w.alias(j.id,'private-capability-'+i);await w.flush();const p=Object.values(storage.data)[0];assert(p.gap);assert(!JSON.stringify(p).includes('private-capability'));});
+test('in-flight closure ACK cannot erase newer gap metadata',async t=>{const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source:'content'});await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));await w.drain(async p=>{w.gap(j.id);return {persisted:audit.ingest(j,p),close:true};});await w.flush();assert.equal(Object.keys(storage.data).length,1);assert(Object.values(storage.data)[0].gap);await w.drain(async p=>({persisted:audit.ingest(j,p),close:true}));assert(audit.report(j).coverage.reasons.includes('sequence_gap'));assert.equal(Object.keys(storage.data).length,0);});
 test('audit setup occurs once per job and never waits again for acquisition chunks',async t=>{const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());let binds=0;const send=f.wc.chrome.tabs.sendMessage;f.wc.chrome.tabs.sendMessage=async(id,m)=>{if(m.type==='viral-ai:muse-audit-bind')binds++;return send(id,m);};const j=await f.admit();f.job=j;await complete(f);assert.equal(binds,1);assert.equal(f.content.clicks,1);});
 test('native submit request event follows actual adapter dispatch invocation',async t=>{const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());const record=f.service.executionJournal.record.bind(f.service.executionJournal);let observed=false;f.service.executionJournal.record=(j,type,...rest)=>{if(type==='submit.requested'){assert(f.calls.includes('submitGeneration'));observed=true;}return record(j,type,...rest);};await f.admit();assert(observed);});
 test('failed authoritative acceptance save emits no acceptance proof despite a real click',async t=>{const f=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>f.close());const rename=fs.renameSync;try{fs.renameSync=(from,to)=>{if(String(to).endsWith('muse-operation.json') && JSON.parse(fs.readFileSync(from)).receipt?.userStableIdHash)throw Error('DEV acceptance persistence');return rename(from,to);};const j=await f.admit(),r=f.service.executionAuditReport(j.id);assert.equal(j.status,'interrupted');assert.equal(f.content.clicks,1);assert.equal(r.counters['submit.acceptance_proven'].recorded,0);assert.equal(r.counters['ownership.completed'].recorded,0);}finally{fs.renameSync=rename;}});
@@ -164,11 +164,11 @@ for(const stage of ['worker bind','route read','route write','content bind','dra
  const hold=()=>{entered.resolve();return gate.promise;};
  // No audit watchdog can release a regression that accidentally awaits setup.
  f.wc.MuseExecutionAudit.settle=p=>Promise.resolve(p).catch(()=>{});
- const command={id:uuid(),type:'openMuse',payload:{tabId:5},audit:{jobId:uuid(),auditId:uuid()}};
+ const command={id:uuid(),type:'openMuse',payload:{tabId:5},audit:{version:2,jobId:uuid(),auditId:uuid()}};
  f.wc.testCommand=command;f.wc.results=[];f.wc.started=[];
  if(stage==='worker bind')f.workerAudit.bind=hold;
  if(stage==='route read'){const get=f.storage.get;let reads=0;f.storage.get=k=>k===null && ++reads===2?hold():get(k);}
- if(stage==='route write'){const set=f.storage.set;f.storage.set=v=>Object.keys(v).some(k=>k.startsWith('execution-audit-v1:route:'))?hold():set(v);}
+ if(stage==='route write'){const set=f.storage.set;f.storage.set=v=>Object.keys(v).some(k=>k.startsWith('execution-audit-v2:route:'))?hold():set(v);}
  if(stage==='content bind')f.wc.chrome.tabs.sendMessage=hold;
  // poll also initiates a separate drain; hold both without serializing execution.
  if(stage==='drain')f.workerAudit.drain=hold;
@@ -189,7 +189,7 @@ for(const source of ['worker','content'])test(source+' delayed binding flushes a
  storage.get=async k=>{reads++;await gate.promise;return get(k);};
  const w=W.create({storage,source}),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
  // Content may receive the invocation before even the bind message arrives.
- w.observe(j.id,type,detail);const binding=w.bind({jobId:j.id,auditId:j.executionAudit.auditId});
+ w.observe(j.id,type,detail);const binding=w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId});
  w.observe(j.id,type,detail);
  assert.equal(reads,1);await turn();assert.deepEqual(storage.data,{});assert.equal(gate.settled,false);
  assert.equal(audit.report(j).counters[type].total,null);
@@ -201,7 +201,7 @@ for(const source of ['worker','content'])test(source+' delayed binding flushes a
 for(const source of ['worker','content'])test(source+' queued witness waits only inside telemetry for initial checkpoint storage',async()=>{
  const storage=memoryStorage(),set=storage.set,gate=deferred(),entered=deferred(),jobId=uuid();
  storage.set=async v=>{entered.resolve();await gate.promise;return set(v);};
- const w=W.create({storage,source}),binding=w.bind({jobId,auditId:uuid()});await entered.promise;
+ const w=W.create({storage,source}),binding=w.bind({version:2,jobId,auditId:uuid()});await entered.promise;
  w.observe(jobId,source==='worker'?'submit.committed':'submit.invocation_observed',source==='worker'?{}:{outcome:'returned'});
  await turn();assert.deepEqual(storage.data,{});gate.resolve();assert(await binding);await w.flush();assert.equal(Object.values(storage.data)[0].events.length,1);
 });
@@ -209,14 +209,14 @@ for(const source of ['worker','content'])test(source+' queued witness waits only
 for(const source of ['worker','content'])test(source+' pre-bind overflow preserves the bounded events and reports a gap',async()=>{
  const storage=memoryStorage(),w=W.create({storage,source}),jobId=uuid(),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
  for(let i=0;i<W.MAX_RECORDS+1;i++)w.observe(jobId,type,detail);
- assert(await w.bind({jobId,auditId:uuid()}));await w.flush();const p=Object.values(storage.data)[0];assert.equal(p.events.length,W.MAX_RECORDS);assert(p.gap);
+ assert(await w.bind({version:2,jobId,auditId:uuid()}));await w.flush();const p=Object.values(storage.data)[0];assert.equal(p.events.length,W.MAX_RECORDS);assert(p.gap);
 });
 
 for(const source of ['worker','content'])test(source+' pre-bind overflow and failed bind retain truthful partial coverage',async t=>{
  const {audit,job:j}=fixture(t),storage=memoryStorage(),w=W.create({storage,source}),type=source==='worker'?'submit.committed':'submit.invocation_observed',detail=source==='worker'?{}:{outcome:'returned'};
  for(let i=0;i<W.MAX_RECORDS+1;i++)w.observe(j.id,type,detail);
- const get=storage.get;storage.get=async()=>{throw Error('offline');};assert.equal(await w.bind({jobId:j.id,auditId:j.executionAudit.auditId}),false);
- storage.get=get;assert.equal(await w.bind({jobId:j.id,auditId:j.executionAudit.auditId}),true);await w.flush();
+ const get=storage.get;storage.get=async()=>{throw Error('offline');};assert.equal(await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId}),false);
+ storage.get=get;assert.equal(await w.bind({version:2,jobId:j.id,auditId:j.executionAudit.auditId}),true);await w.flush();
  assert(Object.values(storage.data)[0].gap);assert.equal(Object.values(storage.data)[0].events.length,0,'failed bind discards telemetry, never replays execution');
  await w.drain(async p=>({persisted:audit.ingest(j,p)}));const r=audit.report(j);assert.equal(r.coverage.state,'partial');assert.equal(r.counters[type].total,null);assert(r.coverage.reasons.includes('sequence_gap'));
 });
@@ -224,7 +224,7 @@ for(const source of ['worker','content'])test(source+' pre-bind overflow and fai
 test('pre-bind capacity is bounded across jobs and overflow damages later coverage',async()=>{
  const storage=memoryStorage(),w=W.create({storage,source:'worker'}),ids=Array.from({length:W.MAX_STREAMS+1},uuid);
  for(const id of ids)w.observe(id,'submit.committed');
- const last=ids.at(-1);assert(await w.bind({jobId:last,auditId:uuid()}));await w.flush();
+ const last=ids.at(-1);assert(await w.bind({version:2,jobId:last,auditId:uuid()}));await w.flush();
  assert(Object.values(storage.data)[0].gap);assert.equal(Object.values(storage.data)[0].events.length,0);
 });
 
@@ -257,7 +257,7 @@ test('restart followed by empty rebinding cannot turn lost pre-bind witnesses in
  // A fresh worker/document keeps only authoritative storage; neither memory queue survived.
  const next=await automaticFixture({root:root(t),bytes,verifyVideo:async()=>media});t.after(()=>next.close());
  const intentKey='generation-intent:'+j.id;next.storage.data[intentKey]=json(f.storage.data[intentKey]);
- next.wc.command={id:uuid(),type:'inspectGeneration',payload:{tabId:5,operationId:j.id},audit:{jobId:j.id,auditId:j.executionAudit.auditId}};
+ next.wc.command={id:uuid(),type:'inspectGeneration',payload:{tabId:5,operationId:j.id},audit:{version:2,jobId:j.id,auditId:j.executionAudit.auditId}};
  await vm.runInContext('prepareExecutionAudit(command)',next.wc);await next.workerAudit.flush();
  const p=Object.values(next.storage.data).find(v=>v.source==='worker');assert(p.gap);assert.equal(p.events.length,0);
  assert(f.service.ingestExecutionWitness(json(p),{instanceId:'audit-fixture',tabId:5}).persisted);
@@ -304,7 +304,7 @@ test('content click and returned/threw_unknown witnesses survive unresolved cont
  for(const clickThrows of [false,true]){
    const storage=memoryStorage(),gate=deferred(),get=storage.get;
    storage.get=async k=>{await gate.promise;return get(k);};
-   const f=contentFixture({storage,clickThrows}),jobId=uuid(),binding=f.audit.bind({jobId,auditId:uuid()});
+   const f=contentFixture({storage,clickThrows}),jobId=uuid(),binding=f.audit.bind({version:2,jobId,auditId:uuid()});
    const result=await f.send('submitGeneration',{operationId:jobId,sceneId:'scene',prompt:'Synthetic prompt'});
    assert.equal(gate.settled,false);assert.equal(f.clicks,1);assert.equal(result.state,clickThrows?'interrupted':'running');assert.deepEqual(storage.data,{});
    gate.resolve();assert(await binding);await f.audit.flush();

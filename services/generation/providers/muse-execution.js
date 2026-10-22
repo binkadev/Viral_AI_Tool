@@ -5,7 +5,7 @@ const {identifier}=require('../generation-request');
 const {validResult,validReceipt,validAnchoredOwnershipDiagnostic}=require('../bridge/execution-contract');
 const receiptV2=require('../../../extensions/meta-muse-bridge/receipt-v2');
 const ownershipDiagnosis=require('../bridge/ownership-diagnosis');
-const {safeObserve,digest: auditDigest}=require('../execution-audit');
+const {safeObserve,safeSealSubmission,digest: auditDigest}=require('../execution-audit');
 function createMuseExecution(bridge,verifyVideo) {
   const locks=new Map(),cancelled=new Set(),transfers=new Map();
   const manual=require('./muse-manual-recovery').createManualRecovery({bridge,verifyVideo,busy:id=>locks.size>0 || transfers.size>0});
@@ -173,7 +173,10 @@ function createMuseExecution(bridge,verifyVideo) {
         if(prepared.state!=='prepared')throw failure('RECOVERY_REQUIRED');
       }
       if(cancelled.has(c.jobId))throw failure('RECOVERY_REQUIRED');
-      const result=await command('submitGeneration',c,record,{prompt:c.request.prompt,...(v2?{receipt:record.receipt}:{})});
+      const pending=command('submitGeneration',c,record,{prompt:c.request.prompt,...(v2?{receipt:record.receipt}:{})});
+      // Segment completion is observed on either outcome. Never wait for a seal.
+      pending.then(()=>safeSealSubmission(c),()=>safeSealSubmission(c));
+      const result=await pending;
       if(!['running','result'].includes(result.state))throw failure('RECOVERY_REQUIRED');
       return {status:'running'};
     }),

@@ -30,9 +30,9 @@ async function run() {
       for(const type of TYPES){assert.equal(report.counters[type].recorded,zero.includes(type)?0:1,type);assert.equal(report.counters[type].total,mode==='automatic'?(zero.includes(type)?0:1):null,type);}
       const stored=project.persisted();assert.equal(stored.media.assets.length,1);assert.equal(stored.workflow.jobs.length,1);assert.equal(stored.workflow.generationOutputs.length,1);assert.equal(stored.source.path,output.path);
       assert.equal(fs.readdirSync(path.dirname(output.path)).filter(n=>n.endsWith('.mp4')).length,1);
-      results.push({mode,coverage:report.coverage.state,counters:report.counters,canonicalRegistryCorroboration:'PASS',nativeVideo:{duration:media.duration,width:media.width,height:media.height,size:fs.statSync(output.path).size}});
+      results.push({mode,coverage:report.coverage.state,scopes:report.scopes,counters:report.counters,canonicalRegistryCorroboration:'PASS',nativeVideo:{duration:media.duration,width:media.width,height:media.height,size:fs.statSync(output.path).size}});
     }
-    process.stdout.write(JSON.stringify({executionAuditVersion:1,liveMuseRequests:0,results},null,2)+'\n');
+    process.stdout.write(JSON.stringify({executionAuditVersion:2,liveMuseRequests:0,results},null,2)+'\n');
     return results;
   } finally {for(const f of fixtures)f.close();fs.rmSync(root,{recursive:true,force:true});}
 }
