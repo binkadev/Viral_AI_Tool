@@ -265,6 +265,9 @@
     if (!current.scenePlan && currentSnapshot.scenePlan) {
       current.scenePlan = model.clone(currentSnapshot.scenePlan);
     }
+    if (!current.mediaAssembly && currentSnapshot.mediaAssembly) {
+      current.mediaAssembly = model.clone(currentSnapshot.mediaAssembly);
+    }
     if (!current.media && currentSnapshot.media) {
       current.media = model.clone(currentSnapshot.media, { schemaVersion: 1, assets: [], selectedAssetId: null });
     }
@@ -297,6 +300,7 @@
       return null;
     }
     currentSnapshot = next;
+    if (next.mediaAssembly) current.mediaAssembly = model.clone(next.mediaAssembly);
     projectLegacyProjection(next);
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
       detail: { reason, schemaVersion: next.schemaVersion, projectId: next.projectId }
@@ -338,6 +342,7 @@
     currentSnapshot = next;
     projectLegacyProjection(next);
     current.scenePlan = model.clone(plan);
+    if (next.mediaAssembly) current.mediaAssembly = model.clone(next.mediaAssembly);
     if (!current.media) current.media = model.clone(next.media);
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
       detail: { reason: "ensure-project", schemaVersion: next.schemaVersion, projectId: next.projectId }
@@ -382,6 +387,7 @@
       const jobs = current.jobs || [];
       current.jobs = next.workflow.jobs.map(job => jobs.find(existing => existing.id === job.id) || model.clone(job));
       current.media = model.clone(next.media);
+      if (next.mediaAssembly) current.mediaAssembly = model.clone(next.mediaAssembly);
       current.generationOutputs = model.clone(next.workflow.generationOutputs);
       projectLegacyProjection(next);
       presentProject("generated-media", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
@@ -411,6 +417,55 @@
     return updateProjectMedia(job.projectId, snapshot => model.attachGeneratedOutput(snapshot, job, output, meta), job.id);
   }
 
+  // Scene materials share the registry's synchronous commit boundary. Selection
+  // changes only assembly; it never selects a library asset or rebinds a player.
+  function mutateSceneMaterial(operation, sceneId, assetId, options = {}) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const current = appState(), projectId = registry.activeProjectId;
+    if (!current || !projectId || currentSnapshot?.projectId !== projectId ||
+        current.projectId && current.projectId !== projectId) throw Error("PROJECT_STATE_UNAVAILABLE");
+    if (options.projectId && options.projectId !== projectId) throw Error("PROJECT_MISMATCH");
+    const next = model.migrateSnapshot({ ...currentSnapshot,
+      scenePlan: current.scenePlan ?? currentSnapshot.scenePlan, media: current.media ?? currentSnapshot.media,
+      mediaAssembly: current.mediaAssembly ?? currentSnapshot.mediaAssembly }).snapshot;
+    if (!next || next.projectId !== projectId || !model.mediaAssemblyModel) throw Error("PROJECT_STATE_UNAVAILABLE");
+    const scenes = next.scenePlan.scenes, assets = next.media.assets;
+    if (!scenes.some(scene => scene.id === sceneId)) throw Error("PROJECT_SCENE_NOT_FOUND");
+    if (operation !== "clearSelection" && !assets.some(asset => asset.id === assetId && ["video", "image"].includes(asset.kind))) throw Error("PROJECT_ASSET_NOT_FOUND");
+    if (operation === "selectCandidate" && !model.mediaAssemblyModel.sceneSlot(next.mediaAssembly, sceneId)?.candidateAssetIds.includes(assetId)) throw Error("PROJECT_MATERIAL_NOT_FOUND");
+    const descriptor = Object.getOwnPropertyDescriptor(current, "mediaAssembly");
+    if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    next.mediaAssembly = model.mediaAssemblyModel[operation](next.mediaAssembly, sceneId,
+      ...(operation === "clearSelection" ? [] : [assetId]),
+      { scenes, assets, now: Date.now(), selectionSource: "manual", selectIfEmpty: options.selectIfEmpty === true });
+    // Pure no-ops (including capacity and duplicate adds) need no write or event.
+    if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return model.clone(currentSnapshot);
+    next.updatedAt = new Date().toISOString();
+    try { saveSnapshot(next); }
+    catch (error) { dispatchSaveFailure("scene-material", error); throw error; }
+    currentSnapshot = next;
+    current.mediaAssembly = model.clone(next.mediaAssembly);
+    projectLegacyProjection(next);
+    presentProject("scene-material", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+      detail: { reason: "scene-material", projectId, sceneId }
+    })));
+    return model.clone(next);
+  }
+
+  function addSceneMaterialCandidate(sceneId, assetId, options = {}) {
+    return mutateSceneMaterial("addCandidate", sceneId, assetId, options);
+  }
+  function selectSceneMaterial(sceneId, assetId, options = {}) {
+    return mutateSceneMaterial("selectCandidate", sceneId, assetId, options);
+  }
+  function removeSceneMaterialCandidate(sceneId, assetId, options = {}) {
+    return mutateSceneMaterial("removeCandidate", sceneId, assetId, options);
+  }
+  function clearSceneMaterialSelection(sceneId, options = {}) {
+    return mutateSceneMaterial("clearSelection", sceneId, null, options);
+  }
+
   function assertSwitchSafe() {
     const current = appState();
     const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
@@ -428,7 +483,7 @@
     const projected = model.toLegacyState(snapshot, {});
     const runtime = { projectId: snapshot.projectId, projectName: snapshot.projectName,
       page: snapshot.source ? "ai-video" : "ai-create" };
-    for (const key of ["output", "renderOptions", "jobs", "media", "scenePlan", "generationOutputs"]) runtime[key] = model.clone(projected[key]);
+    for (const key of ["output", "renderOptions", "jobs", "media", "scenePlan", "mediaAssembly", "generationOutputs"]) runtime[key] = model.clone(projected[key]);
     // Prepare all project-owned state before the registry commit. Global provider
     // catalogs/configuration survive, while old jobs/results/assignments do not.
     for (const key of ["speech", "translation", "voice"]) {
@@ -669,6 +724,10 @@
     registerGenerationJob,
     generationOutputJobs,
     attachGeneratedOutput,
+    addSceneMaterialCandidate,
+    selectSceneMaterial,
+    removeSceneMaterialCandidate,
+    clearSceneMaterialSelection,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
     openProject,

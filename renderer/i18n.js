@@ -1,6 +1,14 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      sceneMaterials: {
+        title: "Tư liệu cảnh", scene: "Cảnh {number}", candidateCount: "{count} phương án", use: "Dùng", inUse: "Đang dùng",
+        add: "Thêm từ dự án", projectMedia: "Tư liệu dự án", chooseAsset: "Chọn tư liệu", selectScene: "Chọn một cảnh để xem tư liệu.",
+        noSelection: "Chưa chọn tư liệu", empty: "Chưa có phương án", remove: "Bỏ khỏi cảnh", clear: "Bỏ lựa chọn",
+        capacity: "Cảnh đã có đủ 64 phương án. Bỏ một phương án trước khi thêm tư liệu khác.",
+        saveFailed: "Chưa lưu được tư liệu cảnh. Lựa chọn chưa thay đổi. Hãy kiểm tra cảnh và tư liệu rồi thử lại.",
+        kind: { video: "Video", image: "Ảnh" }, origin: { local: "Đã nhập", stock: "Kho tư liệu", generated: "Đã tạo", other: "Tư liệu dự án" }
+      },
       manualRecovery: {"status": "Tạo video cần xác nhận", "explanation": "Ứng dụng chưa xác nhận được video nào thuộc yêu cầu này. Bạn có thể xem và chọn video muốn dùng.", "review": "Xem và chọn video", "view": "Xem trong Muse", "confirm": "Dùng video này cho cảnh này", "dismiss": "Không dùng video nào", "open": "Mở Muse", "changed": "Video đã thay đổi hoặc không còn khả dụng. Hãy xem và chọn lại.", "completed": "Đã xong · Bạn đã xác nhận", "candidate": "Video {number}", "available": "Có thể dùng", "unavailable": "Không còn khả dụng", "empty": "Chưa có video có thể dùng. Hãy kiểm tra Muse rồi xem và chọn lại.", "tooMany": "Có quá nhiều video để chọn an toàn. Hãy thu gọn các video đang hiển thị trong Muse rồi thử lại.", "expires": "Lựa chọn có hiệu lực trong 2 phút. Hãy xem video trong Muse trước khi xác nhận.", "error": "Chưa lưu hoặc lấy được video đã chọn. Cảnh này chưa có video mới. Hãy kiểm tra kết nối và dung lượng trống rồi chọn lại.", "details": "{width} × {height} · {duration} giây"},
       devHandoff: { running: "DEV · Đang kiểm tra video trong Studio", passed: "DEV · Studio đã mở video xác minh. Đang dùng dữ liệu thử riêng.", negativePassed: "DEV · Đã chặn gắn video không hợp lệ; không gửi yêu cầu tạo video.", failed: "DEV · Kiểm tra chưa đạt:", projectA: "DEV · Dự án video A", projectB: "DEV · Dự án trống B" },
       videoProviders: {
@@ -1440,6 +1448,14 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      sceneMaterials: {
+        title: "Scene materials", scene: "Scene {number}", candidateCount: "{count} candidates", use: "Use", inUse: "In use",
+        add: "Add from project", projectMedia: "Project media", chooseAsset: "Choose material", selectScene: "Select a scene to view its materials.",
+        noSelection: "No material selected", empty: "No candidates yet", remove: "Remove from scene", clear: "Clear selection",
+        capacity: "This scene has 64 candidates. Remove a candidate before adding another material.",
+        saveFailed: "Scene materials could not be saved. Your selection has not changed. Check the scene and material, then try again.",
+        kind: { video: "Video", image: "Image" }, origin: { local: "Imported", stock: "Stock", generated: "Generated", other: "Project media" }
+      },
       manualRecovery: {"status": "Video needs confirmation", "explanation": "The app could not confirm which video belongs to this request. Review and choose the video you want to use.", "review": "Review candidates", "view": "View in Muse", "confirm": "Use this video for this scene", "dismiss": "Use none", "open": "Open Muse", "changed": "This video changed or is unavailable. Review and select it again.", "completed": "Done ? Confirmed by you", "candidate": "Candidate {number}", "available": "Available", "unavailable": "Unavailable", "empty": "No available videos. Check Muse, then review and select again.", "tooMany": "Too many candidates to review safely. Reduce the videos currently displayed in Muse and try again.", "expires": "Selection expires in 2 minutes. View the video in Muse before confirming.", "error": "The selected video could not be saved or acquired. This scene has no new video. Check the connection and free space, then select again.", "details": "{width} ? {height} ? {duration} seconds"},
       devHandoff: { running: "DEV · Checking video in Studio", passed: "DEV · Studio opened the verified video. Using isolated test data.", negativePassed: "DEV · Invalid attachment blocked; no generation request sent.", failed: "DEV · Validation failed:", projectA: "DEV · Video project A", projectB: "DEV · Empty project B" },
       videoProviders: {

@@ -1,6 +1,6 @@
 "use strict";
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
-const model=require('../renderer/core-project-scene-plan'),sceneModel=require('../renderer/core-scene-plan-model');
+const model=require('../renderer/core-project-media-assembly'),sceneModel=require('../renderer/core-scene-plan-model');
 const KEY='viral-ai-core-project-registry-v1',BRIEF='viral-ai-generation-brief';
 const json=value=>JSON.parse(JSON.stringify(value));
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -148,7 +148,7 @@ test('valid registry remains authoritative over a future compatibility mirror an
  assert.equal(restarted.api.activeProjectId(),b.projectId);assert.equal(restarted.api.snapshot().projectId,b.projectId);
  assert.equal(restarted.api.listProjects().length,2);assert.equal(restarted.data.get(KEY),registryBefore);
  assert.equal(JSON.parse(restarted.data.get(model.SNAPSHOT_KEY)).projectId,b.projectId);
- assert.equal(JSON.parse(restarted.data.get(model.SNAPSHOT_KEY)).schemaVersion,4);
+ assert.equal(JSON.parse(restarted.data.get(model.SNAPSHOT_KEY)).schemaVersion,5);
  assert.equal(restarted.api.openProject(a.projectId).projectId,a.projectId);
  assert.equal(restarted.api.openProject(b.projectId).projectId,b.projectId);
  assert.equal(restarted.submissions.length,0);
