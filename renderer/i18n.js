@@ -470,6 +470,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
 
 
           draftProjectName: "Dự án AI mới",
+          defaultProjectNameBase: "Dự án AI",
           newAiProject: "Dự án AI mới",
           openProject: "Mở dự án",
           importedProject: "Dự án từ video",
@@ -2024,6 +2025,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         examples: [{"title":"Product spotlight","detail":"Studio lighting · Close-up","prompt":"Close-up of a perfume bottle on a stone plinth, soft studio light from the left, muted purple background, camera slowly orbiting the product."},{"title":"Somewhere far away","detail":"Nature · Cinematic","prompt":"Layers of blue mountains in morning mist, sun rising above the horizon, camera slowly moving forward through the valley, cinematic style."},{"title":"City after hours","detail":"Street life · Motion","prompt":"A city street at night after the rain, blue and purple lights reflecting on the road, camera moving close to the ground, cinematic atmosphere."}],
 
           draftProjectName: "New AI project",
+          defaultProjectNameBase: "AI Project",
           newAiProject: "New AI Project",
           openProject: "Open project",
           importedProject: "Imported project",
@@ -3225,6 +3227,20 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     return value.replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? ("{" + name + "}"));
   };
 
+  messages.vi.projectIdentity = {
+    rename:"Đổi tên", projectName:"Tên dự án", invalid:"Tên dự án đang trống. Hãy nhập tên rồi lưu lại.",
+    missing:"Không còn tìm thấy dự án này. Hãy kiểm tra danh sách và chọn lại dự án.",
+    busy:"Dự án đang chuyển trạng thái. Tên cũ vẫn được giữ; hãy chờ một chút rồi lưu lại.",
+    protected:"Chưa thể lưu tên dự án an toàn. Tên cũ vẫn được giữ; hãy kiểm tra bộ nhớ rồi thử lại.",
+    failed:"Chưa lưu được tên dự án. Tên cũ vẫn được giữ; hãy thử lưu lại."
+  };
+  messages.en.projectIdentity = {
+    rename:"Rename", projectName:"Project name", invalid:"The project name is empty. Enter a name, then save again.",
+    missing:"This project could not be found. Check the list and select the project again.",
+    busy:"The project is changing state. Its previous name is preserved; wait a moment, then save again.",
+    protected:"The project name cannot be saved safely. Its previous name is preserved; check storage, then try again.",
+    failed:"The project name could not be saved. Its previous name is preserved; try saving again."
+  };
   return {
     messages,
     t(locale, key, vars) { return translate(locale, key, vars); },

@@ -38,7 +38,7 @@
     const attention = reasons.length > 0;
     const status = liveRender ? "rendering" : liveProduction?.state === "running" ? "preparing" : liveProduction?.state === "paused" ? "paused" :
       current && !failed && !renderError ? "ready" : attention ? "needs_attention" : materialSummary.review > 0 ? "review" : materialReady && renderPlan.ready ? "ready_to_render" : "draft";
-    return { projectId:id, name:snapshot.projectName, updatedAt:snapshot.updatedAt, active:id === activeProjectId, status,
+    return { projectId:id, name:snapshot.projectName, projectKind:snapshot.projectKind, updatedAt:snapshot.updatedAt, active:id === activeProjectId, status,
       materials:{ total:materialSummary.total, ready:materialSummary.ready, review:materialSummary.review, attention:materialSummary.attention,
         scenes:materialSummary.scenes.map(s => ({ sceneId:s.sceneId, status:s.status, reason:s.reason })) },
       reasons:[...new Set(reasons)], renderReady:renderPlan.ready, profile:{...renderPlan.profile},

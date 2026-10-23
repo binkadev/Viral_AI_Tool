@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
 
 const state = {
+  projectId: saved.projectId || null,
+  projectName: saved.projectName || "",
   locale: I18N.supported.includes(saved.locale) ? saved.locale : "vi",
   appearance: saved.appearance || "aurora-light",
   motion: saved.motion || "balanced",

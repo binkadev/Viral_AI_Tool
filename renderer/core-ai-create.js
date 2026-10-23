@@ -29,6 +29,16 @@
     return window.I18N.messages[locale()].aiCreate;
   }
 
+  function defaultProjectName() {
+    const now = new Date(), pad = n => String(n).padStart(2, "0");
+    return copy().defaultProjectNameBase + " · " + now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) +
+      " " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+  }
+
+  const rename = window.ViralProjectIdentity?.create({ owner:"ai", persistence:window.ViralCoreProjectPersistence,
+    locale, currentId:() => appState()?.page === "ai-create" ? projectIdentity().projectId : null,
+    changed:() => { renderWorkspace(); rename.restoreFocus(document); }, document, i18n:window.I18N });
+
   let generationReady = false;
   let museSession=false;
   let generationState = "checking";
@@ -132,7 +142,7 @@
     try {
       let snapshot;
       try {
-        snapshot = await window.ViralCoreProjectPersistence.ensureProject({ projectName: copy().draftProjectName });
+        snapshot = await window.ViralCoreProjectPersistence.ensureProject({ projectName: defaultProjectName() });
         if (!snapshot?.projectId || !snapshot?.scenePlan?.selectedSceneId) throw Error("PROJECT_NOT_PERSISTED");
       } catch {
         feedback = copy().projectSaveError;
@@ -244,7 +254,7 @@
     const projectType = item => item.projectKind === "ai" || (!item.projectKind && !item.hasSource) ? c.aiProject : c.importedProject;
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
       '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></div></header>' +
-      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '"><span>' + esc(format(c.activeProject, { projectName: activeProject.projectName })) + '</span><span>' + esc(projectType(activeProject)) + '</span></div>' : '') +
+      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '<span>' + esc(projectType(activeProject)) + '</span></div>' : '') +
       (activeProject ? window.ViralCoreProjectScenes?.surface?.() || '' : '') +
       '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
       '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
@@ -258,7 +268,7 @@
       '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
       '<section class="core-ai-examples" aria-labelledby="ai-examples-title"><div class="core-ai-section-heading"><h3 id="ai-examples-title">' + esc(c.examplesTitle) + '</h3><span>' + esc(c.examplesHint) + '</span></div><div class="core-ai-example-row">' + samples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '"><span class="core-ai-example-art art-' + i + '" aria-hidden="true"><i></i><b></b><em></em></span><span class="core-ai-example-copy"><strong>' + esc(sample.title) + '</strong><span>' + esc(sample.detail) + '</span></span><span class="core-ai-example-arrow" aria-hidden="true">↗</span></button>').join('') + '</div></section>' +
       '<section class="core-ai-recent"><div class="core-ai-section-heading"><h3>' + esc(c.recentTitle) + '</h3><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">↗</span></button></div>' +
-      (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong>' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +
+      (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong title="' + esc(item.projectName) + '">' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +
         (item.projectId === activeId ? '' : '<button class="button ghost" type="button" data-ai-open-project="' + esc(item.projectId) + '"' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.openProject) + '</button>') + '</div>').join('') : '<div class="core-ai-recent-empty"><span aria-hidden="true">↗</span><div><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div></div>') + '</section></div>';
   }
 
@@ -277,7 +287,7 @@
     try {
       const persistence = window.ViralCoreProjectPersistence;
       if (projectId) await persistence.openProject(projectId);
-      else await persistence.createProject({ kind: "ai", projectName: copy().draftProjectName });
+      else await persistence.createProject({ kind: "ai", projectName: defaultProjectName() });
       submissionKey = null;
       feedback = "";
     } catch (error) {
@@ -375,6 +385,7 @@
         updateGenerationControls();
       });
       window.addEventListener("viral-ai:core-state-changed", event => {
+        if (event?.detail?.reason === "project-rename") { renderWorkspace(); return; }
         if (event?.detail?.reason === "project-scene") { updateGenerationControls(); return; }
         refreshReadiness();
         renderWorkspace();

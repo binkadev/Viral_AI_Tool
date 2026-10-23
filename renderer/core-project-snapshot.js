@@ -356,6 +356,8 @@
     const workflow = migrated.workflow;
     return {
       ...clone(existing, {}),
+      projectId: migrated.projectId,
+      projectName: migrated.projectName,
       page: migrated.source ? "ai-video" : "ai-create",
       output: workflow.output,
       generationOutputs: clone(workflow.generationOutputs, []),

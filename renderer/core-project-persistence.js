@@ -301,6 +301,8 @@
       return null;
     }
     currentSnapshot = next;
+    if (current.projectId !== next.projectId) current.projectId = next.projectId;
+    if (current.projectName !== next.projectName) current.projectName = next.projectName;
     if (next.mediaAssembly) current.mediaAssembly = model.clone(next.mediaAssembly);
     projectLegacyProjection(next);
     window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
@@ -342,6 +344,8 @@
     }
     currentSnapshot = next;
     projectLegacyProjection(next);
+    if (current.projectId !== next.projectId) current.projectId = next.projectId;
+    if (current.projectName !== next.projectName) current.projectName = next.projectName;
     current.scenePlan = model.clone(plan);
     if (next.mediaAssembly) current.mediaAssembly = model.clone(next.mediaAssembly);
     if (!current.media) current.media = model.clone(next.media);
@@ -354,6 +358,47 @@
   function listProjects() {
     return registry.projects.map(p => ({ projectId: p.projectId, projectName: p.projectName,
       projectKind: p.projectKind, updatedAt: p.updatedAt, hasSource: !!p.source }));
+  }
+
+  // Display metadata only. Registry commits precede live state and presentation.
+  function renameProject(projectId, value) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const projectName = String(value).trim();
+    if (!projectName) throw Error("PROJECT_NAME_INVALID");
+    let stored = registry.projects.find(p => p.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    const active = registry.activeProjectId === projectId, current = appState();
+    if (active && (!current || current.projectId !== projectId || currentSnapshot?.projectId !== projectId)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    if (projectName === stored.projectName) return model.clone(stored);
+    if (active) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, "projectName");
+      if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+      if (!flush("before-project-rename")) throw Error("PROJECT_SAVE_FAILED");
+      if (projectTransition || registry.activeProjectId !== projectId || current.projectId !== projectId) throw Error("PROJECT_TRANSITION_PENDING");
+      const liveDescriptor = Object.getOwnPropertyDescriptor(current, "projectName");
+      if (liveDescriptor ? !("value" in liveDescriptor) || !liveDescriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    }
+    stored = registry.projects.find(p => p.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    const next = { ...stored, projectName, updatedAt: new Date().toISOString() };
+    projectTransition = true;
+    try {
+      try { writeRegistry({ ...registry, projects: registry.projects.map(p => p.projectId === projectId ? next : p) }); }
+      catch (error) { dispatchSaveFailure("project-rename", error); throw error; }
+      if (active) {
+        currentSnapshot = next;
+        current.projectName = projectName;
+        projectLegacyProjection(next);
+      }
+      presentProject("project-rename", () => window.dispatchEvent(new CustomEvent("viral-ai:project-snapshot-saved", {
+        detail: { reason: "project-rename", projectId, schemaVersion: next.schemaVersion }
+      })));
+      if (active) presentProject("project-rename", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
+        detail: { reason: "project-rename", projectId }
+      })));
+      return model.clone(next);
+    } finally { projectTransition = false; }
   }
 
   // Registry writes target an explicit project and never change selection.
@@ -1033,6 +1078,7 @@
     projectAudioSnapshot,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
+    renameProject,
     openProject,
     storageError() { return registryError; },
     schedule,

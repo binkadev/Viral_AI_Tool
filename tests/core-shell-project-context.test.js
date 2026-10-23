@@ -148,7 +148,7 @@ function assertWorkspace(h, name) {
       const imported = locale === "vi" ? "Dự án từ video" : "Imported project";
       const activeType = id === "a" ? ai : imported;
       const name = id === "a" ? "AI campaign &lt;A&gt;" : "Named imported campaign";
-      assert(html.includes((locale === "vi" ? "Dự án đang mở: " : "Active project: ") + name));
+      assert(html.includes('title="' + name + '"') && html.includes('>' + name + '</strong>'), "The active identity strip exposes the escaped canonical name and full title");
       assert(html.includes('data-ai-active-project="' + id + '"'));
       assert(html.includes('<span>' + activeType + '</span></div><section class="core-ai-composer"'));
       assert(html.includes('<span>' + activeType + (locale === "vi" ? " · Đang mở" : " · Open") + '</span>'));

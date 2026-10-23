@@ -174,7 +174,8 @@ test("the real Create AI submit handler enrolls the admitted job and ordinary St
     const canGenerate=()=>!submitting, currentBrief=()=>'fixture prompt', updateGenerationControls=()=>{};
     const copy=()=>window.I18N.messages.en.aiCreate, selectedGoal=()=>'balanced', selectedOption=(_n,_v,f)=>f;
     const projectIdentity=()=>({projectId:window.ViralCoreProjectPersistence.activeProjectId()});
-  ` + ai.slice(ai.indexOf("  async function generate()"), ai.indexOf("  function format(")), h.c);
+  ` + ai.slice(ai.indexOf("  function defaultProjectName()"), ai.indexOf("\n  const rename =")) +
+    ai.slice(ai.indexOf("  async function generate()"), ai.indexOf("  function format(")), h.c);
   await h.c.generate(); await h.drain();
   assert.equal(submitted, 1); assert.equal(opened, 1);
   assert.equal(h.api.snapshot().workflow.generationOutputs[0].jobId, job.id);
