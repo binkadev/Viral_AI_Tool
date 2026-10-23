@@ -1,0 +1,170 @@
+/* UX-0: semantic aliases, not a replacement for the workstation's local styles.
+   All page polish excludes Studio. No asset, layout or production authority. */
+:root {
+  --viral-bg-0: var(--bg);
+  --viral-bg-1: var(--bg-soft);
+  --viral-bg: var(--viral-bg-0);
+  --viral-surface-1: var(--surface-solid);
+  --viral-surface-2: var(--surface-soft);
+  --viral-surface-3: var(--surface-strong);
+  --viral-surface: var(--viral-surface-1);
+  --viral-surface-raised: var(--viral-surface-2);
+  --viral-line-soft: var(--line);
+  --viral-line: var(--line-strong);
+  --viral-text: var(--text);
+  --viral-text-secondary: var(--text-soft);
+  --viral-muted: var(--viral-text-secondary);
+  --viral-accent: var(--accent);
+  --viral-accent-secondary: var(--accent-2);
+  --viral-accent-soft: color-mix(in srgb, var(--viral-accent) 12%, var(--viral-surface));
+  --viral-success: var(--success);
+  --viral-warning: var(--warning);
+  --viral-danger: var(--danger);
+  --viral-focus: color-mix(in srgb, var(--viral-accent) 78%, var(--viral-text));
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-feature: 16px;
+  --radius-modal: 18px;
+  --viral-depth-1: 0 1px 0 color-mix(in srgb, var(--viral-text) 3%, transparent);
+  --viral-depth-2: 0 6px 20px rgb(0 0 0 / 8%);
+  --viral-depth-3: 0 18px 48px rgb(0 0 0 / 18%);
+  --motion-instant: 80ms;
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --motion-hero: 600ms;
+  --ease-standard: cubic-bezier(.2, 0, .2, 1);
+  --ease-enter: cubic-bezier(.16, 1, .3, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(.2, .8, .2, 1);
+}
+html[data-theme="midnight"] {
+  --viral-bg-0: #090a0f;
+  --viral-bg-1: #0d0f17;
+  --viral-surface-1: #131620;
+  --viral-surface-2: #181b27;
+  --viral-surface-3: #202431;
+  --viral-line-soft: rgb(255 255 255 / 6%);
+  --viral-line: rgb(255 255 255 / 10%);
+  --viral-text: #f2f1f8;
+  --viral-text-secondary: #a6a8bb;
+  --viral-accent: #a394ef;
+  --viral-accent-secondary: #789fda;
+  --viral-success: #67bc9c;
+  --viral-warning: #d7b476;
+  --viral-danger: #dc8494;
+}
+/* Preserve the existing light palettes even if legacy editor theme variables
+   are still present on the root after leaving Studio. No editor token changes. */
+html[data-theme="aurora-light"] {
+  --viral-bg-0: #f4f7fc; --viral-bg-1: #eef4fb;
+  --viral-surface-1: #fff; --viral-surface-2: #f8faff; --viral-surface-3: #f0f4fb;
+  --viral-line-soft: rgb(70 79 112 / 11%); --viral-line: rgb(74 82 116 / 18%);
+  --viral-text: #1e2433; --viral-text-secondary: #667087;
+  --viral-accent: #7367f0; --viral-accent-secondary: #4fb7ff;
+}
+html[data-theme="pearl-light"] {
+  --viral-bg-0: #f5f6f8; --viral-bg-1: #eef0f4;
+  --viral-surface-1: #fff; --viral-surface-2: #fafafa; --viral-surface-3: #f0f1f4;
+  --viral-line-soft: rgb(48 53 68 / 10%); --viral-line: rgb(48 53 68 / 17%);
+  --viral-text: #20242d; --viral-text-secondary: #666d79;
+  --viral-accent: #667085; --viral-accent-secondary: #7f8aa6;
+}
+html[data-commercial-page]:not([data-commercial-page="ai-video"]) #page {
+  --surface: var(--viral-surface-1);
+  --surface-solid: var(--viral-surface-1);
+  --surface-soft: var(--viral-surface-2);
+  --surface-strong: var(--viral-surface-3);
+  --line: var(--viral-line-soft);
+  --line-strong: var(--viral-line);
+  --text: var(--viral-text);
+  --text-soft: var(--viral-muted);
+  color: var(--viral-text);
+  background: var(--viral-bg);
+}
+html:is([data-theme="aurora-light"], [data-theme="pearl-light"])[data-commercial-page]:not([data-commercial-page="ai-video"]) #page .button.ghost {
+  color: var(--viral-text);
+  background: var(--viral-surface-3);
+  border-color: var(--viral-line);
+}
+/* These two chrome colors and the group font need !important only because the
+   existing workstation shell fixes those exact properties with !important. */
+html[data-commercial-page][data-theme="midnight"] .sidebar { background: var(--viral-bg-1) !important; }
+html[data-commercial-page][data-theme="midnight"] #nav .nav-item.active { background: var(--viral-accent-soft) !important; }
+html[data-commercial-page] #nav .nav-group { font-size: 12px !important; }
+html[data-commercial-page] #nav { align-content: start; }
+html[data-commercial-page] #nav .nav-group { line-height: 1.5; letter-spacing: .08em; }
+html[data-commercial-page] #nav .nav-item { block-size: auto; min-inline-size: 0; text-align: start; }
+html[data-commercial-page] #nav .nav-item > span:last-child { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+html[data-commercial-page] #nav .nav-item::before { transition: background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard); }
+html[data-commercial-page] #nav .nav-item.active::after { animation: none; box-shadow: none; background: var(--viral-accent); }
+html[data-commercial-page] #nav .nav-icon { transform: none; filter: none; }
+
+/* Shared focus is deliberately scoped to commercial chrome/non-editor forms.
+   A small priority override beats earlier per-feature focus rules. */
+html[data-commercial-page] :is(#nav .nav-item, .topbar .button, .topbar .select-trigger, .topbar .command-palette):focus-visible,
+html[data-viral-motion-zone="expressive"] #page :is(button, input, select, textarea, summary):focus-visible,
+html[data-viral-motion-zone="controlled"] #page :is(button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--viral-focus) !important;
+  outline-offset: 3px !important;
+}
+html[data-viral-motion-zone="expressive"] .start-home { --ai-surface: var(--viral-surface-2); --ai-muted: var(--viral-muted); color: var(--viral-text); }
+html[data-viral-motion-zone="expressive"] .start-eyebrow { font-size: 12px; }
+html[data-viral-motion-zone="expressive"] .start-heading h2 { color: var(--viral-text); }
+html[data-viral-motion-zone="expressive"] .start-heading > div::before { background: linear-gradient(var(--viral-accent), var(--viral-accent-secondary)); }
+html[data-viral-motion-zone="expressive"] .start-action {
+  border-radius: var(--radius-card);
+  border-color: var(--viral-line-soft);
+  box-shadow: var(--viral-depth-1);
+  transition: transform var(--motion-normal) var(--ease-standard), background-color var(--motion-normal) var(--ease-standard), border-color var(--motion-normal) var(--ease-standard);
+}
+html[data-viral-motion-zone="expressive"] .start-action:first-child {
+  border-radius: var(--radius-feature);
+  background: linear-gradient(115deg, color-mix(in srgb, var(--viral-accent) 15%, var(--viral-surface-2)), color-mix(in srgb, var(--viral-accent-secondary) 7%, var(--viral-surface-1)));
+}
+html[data-viral-motion-zone="expressive"] .start-project { border-radius: var(--radius-card); transition: transform var(--motion-normal) var(--ease-standard), border-color var(--motion-normal) var(--ease-standard), background-color var(--motion-normal) var(--ease-standard); }
+html[data-viral-motion-zone="expressive"] .start-project img { transition: transform var(--motion-normal) var(--ease-standard); }
+html[data-viral-motion-zone="expressive"] .core-ai-example { border-radius: var(--radius-card); transition: transform var(--motion-normal) var(--ease-standard), border-color var(--motion-normal) var(--ease-standard); }
+@media (hover: hover) {
+  html[data-viral-motion-zone="expressive"] :is(.start-action, .start-project, .core-ai-example):not(:disabled):hover { transform: translateY(-2px); border-color: var(--viral-line); }
+  html[data-viral-motion-zone="expressive"] .start-project:hover img { transform: scale(1.02); }
+}
+html[data-viral-motion-zone="expressive"] :is(.start-action, .start-project):not(:disabled):active { transform: scale(.99); transition-duration: var(--motion-instant); }
+html[data-viral-motion-zone="controlled"] #page .button { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }
+html[data-commercial-page] .topbar .button { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard); }
+html[data-commercial-page] .popover-menu:not(.hidden),
+html[data-commercial-page] .core-command-overlay:not([hidden]) .core-command-dialog { border-radius: var(--radius-card); box-shadow: var(--viral-depth-3); animation: viral-menu-enter var(--motion-fast) var(--ease-enter); }
+html[data-commercial-page] .modal-backdrop:not(.hidden) > .modal { border-radius: var(--radius-modal); animation: viral-dialog-enter var(--motion-normal) var(--ease-enter); }
+html:is([data-viral-motion-zone="expressive"], [data-viral-motion-zone="controlled"]) #page > .viral-enter-surface { animation: viral-page-enter var(--motion-normal) var(--ease-enter) backwards; }
+.viral-status-enter { animation: viral-status-enter var(--motion-fast) var(--ease-standard); }
+.viral-success-enter { animation: viral-success-enter var(--motion-slow) var(--ease-enter); }
+@keyframes viral-page-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes viral-menu-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes viral-dialog-enter { from { opacity: 0; transform: translateY(3px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes viral-status-enter { from { opacity: .4; } to { opacity: 1; } }
+@keyframes viral-success-enter { from { opacity: .4; transform: scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Ambient stays static. Legacy HUD/magnet decoration must not travel through a
+   production workspace. Priority only cancels earlier decorative overrides. */
+html[data-commercial-page] .ambient { animation: none; opacity: .06; }
+html[data-commercial-page] :is(.premium-hud-layer, .hud-reactive-light) { display: none !important; }
+html[data-commercial-page] .is-hud-magnet { translate: none !important; transform: none !important; }
+html[data-viral-motion-zone="workstation"] .ambient-layer { display: none; }
+/* Cancel the old entry choreography only while its explicit entry flag exists;
+   no editor layout, selection, timeline or preview node is animated/changed. */
+html[data-viral-motion-zone="workstation"][data-editor-entry] #page :is(.core-editor-assets-panel, .core-editor-focus-section, .core-editor-inspector, .core-editor-bottom-dock) {
+  translate: none !important; scale: none !important; opacity: 1 !important;
+  transition-property: color, background-color, border-color !important;
+}
+html[data-motion="reduced"] {
+  --motion-instant: 0ms; --motion-fast: 0ms; --motion-normal: 0ms; --motion-slow: 0ms; --motion-hero: 0ms;
+}
+html[data-motion="reduced"][data-commercial-page] :is(.viral-enter-surface, .start-action, .start-project, .start-project img, .core-ai-example, .popover-menu, .core-command-dialog, .modal, .viral-status-enter, .viral-success-enter) {
+  animation: none !important; transition: none !important; transform: none !important; translate: none !important; scale: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-instant: 0ms; --motion-fast: 0ms; --motion-normal: 0ms; --motion-slow: 0ms; --motion-hero: 0ms; }
+  html[data-commercial-page] :is(.viral-enter-surface, .start-action, .start-project, .start-project img, .core-ai-example, .popover-menu, .core-command-dialog, .modal, .viral-status-enter, .viral-success-enter) {
+    animation: none !important; transition: none !important; transform: none !important; translate: none !important; scale: none !important;
+  }
+}

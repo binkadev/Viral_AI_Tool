@@ -1,6 +1,6 @@
 (function(root) {
   "use strict";
-  const primary = new Set(["home", "ai-create", "generation-progress", "library", "settings"]);
+  const primary = new Set(["home", "ai-create", "generation-progress", "library", "productions", "batch-production", "settings"]);
   const hidden = new Set(["accounts", "usage", "billing"]);
   function route(page, { source = false, contextualImport = false } = {}) {
     if (hidden.has(page)) return page === "usage" || page === "billing" ? "settings" : "home";

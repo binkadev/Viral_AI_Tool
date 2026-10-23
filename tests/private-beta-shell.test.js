@@ -1,8 +1,8 @@
 "use strict";
 const { test } = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm");
 const model = require("../renderer/core-private-beta-model");
-test("private beta has exactly five current primary destinations", () => {
-  assert.deepEqual([...model.primary], ["home", "ai-create", "generation-progress", "library", "settings"]);
+test("private beta has exactly seven canonical primary destinations", () => {
+  assert.deepEqual([...model.primary], ["home", "ai-create", "generation-progress", "library", "productions", "batch-production", "settings"]);
   for (const route of ["download", "ai-video", "accounts", "usage", "billing"]) assert(!model.primary.has(route));
 });
 test("stale routes fall back safely while actual media and contextual import remain accessible", () => {

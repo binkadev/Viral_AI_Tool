@@ -33,8 +33,6 @@ for (const required of [
   "const isLegacyDemo = LEGACY_DEMO_NAMES.has",
   "current.jobs.filter(job => !job?.isRenderOutput)",
   'const startupPage = "home"',
-  '{ id: "download", icon: "⇩", label: "core-import" }',
-  '{ id: "ai-video", icon: "◫", label: "core-editor" }',
   "pages.download = function coreImportPage()",
   'workflow: "Tạo video"',
   'editor: "Studio video"',
