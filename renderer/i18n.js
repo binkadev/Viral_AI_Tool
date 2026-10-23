@@ -1,6 +1,24 @@
 window.I18N = (() => {
   const messages = {
     vi: {
+      projectAudio: {
+        title:"Âm thanh và phụ đề dự án", subtitles:"Phụ đề", showSubtitles:"Hiện phụ đề", textSource:"Nguồn lời", auto:"Tự động", source:"Lời gốc", translation:"Bản dịch",
+        activeSource:"Đang dùng: {source}.", voice:"Giọng AI", narrator:"Giọng đọc mặc định", speaker:"Người nói {number}", useDefault:"Dùng giọng mặc định", chooseVoice:"Chọn giọng đọc",
+        previewVoice:"Nghe thử giọng", generate:"Tạo giọng cho dự án", cancel:"Hủy tạo giọng", voiceEnabled:"Bật giọng đọc", voiceVolume:"Âm lượng giọng đọc",
+        checking:"Đang kiểm tra dịch vụ giọng đọc…", serviceReady:"Dịch vụ giọng đọc đã sẵn sàng.", voiceUnavailable:"Chưa dùng được dịch vụ giọng đọc. Kiểm tra đăng nhập, gói sử dụng và kết nối rồi mở lại Studio.",
+        savedVoiceUnavailable:"Giọng đã chọn hiện không có trong danh sách", validating:"Đang kiểm tra yêu cầu…", queued:"Đang chờ xử lý…", generating:"Đang tạo giọng…", downloading:"Đang lưu âm thanh…", cancelling:"Đang hủy…",
+        voiceReady:"Giọng đọc đã sẵn sàng cho dự án.", completed:"Đã tạo giọng đọc.", cancelled:"Đã hủy tạo giọng. Kết quả cũ vẫn được giữ.", interrupted:"Lần tạo giọng trước đã gián đoạn. Kiểm tra thiết lập rồi bấm tạo lại khi cần.",
+        failed:"Chưa tạo được giọng cho dự án. Kiểm tra kết nối và thiết lập rồi thử lại.", voiceFailed:"Chưa nhận được âm thanh hợp lệ. Giọng đọc dự án chưa sẵn sàng; kiểm tra dịch vụ rồi thử lại.",
+        voiceStale:"Lời đọc hoặc thời gian cảnh đã đổi. Giọng cũ được giữ lại nhưng không phát; hãy tạo giọng mới.", noVoice:"Dự án chưa có giọng đọc.", progress:"{percent}%",
+        bgm:"Nhạc nền", bgmAsset:"Tư liệu âm thanh", noMusic:"Không dùng nhạc nền", bgmVolume:"Âm lượng nhạc nền", loop:"Lặp nhạc nền",
+        importGuidance:"Nhập tệp âm thanh bằng nút Nhập tư liệu trong thư viện dự án, rồi chọn ở đây.", audioLane:"Giọng / Nhạc nền", voiceCue:"Giọng: {text}", bgmCue:"Nhạc nền: {name}",
+        translationUnavailable:"Bản dịch chưa đủ hoặc không khớp lời hiện tại. Kiểm tra bản dịch hoặc chọn Lời gốc.", timingUnresolved:"Chưa thể tạo giọng vì thời lượng hoặc mốc lời của một số cảnh chưa xác định.",
+        noText:"Chưa có lời đọc. Thêm lời gốc cho cảnh hoặc dùng bản dịch hợp lệ.", tooMany:"Dự án vượt giới hạn 300 đoạn lời cho một lần tạo giọng. Hãy giảm số đoạn trước khi tạo.", tooLong:"Một đoạn lời quá dài. Chia đoạn trong nguồn lời trước khi tạo giọng.",
+        languageUnavailable:"Chưa xác định được ngôn ngữ hợp lệ. Kiểm tra ngôn ngữ lời gốc hoặc bản dịch.", alreadyRunning:"Dự án đang có yêu cầu tạo giọng. Chờ hoặc hủy yêu cầu hiện tại.",
+        saveFailed:"Chưa lưu được thay đổi âm thanh. Dữ liệu đã lưu vẫn được giữ; kiểm tra dung lượng rồi mở lại dự án.", cancelFailed:"Chưa xác nhận được việc hủy. Kiểm tra trạng thái yêu cầu trước khi thao tác tiếp.",
+        operationFailed:"Chưa xác nhận được yêu cầu cho đúng dự án. Kiểm tra lời đọc, thời lượng và dữ liệu đã lưu trước khi tạo lại.", previewUnavailable:"Chưa phát được âm thanh xem trước. Video vẫn tiếp tục; kiểm tra tệp và thiết bị âm thanh rồi thử lại.",
+        pauseForPreview:"Tạm dừng dự án trước khi nghe thử giọng.", timingRisk:"Một số đoạn âm thanh dài hơn hoặc ngắn hơn cảnh. Phần xem trước chỉ phát trong khoảng lời tương ứng, không đổi tốc độ hay thời lượng cảnh."
+      },
       productionModes: {
         title: "Chuẩn bị tư liệu dự án", mode: "Chế độ", assisted: "Có kiểm tra", auto: "Tự động",
         assistedDescription: "Hệ thống chuẩn bị tư liệu cho từng cảnh, bạn kiểm tra và chọn kết quả.",
@@ -1539,6 +1557,24 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     },
 
     en: {
+      projectAudio: {
+        title:"Project audio and subtitles", subtitles:"Subtitles", showSubtitles:"Show subtitles", textSource:"Text source", auto:"Auto", source:"Source", translation:"Translation",
+        activeSource:"Using: {source}.", voice:"AI voice", narrator:"Default narrator voice", speaker:"Speaker {number}", useDefault:"Use default voice", chooseVoice:"Choose a voice",
+        previewVoice:"Preview voice", generate:"Generate project voice", cancel:"Cancel voice", voiceEnabled:"Enable voice", voiceVolume:"Voice volume",
+        checking:"Checking voice service…", serviceReady:"Voice service ready.", voiceUnavailable:"Voice service is unavailable. Check your sign-in, plan and connection, then reopen Studio.",
+        savedVoiceUnavailable:"Saved voice is not currently in the catalog", validating:"Checking request…", queued:"Queued…", generating:"Generating voice…", downloading:"Saving audio…", cancelling:"Cancelling…",
+        voiceReady:"Voice is ready for this project.", completed:"Voice generated.", cancelled:"Voice generation cancelled. Previous output is retained.", interrupted:"The previous voice job was interrupted. Check settings and explicitly generate again when ready.",
+        failed:"Project voice could not be generated. Check your connection and settings, then try again.", voiceFailed:"No valid audio result was received. Project voice is unavailable; check the service and try again.",
+        voiceStale:"Narration or scene timing changed. Previous voice is retained but will not play; generate a new voice result.", noVoice:"This project has no voice result yet.", progress:"{percent}%",
+        bgm:"Background music", bgmAsset:"Audio asset", noMusic:"No background music", bgmVolume:"Music volume", loop:"Loop background music",
+        importGuidance:"Import an audio file using Import media in the Project Library, then select it here.", audioLane:"Voice / BGM", voiceCue:"Voice: {text}", bgmCue:"Music: {name}",
+        translationUnavailable:"Translation is incomplete or does not match the current text. Check translation or choose Source.", timingUnresolved:"Voice cannot be generated until all scene durations and source cue timings are resolved.",
+        noText:"No narration is available. Add scene source text or use a valid translation.", tooMany:"This project exceeds the 300-segment limit for one voice job. Reduce the segment count before generating.", tooLong:"A narration segment is too long. Split it in the source text before generating voice.",
+        languageUnavailable:"A valid language is unavailable. Check source or translation language.", alreadyRunning:"A voice request is already active for this project. Wait or cancel that request.",
+        saveFailed:"Audio changes could not be saved. Previously saved data is retained; check free space and reopen the project.", cancelFailed:"Cancellation could not be confirmed. Check the request state before continuing.",
+        operationFailed:"The request could not be confirmed for the correct project. Check narration, timing and saved data before generating again.", previewUnavailable:"Preview audio could not play. Video continues; check the file and audio device, then try again.",
+        pauseForPreview:"Pause the project before previewing a voice.", timingRisk:"Some audio differs from scene timing. Preview plays only within each narration interval, without changing speed or scene duration."
+      },
       productionModes: {
         title: "Prepare project materials", mode: "Mode", assisted: "Assisted", auto: "Auto",
         assistedDescription: "Prepare materials scene by scene while you review and choose the result.",

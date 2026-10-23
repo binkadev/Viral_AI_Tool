@@ -539,7 +539,7 @@
     const libraryModel = window.ViralCoreMediaLibraryModel;
     if (!current || currentSnapshot?.projectId !== projectId || current.projectId && current.projectId !== projectId ||
         !libraryModel || !model.mediaAssemblyModel) throw Error("PROJECT_STATE_UNAVAILABLE");
-    for (const key of ["media", "mediaAssembly"]) {
+    for (const key of ["media", "mediaAssembly", "renderOptions"]) {
       const descriptor = Object.getOwnPropertyDescriptor(current, key);
       if (descriptor ? !("value" in descriptor) || !descriptor.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
     }
@@ -579,6 +579,7 @@
     }
     next.mediaAssembly = model.mediaAssemblyModel.normalizeAssembly(next.mediaAssembly,
       { scenes: next.scenePlan.scenes, assets: next.media.assets });
+    if (window.ViralCoreProjectAudioModel && !window.ViralCoreProjectAudioModel.resolveBgm(next)) next.workflow.renderOptions.bgmAssetId = null;
     const result = () => model.clone({ projectId, added, duplicates, assets, media: next.media });
     if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot)) return result();
     next.updatedAt = new Date(now).toISOString();
@@ -586,6 +587,7 @@
     try { saveSnapshot(next); }
     catch (error) { dispatchSaveFailure("project-media", error); throw error; }
     currentSnapshot = next; current.media = liveMedia; current.mediaAssembly = liveAssembly;
+    current.renderOptions = model.clone(next.workflow.renderOptions);
     projectLegacyProjection(next, projection);
     presentProject("project-media", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
       detail: { reason: "project-media", projectId, addedAssetIds: added.map(a => a.id) }
@@ -597,9 +599,97 @@
   function updateProjectMediaAsset(assetId, patch, options = {}) { return mutateProjectMedia("update", { assetId, patch }, options); }
   function removeProjectMediaAsset(assetId, options = {}) { return mutateProjectMedia("remove", { assetId }, options); }
 
+  // Audio has the same atomic registry boundary as visual materials. A scoped
+  // Voice completion may update its original inactive Project without selection.
+  function mutateProjectAudio(projectId, update) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const stored = registry.projects.find(p => p.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    const active = registry.activeProjectId === projectId, current = appState();
+    if (active && (!current || current.projectId && current.projectId !== projectId)) throw Error("PROJECT_MISMATCH");
+    let next = active ? model.buildSnapshot(current, editorState(current), currentSnapshot) : model.clone(stored);
+    if (!next || next.projectId !== projectId) throw Error("PROJECT_MISMATCH");
+    if (active) next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+    update(next);
+    if (model.semanticSignature(next) === model.semanticSignature(stored)) return model.clone(stored);
+    next.updatedAt = new Date().toISOString();
+    const projectedVoice = model.clone(next.workflow.voice), projectedOptions = model.clone(next.workflow.renderOptions);
+    if (active) for (const key of ["voice", "renderOptions"]) {
+      const d = Object.getOwnPropertyDescriptor(current, key);
+      if (d ? !("value" in d) || !d.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE");
+    }
+    try { writeRegistry({ ...registry, projects: registry.projects.map(p => p.projectId === projectId ? next : p) }); }
+    catch (error) { dispatchSaveFailure("project-audio", error); throw error; }
+    if (active) {
+      currentSnapshot = next;
+      current.voice = { ...current.voice, ...projectedVoice }; current.renderOptions = projectedOptions;
+      projectLegacyProjection(next);
+      presentProject("project-audio", () => window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", { detail: { reason: "project-audio", projectId } })));
+    }
+    return model.clone(next);
+  }
+  function updateProjectAudioSettings(projectId, patch) {
+    const booleanKeys = ["burnSubtitles", "voiceEnabled", "bgmLoop"], volumeKeys = ["voiceVolume", "bgmVolume"];
+    if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key =>
+      booleanKeys.includes(key) ? typeof patch[key] !== "boolean" : volumeKeys.includes(key) ? typeof patch[key] !== "number" || !Number.isFinite(patch[key]) || patch[key] < 0 || patch[key] > 1 :
+      key === "textSource" ? !["auto", "source", "translation"].includes(patch[key]) : key === "bgmAssetId" ? patch[key] !== null && (typeof patch[key] !== "string" || !patch[key] || patch[key].length > 512) : true)) throw Error("PROJECT_AUDIO_SETTINGS_INVALID");
+    if (projectId !== registry.activeProjectId) throw Error("PROJECT_MISMATCH");
+    return mutateProjectAudio(projectId, next => {
+      if (patch.bgmAssetId && !window.ViralCoreProjectAudioModel.resolveBgm(next, patch.bgmAssetId)) throw Error("PROJECT_BGM_UNAVAILABLE");
+      next.workflow.renderOptions = { ...next.workflow.renderOptions, ...patch };
+    });
+  }
+  function updateProjectVoice(projectId, input) {
+    const audio = window.ViralCoreProjectAudioModel;
+    if (!audio || !input || typeof input !== "object") throw Error("PROJECT_VOICE_INVALID");
+    const validId = v => typeof v === "string" && /^[A-Za-z0-9._-]{8,160}$/.test(v);
+    const validSignature = v => typeof v === "string" && /^project-voice-v1:[a-f0-9]{64}$/.test(v);
+    return mutateProjectAudio(projectId, next => {
+      const voice = next.workflow.voice;
+      if (input.action === "assign") {
+        if (projectId !== registry.activeProjectId || Object.keys(input).sort().join() !== "action,speaker,voiceId" || typeof input.speaker !== "string" || !input.speaker || input.speaker.length > 512 || typeof input.voiceId !== "string" || input.voiceId.length > 160) throw Error("PROJECT_VOICE_INVALID");
+        voice.assignments = { ...voice.assignments, [input.speaker]: input.voiceId }; return;
+      }
+      if (input.action === "stale") {
+        if (Object.keys(input).sort().join() !== "action,inputSignature" || !validSignature(input.inputSignature)) throw Error("PROJECT_VOICE_INVALID");
+        if (voice.result?.projectId === projectId && voice.result.inputSignature !== input.inputSignature) {
+          voice.staleResult = { ...voice.result, status: "stale", staleReason: "project-input-changed" }; voice.result = null;
+          if (voice.job?.projectId === projectId && voice.job.status === "completed") { voice.staleJob = { ...voice.job, status: "stale" }; voice.job = null; }
+        }
+        return;
+      }
+      if (input.action === "admit") {
+        const job = input.job;
+        if (Object.keys(input).sort().join() !== "action,job" || projectId !== registry.activeProjectId || !validId(job?.id) || job.projectId !== projectId ||
+            !validSignature(job.inputSignature) || !["auto", "source", "translation"].includes(job.textSource) || typeof job.language !== "string" || job.language.length > 80 ||
+            [voice.job, voice.staleJob].some(j => audio.ACTIVE.includes(j?.status))) throw Error("PROJECT_VOICE_INVALID");
+        if (voice.result) { voice.staleResult = voice.result; voice.result = null; }
+        if (voice.job) voice.staleJob = voice.job;
+        voice.job = { id: job.id, projectId, inputSignature: job.inputSignature, textSource: job.textSource, language: job.language, status: "validating" }; return;
+      }
+      if (input.action !== "terminal" || Object.keys(input).some(k => !["action", "jobId", "status", "result"].includes(k)) || !validId(input.jobId) || !["completed", "failed", "cancelled", "interrupted"].includes(input.status)) throw Error("PROJECT_VOICE_INVALID");
+      const key = ["job", "staleJob"].find(k => voice[k]?.id === input.jobId && voice[k]?.projectId === projectId);
+      if (!key || !audio.ACTIVE.includes(voice[key].status) && !(key === "staleJob" && voice[key].status === "stale")) throw Error("PROJECT_VOICE_OWNERSHIP");
+      const job = voice[key];
+      if (input.status === "completed") {
+        const value = input.result;
+        if (value?.projectId !== projectId || value.inputSignature !== job.inputSignature || value.textSource !== job.textSource || value.language !== job.language ||
+            !Array.isArray(value.segments) || !value.segments.length || value.segments.length > 300) throw Error("PROJECT_VOICE_RESULT_INVALID");
+        // Copy only the bounded Project-owned result; no provider response body.
+        const result = audio.validateResult(value, { ...job, segments: value.segments });
+        result.generatedAt = new Date().toISOString();
+        if (key === "staleJob") voice.staleResult = { ...result, status: "stale", staleReason: "project-input-changed" };
+        else voice.result = result;
+      }
+      voice[key] = { ...job, status: input.status };
+    });
+  }
+  function projectAudioSnapshot(projectId) { return model.clone(registry.projects.find(p => p.projectId === projectId), null); }
+
   function assertSwitchSafe() {
     const current = appState();
-    const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job, current?.scenePlan?.plannerJob,
+    const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job?.projectId ? null : current?.voice?.job, current?.scenePlan?.plannerJob,
       ...(current?.jobs || []).filter(j => j.isRenderOutput)];
     const busy = new Set(["validating", "preparing", "uploading", "queued", "processing", "translating", "generating", "downloading", "rendering", "planning", "cancelling"]);
     if (workflows.some(job => busy.has(job?.status))) throw Error("PROJECT_WORK_RUNNING");
@@ -870,6 +960,9 @@
     addProjectMediaAsset,
     updateProjectMediaAsset,
     removeProjectMediaAsset,
+    updateProjectAudioSettings,
+    updateProjectVoice,
+    projectAudioSnapshot,
     activeProjectId() { return registry.activeProjectId; },
     createProject,
     openProject,

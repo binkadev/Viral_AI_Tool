@@ -1207,6 +1207,7 @@ function updateTranslationProgress(payload) {
 
 function voiceJobForSource(source) {
   const job = state.voice.job;
+  if (job?.projectId) return null;
   return source &&
     job?.sourcePath === source.sourcePath &&
     job?.language === state.translation.targetLanguage
@@ -1216,6 +1217,7 @@ function voiceJobForSource(source) {
 
 function voiceResultForSource(source) {
   const result = state.voice.result;
+  if (result?.projectId) return null;
   return source &&
     result?.sourcePath === source.sourcePath &&
     result?.language === state.translation.targetLanguage
@@ -1271,6 +1273,7 @@ function voiceTierLabel(voice) {
 }
 
 function ensureVoiceAssignments(result) {
+  if (state.page === "ai-video" && window.ViralCoreProjectPersistence?.snapshot()?.scenePlan?.scenes?.length) return voiceSpeakerEntries(result);
   const speakers = voiceSpeakerEntries(result);
   const catalog = Array.isArray(state.voice.catalog) ? state.voice.catalog : [];
   const validIds = new Set(catalog.map(item => String(item.id)));
@@ -1810,6 +1813,7 @@ async function cancelVoiceGeneration() {
 
 function updateVoiceProgress(payload) {
   const job = state.voice.job;
+  if (job?.projectId) return; // Project Audio owns scoped progress without tick writes.
   if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
 
   const allowed = new Set(["validating", "queued", "generating", "downloading"]);

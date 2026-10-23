@@ -3,7 +3,7 @@ const path = require("node:path"), { pathToFileURL } = require("node:url");
 const { describeLocalMediaFile } = require("./local-files");
 function localPreviewUrl(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-      Object.keys(payload).sort().join() !== "kind,localPath" || !["video", "image"].includes(payload.kind) ||
+      Object.keys(payload).sort().join() !== "kind,localPath" || !["video", "image", "audio"].includes(payload.kind) ||
       typeof payload.localPath !== "string" || payload.localPath.length > 32767 || !path.isAbsolute(payload.localPath)) throw Error("PREVIEW_INVALID");
   const media = describeLocalMediaFile(payload.localPath);
   if (media.kind !== payload.kind) throw Error("PREVIEW_INVALID");

@@ -83,6 +83,7 @@
         } else { button.classList.add("is-unresolved"); button.textContent += " · " + text("timingPending"); button.disabled = e.projectStart == null; unresolved.append(button); }
       }
       dock.querySelector("[data-bottom-timeline-empty]").hidden = true;
+      window.dispatchEvent(new CustomEvent("viral-ai:project-timeline-rendered", { detail: { projectId: s.projectId, generation: s.generation } }));
     }
     function changed(s, projection) {
       if (!active || !host?.isConnected) return;
@@ -171,7 +172,7 @@
       else return;
       event.preventDefault(); event.stopImmediatePropagation();
     }, true);
-    new MutationObserver(records => { if (records.some(r => [...r.addedNodes, ...r.removedNodes].some(n => n.nodeType === 1 && !n.closest?.("[data-project-preview-status], [data-project-scene-clip], [data-time-ruler]")))) queue(); }).observe(document.getElementById("page"), { childList: true, subtree: true });
+    new MutationObserver(records => { if (records.some(r => [...r.addedNodes, ...r.removedNodes].some(n => n.nodeType === 1 && !n.closest?.("[data-project-preview-status], [data-project-scene-clip], [data-time-ruler], [data-project-audio], [data-project-audio-clip], [data-project-subtitle]")))) queue(); }).observe(document.getElementById("page"), { childList: true, subtree: true });
     window.addEventListener("viral-ai:core-state-changed", projectChanged);
     window.addEventListener("viral-ai:project-snapshot-restored", projectChanged);
     window.addEventListener("viral-ai:project-snapshot-saved", projectChanged);

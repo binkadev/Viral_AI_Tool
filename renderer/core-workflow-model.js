@@ -40,12 +40,14 @@
   }
 
   function resultMatches(result, source) {
+    if (result?.projectId && result?.inputSignature) return false;
     if (!result || !source) return false;
     if (!result.sourcePath) return true;
     return String(result.sourcePath) === String(source.sourcePath);
   }
 
   function jobMatches(job, source) {
+    if (job?.projectId && job?.inputSignature) return false;
     if (!job || !source) return false;
     if (!job.sourcePath) return true;
     return String(job.sourcePath) === String(source.sourcePath);

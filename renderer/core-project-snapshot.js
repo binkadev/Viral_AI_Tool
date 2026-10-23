@@ -3,10 +3,11 @@
   if (!mediaModel && typeof module !== "undefined" && module.exports && typeof require === "function") {
     try { mediaModel = require("./core-media-library-model"); } catch {}
   }
-  const api = factory(mediaModel);
+  const audioModel = root?.ViralCoreProjectAudioModel || (typeof module !== "undefined" && module.exports ? require("./core-project-audio-model") : null);
+  const api = factory(mediaModel, audioModel);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreProjectSnapshot = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel) {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel, audioModel) {
   "use strict";
 
   const CURRENT_SCHEMA_VERSION = 4;
@@ -106,6 +107,7 @@
       output: String(state?.output || ""),
       generationBrief: String(state?.generationBrief || "").slice(0, 8000),
       renderOptions: {
+        ...audioModel?.normalizeSettings(state?.renderOptions),
         burnSubtitles: state?.renderOptions?.burnSubtitles !== false,
         mixOriginalAudio: state?.renderOptions?.mixOriginalAudio !== false,
         originalAudioVolume: clamp(state?.renderOptions?.originalAudioVolume, 0, 0.35, 0.12)
@@ -214,6 +216,14 @@
       voice: snapshot.workflow?.voice,
       jobs: snapshot.workflow?.jobs
     });
+    const media = mediaFromState({ media: snapshot.media || emptyMedia() }, { restartSafe: options.restartSafeMedia === true });
+    if (audioModel && !audioModel.resolveBgm({ media, workflow })) workflow.renderOptions.bgmAssetId = null;
+    if (options.restartSafeMedia && workflow.voice.job?.projectId === snapshot.projectId && audioModel?.ACTIVE.includes(workflow.voice.job.status)) {
+      workflow.voice.job = { ...workflow.voice.job, status: "interrupted" };
+    }
+    if (options.restartSafeMedia && workflow.voice.staleJob?.projectId === snapshot.projectId && audioModel?.ACTIVE.includes(workflow.voice.staleJob.status)) {
+      workflow.voice.staleJob = { ...workflow.voice.staleJob, status: "interrupted" };
+    }
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       projectKind: aiProject ? "ai" : "imported",
@@ -221,10 +231,7 @@
       projectName: String(snapshot.projectName || source?.name || source?.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
-      media: mediaFromState(
-        { media: snapshot.media || emptyMedia() },
-        { restartSafe: options.restartSafeMedia === true }
-      ),
+      media,
       workflow,
       editor: normalizeEditor(snapshot.editor, source)
     };
