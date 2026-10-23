@@ -1,0 +1,4 @@
+.core-project-render { display:flex; flex-wrap:wrap; gap:10px; padding:14px; min-inline-size:0; font-size:13px; line-height:1.55; }
+.core-project-render h3,.core-project-render p { flex-basis:100%; margin:0; overflow-wrap:anywhere; }
+.core-project-render button { min-block-size:36px; white-space:normal; max-inline-size:100%; }
+.core-project-render button:focus-visible { outline:2px solid var(--accent,#5eead4); outline-offset:3px; }

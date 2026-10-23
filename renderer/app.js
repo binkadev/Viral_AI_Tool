@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 const saved = JSON.parse(localStorage.getItem("viral-ai-tool-state") || "{}");
 
 const state = {
+  projectId: saved.projectId || null,
+  projectName: saved.projectName || "",
   locale: I18N.supported.includes(saved.locale) ? saved.locale : "vi",
   appearance: saved.appearance || "aurora-light",
   motion: saved.motion || "balanced",
@@ -1207,6 +1209,7 @@ function updateTranslationProgress(payload) {
 
 function voiceJobForSource(source) {
   const job = state.voice.job;
+  if (job?.projectId) return null;
   return source &&
     job?.sourcePath === source.sourcePath &&
     job?.language === state.translation.targetLanguage
@@ -1216,6 +1219,7 @@ function voiceJobForSource(source) {
 
 function voiceResultForSource(source) {
   const result = state.voice.result;
+  if (result?.projectId) return null;
   return source &&
     result?.sourcePath === source.sourcePath &&
     result?.language === state.translation.targetLanguage
@@ -1271,6 +1275,7 @@ function voiceTierLabel(voice) {
 }
 
 function ensureVoiceAssignments(result) {
+  if (state.page === "ai-video" && window.ViralCoreProjectPersistence?.snapshot()?.scenePlan?.scenes?.length) return voiceSpeakerEntries(result);
   const speakers = voiceSpeakerEntries(result);
   const catalog = Array.isArray(state.voice.catalog) ? state.voice.catalog : [];
   const validIds = new Set(catalog.map(item => String(item.id)));
@@ -1810,6 +1815,7 @@ async function cancelVoiceGeneration() {
 
 function updateVoiceProgress(payload) {
   const job = state.voice.job;
+  if (job?.projectId) return; // Project Audio owns scoped progress without tick writes.
   if (!job || job.id !== payload?.jobId || ["cancelling", "cancelled"].includes(job.status)) return;
 
   const allowed = new Set(["validating", "queued", "generating", "downloading"]);
@@ -1874,9 +1880,11 @@ function aiVideoPage() {
     ["6", t("aiVideo.steps.render"), t("aiVideo.steps.pending")]
   ];
 
-  const sourceName = source?.name || t("media.noVideo");
-  const sourceMeta = source ? mediaMetaText(source) : "";
-  const preview = source?.previewUrl
+  const sourceName = window.ViralCorePlayer?.projectPreview?.hasProject?.() ? t("projectPreview.title") : source?.name || t("media.noVideo");
+  const sourceMeta = window.ViralCorePlayer?.projectPreview?.hasProject?.() ? t("projectPreview.sequence") : source ? mediaMetaText(source) : "";
+  const preview = window.ViralCorePlayer?.projectPreview?.hasProject?.()
+    ? '<div class="preview preview-real"></div>'
+    : source?.previewUrl
     ? '<div class="preview preview-real"><video class="preview-video" controls preload="metadata" src="' + source.previewUrl + '"></video></div>'
     : '<div class="preview"><div class="preview-center"><div class="preview-play">▶</div><div class="preview-label">' + t("media.previewHint") + '</div></div></div>';
 
@@ -2808,6 +2816,7 @@ async function loadReleaseInfo({ rerender = false } = {}) {
 
 function releaseChannelLabel(channel) {
   const value = String(channel || "").toLowerCase();
+  if (value === "beta") return t("settings.releasePrivateBeta");
   if (value === "stable") return t("settings.releaseStable");
   if (value === "preview") return t("settings.releasePreview");
   return t("settings.releaseDevelopment");
@@ -3663,6 +3672,7 @@ async function handleJobAction(action, jobId) {
   if (action === "trash") return trashJobFile(job);
   if (action === "cancel-export") return cancelExportJob(job);
   if (action === "retry-export") {
+    if (job.renderKind === "project") return window.ViralCoreProjectRender?.start(job.projectId);
     const source = state.jobs.find(item =>
       !item.isRenderOutput &&
       item.sourcePath === job.sourcePath
@@ -3739,16 +3749,13 @@ async function addFiles() {
   const files = await window.desktopAPI.selectVideos();
   if (!files.length) return [];
 
-  const jobs = files.map((file) => ({
-    id: makeJobId("source"),
-    name: file.name,
-    lang: "",
-    status: "queued",
-    progress: 0,
-    time: t("common.now"),
-    sourcePath: file.path,
-    fileState: "available",
-    mediaState: "reading"
+  return addSourceFiles(files);
+}
+
+function addSourceFiles(files) {
+
+  const jobs = files.map(file => window.ViralCoreMediaLibraryModel.sourceJob(file, {
+    id: makeJobId("source"), time: t("common.now")
   }));
 
   jobs.slice().reverse().forEach(job => state.jobs.unshift(job));
@@ -3756,6 +3763,7 @@ async function addFiles() {
   toast(t("download.added", { count: files.length }));
 
   jobs.forEach(enrichJob);
+  save();
   return jobs;
 }
 
@@ -4563,6 +4571,7 @@ async function handleExportBlock(response, source) {
 }
 
 async function cancelExportJob(job) {
+  if (job?.renderKind === "project") return window.ViralCoreProjectRender?.runtime.cancel(job.projectId);
   if (!job || !job.isRenderOutput || normalizeStatus(job.status) !== "processing") return;
 
   const confirmed = await confirmAction({
@@ -5379,7 +5388,7 @@ function bind() {
   });
 
   const renderButton = $("render");
-  if (renderButton) renderButton.onclick = () => startLocalizedRender();
+  if (renderButton) renderButton.onclick = () => window.ViralCoreProjectRender?.active() ? window.ViralCoreProjectRender.start() : startLocalizedRender();
 
   const burnSubtitlesToggle = $("burnSubtitlesToggle");
   if (burnSubtitlesToggle) {
@@ -5403,7 +5412,7 @@ function bind() {
   if (tts) tts.onclick = () => toast(t("voice.generated"));
 
   const exportButton = $("export");
-  if (exportButton) exportButton.onclick = startRealRender;
+  if (exportButton) exportButton.onclick = () => window.ViralCoreProjectRender?.active() ? window.ViralCoreProjectRender.start() : startRealRender();
 
   const addChannel = $("addChannel");
   if (addChannel) addChannel.onclick = () => modal(t("monitor.modalTitle"), t("monitor.modalBody"));
@@ -5699,6 +5708,7 @@ if (window.desktopAPI) {
   if (window.desktopAPI.onRenderProgress) {
     window.desktopAPI.onRenderProgress((payload) => {
       const job = state.jobs.find(item => item.id === payload?.jobId);
+      if (job?.renderKind === "project") return;
       if (!job || ["cancelling", "cancelled"].includes(normalizeStatus(job.status))) return;
       job.progress = Math.max(0, Math.min(100, Number(payload.percent || 0)));
       job.renderPhase = payload.phase || job.renderPhase || "rendering";

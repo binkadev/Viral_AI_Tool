@@ -12,6 +12,17 @@
     ".transcript-row"
   ].join(",");
   let queued = false;
+  let materialFeedback = null;
+  let mediaFeedback = null;
+  const sourceText = (key, vars = {}) => window.I18N?.t?.(locale(), "projectMedia." + key, vars) || key;
+  function importLocal(options, button) {
+    window.ViralCoreProjectMedia.importLocal(options).finally(() => requestAnimationFrame(() => {
+      const panel = document.querySelector(".core-editor-assets-panel");
+      if (options.projectId && options.projectId !== window.ViralCoreProjectPersistence?.activeProjectId?.()) return;
+      const fallback = options.sceneId === appState()?.scenePlan?.selectedSceneId ? panel?.querySelector('[data-scene-material-action="import"]') : null;
+      (button.isConnected ? button : fallback || panel?.querySelector("[data-import-project-media]"))?.focus();
+    }));
+  }
 
   function locale() {
     try {
@@ -112,6 +123,106 @@
     '</div>';
   }
 
+  function materialText(key, vars = {}) {
+    return window.I18N?.t?.(locale(), "sceneMaterials." + key, vars) || key;
+  }
+  function escapeMaterial(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  }
+  function materialsMarkup() {
+    const current = appState(), persistence = window.ViralCoreProjectPersistence;
+    const projectId = persistence?.activeProjectId?.(), scenes = current?.scenePlan?.scenes || [];
+    const scene = scenes.find(item => item.id === current?.scenePlan?.selectedSceneId);
+    const label = key => escapeMaterial(materialText(key));
+    let body = '<h3>' + label("title") + '</h3>';
+    if (!projectId || !scene) return body + '<p>' + label("selectScene") + '</p>';
+    const model = window.ViralCoreMediaAssemblyModel, assets = mediaAssets();
+    const assembly = model?.normalizeAssembly(current.mediaAssembly, { scenes, assets });
+    const slot = model?.sceneSlot(assembly, scene.id), ids = slot?.candidateAssetIds || [];
+    const available = assets.filter(asset => ["video", "image"].includes(asset.kind) && !ids.includes(asset.id));
+    const attrs = ' data-project-id="' + escapeMaterial(projectId) + '" data-scene-id="' + escapeMaterial(scene.id) + '"';
+    const action = (name, text, assetId = "", disabled = false) => '<button type="button" data-scene-material-action="' + name + '"' + attrs +
+      ' data-asset-id="' + escapeMaterial(assetId) + '"' + (disabled ? ' disabled' : '') + '>' + label(text) + '</button>';
+    body += '<p class="core-material-scene">' + escapeMaterial(scene.title || materialText("scene", { number: scenes.indexOf(scene) + 1 })) + '</p>' +
+      '<p>' + escapeMaterial(materialText("candidateCount", { count: ids.length })) + '</p>';
+    body += '<div class="core-material-actions core-material-sources">' +
+      '<button type="button" data-scene-material-action="import"' + attrs + (window.ViralCoreProjectMedia?.importing() ? ' disabled' : '') + '>' + escapeMaterial(sourceText("importScene")) + '</button>' +
+      '<button type="button" data-scene-material-action="stock"' + attrs + '>' + escapeMaterial(sourceText("searchScene")) + '</button></div>';
+    if (!slot?.selectedAssetId) body += '<p>' + label("noSelection") + '</p>';
+    if (!ids.length) body += '<p>' + label("empty") + '</p>';
+    body += '<ul class="core-material-candidates">' + ids.map(id => {
+      const asset = assets.find(item => item.id === id), selected = id === slot.selectedAssetId;
+      const origin = ["local", "stock", "generated"].includes(asset.origin) ? asset.origin : "other";
+      return '<li><b>' + escapeMaterial(asset.name) + '</b><small>' + escapeMaterial(materialText("kind." + asset.kind)) + ' · ' +
+        escapeMaterial(materialText("origin." + origin)) + '</small><div class="core-material-actions">' +
+        (selected ? '<span class="core-material-selected">' + label("inUse") + '</span>' : action("use", "use", id)) +
+        action("remove", "remove", id) + '</div></li>';
+    }).join("") + '</ul>';
+    if (slot?.selectedAssetId) body += action("clear", "clear");
+    const full = ids.length >= (model?.MAX_CANDIDATES_PER_SLOT || 64);
+    body += '<label class="core-material-picker"><span>' + label("projectMedia") + '</span><select data-scene-material-picker' + attrs +
+      ' aria-label="' + label("projectMedia") + '"' + (full || !available.length ? ' disabled' : '') + '><option value="">' + label("chooseAsset") + '</option>' +
+      available.map(asset => '<option value="' + escapeMaterial(asset.id) + '">' + escapeMaterial(asset.name) + '</option>').join("") + '</select></label>' +
+      action("add", "add", "", full || !available.length) + (full ? '<p>' + label("capacity") + '</p>' : '');
+    const feedback = materialFeedback?.projectId === projectId && materialFeedback.sceneId === scene.id ? materialFeedback.key : null;
+    return body + '<p role="status" aria-live="polite" data-scene-material-feedback>' + (feedback ? label(feedback) : '') + '</p>';
+  }
+  function updateMaterials(panel) {
+    const section = panel.querySelector("[data-scene-materials]");
+    if (!section) return;
+    const markup = materialsMarkup();
+    if (section.__materialMarkup === markup) return;
+    const focused = document.activeElement;
+    const focus = section.contains(focused) ? { action: focused.dataset?.sceneMaterialAction, assetId: focused.dataset?.assetId,
+      picker: focused.hasAttribute?.("data-scene-material-picker") } : null;
+    section.innerHTML = markup; section.__materialMarkup = markup;
+    if (focus) {
+      const target = focus.picker ? section.querySelector("select") : [...section.querySelectorAll("button")].find(button =>
+        button.dataset.sceneMaterialAction === focus.action && button.dataset.assetId === focus.assetId);
+      (target || section).focus();
+    }
+  }
+  function materialAction(event, panel) {
+    const button = event.target.closest?.("[data-scene-material-action]");
+    if (!button || button.disabled || !panel.contains(button)) return;
+    const { sceneId, projectId, assetId, sceneMaterialAction: action } = button.dataset;
+    const persistence = window.ViralCoreProjectPersistence, current = appState();
+    try {
+      if (projectId !== persistence?.activeProjectId?.() || sceneId !== current?.scenePlan?.selectedSceneId) throw Error("STALE_SCENE");
+      const options = { projectId };
+      if (action === "import") { importLocal({ projectId, sceneId, intent: "candidate" }, button); return; }
+      else if (action === "stock") { window.dispatchEvent(new CustomEvent("viral-ai:media-discovery-open", { detail: { projectId, sceneId, kind: "video" } })); return; }
+      else if (action === "use") persistence.selectSceneMaterial(sceneId, assetId, options);
+      else if (action === "remove") persistence.removeSceneMaterialCandidate(sceneId, assetId, options);
+      else if (action === "clear") persistence.clearSceneMaterialSelection(sceneId, options);
+      else if (action === "add") {
+        const id = panel.querySelector("[data-scene-material-picker]")?.value;
+        if (!id) { materialFeedback = { projectId, sceneId, key: "chooseAsset" }; updateMaterials(panel); return; }
+        persistence.addSceneMaterialCandidate(sceneId, id, options);
+      } else return;
+      materialFeedback = null;
+    } catch { materialFeedback = { projectId, sceneId, key: "saveFailed" }; }
+    updateMaterials(panel);
+  }
+
+  function updateProjectLibrary(panel) {
+    const section = panel.querySelector("[data-project-media-library]");
+    const projectId = window.ViralCoreProjectPersistence?.activeProjectId?.();
+    const assets = mediaAssets();
+    const key = JSON.stringify([projectId, assets, locale(), window.ViralCoreProjectMedia?.importing()]);
+    if (section.__mediaKey === key) return;
+    const focusedId = section.contains(document.activeElement) ? document.activeElement.dataset?.projectMediaRemove : null;
+    const open = section.querySelector("details")?.open;
+    section.__mediaKey = key;
+    section.innerHTML = '<button type="button" class="core-asset-item" data-import-project-media' + (!projectId || window.ViralCoreProjectMedia?.importing() ? ' disabled' : '') + '>' + escapeMaterial(sourceText("importMedia")) + '</button>' +
+      '<details' + (open ? ' open' : '') + '><summary>' + escapeMaterial(sourceText("projectLibrary", { count: assets.length })) + '</summary><ul class="core-project-media-list">' +
+      assets.map(a => '<li><b>' + escapeMaterial(a.name) + '</b><small>' + escapeMaterial(sourceText("kind." + a.kind)) + ' · ' +
+        escapeMaterial(sourceText("origin." + a.origin)) + '</small><button type="button" data-project-media-remove="' + escapeMaterial(a.id) +
+        '" data-project-id="' + escapeMaterial(projectId) + '" aria-label="' + escapeMaterial(sourceText("removeNamed", { name: a.name })) + '">' +
+        escapeMaterial(sourceText("remove")) + '</button></li>').join("") + '</ul></details>';
+    if (focusedId) ([...section.querySelectorAll("[data-project-media-remove]")].find(n => n.dataset.projectMediaRemove === focusedId) || section.querySelector("summary")).focus();
+  }
+
   function ensurePanel(grid) {
     let panel = grid.querySelector(":scope > .core-editor-assets-panel");
     if (panel instanceof HTMLElement) return panel;
@@ -122,6 +233,8 @@
     panel.innerHTML =
       '<div class="core-assets-head"><strong>' + t("assets") + '</strong><button type="button" data-assets-collapse>‹</button></div>' +
       '<div class="core-assets-body">' +
+        (window.ViralCoreProjectScenes?.surface?.() || '') +
+        '<section class="core-scene-materials" data-scene-materials tabindex="-1" aria-label="' + escapeMaterial(materialText("title")) + '"></section>' +
         sectionLabel("project") +
         '<button type="button" class="core-asset-item core-source-asset" data-source-asset>' +
           '<span class="core-asset-icon">▶</span>' +
@@ -132,6 +245,7 @@
           '<span class="core-asset-copy"><b>' + t("transcript") + '</b><small data-transcript-status>' + t("noTranscript") + '</small></span>' +
         '</button>' +
         sectionLabel("media") +
+        '<section data-project-media-library></section><p role="status" aria-live="polite" data-project-media-status></p>' +
         statRow("VID", "video", "video") +
         statRow("IMG", "images", "image") +
         statRow("AUD", "audio", "audio") +
@@ -153,6 +267,19 @@
       '</div>';
 
     grid.prepend(panel);
+    panel.addEventListener("click", event => materialAction(event, panel));
+    panel.addEventListener("click", event => {
+      const button = event.target.closest?.("[data-import-project-media], [data-project-media-remove]");
+      if (!button || button.disabled) return;
+      const persistence = window.ViralCoreProjectPersistence;
+      if (button.hasAttribute("data-import-project-media")) importLocal({ projectId: persistence.activeProjectId(), intent: "project" }, button);
+      else {
+        try { persistence.removeProjectMediaAsset(button.dataset.projectMediaRemove, { projectId: button.dataset.projectId });
+          mediaFeedback = { projectId: button.dataset.projectId, status: "removed" }; }
+        catch { mediaFeedback = { projectId: button.dataset.projectId, status: "saveFailed" }; }
+        queue();
+      }
+    });
     panel.querySelector("[data-assets-collapse]")?.addEventListener("click", () => {
       applyCollapsed(panel, !panel.classList.contains("is-collapsed"));
     });
@@ -180,6 +307,10 @@
   }
 
   function updatePanel(panel, grid) {
+    updateMaterials(panel);
+    updateProjectLibrary(panel);
+    const feedback = mediaFeedback?.projectId === window.ViralCoreProjectPersistence?.activeProjectId?.() ? mediaFeedback.status : "";
+    setText(panel.querySelector("[data-project-media-status]"), feedback ? sourceText(feedback) : "");
     const video = grid.querySelector("video.preview-video, video.core-player-media");
     const source = currentSource();
     const name = panel.querySelector("[data-source-name]");
@@ -229,7 +360,7 @@
 
     const video = grid.querySelector("video.preview-video, video.core-player-media");
     const source = currentSource();
-    if (!video && !source) return;
+    if (!video && !source && !window.ViralCorePlayer?.projectPreview?.active()) return;
 
     const panel = ensurePanel(grid);
     updatePanel(panel, grid);
@@ -265,7 +396,20 @@
     }
     window.addEventListener("viral-ai:editor-preview-preserved", queue);
     window.addEventListener("viral-ai:core-state-changed", queue);
+    window.addEventListener("viral-ai:scene-plan-changed", queue);
     window.addEventListener("viral-ai:transcript-edit", queue);
+    window.addEventListener("viral-ai:project-media-feedback", event => {
+      const detail = event.detail;
+      if (!detail || detail.projectId !== window.ViralCoreProjectPersistence?.activeProjectId?.()) return;
+      if (detail.status !== "idle") {
+        const code = detail.code || "";
+        const status = detail.status !== "failed" ? detail.status : ["PROJECT_CHANGED", "PROJECT_MISMATCH"].includes(code) ? "projectChanged" :
+          code === "PROJECT_MEDIA_LIMIT" || code === "MEDIA_IMPORT_LIMIT" ? "capacity" : /^MEDIA_FILE|MEDIA_TYPE/.test(code) ? "invalidFiles" : "saveFailed";
+        mediaFeedback = { projectId: detail.projectId, status };
+        if (status !== "importing" && typeof toast === "function") toast(sourceText(status));
+      }
+      queue();
+    });
     queue();
   };
 

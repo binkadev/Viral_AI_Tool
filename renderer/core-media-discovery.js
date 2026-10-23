@@ -21,6 +21,11 @@
   let opener = null;
   let inertSnapshot = [];
   const acquisitions = new Map();
+  let drawerContext = null;
+  let plannedSearch = null;
+  let manualFilters = { query: "", kind: "video", orientation: "any" };
+  const projectMedia = () => window.ViralCoreProjectMedia;
+  const sourceText = (key, vars) => tc("projectMedia." + key, vars);
 
   function locale() {
     try {
@@ -66,10 +71,7 @@
   }
 
   function currentProjectId() {
-    const current = appState();
-    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
-    const source = jobs.find(job => job?.sourcePath && !job?.isRenderOutput);
-    return String(source?.id || source?.sourcePath || "").trim();
+    return window.ViralCoreProjectPersistence?.activeProjectId?.() || null;
   }
 
   function resultIdentity(result) {
@@ -122,37 +124,9 @@
     return (Array.isArray(library()?.assets) ? library().assets : []).some(asset => model.assetIdentity(asset) === identity);
   }
 
-  function addAcquiredAsset(rawAsset, expectedProjectId) {
-    const model = window.ViralCoreMediaLibraryModel;
-    const current = appState();
-    if (!model || !current || !rawAsset) return { status: "invalid" };
-    if (!expectedProjectId || currentProjectId() !== expectedProjectId) return { status: "project-changed" };
-    const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
-    if (count >= Number(model.MAX_PROJECT_ASSETS || 500)) return { status: "capacity" };
-
-    const candidate = {
-      ...rawAsset,
-      previewUrl: null,
-      remoteUrl: null,
-      status: "ready",
-      fileState: "available",
-      progress: 100
-    };
-    const next = model.addAssets(current.media, [candidate]);
-    if (!next.added.length) {
-      const atCapacity = next.library?.assets?.length >= Number(model.MAX_PROJECT_ASSETS || 500);
-      return { status: atCapacity ? "capacity" : "duplicate" };
-    }
-
-    current.media = next.library;
-    window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed", {
-      detail: { reason: "media-library", addedAssetIds: next.added.map(item => item.id) }
-    }));
-    return { status: "added", asset: next.added[0] };
-  }
-
+  const acquisitionKey = result => (drawerContext?.projectId || currentProjectId()) + "|" + resultIdentity(result);
   function acquisitionState(result) {
-    return acquisitions.get(resultIdentity(result)) || null;
+    return acquisitions.get(acquisitionKey(result)) || null;
   }
 
   function acquisitionErrorKey(code) {
@@ -164,38 +138,51 @@
     if (value === "MEDIA_DOWNLOAD_DUPLICATE") return "acquisitionDuplicateBody";
     if (value === "MEDIA_AUTH_REQUIRED") return "acquisitionAuthBody";
     if (value === "MEDIA_PROJECT_CHANGED") return "acquisitionProjectChangedBody";
+    if (value === "PROJECT_CHANGED" || value === "PROJECT_MISMATCH") return "acquisitionProjectChangedBody";
     return "acquisitionDownloadBody";
   }
 
   async function acquireToProject(result) {
-    const identity = resultIdentity(result);
-    if (!identity || existingIdentity(result)) return;
-    if (acquisitions.has(identity)) return;
+    if (plannedSearch && !plannedSearch.targetKinds.includes(result?.kind)) return;
+    const identity = acquisitionKey(result);
+    if (!resultIdentity(result)) return;
+    if (acquisitions.has(identity) && acquisitions.get(identity).state !== "failed") return;
 
     const model = window.ViralCoreMediaLibraryModel;
     const current = appState();
     const count = Array.isArray(current?.media?.assets) ? current.media.assets.length : 0;
-    if (!model || !current || count >= Number(model.MAX_PROJECT_ASSETS || 500)) {
+    if (!model || !current || count >= Number(model.MAX_PROJECT_ASSETS || 500) && !existingIdentity(result)) {
       renderState("capacity", "libraryFullTitle", "libraryFullBody");
       return;
     }
 
     const ticket = String(result?.acquisition?.ticket || "").trim();
-    const projectId = currentProjectId();
+    const projectId = drawerContext?.projectId;
     if (!ticket || !projectId || typeof window.desktopAPI?.acquireMedia !== "function") {
       acquisitions.set(identity, { state: "failed", progress: 0, error: "MEDIA_SOURCE_UNAVAILABLE" });
       renderResults(lastResults);
       return;
     }
 
+    let context;
+    try { context = projectMedia().begin({ ...drawerContext, parent: drawerContext, expected: result }); }
+    catch { renderNotice("projectChanged"); return; }
     const jobId = requestId("acquire");
-    acquisitions.set(identity, { jobId, state: "validating", progress: 0, error: null });
+    acquisitions.set(identity, { jobId, context, state: "validating", progress: 0, error: null });
     renderResults(lastResults);
 
     try {
-      const payload = await window.desktopAPI.acquireMedia({ jobId, projectId, ticket });
+      const existing = library().assets.find(a => model.assetIdentity(a) === model.assetIdentity(identityCandidate(result)));
+      const payload = existing ? { asset: existing } : await window.desktopAPI.acquireMedia({ jobId, projectId, ticket });
       const active = acquisitions.get(identity);
       if (!active || active.jobId !== jobId) return;
+      if (active.state === "cancelling") {
+        acquisitions.delete(identity);
+        if (projectMedia().current(drawerContext)) { renderResults(lastResults); renderNotice("cancelled"); }
+        return;
+      }
+      if (!projectMedia().current(context)) throw Object.assign(Error(), { code: "PROJECT_CHANGED" });
+      if (payload?.data?.projectId && payload.data.projectId !== projectId || payload?.data?.jobId && payload.data.jobId !== jobId) throw Object.assign(Error(), { code: "PROJECT_MEDIA_INVALID" });
 
       if (payload?.ok === false) {
         const code = payload?.error?.code || "MEDIA_DOWNLOAD_FAILED";
@@ -206,32 +193,33 @@
       }
 
       const acquired = payload?.data?.asset || payload?.asset || null;
-      const outcome = addAcquiredAsset(acquired, projectId);
-      if (outcome.status === "project-changed") {
-        acquisitions.set(identity, { ...active, state: "failed", error: "MEDIA_PROJECT_CHANGED" });
-        renderResults(lastResults);
-        return;
-      }
+      const outcome = projectMedia().admit(context, [acquired]);
       acquisitions.delete(identity);
-      if (outcome.status === "capacity") {
-        renderState("capacity", "libraryFullTitle", "libraryFullBody");
-        return;
-      }
       renderResults(lastResults);
-    } catch {
+      renderNotice(outcome.status);
+    } catch (error) {
       const active = acquisitions.get(identity);
       if (active?.jobId === jobId) {
-        acquisitions.set(identity, { ...active, state: "failed", error: "MEDIA_DOWNLOAD_FAILED" });
-        renderResults(lastResults);
+        if (active.state === "cancelling") {
+          acquisitions.delete(identity);
+          if (projectMedia().current(drawerContext)) { renderResults(lastResults); renderNotice("cancelled"); }
+          return;
+        }
+        acquisitions.set(identity, { ...active, state: "failed", error: error.code || error.message || "MEDIA_DOWNLOAD_FAILED" });
+        if (projectMedia().current(drawerContext)) {
+          if ((error.code || error.message) === "PROJECT_MEDIA_LIMIT") renderState("capacity", "libraryFullTitle", "libraryFullBody");
+          else { renderResults(lastResults); renderNotice((error.code || error.message) === "PROJECT_CHANGED" ? "projectChanged" : "saveFailed"); }
+        }
       }
-    }
+    } finally { projectMedia().finish(context); }
   }
 
   function cancelAcquisition(result) {
-    const identity = resultIdentity(result);
+    const identity = acquisitionKey(result);
     const active = acquisitions.get(identity);
     if (!active?.jobId) return;
     acquisitions.set(identity, { ...active, state: "cancelling" });
+    projectMedia().finish(active.context);
     renderResults(lastResults);
     if (typeof window.desktopAPI?.cancelMediaAcquisition === "function") {
       Promise.resolve(window.desktopAPI.cancelMediaAcquisition(active.jobId)).catch(() => {});
@@ -311,11 +299,13 @@
           '<div class="core-media-search-input"><span aria-hidden="true">⌕</span><input type="search" data-media-query autocomplete="off" /></div>' +
           '<button class="core-media-search-button" type="submit" data-media-search></button>' +
         '</form>' +
+        '<label class="core-media-planned-query" data-media-planned hidden><span></span><select data-media-planned-query></select></label>' +
         '<div class="core-media-filters">' +
           '<label><span data-media-type-label></span><select data-media-kind><option value="video"></option><option value="image"></option></select></label>' +
           '<label><span data-media-orientation-label></span><select data-media-orientation><option value="any"></option><option value="portrait"></option><option value="landscape"></option><option value="square"></option></select></label>' +
         '</div>' +
         '<div class="core-media-result-summary"><strong data-media-results-label></strong><span data-media-result-count></span></div>' +
+        '<p class="core-media-ingest-notice" role="status" aria-live="polite" data-media-ingest-notice></p>' +
         '<div class="core-media-results" data-media-results></div>' +
       '</aside>';
 
@@ -324,6 +314,11 @@
     drawer.querySelector("[data-media-form]")?.addEventListener("submit", event => {
       event.preventDefault();
       runSearch({ append: false, page: 1 });
+    });
+    drawer.querySelector("[data-media-planned-query]").addEventListener("change", event => {
+      if (!plannedSearch?.queries.includes(event.target.value)) return;
+      drawer.querySelector("[data-media-query]").value = event.target.value;
+      // Selecting a planned query does not start background work; Search is explicit.
     });
     drawer.querySelector("[data-media-results]")?.addEventListener("click", event => {
       const target = event.target instanceof Element ? event.target.closest("[data-media-action]") : null;
@@ -350,6 +345,11 @@
     return drawer;
   }
 
+  function renderNotice(key) {
+    const node = document.getElementById(DRAWER_ID)?.querySelector("[data-media-ingest-notice]");
+    if (node) node.textContent = sourceText(key);
+  }
+
   function updateCopy(drawer) {
     const title = drawer.querySelector("#core-media-discovery-title");
     const desc = drawer.querySelector("[data-media-desc]");
@@ -363,7 +363,7 @@
     const orientation = drawer.querySelector("[data-media-orientation]");
     const resultsLabel = drawer.querySelector("[data-media-results-label]");
     if (title) title.textContent = t("discoveryTitle");
-    if (desc) desc.textContent = t("discoveryDesc");
+    if (desc) desc.textContent = drawerContext?.sceneId ? sourceText("sceneSearch") : t("discoveryDesc");
     if (kicker) kicker.textContent = t("media");
     if (closeButton) { closeButton.textContent = "×"; closeButton.setAttribute("aria-label", t("close")); }
     if (query instanceof HTMLInputElement) query.placeholder = t("searchPlaceholder");
@@ -371,8 +371,7 @@
     if (typeLabel) typeLabel.textContent = t("mediaType");
     if (orientationLabel) orientationLabel.textContent = t("orientation");
     if (kind instanceof HTMLSelectElement) {
-      kind.options[0].textContent = t("video");
-      kind.options[1].textContent = t("images");
+      for (const option of kind.options) option.textContent = t(option.value === "image" ? "images" : "video");
     }
     if (orientation instanceof HTMLSelectElement) {
       orientation.options[0].textContent = t("any");
@@ -430,7 +429,7 @@
     if (!root) return;
 
     const cards = lastResults.map((result, index) => {
-      const added = existingIdentity(result);
+      const added = existingIdentity(result) && !drawerContext?.sceneId;
       const active = acquisitionState(result);
       const preview = result.thumbnailUrl || result.previewUrl || "";
       const creator = result?.attribution?.creatorName || "";
@@ -442,7 +441,7 @@
         duration > 0 ? t("duration", { seconds: Math.round(duration) }) : ""
       ].filter(Boolean).join(" · ");
       const working = active && !["failed", "cancelled"].includes(active.state);
-      const label = added ? t("addProject") : active ? progressLabel(active) : t("addProject");
+      const label = added ? t("addProject") : active ? progressLabel(active) : drawerContext?.sceneId ? sourceText("addScene") : t("addProject");
       const action = working ? "cancel-add" : "add";
       const disabled = added || (active?.state === "cancelling");
       const progress = active && working ? Math.max(0, Math.min(100, Number(active.progress || 0))) : 0;
@@ -476,6 +475,7 @@
   }
 
   async function runSearch({ append = false, page = 1 } = {}) {
+    if (!projectMedia()?.current(drawerContext)) { renderNotice("projectChanged"); return; }
     const drawer = ensureDrawer();
     const queryEl = drawer.querySelector("[data-media-query]");
     const kindEl = drawer.querySelector("[data-media-kind]");
@@ -489,10 +489,15 @@
           provider: "auto"
         };
     const query = context.query;
+    if (plannedSearch && (!plannedSearch.queries.includes(query) || !plannedSearch.targetKinds.includes(context.kind))) {
+      cancelActiveSearch(); ++activeRequest;
+      renderNotice("projectChanged"); return;
+    }
 
     cancelActiveSearch();
     const requestNumber = ++activeRequest;
     const searchRequestId = requestId("search");
+    const owner = drawerContext;
     activeSearchRequestId = searchRequestId;
     if (!append) {
       lastResults = [];
@@ -530,7 +535,7 @@
         perPage: SEARCH_PAGE_SIZE,
         provider: context.provider
       });
-      if (requestNumber !== activeRequest) return;
+      if (requestNumber !== activeRequest || !projectMedia().current(owner)) return;
       if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
       loadingMore = false;
       if (payload?.ok === false) {
@@ -554,13 +559,13 @@
       }
 
       const data = payload?.data && typeof payload.data === "object" ? payload.data : payload;
-      const received = Array.isArray(data?.results) ? data.results : [];
+      const received = (Array.isArray(data?.results) ? data.results : []).filter(result => !plannedSearch || result.kind === context.kind);
       lastResults = append ? mergeResults(lastResults, received) : mergeResults([], received);
       nextPage = Number.isFinite(Number(data?.nextPage)) && Number(data.nextPage) > 0 ? Number(data.nextPage) : null;
       searchContext = context;
       renderResults(lastResults);
     } catch {
-      if (requestNumber !== activeRequest) return;
+      if (requestNumber !== activeRequest || !projectMedia().current(owner)) return;
       if (activeSearchRequestId === searchRequestId) activeSearchRequestId = null;
       loadingMore = false;
       if (append && lastResults.length) renderResults(lastResults);
@@ -571,6 +576,12 @@
   function open(detail = {}) {
     const drawer = ensureDrawer();
     if (!drawer.classList.contains("hidden")) return;
+    const orchestration = detail.authority === "scene-orchestration";
+    if (orchestration && (!window.ViralSceneOrchestration?.runtime.acceptsSearch(detail.context) ||
+        detail.context.projectId !== detail.projectId || detail.context.sceneId !== detail.sceneId)) return;
+    plannedSearch = orchestration ? detail.context : null;
+    try { drawerContext = projectMedia().begin({ projectId: detail.projectId || currentProjectId(), sceneId: detail.sceneId || null, intent: detail.sceneId ? "candidate" : "project" }); }
+    catch { window.dispatchEvent(new CustomEvent("viral-ai:project-media-feedback", { detail: { projectId: currentProjectId(), status: "failed", code: "PROJECT_CHANGED" } })); return; }
     opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     updateCopy(drawer);
     drawer.classList.remove("hidden");
@@ -578,9 +589,29 @@
     makeBackgroundInert(drawer);
     document.documentElement.classList.add("core-media-discovery-open");
     const kind = drawer.querySelector("[data-media-kind]");
-    if (kind instanceof HTMLSelectElement && ["video", "image"].includes(detail.kind)) kind.value = detail.kind;
+    if (kind instanceof HTMLSelectElement) {
+      kind.replaceChildren(...(plannedSearch?.targetKinds || ["video", "image"]).map(value => {
+        const option = document.createElement("option"); option.value = value; option.textContent = t(value === "image" ? "images" : "video"); return option;
+      }));
+      if (plannedSearch) kind.value = plannedSearch.kind;
+      else kind.value = ["video", "image"].includes(detail.kind) ? detail.kind : manualFilters.kind;
+    }
+    const planned = drawer.querySelector("[data-media-planned]"), query = drawer.querySelector("[data-media-query]");
+    planned.hidden = !plannedSearch; query.readOnly = !!plannedSearch;
+    if (plannedSearch) {
+      planned.querySelector("span").textContent = tc("sceneActions.query");
+      const choices = planned.querySelector("select"); choices.setAttribute("aria-label", tc("sceneActions.query"));
+      choices.replaceChildren(...plannedSearch.queries.map(value => { const option = document.createElement("option"); option.value = value; option.textContent = value; return option; }));
+      choices.value = plannedSearch.query; query.value = plannedSearch.query;
+      drawer.querySelector("[data-media-orientation]").value = plannedSearch.orientation;
+    } else {
+      query.value = manualFilters.query;
+      drawer.querySelector("[data-media-orientation]").value = manualFilters.orientation;
+    }
     renderState("empty", "emptyTitle", "emptyBody");
+    renderNotice(drawerContext.sceneId ? "sceneSearch" : "projectSearch");
     requestAnimationFrame(() => drawer.querySelector("[data-media-query]")?.focus?.());
+    if (plannedSearch) runSearch(); // The explicit Scene Find click is authority.
   }
 
   function close() {
@@ -595,11 +626,23 @@
     drawer.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("core-media-discovery-open");
     restoreBackground();
+    const context = drawerContext;
+    projectMedia()?.finish(drawerContext); drawerContext = null;
+    const searchOwner = plannedSearch; plannedSearch = null;
+    if (!searchOwner) manualFilters = { query: drawer.querySelector("[data-media-query]").value,
+      kind: drawer.querySelector("[data-media-kind]").value, orientation: drawer.querySelector("[data-media-orientation]").value };
     const target = opener;
     opener = null;
     requestAnimationFrame(() => {
       if (target?.isConnected && typeof target.focus === "function") target.focus();
+      else if (context?.projectId === currentProjectId()) {
+        const scene = window.ViralCoreProjectPersistence?.snapshot()?.scenePlan?.selectedSceneId;
+        const fallback = context.sceneId === scene ? document.querySelector('[data-scene-material-action="stock"]') : null;
+        const planned = searchOwner && context.sceneId === scene ? document.querySelector('[data-scene-action="find"]') : null;
+        (planned || fallback || document.querySelector("[data-find-media]"))?.focus();
+      }
     });
+    if (searchOwner) window.dispatchEvent(new CustomEvent("viral-ai:scene-search-closed", { detail: searchOwner }));
   }
 
   if (typeof window.desktopAPI?.onMediaAcquisitionProgress === "function") {
@@ -608,6 +651,7 @@
       if (!jobId) return;
       for (const [identity, active] of acquisitions.entries()) {
         if (active?.jobId !== jobId) continue;
+        if (!projectMedia().current(active.context) || active.state === "cancelling" || payload?.projectId && payload.projectId !== active.context.projectId) return;
         const stateValue = String(payload?.state || active.state || "downloading");
         if (stateValue === "cancelled") acquisitions.delete(identity);
         else acquisitions.set(identity, {
@@ -625,6 +669,12 @@
   }
 
   window.addEventListener("viral-ai:media-discovery-open", event => open(event?.detail || {}));
+  window.addEventListener("viral-ai:project-snapshot-restored", () => {
+    for (const active of acquisitions.values()) if (active.state !== "failed") {
+      Promise.resolve(window.desktopAPI?.cancelMediaAcquisition?.(active.jobId)).catch(() => {});
+    }
+    acquisitions.clear(); close();
+  });
   window.addEventListener("keydown", event => {
     if (!document.documentElement.classList.contains("core-media-discovery-open")) return;
     if (event.key === "Escape") {

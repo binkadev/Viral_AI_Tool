@@ -1,3 +1,5 @@
+> Historical foundation document. For the current production contract see [Muse generation execution](MUSE_GENERATION_EXECUTION.md). Earlier readiness-only and browser-process approaches below are not the current execution path.
+
 # AI Create 2B-1: Muse foundation
 
 Muse is registered behind the existing ProviderRegistry and GenerationService. It uses the runtime's readiness/preflight/start/reconcile/cancel contract; reconcile remains the future polling/recovery boundary. No separate jobs or media state are created.

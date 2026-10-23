@@ -68,7 +68,7 @@ test("requests normalize scene/model metadata and reject unsafe inputs", () => {
   assert.equal(normalized.mode, "text-to-video");
   assert.equal(normalized.aspectRatio, "9:16");
   assert.equal(normalized.sceneId, "scene-1");
-  assert.equal(normalizeRequest({ ...request(), prompt: " hello " }).prompt, "hello");
+  assert.equal(normalizeRequest({ ...request(), prompt: " hello " }).prompt, " hello ");
   assert.equal(normalizeRequest(request("x", { referenceAssetIds: ["asset-1"] })).referenceAssetIds[0], "asset-1");
   for (const change of [
     { apiKey: "secret" }, { prompt: " " }, { prompt: "x".repeat(8001) }, { goal: "other" },
@@ -252,6 +252,23 @@ test("completion verifies assigned output and durable estimates do not drift on 
   const reloaded = new GenerationStore(f.root).load()[0];
   assert.equal(reloaded.estimate.estimatedUsd, 123.45, "historical estimate must remain the recorded snapshot");
   assert.deepEqual(reloaded.output, { fileName: job.id + ".mp4" });
+  const verification = f.service.get(job.id).outputVerification;
+  assert.equal(verification.version, 1);
+  assert.equal(verification.size, 12);
+  assert.match(verification.sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(reloaded.outputVerification, verification);
+  assert.equal(f.service.output(job.id).verified, true);
+  const outputPath = f.service.output(job.id).path, original = fs.readFileSync(outputPath);
+  // Same length and still an ftyp header: content integrity must reject it.
+  const changed = Buffer.from(original); changed[11] ^= 1; fs.writeFileSync(outputPath, changed);
+  assert.throws(() => f.service.output(job.id), { code: "ASSET_UNAVAILABLE" });
+  fs.writeFileSync(outputPath, original);
+  const restarted = new GenerationService({root:f.root, registry:f.registry});
+  assert.equal(restarted.output(job.id).verified, true);
+  delete restarted.jobs.find(item => item.id === job.id).outputVerification;
+  assert.equal(restarted.output(job.id).verified, false, "legacy output is not auto-attachment evidence");
+  fs.unlinkSync(outputPath);
+  assert.throws(() => f.service.output(job.id));
 });
 
 test("explicit model selection is honored only when that model is ready", async t => {
@@ -306,7 +323,7 @@ test("renderer readiness is native-authoritative, project-scoped, fail closed an
     window: {
       addEventListener: (name, fn) => { handlers[name] = fn; },
       crypto: { randomUUID: () => "request-id" },
-      ViralCoreProjectPersistence: { snapshot: () => ({ projectId: "project-1", scenePlan: { selectedSceneId: "scene-1" } }) },
+      ViralCoreProjectPersistence: { ensureProject: () => { throw Error("readiness must not create a project"); }, snapshot: () => ({ projectId: "project-1", scenePlan: { selectedSceneId: "scene-1" } }) },
       desktopAPI: { getGenerationStatus: async () => {
         if (reject) throw Error("offline");
         return { ok: true, value: { ready, state: ready ? "ready" : "not_configured" } };

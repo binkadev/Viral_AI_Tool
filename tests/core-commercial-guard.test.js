@@ -34,13 +34,13 @@ assert(!bootstrap.includes("setInterval("), "Startup stabilization must not poll
 
 for (const chromeToken of [
   "function primeCommercialChrome()",
-  'workspaceName.textContent = en ? "Video Studio" : "Studio video"',
   'accountName.textContent = en ? "Cloud account" : "Tài khoản Cloud"',
   'projectAction.textContent = en ? "Import video" : "Nhập video"',
   "primeCommercialChrome();"
 ]) {
   assert(bootstrap.includes(chromeToken), "Bootstrap commercial first-paint copy missing: " + chromeToken);
 }
+assert(!bootstrap.includes('.workspace strong'), "Bootstrap must leave active project identity to its canonical owner.");
 
 for (const productionModule of [
   "core-accounts-real-data.js",

@@ -21,10 +21,13 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install packaging test dependency
+      - name: Install isolated test dependencies
         run: |
           ASAR_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@electron/asar'].version")
-          npm install --prefix "$RUNNER_TEMP/muse-ci" --no-save "@electron/asar@$ASAR_VERSION"
+          FFMPEG_STATIC_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/ffmpeg-static'].version")
+          npm install --prefix "$RUNNER_TEMP/muse-ci" --no-save \
+            "@electron/asar@$ASAR_VERSION" \
+            "ffmpeg-static@$FFMPEG_STATIC_VERSION"
           echo "NODE_PATH=$RUNNER_TEMP/muse-ci/node_modules" >> "$GITHUB_ENV"
 
       - name: Test durable backend state

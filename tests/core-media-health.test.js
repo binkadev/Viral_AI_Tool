@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
-const health = fs.readFileSync(path.join(root, "renderer", "core-media-health.js"), "utf8");
+const health = fs.readFileSync(path.join(root, "renderer", "core-media-health.js"), "utf8").replace(/\r\n/g, "\n");
 const css = fs.readFileSync(path.join(root, "renderer", "core-media-health.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 

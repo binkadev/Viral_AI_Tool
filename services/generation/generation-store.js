@@ -20,6 +20,7 @@ function validUuid(value) {
 }
 
 function safeEstimate(value, modelId, request) {
+  if(request.providerId==='muse')return {modelId:null,provider:'muse',known:false,providerCredits:null,estimatedUsd:null,pricingKind:'unknown',durationSeconds:null,resolution:null};
   if (!value || typeof value !== "object") return estimateGenerationCost(modelId, request);
   const estimate = {
     modelId,
@@ -64,6 +65,12 @@ function safeAsset(value) {
   return value && /^[a-f0-9-]{36}\.mp4$/i.test(value.fileName) ? { fileName: value.fileName } : null;
 }
 
+function safeOutputVerification(value) {
+  if(value.version!==1 || !Number.isSafeInteger(value.size) || value.size<12 ||
+      !/^[a-f0-9]{64}$/.test(value.sha256))throw failure('STORE_UNAVAILABLE');
+  return {version:1,size:value.size,sha256:value.sha256};
+}
+
 class GenerationStore {
   constructor(root) {
     this.root = root;
@@ -76,7 +83,7 @@ class GenerationStore {
       if (data.version !== 1 || !Array.isArray(data.jobs)) throw failure("STORE_UNAVAILABLE");
       const ids = new Set();
       return data.jobs.map(job => {
-        const model = getModel(job.modelId);
+        const model = job.modelId===null && job.provider==='muse' && job.request?.providerId==='muse' ? {id:null,provider:'muse'} : getModel(job.modelId);
         if (
           !validUuid(job.id) ||
           ids.has(job.id) ||
@@ -89,6 +96,8 @@ class GenerationStore {
         }
         ids.add(job.id);
         const request = normalizeRequest(job.request);
+        if(job.manualRecovery!==undefined && (model.provider!=='muse' || request.providerId!=='muse'))throw failure('STORE_UNAVAILABLE');
+        if(job.outputResolution!==undefined && (job.manualRecovery?.version!==1 || job.manualRecovery.eligible!==true))throw failure('STORE_UNAVAILABLE');
         const progress = validProgress(job.progress) ? job.progress : 0;
         const estimate = safeEstimate(job.estimate, model.id, request);
         const asset = safeAsset(job.asset || job.output);
@@ -111,6 +120,7 @@ class GenerationStore {
           estimate,
           usage: safeUsage(job.usage),
           output: asset ? { fileName: asset.fileName } : null,
+          ...(job.outputVerification ? { outputVerification: safeOutputVerification(job.outputVerification) } : {}),
           error: errorCode ? { code: errorCode } : null,
           retryOf: validUuid(job.retryOf) ? job.retryOf : null,
           attempts: safeAttempts(job.attempts, job.createdAt),
@@ -120,7 +130,10 @@ class GenerationStore {
           completedAt: Number.isFinite(Date.parse(job.completedAt)) ? job.completedAt : null,
           cancelledAt: Number.isFinite(Date.parse(job.cancelledAt)) ? job.cancelledAt : null,
           errorCode,
-          asset
+          asset,
+          ...(job.executionAudit===undefined?{}:{executionAudit:require("./execution-audit").persistedMarker(job.executionAudit)}),
+          ...(job.manualRecovery===undefined?{}:{manualRecovery:require('./output-resolution').eligibility(job.manualRecovery)}),
+          ...(job.outputResolution===undefined?{}:{outputResolution:require('./output-resolution').validate(job.outputResolution,{id:job.id,projectId:request.projectId,sceneId:request.sceneId})})
         };
       });
     } catch (error) {
@@ -132,9 +145,17 @@ class GenerationStore {
   save(jobs) {
     let fd;
     try {
+      for(const job of jobs) {
+        if(job.manualRecovery!==undefined && (job.provider!=='muse' || job.request.providerId!=='muse'))throw failure('STORE_UNAVAILABLE');
+        if(job.outputResolution!==undefined && job.manualRecovery?.eligible!==true)throw failure('STORE_UNAVAILABLE');
+        if(job.manualRecovery!==undefined)require('./output-resolution').eligibility(job.manualRecovery);
+        if(job.outputResolution!==undefined)require('./output-resolution').validate(job.outputResolution,job);
+      }
       fs.mkdirSync(this.root, { recursive: true });
       fd = fs.openSync(this.file + ".tmp", "w", 0o600);
-      fs.writeFileSync(fd, JSON.stringify({ version: 1, jobs }));
+      const persistedJobs = jobs.map(job => job.executionAudit === undefined ? job :
+        {...job, executionAudit: require("./execution-audit").persistedMarker(job.executionAudit)});
+      fs.writeFileSync(fd, JSON.stringify({ version: 1, jobs: persistedJobs }));
       fs.fsyncSync(fd);
       fs.closeSync(fd);
       fd = undefined;

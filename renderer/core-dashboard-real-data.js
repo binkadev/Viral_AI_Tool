@@ -231,9 +231,18 @@
     const source = sourceJobs()[0] || null;
     const workspace = document.querySelector(".workspace strong");
     if (workspace) {
-      const projectName = source?.name || fileName(source?.sourcePath) || c.noProject;
-      workspace.textContent = projectName;
-      workspace.title = projectName;
+      let registryName = "";
+      try {
+        const persistence = window.ViralCoreProjectPersistence;
+        const activeId = persistence?.activeProjectId?.();
+        const projects = persistence?.listProjects?.();
+        const active = activeId && Array.isArray(projects)
+          ? projects.find(project => project?.projectId === activeId) : null;
+        if (typeof active?.projectName === "string" && active.projectName.trim()) registryName = active.projectName;
+      } catch {}
+      const projectName = registryName || source?.name || fileName(source?.sourcePath) || c.noProject;
+      if (workspace.textContent !== projectName) workspace.textContent = projectName;
+      if (workspace.title !== projectName) workspace.title = projectName;
     }
 
     const usage = document.querySelector('[data-core-placeholder="account-usage"]');

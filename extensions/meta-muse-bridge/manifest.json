@@ -1,11 +1,38 @@
 {
   "manifest_version": 3,
   "name": "Viral AI · Meta Muse Bridge",
-  "version": "0.2.0",
+  "version": "0.3.18",
   "description": "Muse session readiness for Viral AI Tool.",
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["https://muse.ai/*", "http://127.0.0.1/*"],
-  "background": {"service_worker": "service-worker.js"},
-  "content_scripts": [{"matches": ["https://muse.ai/*"], "js": ["content-script.js"], "run_at": "document_idle"}],
-  "action": {"default_title": "Viral AI · Meta Muse Bridge", "default_popup": "popup.html"}
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://muse.ai/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://muse.ai/*"
+      ],
+      "js": [
+        "execution-audit.js",
+        "acceptance-replay.js",
+        "receipt-v2.js",
+        "manual-recovery-contract.js",
+        "manual-recovery.js",
+        "content-manual-recovery.js",
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Viral AI · Meta Muse Bridge",
+    "default_popup": "popup.html"
+  }
 }

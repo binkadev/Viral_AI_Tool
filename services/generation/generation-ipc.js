@@ -1,6 +1,7 @@
 "use strict";
 
 const { identifier } = require("./generation-request");
+const { failure } = require('./generation-job');
 
 const SAFE_CODES = new Set([
   "INVALID_REQUEST",
@@ -13,16 +14,44 @@ const SAFE_CODES = new Set([
   "DUPLICATE_JOB",
   "JOB_NOT_FOUND",
   "RETRY_UNSAFE",
-  "UNAVAILABLE"
+  "UNAVAILABLE",
+  "RECOVERY_CHANGED",
+  "RECOVERY_TOO_MANY"
 ]);
 
-function registerGenerationIpc({ ipcMain, getService, trusted }) {
+function registerGenerationIpc({ ipcMain, getService, trusted, developmentDiagnostics=false }) {
+  ipcMain.on?.('generation:development-diagnostics', event => {
+    event.returnValue = developmentDiagnostics===true && trusted(event)===true;
+  });
   const noPayload = (service, payload, fn) => {
     if (payload !== undefined) throw 0;
     return fn(service);
   };
 
   const handlers = {
+    "execution-audit": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.executionAuditReport(payload);
+    },
+    "attachment-report": (service,payload)=>service.reportGenerationAttachment(payload),
+    "recovery-candidates": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.listRecoveryCandidates(payload);
+    },
+    "recovery-reveal": (service,payload)=>{
+      const C=require('../../extensions/meta-muse-bridge/manual-recovery-contract');
+      if(!C.exact(payload,['jobId','candidateId']) || !identifier(payload.jobId) || !C.opaque(payload.candidateId))throw 0;
+      return service.revealRecoveryCandidate(payload.jobId,payload.candidateId);
+    },
+    "recovery-confirm": (service,payload)=>{
+      const C=require('../../extensions/meta-muse-bridge/manual-recovery-contract');
+      if(!C.exact(payload,['jobId','candidateId']) || !identifier(payload.jobId) || !C.opaque(payload.candidateId))throw 0;
+      return service.confirmRecoveryCandidate(payload.jobId,payload.candidateId);
+    },
+    "recovery-dismiss": (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.dismissRecovery(payload);
+    },
     status: (service, payload) => noPayload(service, payload, current => current.readiness()),
     providers: (service, payload) => noPayload(service, payload, async current => {
       const status = await current.readiness();
@@ -36,6 +65,19 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
     "provider-check": (service, payload) => {
       if (!identifier(payload)) throw 0;
       return service.checkProvider(payload);
+    },
+    "provider-runtime-diagnosis": (service,payload) => {
+      if(!identifier(payload))throw 0;
+      return service.providerRuntimeDiagnosis(payload);
+    },
+    "acceptance-trace": (service,payload) => {
+      if(!identifier(payload))throw 0;
+      return service.acceptanceTrace(payload);
+    },
+    "ownership-diagnosis": (service,payload) => {
+      if(developmentDiagnostics!==true)throw failure('UNAVAILABLE');
+      if(!identifier(payload))throw 0;
+      return service.diagnoseMuseOwnership(payload);
     },
     "provider-session-open": (service, payload) => {
       if (!identifier(payload)) throw 0;
@@ -69,11 +111,15 @@ function registerGenerationIpc({ ipcMain, getService, trusted }) {
     submit: (service, payload) => service.submit(payload),
     list: (service, payload) => {
       if (!identifier(payload)) throw 0;
-      return service.list(payload);
+      return service.list(payload).map(job => service.publicJob(job));
     },
     get: (service, payload) => {
       if (!identifier(payload)) throw 0;
-      return service.get(payload);
+      return service.publicJob(service.get(payload));
+    },
+    output: (service,payload)=>{
+      if(!identifier(payload))throw 0;
+      return service.output(payload);
     },
     cancel: (service, payload) => {
       if (!identifier(payload)) throw 0;

@@ -1,8 +1,8 @@
 (function installCoreMediaRestore() {
   "use strict";
 
-  const restoring = new Set();
-  const completed = new Set();
+  const restoring = new WeakSet();
+  const completed = new WeakSet();
 
   function appState() {
     try { return typeof state !== "undefined" ? state : null; }
@@ -38,11 +38,10 @@
     const source = latestSource(current);
     if (!source?.sourcePath || source.previewUrl || source.fileState === "missing") return;
 
-    const key = String(source.sourcePath);
-    if (restoring.has(key) || completed.has(key)) return;
+    if (restoring.has(source) || completed.has(source)) return;
     if (!window.desktopAPI?.fileStatus || !window.desktopAPI?.getVideoUrl) return;
 
-    restoring.add(key);
+    restoring.add(source);
     source.mediaState = "reading";
 
     try {
@@ -51,7 +50,7 @@
         source.fileState = "missing";
         source.mediaState = "missing";
         source.previewUrl = "";
-        completed.add(key);
+        completed.add(source);
         persist();
         rerender("source-missing-on-reopen", source.sourcePath);
         return;
@@ -66,7 +65,7 @@
       source.previewUrl = previewUrl;
       source.fileState = "available";
       source.mediaState = "ready";
-      completed.add(key);
+      completed.add(source);
       persist();
       rerender("preview-restored", source.sourcePath);
     } catch {
@@ -74,7 +73,7 @@
       // Technical failures stay in the desktop diagnostic logs.
       source.mediaState = "preview-unavailable";
     } finally {
-      restoring.delete(key);
+      restoring.delete(source);
     }
   }
 

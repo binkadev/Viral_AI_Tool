@@ -2,6 +2,24 @@
 
 All notable product and release-engineering changes are tracked here.
 
+## 0.14.1-beta.3 — Local update verification marker
+
+- Version-only update target for the loopback beta.2 → beta.3 installation test; no additional product features.
+
+## 0.14.1-beta.2 — Private Beta update seed
+
+- Limit primary navigation to Home, Create with AI, Generation progress, Library and Settings; retain contextual import and Project Studio handoffs.
+- Add main-process update checks, explicit downloads, progress and safe Install & Restart with VI/EN Settings and a non-blocking notification.
+- Configure the GitHub beta channel without publishing; retain normal checksum verification for unsigned private testing.
+- beta.1 requires a manual beta.2 installation once. Only beta.2 and later contain this updater.
+
+## 0.14.1-beta.1 — First private Windows Beta
+
+- Package the existing Project v5 / MediaAssembly foundation with Electron 38.2.0 and the existing x64 NSIS installer.
+- Identify this build as Private Beta in the existing version surface; remote update and release URLs are unset.
+- Retain user data on ordinary uninstall. This unsigned build is for private testing, with no public release or automatic updating.
+- Muse extension 0.3.18 and all execution, receipt, recovery and audit contracts remain unchanged.
+
 ## 0.14.0 — Production hardening & Windows release baseline
 
 ### Product

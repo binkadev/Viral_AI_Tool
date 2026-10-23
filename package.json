@@ -1,9 +1,11 @@
 {
   "name": "viral-ai-tool",
-  "version": "0.14.0",
+  "version": "0.14.1-beta.2",
   "description": "Viral AI Tool desktop video automation studio",
   "main": "startup-main.js",
-  "author": { "name": "Viral AI Tool" },
+  "author": {
+    "name": "Viral AI Tool"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
@@ -15,6 +17,7 @@
     "test:backend-state": "node dev-backend/tests/state-persistence.test.js",
     "test:backend-restart": "node dev-backend/tests/server-restart.integration.test.js",
     "test:backend-production": "node dev-backend/tests/production-mode.integration.test.js",
+    "test:private-beta": "node --test tests/private-beta-packaging.test.js",
     "test:release-policy": "node tests/release-policy.test.js",
     "test:release-assets": "node tests/release-assets.test.js",
     "test:release-readiness": "node tests/release-readiness.test.js",
@@ -34,18 +37,34 @@
     "test:core-player": "node tests/core-player.test.js && node tests/core-player-mutation-loop.test.js",
     "test:core-player-workstation": "node tests/core-player-workstation.test.js",
     "test:core-transcript": "node tests/core-transcript.test.js",
-    "test:core-project-persistence": "node tests/core-project-persistence.test.js",
+    "test:media-assembly": "node --test tests/core-media-assembly.test.js tests/core-media-assembly-persistence.test.js tests/core-editor-assets.test.js",
+    "test:multi-scene": "node --test tests/core-multi-scene-model.test.js tests/core-multi-scene-persistence.test.js",
+    "test:continuous-preview": "node --test tests/core-continuous-preview-model.test.js tests/core-continuous-preview-runtime.test.js tests/core-continuous-preview-ipc.test.js",
+    "test:multi-source-materials": "node --test tests/core-multi-source-materials.test.js",
+    "test:voice-subtitle-bgm": "node --test tests/core-project-audio.test.js tests/core-project-audio-runtime.test.js tests/core-project-audio-followers.test.js tests/project-voice-service.test.js",
+    "test:production-modes": "node --test tests/core-production-modes.test.js",
+    "test:scene-orchestration": "node --test tests/core-scene-orchestration.test.js",
+    "test:core-project-persistence": "node tests/core-project-persistence.test.js && node --test tests/core-project-registry.test.js",
     "test:core-media-library": "node tests/core-media-library-model.test.js",
     "test:core-scene-plan": "node tests/core-scene-plan-model.test.js",
     "test:core-scene-plan-persistence": "node tests/core-scene-plan-persistence.test.js",
     "test:generation-visual-harness": "node --test tests/generation-visual-harness.test.js",
-    "test:generation-progress": "node tests/core-generation-progress.test.js",
-    "test:muse-extension": "node --test tests/muse-extension-readiness.test.js",
+    "dev:generated-handoff": "node dev/run-generated-handoff.js",
+    "test:generated-handoff": "node --test tests/generated-handoff-harness.test.js",
+    "test:generated-handoff-desktop": "node dev/run-generated-handoff.js --verify",
+    "test:generation-progress": "node tests/core-generation-progress.test.js && node --test tests/core-generated-media.test.js",
+    "test:muse-manual-recovery": "node --test tests/muse-manual-recovery.test.js tests/muse-manual-recovery-ui.test.js",
+    "dev:muse-manual-recovery": "node dev/run-manual-recovery.js",
+    "dev:execution-audit": "node dev/run-execution-audit.js",
+    "dev:execution-audit-v2": "node dev/run-execution-audit-v2.js",
+    "test:execution-audit": "node --test tests/execution-audit.test.js tests/execution-audit-v2.test.js",
+    "test:muse-execution": "node --test tests/muse-generation-execution.test.js tests/muse-acceptance-replay.test.js tests/muse-ownership-diagnostic.test.js tests/muse-interaction-diagnostics.test.js",
+    "test:muse-extension": "node --test tests/muse-extension-readiness.test.js tests/muse-development-diagnostics.test.js",
     "test:muse-browser": "node --test tests/muse-browser-discovery.test.js tests/muse-browser-bridge.test.js",
     "test:muse-foundation": "node --test tests/muse-foundation.test.js tests/core-video-provider-settings.test.js",
     "test:generation-runtime": "node --test tests/generation-runtime.test.js",
     "test:generation-router": "node tests/generation-router.test.js",
-    "test:core-ai-create": "node tests/core-ai-create.test.js",
+    "test:core-ai-create": "node tests/core-ai-create.test.js && node tests/core-ai-first-project.test.js",
     "test:startup-shell": "node tests/startup-shell-guard.test.js",
     "test:media-local-files": "node tests/media-local-files.test.js",
     "test:media-provider-adapters": "node tests/media-provider-adapters.test.js",
@@ -57,7 +76,7 @@
     "test:core-capabilities": "node tests/core-capabilities.test.js",
     "test:core-job-model": "node tests/core-job-model.test.js",
     "test:core-media-restore": "node tests/core-media-restore.test.js",
-    "test:core-product-shell": "node tests/core-product-shell.test.js",
+    "test:core-product-shell": "node tests/core-product-shell.test.js && node tests/core-shell-project-context.test.js",
     "test:core-creator-home": "node tests/core-creator-home.test.js",
     "test:core-editor-stability": "node tests/core-editor-stability.test.js",
     "test:core-editor-render-stability": "node tests/core-editor-render-stability.test.js",
@@ -83,7 +102,14 @@
     "test:core-creator-home-production": "node tests/core-creator-home-production.test.js",
     "test:core-export-folder-recovery": "node tests/core-export-folder-recovery.test.js",
     "test:core-commercial-guard": "node tests/core-commercial-guard.test.js",
-    "test:core-commercial": "npm run test:core-commercial-guard && npm run test:startup-shell && npm run test:core-product-shell && npm run test:core-ai-create && npm run test:generation-router && npm run test:generation-runtime && npm run test:muse-foundation && npm run test:muse-browser && npm run test:muse-extension && npm run test:generation-progress && npm run test:generation-visual-harness && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:core-scene-plan && npm run test:core-scene-plan-persistence && npm run test:media-local-files && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy && npm run test:core-editor-observer-storm"
+    "test:core-commercial": "npm run test:project-render && npm run test:production-manager && npm run test:batch-production && npm run test:telegram-notifications && npm run test:voice-subtitle-bgm && npm run test:production-modes && npm run test:scene-orchestration && npm run test:multi-source-materials && npm run test:continuous-preview && npm run test:multi-scene && npm run test:media-assembly && npm run test:commercial-design-navigation && npm run test:project-identity && npm run test:core-commercial-guard && npm run test:startup-shell && npm run test:core-product-shell && npm run test:core-ai-create && npm run test:generation-router && npm run test:generation-runtime && npm run test:muse-foundation && npm run test:muse-browser && npm run test:muse-extension && npm run test:muse-execution && npm run test:muse-manual-recovery && npm run test:generation-progress && npm run test:generation-visual-harness && npm run test:core-creator-home-production && npm run test:core-workflow && npm run test:core-render-output-integrity && npm run test:core-player && npm run test:core-player-workstation && npm run test:core-transcript && npm run test:core-project-persistence && npm run test:core-media-library && npm run test:core-scene-plan && npm run test:core-scene-plan-persistence && npm run test:media-local-files && npm run test:core-timeline-workstation && npm run test:core-editor-panels-workstation && npm run test:core-editor-shortcuts && npm run test:core-editor-render-stability && npm run test:core-editor-output-state && npm run test:core-job-file-health && npm run test:core-accounts-real-data && npm run test:core-settings-production && npm run test:core-library-output-recovery && npm run test:core-export-folder-recovery && npm run test:core-motion-policy && npm run test:core-editor-observer-storm",
+    "test:private-beta-updater": "node --test tests/private-beta-updater.test.js tests/private-beta-shell.test.js",
+    "test:project-render": "node --test tests/core-project-render.test.js tests/core-project-render-runtime.test.js tests/project-render-service.test.js",
+    "test:production-manager": "node --test tests/core-production-manager.test.js",
+    "test:batch-production": "node --test tests/core-batch-production.test.js",
+    "test:telegram-notifications": "node --test tests/telegram-notifications.test.js",
+    "test:commercial-design-navigation": "node --test tests/core-commercial-design-navigation.test.js",
+    "test:project-identity": "node --test tests/core-project-identity.test.js"
   },
   "devDependencies": {
     "electron": "38.2.0",
@@ -94,11 +120,29 @@
     "afterPack": "scripts/verify-muse-package.js",
     "productName": "Viral AI Tool",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
-    "directories": { "output": "release" },
-    "files": ["startup-main.js", "main.js", "preload.js", "renderer/**/*", "assets/**/*", "services/**/*", "extensions/**/*", "release-info.json"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "startup-main.js",
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "services/**/*",
+      "extensions/**/*",
+      "release-info.json"
+    ],
     "win": {
       "icon": "assets/icon.ico",
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "executableName": "Viral AI Tool",
       "requestedExecutionLevel": "asInvoker"
     },
@@ -106,6 +150,7 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "oneClick": false,
+      "deleteAppDataOnUninstall": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
@@ -113,15 +158,27 @@
       "uninstallDisplayName": "Viral AI Tool",
       "runAfterFinish": true
     },
+    "asar": true,
     "asarUnpack": [
       "node_modules/ffmpeg-static/**",
       "node_modules/sherpa-onnx-node/**",
       "node_modules/sherpa-onnx-win-x64/**",
       "services/speech/local-worker.js"
     ],
-    "copyright": "Copyright © 2026 Viral AI Tool"
+    "copyright": "Copyright © 2026 Viral AI Tool",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "binkadev",
+        "repo": "Viral_AI_Tool",
+        "channel": "beta",
+        "releaseType": "prerelease"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": false
   },
   "dependencies": {
+    "electron-updater": "6.6.2",
     "ffmpeg-static": "5.3.0",
     "sherpa-onnx-node": "1.13.8",
     "sherpa-onnx-win-x64": "1.13.8"

@@ -1,0 +1,19 @@
+html[data-private-beta="true"] .sidebar-bottom,
+html[data-private-beta="true"] .release-info-card .release-actions { display: none; }
+html[data-private-beta="true"] .brand-name { font-size: 16px; letter-spacing: 0; }
+html[data-private-beta="true"] .brand-sub { font-size: 12px; letter-spacing: .06em; }
+.beta-updates { margin-block: 16px; font-size: 13px; line-height: 1.6; }
+.beta-update-facts { display: flex; flex-wrap: wrap; gap: 16px 40px; }
+.beta-update-facts dt { font-size: 12px; color: var(--muted, #9ca6b8); }
+.beta-update-facts dd { margin-inline-start: 0; overflow-wrap: anywhere; }
+.beta-automatic { display: flex; align-items: center; gap: 10px; min-block-size: 40px; cursor: pointer; }
+.beta-automatic input { inline-size: 20px; block-size: 20px; accent-color: #9c8bff; }
+.beta-update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.beta-update-actions button { min-block-size: 38px; white-space: normal; }
+.beta-updates progress { inline-size: min(100%, 400px); accent-color: #9c8bff; }
+.beta-updates summary { cursor: pointer; min-block-size: 36px; padding-block-start: 8px; }
+.beta-release-notes { white-space: pre-wrap; overflow-wrap: anywhere; max-block-size: 240px; overflow: auto; }
+.beta-update-error { color: var(--warning, #eabf75); }
+.beta-update-notice { position: fixed; z-index: 200; inset-inline-end: 24px; inset-block-end: 24px; inline-size: min(390px, calc(100vw - 48px)); padding: 20px; border: 1px solid #655989; border-radius: 14px; background: var(--panel, #1a1c2c); color: var(--text, #eeeef5); box-shadow: 0 12px 40px #0005; font-size: 13px; line-height: 1.6; }
+.beta-update-notice[hidden] { display: none; }
+.beta-updates :focus-visible, .beta-update-notice :focus-visible { outline: 2px solid #b5a7ff; outline-offset: 3px; }

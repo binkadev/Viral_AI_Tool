@@ -6,9 +6,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const {failure} = require("../generation-job");
+const {validPayload:automaticPayload, validResult:automaticResult} = require("./execution-contract");
+const manualContract=require('../../../extensions/meta-muse-bridge/manual-recovery-contract');
+const validPayload=(type,p)=>manualContract.commands.includes(type)?manualContract.request(type,p):automaticPayload(type,p);
+const validResult=(type,r,p)=>manualContract.commands.includes(type)?manualContract.result(type,r,p):automaticResult(type,r,p);
+const {diagnosticFailure}=require('./ownership-diagnosis');
+const {validDiagnostic,validRuntimeBuild}=require('./connection-diagnostics');
+const {readBundle,matches,stageBundle,identity:bundleIdentity}=require('./extension-bundle');
 const {sanitizeSession, instanceId, tabId, label} = require("./session-status");
 const PORT_START = 32147, PORT_END = 32157, SESSION_TTL_MS = 12000;
-const FILES = ["manifest.json","service-worker.js","content-script.js","popup.html","popup.js","popup.css","strings.js"];
 const validOrigin = origin => /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
 const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).every(k => keys.includes(k));
 const text = (value, max) => typeof value === "string" && value.length <= max;
@@ -17,16 +23,18 @@ function check(ok) {if(!ok) throw failure("INVALID_REQUEST");}
 async function body(req) {
   check(req.headers["content-type"]?.split(";")[0] === "application/json");
   const chunks=[];let size=0;
-  for await(const chunk of req) {size+=chunk.length;check(size<=32768);chunks.push(chunk);}
+  for await(const chunk of req) {size+=chunk.length;check(size<=300000);chunks.push(chunk);}
   try {return JSON.parse(Buffer.concat(chunks).toString("utf8"));} catch {throw failure("INVALID_REQUEST");}
 }
 class MetaMuseExtensionBridge {
-  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000, distribution}) {
+  constructor({userDataPath, extensionSourceDir, shell, now=Date.now, commandTimeoutMs=10000, distribution, developmentDiagnostics=false}) {
     if(!path.isAbsolute(userDataPath)) throw failure("PROVIDER_CONFIG_ERROR");
     this.distribution=configuration(distribution);
+    this.developmentDiagnostics=developmentDiagnostics===true;this.evidenceExpired=false;
     this.root=userDataPath;this.source=extensionSourceDir;this.shell=shell;this.now=now;this.commandTimeoutMs=commandTimeoutMs;
     this.selectionFile=path.join(userDataPath,"meta-muse-extension-selection.json");
     this.installDir=path.join(userDataPath,"meta-muse-extension");
+    this.auditBindings=new Map();
     this.serverId=crypto.randomUUID();this.sessions=new Map();this.pending=new Map();
     this.selectedInstanceId=null;this.selectedTabId=null;this.server=null;this.port=0;this.starting=null;this.stopped=false;
   }
@@ -62,12 +70,13 @@ class MetaMuseExtensionBridge {
   prune() {
     for(const [id,s] of this.sessions) if(this.now()-s.lastSeen>SESSION_TTL_MS) {
       this.sessions.delete(id);this.finish(id,false);
+      this.evidenceExpired=true;
     }
   }
-  finish(instance,ok) {
+  finish(instance,ok,result,reason='UNAVAILABLE') {
     const pending=this.pending.get(instance);if(!pending)return;
     this.pending.delete(instance);clearTimeout(pending.timer);
-    ok ? pending.resolve() : pending.reject(failure("PROVIDER_UNAVAILABLE"));
+    ok ? pending.resolve(result) : pending.reject(pending.payload?.diagnoseOwnership===true?diagnosticFailure(reason,{instanceMatch:true,tabMatch:true}):failure("PROVIDER_UNAVAILABLE"));
   }
   async handle(req,res) {
     const origin=String(req.headers.origin||"");
@@ -78,7 +87,9 @@ class MetaMuseExtensionBridge {
       res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");return this.reply(res,204,{});
     }
     check(typeof req.url==="string" && req.url.length<512 && req.url.startsWith("/v1/"));
-    const url=new URL(req.url,"http://127.0.0.1");this.prune();
+    const url=new URL(req.url,"http://127.0.0.1");
+    const ownershipTransport=['/v1/poll','/v1/result'].includes(url.pathname) && this.pending.get(url.searchParams.get('instanceId'))?.payload?.diagnoseOwnership===true;
+    if(!ownershipTransport)this.prune();
     if(req.method==="GET" && url.pathname==="/v1/ping") return this.reply(res,200,{ok:true,bridge:"meta-muse-extension",serverId:this.serverId});
     if(req.method==="POST" && url.pathname==="/v1/register") {
       const b=await body(req);
@@ -93,51 +104,183 @@ class MetaMuseExtensionBridge {
     check([...url.searchParams.keys()].every(k=>k==="instanceId") && url.searchParams.getAll("instanceId").length===1);
     const s=this.sessions.get(url.searchParams.get("instanceId"));
     const token=req.headers["x-viral-muse-token"];
-    if(!s || (origin && s.origin!==origin) || typeof token!=="string" || token.length!==s.token.length || !crypto.timingSafeEqual(Buffer.from(token),Buffer.from(s.token))) return this.reply(res,401,{ok:false,error:"session-required"});
+    if(!s || (ownershipTransport && this.now()-s.lastSeen>SESSION_TTL_MS) || (origin && s.origin!==origin) || typeof token!=="string" || token.length!==s.token.length || !crypto.timingSafeEqual(Buffer.from(token),Buffer.from(s.token))) return this.reply(res,401,{ok:false,error:"session-required"});
+    if(req.method==="POST" && url.pathname==="/v1/audit") {
+      const b=await body(req);
+      check(exact(b,['tabId','packet']) && tabId(b.tabId) && s.tabs.some(t=>t.tabId===b.tabId) &&
+        b.packet && Buffer.byteLength(JSON.stringify(b.packet))<=24576);
+      let ack={persisted:false};
+      try{ack=await this.executionAuditSink?.(b.packet,{instanceId:s.instanceId,tabId:b.tabId})||ack;}catch{}
+      return this.reply(res,200,{persisted:ack.persisted===true,close:ack.close===true});
+    }
     if(req.method==="POST" && url.pathname==="/v1/heartbeat") {
       const b=await body(req);
       check(exact(b,["profileLabel","browserName","tabs"]) && text(b.profileLabel,120) && b.browserName==="Chrome" && Array.isArray(b.tabs) && b.tabs.length<=20);
       const ids=new Set();
       const tabs=b.tabs.map(t=>{
         // Legacy 0.1.0 metadata is bounded then discarded, never stored or returned.
-        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        check(exact(t,["tabId","url","title","loggedIn","composerReady","accountLabel","inspectionComplete","executionContract","canSubmit","devEvidence","devConnection","ownershipReceiptVersion","runtimeBuild","manualRecoveryVersion","executionAuditVersion"]) && tabId(t.tabId) && !ids.has(t.tabId) && text(t.url,3000) && museUrl(t.url) && typeof t.composerReady==="boolean");
+        if(t.devConnection!==undefined)check(validDiagnostic(t.devConnection));
+        if(t.runtimeBuild!==undefined)check(validRuntimeBuild(t.runtimeBuild));
+        check(t.executionAuditVersion===undefined || t.executionAuditVersion===null || t.executionAuditVersion===2);
+        const evidence=t.devEvidence;
+        const validEvidence=evidence && exact(evidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) &&
+          ['root','editor','actionSlot','generationActive'].every(k=>typeof evidence[k]==='boolean') && Object.values(evidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128));
+        check(t.canSubmit===undefined || typeof t.canSubmit==='boolean');
+        if(this.developmentDiagnostics && t.devEvidence && exact(t.devEvidence,['root','editor','actionSlot','actionableButtons','composerEmpty','generationActive','userMessageCount','assistantMessageCount','messageIdentityValid','assistantVideoPresent']) && Object.values(t.devEvidence).every(v=>typeof v==='boolean' || (Number.isInteger(v)&&v>=0&&v<=128)))this.devEvidence=t.devEvidence;
+        check(t.executionContract===undefined || t.executionContract===null || [1,2,3].includes(t.executionContract));
         for(const key of ["title","accountLabel"]) check(t[key]===undefined || text(t[key],240));
         check(t.loggedIn===undefined || typeof t.loggedIn==="boolean");
         check(t.inspectionComplete===undefined || typeof t.inspectionComplete==="boolean");ids.add(t.tabId);
-        return {tabId:t.tabId,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required"};
+        return {executionAuditVersion:t.executionAuditVersion===2?2:null,manualRecoveryVersion:t.manualRecoveryVersion===1?1:null,ownershipReceiptVersion:t.ownershipReceiptVersion===2?2:null,tabId:t.tabId,canSubmit:t.canSubmit===true,executionContract:t.executionContract===3?3:null,
+          ...(t.runtimeBuild?{runtimeBuild:t.runtimeBuild}:{}),contentFresh:!!validEvidence,composerDetected:validEvidence?evidence.root && evidence.editor && evidence.actionSlot:null,
+          generationActive:validEvidence?evidence.generationActive:null,authState:t.inspectionComplete===false ? "unknown" : t.composerReady ? "authenticated" : "authentication_required",...(this.developmentDiagnostics && t.devConnection?{diagnostic:t.devConnection}:{})};
       });
-      s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();
+      s.tabs=tabs;s.profileLabel=label(b.profileLabel);s.lastSeen=this.now();s.heartbeatSeen=true;this.evidenceExpired=false;
       return this.reply(res,200,{ok:true});
     }
     if(req.method==="GET" && url.pathname==="/v1/poll") {
       if(s.extensionState!=="extension_connected") return this.reply(res,200,{ok:true,command:null});
       const p=this.pending.get(s.instanceId);
-      const command=p&&!p.sent ? {id:p.id,type:"openMuse",payload:p.tabId?{tabId:p.tabId}:{}} : null;
-      if(command)p.sent=true;
+      const command=p&&!p.sent ? {id:p.id,type:p.type || "openMuse",payload:p.payload || (p.tabId?{tabId:p.tabId}:{})} : null;
+      if(command) {
+        p.sent=true;
+        const audit=this.auditBindings.get(command.payload?.operationId);
+        if(audit && audit.target.instanceId===s.instanceId && audit.target.tabId===command.payload.tabId)command.audit=audit.binding;
+      }
       return this.reply(res,200,{ok:true,command});
     }
     if(req.method==="POST" && url.pathname==="/v1/result") {
       const b=await body(req);
       check(exact(b,["commandId","ok","result","error"]) && text(b.commandId,80) && typeof b.ok==="boolean");
-      check(b.result==null || (exact(b.result,["tabId","url"]) && tabId(b.result.tabId) && (b.result.url===undefined || (text(b.result.url,3000)&&museUrl(b.result.url)))));
-      check(b.error==null || (exact(b.error,["code","message"]) && text(b.error.code,80) && text(b.error.message,800)));
       const p=this.pending.get(s.instanceId);check(p && p.sent && p.id===b.commandId);
-      this.finish(s.instanceId,b.ok);return this.reply(res,200,{ok:true});
+      if(p.payload?.diagnoseOwnership===true && b.ok && !validResult(p.type,b.result,p.payload)) {
+        this.finish(s.instanceId,false,undefined,'DIAGNOSTIC_RESULT_INVALID');return this.reply(res,200,{ok:true});
+      }
+      check(p.type ? (b.ok ? validResult(p.type,b.result,p.payload) : b.result==null) : b.result==null || (exact(b.result,["tabId","url"]) && tabId(b.result.tabId) && (b.result.url===undefined || (text(b.result.url,3000)&&museUrl(b.result.url)))));
+      check(b.error==null || (exact(b.error,["code","message"]) && text(b.error.code,80) && text(b.error.message,800)));
+      this.finish(s.instanceId,b.ok,b.result);return this.reply(res,200,{ok:true});
     }
     return this.reply(res,404,{ok:false,error:"unsupported"});
   }
-  snapshot() {
-    this.prune();const sessions=[...this.sessions.values()];
+  snapshot({readOnly=false}={}) {
+    if(!readOnly)this.prune();
+    const sessions=[...this.sessions.values()].filter(s=>this.now()-s.lastSeen<=SESSION_TTL_MS);
     let selected=sessions.find(s=>s.instanceId===this.selectedInstanceId);
     // A remembered but absent profile must never silently fall back to another.
     if(!selected && !this.selectedInstanceId && sessions.length===1)selected=sessions[0];
     let tab=selected?.tabs.find(t=>t.tabId===this.selectedTabId);
     if(!tab && selected?.tabs.length===1)tab=selected.tabs[0];
-    const extensionState=(selected || sessions.find(s=>s.extensionState!=="extension_connected"))?.extensionState || (sessions.length ? "extension_connected" : "extension_install_required");
+    const extensionState=this.stagingFailed?'extension_error':(selected || sessions.find(s=>s.extensionState!=="extension_connected"))?.extensionState || (sessions.length ? "extension_connected" : "extension_install_required");
     const state=extensionState!=="extension_connected"?"extension_offline":!sessions.length?"extension_offline":!selected?"selection_required":!selected.tabs.length?"muse_tab_missing":!tab?"selection_required":tab.authState;
     return sanitizeSession({state,extensionState,storeConfigured:this.distribution.storeConfigured,sessions,selectedInstanceId:selected?.instanceId || this.selectedInstanceId,selectedTabId:tab?.tabId});
   }
   async check() {await this.start();return this.snapshot();}
+  connectionDiagnosis() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const state=this.snapshot({readOnly:true}),s=state.sessions.some(s=>s.instanceId===state.selectedInstanceId)?this.sessions.get(state.selectedInstanceId):null,tab=s?.tabs.find(t=>t.tabId===state.selectedTabId),d=tab?.diagnostic;
+    let reason='READY';
+    if(!s)reason=this.evidenceExpired || [...this.sessions.values()].some(s=>this.now()-s.lastSeen>SESSION_TTL_MS)?'BRIDGE_HEARTBEAT_EXPIRED':this.selectedInstanceId?'SELECTED_INSTANCE_MISSING':'INSTANCE_MISSING';
+    else if(!s.heartbeatSeen)reason='HEARTBEAT_MISSING';
+    else if(!tab)reason=s.tabs.length?'TAB_SELECTION_REQUIRED':'MUSE_TAB_MISSING';
+    else if(!d && (!tab.contentFresh || !tab.runtimeBuild))reason='DIAGNOSTICS_UNAVAILABLE';
+    else if(!d)reason=tab.executionContract!==3?'CONTRACT_INCOMPATIBLE':tab.authState!=='authenticated'?'COMPOSER_UNREADY':'READY';
+    else if(d.lastContentScriptErrorCode!=='NONE')reason=d.lastContentScriptErrorCode;
+    else if(!d.museContentScriptHeartbeatSeen)reason='CONTENT_EVIDENCE_MISSING';
+    else if(d.museTabEvidenceAgeBucket==='stale')reason='CONTENT_EVIDENCE_STALE';
+    else if(d.museContentScriptContractVersion!==3)reason='CONTRACT_INCOMPATIBLE';
+    else if(!d.museTabEvidenceFresh)reason='CONTENT_TIMESTAMP_MISSING';
+    else if(tab.executionContract!==3)reason='STATUS_CONTRACT_MISSING';
+    else if(tab.authState!=='authenticated')reason='COMPOSER_UNREADY';
+    return {extensionInstanceRegistered:!!s,localhostBridgeConnected:!!s?.heartbeatSeen,registrationCompatible:s?.extensionState==='extension_connected',reason,...(d||{})};
+  }
+  receiverDiagnosis() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const selected=this.snapshot({readOnly:true}),sessions=[...this.sessions.values()].filter(s=>this.now()-s.lastSeen<=SESSION_TTL_MS);
+    const receivers=sessions.flatMap((s,sessionIndex)=>s.tabs.map((t,receiverIndex)=>{
+      const d=t.diagnostic;
+      return {sessionIndex,receiverIndex,selected:s.instanceId===selected.selectedInstanceId && t.tabId===selected.selectedTabId,
+        executionAuditVersion:t.executionAuditVersion===2?2:null,reachable:d?(d.museContentScriptHandshakeSeen || d.museContentScriptHeartbeatSeen):t.contentFresh===true,
+        diagnosticsEnabled:t.runtimeBuild?.diagnosticsEnabled===true,contract:d?.museContentScriptContractVersion??t.executionContract??null,receiptVersion:t.ownershipReceiptVersion===2?2:null,workerBuild:t.runtimeBuild?.workerBuild||d?.workerBuild||'unreported',contentBuild:t.runtimeBuild?.contentBuild||d?.contentBuild||'unreported',
+        freshness:d?.museTabEvidenceAgeBucket||(t.contentFresh?'fresh':'absent'),authenticated:d?d.authenticatedEvidencePresent===true:t.authState==='authenticated',composerDetected:d?d.composerDetected===true:t.composerDetected===true,generationActive:d?.generationActive??t.generationActive??null};
+    }));
+    return {selectionState:selected.state,selectionReason:selected.state==='selection_required'?'AMBIGUOUS':receivers.some(r=>r.selected)?'EXISTING_SELECTION_OR_SOLE_TAB':'NO_SELECTED_RECEIVER',
+      enumerationMayBeTruncated:sessions.some(s=>s.tabs.length===20),receivers};
+  }
+  async executionReady() {
+    await this.start();this.prune();return this.cachedExecutionReady();
+  }
+  cachedExecutionReady() {
+    const state=this.snapshot({readOnly:true});
+    const session=this.sessions.get(state.selectedInstanceId);
+    const tab=session?.tabs.find(t=>t.tabId===state.selectedTabId);
+    return state.extensionState==="extension_connected" && state.state==="authenticated" && tab?.executionContract===3 && tab.canSubmit===true &&
+      (!this.source || this.stagedBundleVerified()) && (!this.developmentDiagnostics || this.runtimeBuildPreflight().ready);
+  }
+  stagedBundleVerified() {
+    try{return matches(this.installDir,readBundle(this.source,this.distribution,{developmentDiagnostics:this.developmentDiagnostics}));}catch{return false;}
+  }
+  runtimeBuildPreflight() {
+    if(!this.developmentDiagnostics)throw failure('UNAVAILABLE');
+    const selected=this.snapshot({readOnly:true}),s=selected.sessions.some(s=>s.instanceId===selected.selectedInstanceId)?this.sessions.get(selected.selectedInstanceId):null,tab=s?.tabs.find(t=>t.tabId===selected.selectedTabId),d=tab?.diagnostic;
+    const expected=this.distribution,build=tab?.runtimeBuild||d;
+    let sourceBuild=null;
+    try{sourceBuild=readBundle(this.source,expected,{developmentDiagnostics:this.developmentDiagnostics}).summary;}catch{}
+    let reason='READY';
+    if(selected.extensionState!=='extension_connected' || selected.state!=='authenticated' || !s?.heartbeatSeen || tab?.executionContract!==3 || tab?.ownershipReceiptVersion!==2 || !tab?.canSubmit)reason='SESSION_UNREADY';
+    else if(!build || (d && (!d.museTabEvidenceFresh || !d.museContentScriptHandshakeSeen || d.lastContentScriptErrorCode!=='NONE' || d.lastBridgeErrorCode!=='NONE')) || !build.workerBuild || !build.contentBuild || build.contentBuild==='unreported')reason='BUILD_EVIDENCE_MISSING';
+    else if(build.workerBuild!==expected.expectedWorkerBuild)reason='WORKER_BUILD_MISMATCH';
+    else if(build.contentBuild!==expected.expectedContentBuild)reason='CONTENT_BUILD_MISMATCH';
+    else if(build.diagnosticsEnabled!==true)reason='EXTENSION_DIAGNOSTICS_DISABLED';
+    else if(!sourceBuild || !this.stagedBundleVerified())reason='STAGING_UNVERIFIED';
+    return {ready:reason==='READY',reason,sourceBuild,stagedBuild:bundleIdentity(this.installDir),stagedBundleVerified:this.stagedBundleVerified(),expectedWorkerBuild:expected.expectedWorkerBuild,expectedContentBuild:expected.expectedContentBuild,
+      executingWorkerBuild:build?.workerBuild||'unreported',executingContentBuild:build?.contentBuild||'unreported'};
+  }
+  async executionTarget() {
+    if(!await this.executionReady())throw failure("PROVIDER_UNAVAILABLE");
+    const s=this.snapshot();return {instanceId:s.selectedInstanceId,tabId:s.selectedTabId};
+  }
+  async receiptV2Ready() {
+    if(!await this.executionReady())return false;
+    const s=this.snapshot();return this.sessions.get(s.selectedInstanceId)?.tabs.find(t=>t.tabId===s.selectedTabId)?.ownershipReceiptVersion===2;
+  }
+  async command(type,payload,target) {
+    if((payload?.diagnoseAcquisition!==undefined || payload?.diagnoseOwnership!==undefined) && !this.developmentDiagnostics)throw failure('INVALID_REQUEST');
+    const ownershipDiagnosis=type==='inspectGeneration' && payload?.diagnoseOwnership===true;
+    // An observation of an existing operation must not start/reselect/prune a
+    // session. Only transient command transport state is allocated here.
+    if(ownershipDiagnosis) {
+      if(!validPayload(type,payload) || payload.tabId!==target?.tabId)throw diagnosticFailure('DIAGNOSTIC_RESULT_INVALID');
+      const session=this.sessions.get(target?.instanceId);
+      if(!this.server || this.stopped || !session || this.now()-session.lastSeen>SESSION_TTL_MS)throw diagnosticFailure('TARGET_INSTANCE_UNAVAILABLE',{instanceMatch:false,tabMatch:false});
+      const tab=session.tabs.find(t=>t.tabId===target.tabId);
+      if(!tab)throw diagnosticFailure('TARGET_TAB_UNAVAILABLE',{instanceMatch:true,tabMatch:false});
+      const evidence={instanceMatch:true,tabMatch:true};
+      if(this.stagingFailed || session.extensionState!=='extension_connected' ||
+        tab.runtimeBuild?.workerBuild!==this.distribution.expectedWorkerBuild || tab.runtimeBuild?.contentBuild!==this.distribution.expectedContentBuild ||
+        (this.source && !this.stagedBundleVerified()))throw diagnosticFailure('RUNTIME_BUILD_MISMATCH',evidence);
+      if(tab.runtimeBuild.diagnosticsEnabled!==true)throw diagnosticFailure('EXTENSION_DIAGNOSTICS_DISABLED',evidence);
+      if(!tab.contentFresh || tab.diagnostic?.museTabEvidenceFresh===false)throw diagnosticFailure('CONTENT_RECEIVER_UNAVAILABLE',evidence);
+      if(tab.authState!=='authenticated' || tab.executionContract!==3)throw diagnosticFailure('CONTENT_DIAGNOSIS_REJECTED',evidence);
+      if(this.pending.has(target.instanceId))throw diagnosticFailure('UNAVAILABLE',evidence);
+    } else {await this.start();this.prune();}
+    const s=this.sessions.get(target?.instanceId),tab=s?.tabs.find(t=>t.tabId===target?.tabId);
+    check(validPayload(type,payload) && payload.tabId===target?.tabId);
+    if(this.stagingFailed || (this.source && !this.stagedBundleVerified()) || s?.extensionState!=="extension_connected" || tab?.authState!=="authenticated" || tab.executionContract!==3 || this.pending.has(s.instanceId))throw failure("PROVIDER_UNAVAILABLE");
+    if(manualContract.commands.includes(type) && (tab.manualRecoveryVersion!==1 || tab.runtimeBuild?.workerBuild!==this.distribution.expectedWorkerBuild || tab.runtimeBuild?.contentBuild!==this.distribution.expectedContentBuild))throw failure('PROVIDER_UNAVAILABLE');
+    let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j;});
+    const timer=setTimeout(()=>this.finish(s.instanceId,false),['acquireGenerationResult','acquireRecoveryCandidate'].includes(type)?70000:this.commandTimeoutMs);
+    this.pending.set(s.instanceId,{id:crypto.randomUUID(),type,payload,promise,resolve,reject,timer,sent:false});
+    return promise;
+  }
+  observeExecutionAudit(c,target) {
+    try {
+      if(!c.executionAudit)return;
+      const binding={version:c.executionAudit.version,jobId:c.jobId,auditId:require('../execution-audit').marker(c.executionAudit).auditId};
+      if(this.auditBindings.size>=256 && !this.auditBindings.has(c.jobId))this.auditBindings.delete(this.auditBindings.keys().next().value);
+      this.auditBindings.set(c.jobId,{binding,target:{instanceId:target.instanceId,tabId:target.tabId}});
+    }catch{}
+  }
   async selectSession(selection) {
     check(exact(selection,["instanceId","tabId"]) && instanceId(selection.instanceId) && (selection.tabId===null || tabId(selection.tabId)));
     await this.start();this.prune();const s=this.sessions.get(selection.instanceId);
@@ -166,26 +309,12 @@ class MetaMuseExtensionBridge {
   }
   async revealExtension() {
     check(typeof this.source==="string");
-    // Read the complete bundle before touching the installed extension. Stage
-    // complete files first; replace the manifest last, only after successful IO.
-    const files=FILES.filter(file=>file!=="manifest.json").concat("manifest.json")
-      .map(file=>({file,data:fs.readFileSync(path.join(this.source,file))}));
-    fs.mkdirSync(this.installDir,{recursive:true});
-    check(!fs.lstatSync(this.installDir).isSymbolicLink());
-    for(const {file} of files) {
-      const destination=path.join(this.installDir,file);
-      if(fs.existsSync(destination))check(!fs.lstatSync(destination).isSymbolicLink());
-    }
-    const staged=[];
+    let summary;
     try {
-      for(const {file,data} of files) {
-        const temp=path.join(this.installDir,file+"."+crypto.randomUUID()+".tmp");
-        staged.push({temp,file});fs.writeFileSync(temp,data,{flag:"wx",mode:0o600});
-      }
-      for(const {temp,file} of staged)fs.renameSync(temp,path.join(this.installDir,file));
-    } finally {for(const {temp} of staged) {try {fs.unlinkSync(temp);} catch {}}}
+      summary=stageBundle(this.source,this.installDir,this.distribution,{developmentDiagnostics:this.developmentDiagnostics});this.stagingFailed=false;
+    } catch(error) {this.stagingFailed=true;throw error;}
     this.shell?.showItemInFolder(path.join(this.installDir,"manifest.json"));
-    return {id:"muse",folderRevealed:true};
+    return {id:"muse",folderRevealed:true,extensionVersion:summary.extensionVersion,bundleVerified:summary.bundleVerified};
   }
   close() {
     this.stopped=true;for(const id of this.pending.keys())this.finish(id,false);

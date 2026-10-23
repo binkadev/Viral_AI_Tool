@@ -106,7 +106,55 @@
     return Math.max(0, Math.min(1, clampTime(currentTime, safeDuration) / safeDuration));
   }
 
+  // Production spans are derived; Scene source timestamps and asset ownership
+  // are never edited. Unknown durations block all subsequent time offsets.
+  function buildProjectPlayback(project = {}, resolved = {}) {
+    const assets = new Map((project.media?.assets || []).map(asset => [asset.id, asset]));
+    const slots = new Map((project.mediaAssembly?.slots || []).filter(slot => slot.role === "primary").map(slot => [slot.sceneId, slot]));
+    let cursor = 0, known = true;
+    const entries = (project.scenePlan?.scenes || []).slice().sort((a, b) => a.order - b.order).map(scene => {
+      const slot = slots.get(scene.id), assetId = slot?.selectedAssetId || null;
+      const asset = slot?.candidateAssetIds?.includes(assetId) ? assets.get(assetId) : null;
+      const runtime = resolved[assetId] || {};
+      const duration = asset?.kind === "video" ? Math.max(0, finite(asset.meta?.duration, 0)) || Math.max(0, finite(runtime.duration, 0)) :
+        asset?.kind === "image" ? Math.max(0, finite(scene.end, 0) - finite(scene.start, 0)) : 0;
+      let playableState = !assetId ? "missing-media" : !asset ? "unavailable" :
+        ["missing", "trashed"].includes(asset.fileState) || runtime.state === "missing-file" ? "missing-file" :
+        asset.status && asset.status !== "ready" || !["video", "image"].includes(asset.kind) || !asset.localPath || runtime.state === "unavailable" ? "unavailable" :
+        !duration ? "duration-unresolved" : "ready";
+      const projectStart = known ? cursor : null;
+      const projectEnd = known && duration > 0 ? cursor + duration : null;
+      if (known && duration > 0) cursor = projectEnd;
+      else known = false;
+      return { sceneId: scene.id, order: scene.order, title: scene.title || null, assetId, kind: asset?.kind || null,
+        projectStart, projectEnd, duration: duration || null, playableState };
+    });
+    return { projectId: project.projectId || null, entries, duration: cursor, complete: known };
+  }
+
+  // Treat only machine rounding at a boundary as equality (e.g. 0.1 + 0.2).
+  const reaches = (time, boundary) => time >= boundary || Math.abs(time - boundary) <= Number.EPSILON * Math.max(1, Math.abs(boundary)) * 2;
+  function locateProjectTime(projection, value) {
+    const time = clampTime(value, projection?.duration || 0), entries = projection?.entries || [];
+    for (let index = 0; index < entries.length; index++) {
+      const entry = entries[index];
+      if (entry.projectStart === null) break;
+      if (entry.projectEnd === null || !reaches(time, entry.projectEnd) || index === entries.length - 1) {
+        return { entry, localTime: clampTime(time - entry.projectStart, entry.duration || 0),
+          currentTime: time, ended: !!projection.complete && index === entries.length - 1 && reaches(time, projection.duration) };
+      }
+    }
+    return null;
+  }
+  function projectTimeForScene(projection, sceneId, localTime = 0) {
+    const entry = projection?.entries?.find(entry => entry.sceneId === sceneId);
+    return entry?.projectStart == null ? null : entry.projectStart + clampTime(localTime, entry.duration || 0);
+  }
+
   return {
+    buildProjectPlayback,
+    locateProjectTime,
+    projectTimeForScene,
     clampTime,
     resolveDuration,
     parseTimeLabel,

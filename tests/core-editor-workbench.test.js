@@ -6,7 +6,8 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const js = fs.readFileSync(path.join(root, "renderer", "core-editor-workbench.js"), "utf8");
-const css = fs.readFileSync(path.join(root, "renderer", "core-editor-workbench.css"), "utf8");
+// Windows checkouts may use CRLF; multiline layout assertions concern CSS.
+const css = fs.readFileSync(path.join(root, "renderer", "core-editor-workbench.css"), "utf8").replace(/\r\n/g, "\n");
 const index = fs.readFileSync(path.join(root, "renderer", "index.html"), "utf8");
 
 for (const selector of ["#speechMode", "#translationMode", "#voiceMode", "#render"]) {

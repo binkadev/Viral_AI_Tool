@@ -816,6 +816,242 @@ async function renderLocalizedVideo({
   };
 }
 
+// Project composition uses the same logical reservations and child lifecycle as
+// source exports. Only generated relative filenames enter concat manifests.
+function projectAssert(condition, code = "PROJECT_RENDER_INCOMPLETE") {
+  if (!condition) throw processingError(code, "Project render input is invalid.");
+}
+function projectKeys(value, keys) {
+  projectAssert(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every(k => keys.includes(k)));
+}
+function projectLocal(filePath, kind) {
+  const { MEDIA_EXTENSIONS } = require("./media/local-files");
+  projectAssert(typeof filePath === "string" && filePath.length <= 32767 && !filePath.includes("\0") && path.isAbsolute(filePath) && !/^(https?:|file:|blob:)/i.test(filePath), "PROJECT_RENDER_MEDIA_MISSING");
+  projectAssert(MEDIA_EXTENSIONS[kind]?.includes(path.extname(filePath).slice(1).toLowerCase()), "SOURCE_UNSUPPORTED");
+  let stat;
+  try { stat = fs.statSync(filePath); } catch { throw processingError("PROJECT_RENDER_MEDIA_MISSING", "Project input is missing."); }
+  projectAssert(stat.isFile() && stat.size > 0, "PROJECT_RENDER_MEDIA_MISSING");
+  return stat;
+}
+function validateProjectPayload(p, allowedAudioRoot) {
+  projectKeys(p, ["projectId","projectName","renderInputSignature","profile","scenes","settings","voice","subtitles","bgm","duration","subtitleSource","outputDir","jobId"]);
+  const id = v => typeof v === "string" && v.length > 0 && v.length <= 512 && !/[\x00-\x1f]/.test(v);
+  projectAssert(id(p.projectId) && typeof p.projectName === "string" && p.projectName.length <= 512 && /^project-render-v1:[a-f0-9]{64}$/.test(p.renderInputSignature));
+  validateJobId(p.jobId);
+  projectKeys(p.profile, ["width","height","fps"]);
+  projectAssert([[1920,1080],[1080,1920],[1080,1080]].some(([w,h]) => p.profile.width === w && p.profile.height === h) && p.profile.fps === 30, "PROJECT_RENDER_PROFILE_UNRESOLVED");
+  projectAssert(Number.isFinite(p.duration) && p.duration > 0 && p.duration <= Number.MAX_SAFE_INTEGER / 48000, "PROJECT_RENDER_TIMING_INVALID");
+  projectAssert(Array.isArray(p.scenes) && p.scenes.length > 0 && p.scenes.length <= require("../renderer/core-scene-plan-model").MAX_SCENES);
+  projectKeys(p.settings, ["burnSubtitles","textSource","voiceEnabled","voiceVolume","bgmAssetId","bgmVolume","bgmLoop","mixOriginalAudio","originalAudioVolume"]);
+  const s = p.settings;
+  for (const k of ["burnSubtitles","voiceEnabled","bgmLoop","mixOriginalAudio"]) projectAssert(typeof s[k] === "boolean");
+  for (const k of ["voiceVolume","bgmVolume","originalAudioVolume"]) projectAssert(Number.isFinite(s[k]) && s[k] >= 0 && s[k] <= 1);
+  projectAssert(["auto","source","translation"].includes(s.textSource) && ["source","translation"].includes(p.subtitleSource) && (s.bgmAssetId === null || id(s.bgmAssetId)));
+  const files = new Map(), add = (f,k) => { const stat = projectLocal(f,k); files.set(path.resolve(f), stat); return stat; };
+  const identityKeys = ["assetId","kind","localPath","updatedAt","meta"];
+  const identity = (a,kind) => {
+    projectAssert(id(a.assetId) && a.kind === kind && (a.updatedAt === null || typeof a.updatedAt === "string" && a.updatedAt.length <= 100));
+    projectKeys(a.meta, ["duration","width","height","sizeBytes"]);
+    for (const v of Object.values(a.meta)) projectAssert(v === null || Number.isFinite(v) && v >= 0);
+    return add(a.localPath, kind);
+  };
+  let cursor = 0;
+  const sceneIds = new Set();
+  for (const e of p.scenes) {
+    projectKeys(e, ["sceneId","order",...identityKeys,"projectStart","projectEnd","duration","fit","transition"]);
+    projectAssert(id(e.sceneId) && !sceneIds.has(e.sceneId) && Number.isInteger(e.order) && e.order >= 0 && (sceneIds.size === 0 || e.order > p.scenes[sceneIds.size-1].order)); sceneIds.add(e.sceneId);
+    projectAssert(["video","image"].includes(e.kind) && e.fit === "contain-pad" && e.transition === "cut");
+    projectAssert(Number.isFinite(e.duration) && e.duration > 0 && Math.abs(e.projectStart-cursor) < 1e-6 && Math.abs(e.projectEnd-e.projectStart-e.duration) < 1e-6, "PROJECT_RENDER_TIMING_INVALID");
+    identity(e,e.kind); cursor = e.projectEnd;
+  }
+  projectAssert(Math.abs(cursor-p.duration) < 1e-6, "PROJECT_RENDER_TIMING_INVALID");
+  function cues(list, voice) {
+    projectAssert(Array.isArray(list) && list.length <= (voice ? 300 : 10000), "PROJECT_RENDER_TIMING_INVALID");
+    const ids = new Set(); let end = 0;
+    for (const c of list) {
+      projectKeys(c, voice ? ["id","start","end","text","speaker","audioPath","audioUrl","audioDuration","timingRisk"] : ["id","start","end","text"]);
+      projectAssert(typeof c.id === "string" && c.id.length > 0 && c.id.length <= 2048 && !ids.has(c.id) && typeof c.text === "string" && c.text.length > 0 && c.text.length <= 4096);
+      ids.add(c.id);
+      projectAssert(Number.isFinite(c.start) && Number.isFinite(c.end) && c.start >= end - 1e-6 && c.end > c.start && c.end <= p.duration + 1e-6, "PROJECT_RENDER_TIMING_INVALID"); end = c.end;
+      if (voice) {
+        projectAssert(id(c.speaker) && Number.isFinite(c.audioDuration) && c.audioDuration > 0 && c.audioDuration <= Number.MAX_SAFE_INTEGER / 48000 && typeof c.timingRisk === "boolean");
+        projectAssert(typeof allowedAudioRoot === "string" && path.isAbsolute(allowedAudioRoot), "VOICE_AUDIO_UNTRUSTED");
+        assertVoiceAudioPath(c.audioPath, allowedAudioRoot);
+        // Also check the real paths: junctions/symlinks cannot escape the cache.
+        projectAssert(path.isAbsolute(c.audioPath) && !c.audioPath.includes("\0"), "VOICE_AUDIO_UNTRUSTED");
+        const real = fs.realpathSync(c.audioPath), root = fs.realpathSync(allowedAudioRoot);
+        projectAssert(real.startsWith(root + path.sep), "VOICE_AUDIO_UNTRUSTED");
+        add(c.audioPath,"audio");
+        const header = Buffer.alloc(12), fd = fs.openSync(c.audioPath,"r");
+        try { fs.readSync(fd,header,0,12,0); } finally { fs.closeSync(fd); }
+        projectAssert(header.toString("ascii",0,4) === "RIFF" && header.toString("ascii",8,12) === "WAVE", "VOICE_AUDIO_INVALID");
+      }
+    }
+  }
+  if (s.voiceEnabled) {
+    projectKeys(p.voice,["projectId","inputSignature","textSource","language","segments"]);
+    projectAssert(p.voice.projectId === p.projectId && /^project-voice-v1:[a-f0-9]{64}$/.test(p.voice.inputSignature) && p.voice.textSource === s.textSource && typeof p.voice.language === "string" && p.voice.language.length <= 80 && p.voice.segments?.length > 0, "PROJECT_RENDER_VOICE_REQUIRED");
+    cues(p.voice.segments,true);
+  } else projectAssert(p.voice === null);
+  cues(p.subtitles,false);
+  projectAssert(s.burnSubtitles || p.subtitles.length === 0);
+  if (s.bgmAssetId !== null) {
+    projectKeys(p.bgm,identityKeys); projectAssert(p.bgm.assetId === s.bgmAssetId, "PROJECT_RENDER_BGM_UNAVAILABLE"); identity(p.bgm,"audio");
+  } else projectAssert(p.bgm === null);
+  return files;
+}
+async function preflightProjectRender(payload, { allowedAudioRoot, onProbe } = {}) {
+  const p = JSON.parse(JSON.stringify(payload));
+  const files = validateProjectPayload(p, allowedAudioRoot);
+  const outputDir = assertOutputDirectory(p.outputDir);
+  const inputBytes=[...files.values()].reduce((n,s) => n+s.size,0);
+  // Budget long still-image Projects as well as byte-heavy video inputs. One
+  // encoded bit per output pixel/frame is a conservative staging estimate; PCM
+  // Voice parts plus merged track and BGM are also covered by the same multiplier.
+  const stagedEstimate=p.profile.width*p.profile.height*30*p.duration/8 + p.duration*48000*4*((p.voice?2:0)+(p.bgm?1:0));
+  const requiredFreeBytes = Math.max(MIN_FREE_BYTES, Math.ceil(Math.max(inputBytes,stagedEstimate)*OUTPUT_MULTIPLIER));
+  // Both volumes matter: stage files live in app temp, final output in destination.
+  const tempFree = availableDiskBytes(require("os").tmpdir()), outputFree = availableDiskBytes(outputDir);
+  const freeBytes = Math.min(...[tempFree,outputFree].filter(n => n !== null));
+  projectAssert(Number.isFinite(freeBytes), "OUTPUT_UNAVAILABLE");
+  if (freeBytes < requiredFreeBytes) throw processingError("LOW_DISK_SPACE", "Not enough free disk space.",{freeBytes,requiredFreeBytes});
+  const probes = new Map();
+  for (const [f,stat] of files) {
+    const result = await run(["-hide_banner","-i",f], { acceptNonZero: true, onStart: onProbe });
+    probes.set(f,parseProbeOutput(result.stderr,stat));
+    const current=fs.statSync(f); projectAssert(current.size===stat.size && current.mtimeMs===stat.mtimeMs && current.ctimeMs===stat.ctimeMs,"PROJECT_RENDER_INPUT_CHANGED");
+  }
+  for (const e of p.scenes) {
+    const probe = probes.get(path.resolve(e.localPath));
+    projectAssert(probe.width > 0 && probe.height > 0, "PROJECT_RENDER_INPUT_CHANGED");
+    if (e.meta.width) projectAssert(probe.width === e.meta.width, "PROJECT_RENDER_INPUT_CHANGED");
+    if (e.meta.height) projectAssert(probe.height === e.meta.height, "PROJECT_RENDER_INPUT_CHANGED");
+    if (e.meta.sizeBytes) projectAssert(files.get(path.resolve(e.localPath)).size === e.meta.sizeBytes, "PROJECT_RENDER_INPUT_CHANGED");
+    if (e.kind === "video") projectAssert(Math.abs(probe.duration-e.duration) <= .05, "PROJECT_RENDER_INPUT_CHANGED");
+  }
+  if (p.bgm) projectAssert(!!probes.get(path.resolve(p.bgm.localPath)).audioCodec, "PROJECT_RENDER_BGM_UNAVAILABLE");
+  if (p.voice) for (const c of p.voice.segments) projectAssert(!!probes.get(path.resolve(c.audioPath)).audioCodec && probes.get(path.resolve(c.audioPath)).duration > 0, "VOICE_AUDIO_INVALID");
+  return { projectId: p.projectId, sceneCount: p.scenes.length, duration: p.duration, ...p.profile, requiredFreeBytes, freeBytes,
+    voiceEnabled: p.settings.voiceEnabled, bgmEnabled: !!p.bgm, subtitleCount: p.subtitles.length,
+    timingWarningCount: p.voice?.segments.filter(c => c.timingRisk).length || 0 };
+}
+async function renderProjectVideo(payload, { allowedAudioRoot, onProgress } = {}) {
+  const p = JSON.parse(JSON.stringify(payload)), key = "project:" + p.projectId + ":" + p.renderInputSignature;
+  validateJobId(p.jobId);
+  projectAssert(!activeRenders.has(p.jobId) && !reservedRenders.has(p.jobId) && ![...reservedRenders.values()].includes(key), "PROJECT_RENDER_DUPLICATE");
+  reservedRenders.set(p.jobId,key); // synchronous reservation, also covers probing/stage gaps
+  let workspace, outputPath, outputOwned = false, success = false;
+  const check = () => { if (cancelledRenders.has(p.jobId)) throw processingError("CANCELLED","Render cancelled."); };
+  const progress = (phase,percent,extra={}) => { check(); onProgress?.({jobId:p.jobId,projectId:p.projectId,phase,percent,...extra}); check(); };
+  const childStarted = child => { activeRenders.set(p.jobId,{child,jobId:p.jobId,inputPath:key,outputPath}); if (cancelledRenders.has(p.jobId)) child.kill("SIGTERM"); };
+  async function stage(args,phase,start,span,duration=p.duration,extra={}) {
+    check(); progress(phase,start,extra);
+    const state = {buffer:"",outTime:0};
+    await run(["-hide_banner","-loglevel","error","-nostdin",...args,"-progress","pipe:1","-nostats"], {
+      onStart:childStarted, onStdout(chunk) { parseProgressChunk(chunk,state); if (!cancelledRenders.has(p.jobId)) onProgress?.({jobId:p.jobId,projectId:p.projectId,phase,percent:Math.min(99,start+span*Math.min(1,state.outTime/duration)),...extra}); }
+    });
+    activeRenders.delete(p.jobId); check(); progress(phase,start+span,extra);
+  }
+  const aformat = "aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,asetpts=PTS-STARTPTS";
+  const vcodec = ["-c:v","libx264","-preset","medium","-crf","20","-pix_fmt","yuv420p","-r","30"];
+  const acodec = ["-c:a","aac","-ar","48000","-ac","2","-b:a","192k"];
+  try {
+    progress("preparing",0);
+    const identities=validateProjectPayload(p,allowedAudioRoot);
+    const checkInputs=()=>{for(const [file,stat] of identities){let current;try{current=fs.statSync(file);}catch{throw processingError("PROJECT_RENDER_INPUT_CHANGED","Project input changed.");}projectAssert(current.size===stat.size&&current.mtimeMs===stat.mtimeMs&&current.ctimeMs===stat.ctimeMs,"PROJECT_RENDER_INPUT_CHANGED");}};
+    const preflight = await preflightProjectRender(p,{allowedAudioRoot,onProbe:childStarted}); check(); activeRenders.delete(p.jobId);
+    checkInputs();
+    const root = path.join(require("os").tmpdir(),"viral-ai-tool","project-render"); fs.mkdirSync(root,{recursive:true});
+    workspace = fs.mkdtempSync(path.join(root,p.jobId+"-"));
+    fs.writeFileSync(path.join(workspace,"owner.json"),JSON.stringify({pid:process.pid}));
+    outputPath = makeOutputPath(sanitizeBaseName(p.projectName),p.outputDir,"render_"+crypto.randomBytes(8).toString("hex"));
+    // Atomically reserve a new output; only our own placeholder may be replaced.
+    fs.closeSync(fs.openSync(outputPath,"wx")); outputOwned=true;
+    const clips = [];
+    for (let i=0;i<p.scenes.length;i++) {
+      checkInputs();
+      const e=p.scenes[i], filename="scene-"+i+".mp4", out=path.join(workspace,filename), probe=await run(["-hide_banner","-i",e.localPath],{acceptNonZero:true,onStart:childStarted}); check();
+      const hasAudio = !!parseProbeOutput(probe.stderr).audioCodec && e.kind === "video" && p.settings.mixOriginalAudio;
+      const imageInput=path.extname(e.localPath).toLowerCase()===".gif" ? ["-stream_loop","-1"] : ["-loop","1","-framerate","30"];
+      const args=["-n",...(e.kind === "image" ? imageInput : []),"-i",e.localPath];
+      if (!hasAudio) args.push("-f","lavfi","-i","anullsrc=r=48000:cl=stereo");
+      args.push("-map","0:v:0","-map",hasAudio ? "0:a:0" : "1:a:0","-vf",`scale=${p.profile.width}:${p.profile.height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${p.profile.width}:${p.profile.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS,fps=30,tpad=stop_mode=clone:stop_duration=0.05`,
+        "-af",aformat+",volume="+(hasAudio ? p.settings.originalAudioVolume : 0)+",apad,atrim=duration="+e.duration,
+        ...vcodec,...acodec,"-t",String(e.duration),out);
+      await stage(args,"scenes",3+52*i/p.scenes.length,52/p.scenes.length,e.duration,{sceneIndex:i+1,sceneCount:p.scenes.length}); clips.push(filename);
+    }
+    const manifest = (name,list,durations) => { const file=path.join(workspace,name); fs.writeFileSync(file,list.map((f,i) => "file '"+f+"'"+(durations ? "\nduration "+durations[i] : "")).join("\n"),"utf8"); return file; };
+    const visual=path.join(workspace,"visual.mp4");
+    await stage(["-n","-f","concat","-safe","1","-i",manifest("visual.txt",clips,p.scenes.map(e=>e.duration)),"-c","copy","-t",String(p.duration),visual],"composing",55,4);
+    const tracks=[];
+    if (p.voice) {
+      const parts=[]; let cursor=0;
+      async function voicePart(duration,audioPath) {
+        if (duration <= 1e-7) return;
+        const name="voice-"+parts.length+".wav";
+        await stage(["-n",...(audioPath ? ["-i",audioPath] : ["-f","lavfi","-i","anullsrc=r=48000:cl=stereo"]),"-vn","-af",aformat+",apad,atrim=duration="+duration,"-t",String(duration),"-c:a","pcm_s16le",path.join(workspace,name)],"voice",59,0,duration);
+        parts.push(name);
+      }
+      for (const c of p.voice.segments) { await voicePart(c.start-cursor); await voicePart(c.end-c.start,c.audioPath); cursor=c.end; }
+      await voicePart(p.duration-cursor);
+      const voice=path.join(workspace,"voice.wav");
+      await stage(["-n","-f","concat","-safe","1","-i",manifest("voice.txt",parts),"-af","volume="+p.settings.voiceVolume,"-t",String(p.duration),"-c:a","pcm_s16le",voice],"voice",59,10); tracks.push(voice);
+    }
+    if (p.bgm) {
+      const bgm=path.join(workspace,"bgm.wav");
+      await stage(["-n",...(p.settings.bgmLoop ? ["-stream_loop","-1"] : []),"-i",p.bgm.localPath,"-vn","-af",aformat+",volume="+p.settings.bgmVolume+",apad,atrim=duration="+p.duration,"-t",String(p.duration),"-c:a","pcm_s16le",bgm],"audio",69,7); tracks.push(bgm);
+    }
+    const args=["-y","-i",visual]; for (const track of tracks) args.push("-i",track);
+    const labels=Array.from({length:tracks.length+1},(_,i)=>`[${i}:a:0]`).join("");
+    const filters=[labels+`amix=inputs=${tracks.length+1}:duration=longest:dropout_transition=0:normalize=0,atrim=duration=${p.duration},alimiter=limit=0.95:level=0[aout]`];
+    const subs=p.settings.burnSubtitles && p.subtitles.length;
+    if (subs) { const srt=path.join(workspace,"subtitles.srt");
+      const safeCues=p.subtitles.map(c=>({...c,text:c.text.replace(/\r/g,"").replace(/\n+/g,"\n").replace(/<[^>]*>/g,"").replace(/[{}]/g,"")}));
+      fs.writeFileSync(srt,buildSrt(safeCues),"utf8");
+      filters.push("[0:v:0]subtitles=filename='"+escapeFilterPath(srt)+"':force_style='Alignment=2,MarginV=54,Outline=2,Shadow=0'[vout]"); }
+    args.push("-filter_complex",filters.join(";"),"-map",subs ? "[vout]" : "0:v:0","-map","[aout]",...vcodec,...acodec,"-movflags","+faststart","-t",String(p.duration),outputPath);
+    await stage(args,"finalizing",76,20);
+    progress("verifying",96);
+    const stat=fs.statSync(outputPath); projectAssert(stat.isFile() && stat.size > 0,"PROJECT_RENDER_VERIFY_FAILED");
+    const probe=await run(["-hide_banner","-i",outputPath],{acceptNonZero:true,onStart:childStarted}); check();
+    const metadata=parseProbeOutput(probe.stderr,stat);
+    checkInputs();
+    projectAssert(metadata.width === p.profile.width && metadata.height === p.profile.height && metadata.duration > 0 && Math.abs(metadata.duration-p.duration) <= .08 && Math.abs(metadata.fps-30) < .01 && metadata.videoCodec === "h264" && metadata.audioCodec === "aac", "PROJECT_RENDER_VERIFY_FAILED");
+    progress("verifying",100); success=true;
+    return { cancelled:false,projectId:p.projectId,renderInputSignature:p.renderInputSignature,outputPath,sizeBytes:stat.size,metadata,
+      pipeline:{sceneCount:p.scenes.length,duration:p.duration,profile:p.profile,originalAudioMixed:p.settings.mixOriginalAudio,voiceMixed:!!p.voice,bgmMixed:!!p.bgm,bgmLoop:p.settings.bgmLoop,burnSubtitles:p.settings.burnSubtitles,subtitleCount:p.subtitles.length,timingWarningCount:preflight.timingWarningCount} };
+  } catch (error) {
+    if (cancelledRenders.has(p.jobId)) return {cancelled:true,outputPath:null,projectId:p.projectId};
+    if (error instanceof ProcessingError) throw error;
+    throw processingError(/subtitles|libass|No such filter/i.test(error?.message || "") ? "SUBTITLE_RENDER_UNAVAILABLE" : "PROCESSING_FAILED","Project video processing failed.");
+  } finally {
+    if (!success && outputOwned) removePartialFile(outputPath);
+    if (workspace) { try { fs.rmSync(workspace,{recursive:true,force:true}); } catch {} }
+    activeRenders.delete(p.jobId); reservedRenders.delete(p.jobId); cancelledRenders.delete(p.jobId);
+  }
+}
+
+function cleanupProjectRenderWorkspaces() {
+  const root=path.join(require("os").tmpdir(),"viral-ai-tool","project-render");
+  let count=0;
+  try {
+    if (fs.lstatSync(root).isSymbolicLink()) return count;
+    for (const name of fs.readdirSync(root)) {
+      if (!/^[A-Za-z0-9._-]{1,128}-[A-Za-z0-9]{6}$/.test(name)) continue;
+      const target=path.resolve(root,name);
+      if (path.dirname(target) !== path.resolve(root) || fs.lstatSync(target).isSymbolicLink() || !fs.lstatSync(target).isDirectory()) continue;
+      try {
+        const owner=path.join(target,"owner.json"); if (fs.lstatSync(owner).size > 100 || fs.lstatSync(owner).isSymbolicLink()) continue;
+        const pid=JSON.parse(fs.readFileSync(owner,"utf8")).pid;
+        if (!Number.isInteger(pid) || pid <= 0) continue;
+        try { process.kill(pid,0); continue; } catch(e) { if (e.code !== "ESRCH") continue; }
+        fs.rmSync(target,{recursive:true,force:true}); count++;
+      } catch {}
+    }
+  } catch {}
+  return count;
+}
+
 function cancelRender(jobId) {
   const active = activeRenders.get(jobId);
   const reserved = reservedRenders.has(jobId);
@@ -858,6 +1094,9 @@ function serializeProcessingError(error) {
 }
 
 module.exports = {
+  preflightProjectRender,
+  renderProjectVideo,
+  cleanupProjectRenderWorkspaces,
   probeVideo,
   createThumbnail,
   preflightExport,

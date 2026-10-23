@@ -1,0 +1,15 @@
+/* Project identity only; no page architecture or production controls. */
+.project-identity { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; min-inline-size:0; inline-size:100%; }
+.project-identity-icon { color:var(--viral-accent); flex:0 0 auto; }
+.project-identity-name { flex:1 1 180px; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; }
+.project-identity .button { flex:0 1 auto; min-block-size:36px; white-space:normal; overflow-wrap:anywhere; }
+.project-name-editor { display:grid; gap:4px; flex:1 1 240px; min-inline-size:0; color:var(--viral-text-secondary); font-size:13px; }
+.project-name-editor input { inline-size:100%; min-inline-size:0; min-block-size:38px; padding:8px 10px; font:inherit; color:var(--viral-text); background:var(--viral-surface); border:1px solid var(--viral-line); border-radius:var(--radius-control); }
+.project-name-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.project-name-error { flex-basis:100%; margin:0; color:var(--viral-warning); overflow-wrap:anywhere; }
+.core-ai-active-project > .project-identity { flex:1 1 100%; }
+.pm-detail-head > .project-identity { flex:1 1 240px; }
+.pm-project-title { min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pm-project-kind { color:var(--viral-text-secondary); font-size:12px; }
+/* The shell already shows the canonical name; keep that label inside its row. */
+.sidebar .workspace strong { display:block; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

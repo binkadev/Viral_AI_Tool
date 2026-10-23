@@ -1,19 +1,22 @@
 "use strict";
 const { failure } = require("../generation-job");
+const {createMuseExecution}=require('./muse-execution');
 
-function createMuseProvider({ configStore, extensionBridge = null }) {
+function createMuseProvider({ configStore, extensionBridge = null, verifyVideo = null }) {
+  const execution=createMuseExecution(extensionBridge,verifyVideo);
   const validateConfig = () => {
     const config = configStore.read("muse");
     if (config === null) return { enabled: false, state: "unconfigured", messageCode: "NOT_CONFIGURED" };
     if (!config || typeof config.enabled !== "boolean") throw failure("PROVIDER_CONFIG_ERROR");
     if (!config.enabled) return { enabled: false, state: "unavailable", messageCode: "DISABLED" };
-    // Session evidence is separate: generation has no implementation in this block.
-    return { enabled: true, state: "unavailable", messageCode: "GENERATION_NOT_IMPLEMENTED" };
+    return { enabled: true, state: "unavailable", messageCode: "EXECUTION_UNAVAILABLE" };
   };
   async function readiness() {
     const checkedAt = new Date().toISOString();
     try {
-      return { id: "muse", ...validateConfig(), ready: false, capabilities: ["text-to-video"], checkedAt };
+      const config=validateConfig();
+      const ready=config.enabled && typeof verifyVideo==='function' && await extensionBridge?.executionReady?.()===true && (typeof extensionBridge.receiptV2Ready!=='function' || await extensionBridge.receiptV2Ready());
+      return { id: "muse", ...config, ...(ready?{state:'ready',messageCode:undefined}:{}), ready, capabilities: ["text-to-video"], checkedAt };
     } catch {
       return { id: "muse", enabled: false, ready: false, state: "error",
         capabilities: ["text-to-video"], messageCode: "CONFIG_ERROR", checkedAt };
@@ -22,9 +25,27 @@ function createMuseProvider({ configStore, extensionBridge = null }) {
   async function unsupported() { throw failure("PROVIDER_UNAVAILABLE"); }
   return Object.freeze({
     id: "muse", displayName: "Muse",
-    // Intended generation category only. No validated models or executable routes yet.
+    // Uses the selected tab's settings; do not fabricate a model identifier.
     capabilities: Object.freeze(["text-to-video"]), modelIds: Object.freeze([]),
     validateConfig, readiness,
+    listRecoveryCandidates:c=>execution.listRecoveryCandidates(c),
+    revealRecoveryCandidate:(c,id)=>execution.revealRecoveryCandidate(c,id),
+    confirmRecoveryCandidate:(c,id,persist)=>execution.confirmRecoveryCandidate(c,id,persist),
+    dismissRecovery:c=>execution.dismissRecovery(c),
+    cancelRecovery:c=>execution.cancelRecovery(c),
+    verifyRecoveryOutput:c=>execution.verifyRecoveryOutput(c),
+    ownershipDiagnosticsEnabled:()=>extensionBridge?.developmentDiagnostics===true,
+    diagnoseOwnership:context=>execution.diagnoseOwnership(context),
+    acceptanceTrace:context=>execution.acceptanceTrace(context),
+    runtimeDiagnosis: async () => {
+      // Cached heartbeat/files only: never start a bridge or call execution.
+      if(!extensionBridge?.developmentDiagnostics)throw failure('UNAVAILABLE');
+      const connection=extensionBridge.connectionDiagnosis(),census=extensionBridge.receiverDiagnosis(),build=extensionBridge.runtimeBuildPreflight();
+      const receiver=census.receivers.find(r=>r.selected);
+      const providerReady=validateConfig().enabled && typeof verifyVideo==='function' && extensionBridge.cachedExecutionReady() && receiver?.receiptVersion===2;
+      const {createReport}=require('../bridge/runtime-preflight');
+      return createReport({connection,build,receiver,providerReady});
+    },
     openSession: async () => {
       if (!extensionBridge || !validateConfig().enabled) throw failure("PROVIDER_UNAVAILABLE");
       return extensionBridge.open();
@@ -45,7 +66,12 @@ function createMuseProvider({ configStore, extensionBridge = null }) {
       if (!extensionBridge) throw failure("PROVIDER_UNAVAILABLE");
       return extensionBridge.revealExtension();
     },
-    preflight: readiness, start: unsupported, reconcile: unsupported, cancel: unsupported
+    executionMode:'single-scene-session', pollIntervalMs:2000,
+    preflight: async context => context && !context.sceneId ? {ready:false} : readiness(),
+    start:context=>extensionBridge?execution.start(context):unsupported(),
+    reconcile:context=>extensionBridge?execution.reconcile(context):unsupported(),
+    recoveryState:context=>execution.recoveryState(context),
+    cancel:context=>extensionBridge?execution.cancel(context):unsupported()
   });
 }
 module.exports = { createMuseProvider };

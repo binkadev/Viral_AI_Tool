@@ -40,12 +40,14 @@
   }
 
   function resultMatches(result, source) {
+    if (result?.projectId && result?.inputSignature) return false;
     if (!result || !source) return false;
     if (!result.sourcePath) return true;
     return String(result.sourcePath) === String(source.sourcePath);
   }
 
   function jobMatches(job, source) {
+    if (job?.projectId && job?.inputSignature) return false;
     if (!job || !source) return false;
     if (!job.sourcePath) return true;
     return String(job.sourcePath) === String(source.sourcePath);
@@ -55,7 +57,7 @@
     const jobs = Array.isArray(saved?.jobs) ? saved.jobs : [];
     for (let index = jobs.length - 1; index >= 0; index -= 1) {
       const job = jobs[index];
-      if (!job?.isRenderOutput) continue;
+      if (!job?.isRenderOutput || job.renderKind === "project" || job.projectId && job.renderInputSignature) continue;
       if (source?.sourcePath && job.sourcePath && String(job.sourcePath) !== String(source.sourcePath)) continue;
       return job;
     }

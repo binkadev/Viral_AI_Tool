@@ -11,6 +11,9 @@ const {
   preflightLocalizedExport,
   renderVideo,
   renderLocalizedVideo,
+  preflightProjectRender,
+  renderProjectVideo,
+  cleanupProjectRenderWorkspaces,
   cancelRender,
   cancelAllRenders,
   getActiveRenderCount,
@@ -44,6 +47,12 @@ const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
+const { createConfigStore: createTelegramConfigStore } = require('./services/telegram/config-store');
+const { createDeliveryJournal } = require('./services/telegram/delivery-journal');
+const { createTelegramClient } = require('./services/telegram/client');
+const { createNotificationService } = require('./services/telegram/notification-service');
+const { registerTelegramIpc } = require('./services/telegram/ipc');
+let telegramNotifications;
 const {
   checkForUpdate,
   downloadVerifiedInstaller
@@ -53,6 +62,9 @@ const {
 } = require('./services/update/windows-signature');
 const { createDiagnosticLogger } = require('./services/diagnostics/logger');
 const { createDiagnosticBundle } = require('./services/diagnostics/bundle');
+const { PrivateBetaUpdater } = require('./services/update/private-beta-updater');
+const { registerPrivateBetaUpdateIpc } = require('./services/update/private-beta-ipc');
+let privateBetaUpdater;
 
 const { GenerationService } = require('./services/generation/generation-service');
 const { registerGenerationIpc } = require('./services/generation/generation-ipc');
@@ -85,7 +97,7 @@ function releaseInfo() {
     if (raw && typeof raw === 'object') metadata = raw;
   } catch {}
 
-  const allowedChannels = new Set(['development', 'preview', 'stable']);
+  const allowedChannels = new Set(['development', 'preview', 'beta', 'stable']);
   const channel = allowedChannels.has(String(metadata.channel || '').toLowerCase())
     ? String(metadata.channel).toLowerCase()
     : 'development';
@@ -364,6 +376,7 @@ async function runBackgroundUpdateCheck() {
   const current = releaseInfo();
   if (
     !app.isPackaged ||
+    current.source === 'private-beta' ||
     !current.updateManifestUrl ||
     !["stable", "preview"].includes(current.channel)
   ) {
@@ -424,7 +437,11 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => {
-      runBackgroundUpdateCheck().catch(() => {});
+      if (privateBetaUpdater) {
+        privateBetaUpdater.startupCheck().catch(() => {});
+      } else {
+        runBackgroundUpdateCheck().catch(() => {});
+      }
     }, 12000);
   });
 
@@ -471,6 +488,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  telegramNotifications = createNotificationService({
+    config: createTelegramConfigStore({ userDataPath: app.getPath('userData'), safeStorage }),
+    journal: createDeliveryJournal({ userDataPath: app.getPath('userData') }),
+    client: createTelegramClient(), locale: () => uiLocale
+  });
+  cleanupProjectRenderWorkspaces();
   if (process.platform === 'win32') app.setAppUserModelId('com.viralai.tool');
 
   diagnosticLogger = createDiagnosticLogger({
@@ -484,6 +507,36 @@ app.whenReady().then(() => {
     electron: process.versions.electron,
     node: process.versions.node
   });
+
+  if (releaseInfo().source === 'private-beta') {
+    privateBetaUpdater = new PrivateBetaUpdater({
+      updater: app.isPackaged ? require('electron-updater').autoUpdater : null,
+      packaged: app.isPackaged,
+      version: app.getVersion(),
+      preferencesPath: path.join(app.getPath('userData'), 'update-preferences.json'),
+      testUrl: process.env.VIRAL_AI_UPDATE_TEST_URL,
+      activeWork: getActiveWorkCount,
+      prepareInstall: async () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return false;
+        // Fixed local code, never renderer-supplied script. Storage failure,
+        // unscoped project work, a hung renderer or a missing project API vetoes.
+        const barrier = mainWindow.webContents.executeJavaScript(`(() => {
+          const api = window.ViralCoreProjectPersistence;
+          if (!api || typeof state === 'undefined') return false;
+          const busy = new Set(['validating','preparing','uploading','queued','processing','translating','generating','downloading','rendering','planning','cancelling']);
+          if ([state.speech?.job,state.translation?.job,state.voice?.job,state.scenePlan?.plannerJob,...(state.jobs || []).filter(job => job.isRenderOutput)].some(job => busy.has(job?.status))) return false;
+          return !api.storageError() && !api.unsupportedSchemaVersion() && (!api.activeProjectId() || !!api.flush('before-update-install'));
+        })()`);
+        let timer;
+        try { return await Promise.race([barrier, new Promise(resolve => { timer = setTimeout(() => resolve(false), 4000); })]) === true; }
+        catch { return false; }
+        finally { clearTimeout(timer); }
+      }
+    });
+    privateBetaUpdater.on('state', snapshot => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('updates:state-changed', snapshot);
+    });
+  }
 
   sessionStore = createSessionStore({
     userDataPath: app.getPath('userData'),
@@ -511,14 +564,24 @@ app.whenReady().then(() => {
     }
   });
   try {
+    const handoff = app.isPackaged === false && process.env.NODE_ENV !== 'production' &&
+      ['completed', 'persistence-failure', 'tampered', 'noncompleted', 'legacy', 'manual-recovery'].includes(process.env.VIRAL_AI_DEV_HANDOFF_FIXTURE) &&
+      /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(process.env.VIRAL_AI_DEV_HANDOFF_SESSION || '');
+    if (handoff) {
+      generationService = require('./dev/generated-handoff-harness').runtime(app, process.env).service;
+    } else {
     const root = path.join(app.getPath('userData'), 'generation');
     const providerConfigStore = new ProviderConfigStore(path.join(root, 'provider-config'));
     const registry = new ProviderRegistry();
     museExtensionBridge = new MetaMuseExtensionBridge({ userDataPath: app.getPath('userData'),
-      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'), shell });
+      extensionSourceDir: path.join(app.getAppPath(), 'extensions', 'meta-muse-bridge'), shell,
+      developmentDiagnostics: !app.isPackaged });
     museExtensionBridge.start().catch(() => {});
-    registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge }));
+    registry.register(createMuseProvider({ configStore: providerConfigStore, extensionBridge: museExtensionBridge,
+      verifyVideo:async file=>{const media=await probeVideo(file);if(!(media.duration>0 && media.width>0 && media.height>0))throw Error('ASSET_UNAVAILABLE');return media;} }));
     generationService = new GenerationService({ root, registry, providerConfigStore });
+    museExtensionBridge.executionAuditSink = (packet, target) => generationService.ingestExecutionWitness(packet, target);
+    }
   } catch {}
   // Forward the existing runtime invalidation event; the renderer reads scoped jobs via IPC.
   generationService?.on('changed', ({ id, status }) => {
@@ -630,6 +693,7 @@ ipcMain.handle('diagnostics:export', async () => {
 
 ipcMain.handle('app:check-update', async () => {
   const current = releaseInfo();
+  if (current.source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
 
   if (!current.updateManifestUrl) {
     return {
@@ -665,6 +729,7 @@ ipcMain.handle('app:check-update', async () => {
 
 ipcMain.handle('app:download-update', async (event) => {
   const current = releaseInfo();
+  if (current.source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
 
   if (activeUpdateDownloadController) {
     return {
@@ -731,6 +796,7 @@ ipcMain.handle('app:download-update', async (event) => {
 });
 
 ipcMain.handle('app:cancel-update-download', async () => {
+  if (releaseInfo().source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
   if (!activeUpdateDownloadController) {
     return { ok: true, data: { cancelled: false } };
   }
@@ -747,6 +813,7 @@ ipcMain.handle('app:cancel-update-download', async () => {
 });
 
 ipcMain.handle('app:launch-update', async () => {
+  if (releaseInfo().source === 'private-beta') return { ok: false, error: { code: 'UPDATE_NOT_CONFIGURED', details: {} } };
   if (getActiveWorkCount() > 0) {
     return {
       ok: false,
@@ -1378,6 +1445,22 @@ ipcMain.handle('video:render', async (event, payload) => {
   }
 });
 
+for (const [channel, execute] of [['video:preflight-project-render', preflightProjectRender], ['video:render-project', renderProjectVideo]]) {
+  ipcMain.handle(channel, async (event, payload) => {
+    try {
+      const data = await execute(payload, {
+        allowedAudioRoot: path.join(app.getPath('userData'), 'voice-cache'),
+        onProgress: progress => { if (!event.sender.isDestroyed()) event.sender.send('video:render-progress', progress); }
+      });
+      return { ok: true, data };
+    } catch (error) {
+      const serialized = serializeProcessingError(error);
+      console.error('[ProjectVideoExport]', serialized.code, serialized.technicalMessage);
+      return { ok: false, error: { code: serialized.code } };
+    }
+  });
+}
+
 ipcMain.handle('video:cancel-render', async (_event, jobId) => {
   if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false };
   return { ok: true, cancelled: cancelRender(jobId) };
@@ -1734,7 +1817,31 @@ ipcMain.handle('video:file-url', async (_event, inputPath) => {
   return pathToFileURL(safePath).href;
 });
 
-registerGenerationIpc({ ipcMain, getService: () => generationService, trusted: event =>
+require('./services/media/preview-url').registerPreviewIpc({ ipcMain, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+registerTelegramIpc({ ipcMain, service: () => telegramNotifications, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+require('./services/media/local-picker').registerProjectMediaPicker({ ipcMain, dialog, parent: () => mainWindow, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+registerPrivateBetaUpdateIpc({ ipcMain, service: () => privateBetaUpdater, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+registerGenerationIpc({ ipcMain, getService: () => generationService, developmentDiagnostics: !app.isPackaged, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&
     event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)

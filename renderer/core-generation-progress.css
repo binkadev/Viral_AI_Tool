@@ -12,3 +12,11 @@ html[data-theme="midnight"] .generation-workspace{--progress-surface:#191b24;--p
 .generation-workspace :is(button,select):focus-visible{outline:2px solid #b1a2ff;outline-offset:3px}
 @media(max-height:760px){.generation-workspace{gap:16px}.generation-summary{padding:16px;gap:16px}.generation-heading h2{font-size:26px}.generation-empty{padding:24px}.generation-stages li{padding:8px}}
 @media(max-width:1100px){.generation-summary{grid-template-columns:1fr 1fr}.generation-actions{grid-column:1/-1;max-inline-size:none}.generation-stages{grid-template-columns:repeat(4,minmax(0,1fr))}.generation-story-head{flex-wrap:wrap}.generation-scene{grid-template-columns:40px minmax(0,1fr)}.generation-scene-state{grid-column:2}}
+.generation-recovery { margin-block: 20px; padding: 20px; border: 1px solid var(--border, #334155); border-radius: 12px; }
+.generation-recovery p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.generation-recovery h3, .generation-recovery h4 { line-height: 1.5; }
+.generation-recovery-candidates { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); gap: 16px; margin-block: 16px; }
+.generation-recovery-candidates article { border-block-start: 1px solid var(--border, #334155); padding-block: 12px; min-inline-size: 0; }
+.generation-recovery .generation-actions { flex-wrap: wrap; }
+.generation-recovery button { min-block-size: 40px; white-space: normal; text-align: start; font-size: 13px; }
+.generation-recovery button:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }

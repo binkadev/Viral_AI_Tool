@@ -41,11 +41,12 @@ assert(assets.includes('current?.media?.assets'), "asset counts must come from p
 assert(discovery.includes('window.desktopAPI?.searchMedia'), "online search must go through the narrow desktop bridge");
 assert(discovery.includes('window.desktopAPI?.acquireMedia'), "adding online media must use native acquisition rather than persisting a provider URL");
 assert(discovery.includes('window.ViralCoreMediaLibraryModel'), "project insertion must use the media domain model");
-assert(discovery.includes('model.addAssets(current.media, [candidate])'), "duplicate protection must be enforced through domain addAssets after acquisition");
+assert(discovery.includes('projectMedia().admit(context, [acquired])'), "acquisition must use the durable canonical Project media boundary");
+assert(!discovery.includes('current.media ='), "discovery cannot publish live assets before durable persistence");
 assert(discovery.includes('model.MAX_PROJECT_ASSETS'), "project capacity must be enforced from the domain model rather than a UI magic number alone");
 assert(discovery.includes('renderState("capacity", "libraryFullTitle", "libraryFullBody")'), "capacity rejection must be visible and localized");
 assert(discovery.includes('previewUrl: null') && discovery.includes('remoteUrl: null'), "durable project assets must not retain temporary provider media URLs");
-assert(discovery.includes('fileState: "available"'), "successful acquisition must become a locally available project asset");
+assert(read("renderer/core-project-media.js").includes('a.fileState !== "available"'), "durable admission must reject media that is not locally available");
 assert(discovery.includes('origin: "stock"'), "selected search media must retain stock origin");
 assert(discovery.includes('attribution: result.attribution || {}'), "search identity must retain attribution/license metadata until acquisition");
 assert(discovery.includes('typeof window.desktopAPI?.searchMedia !== "function"'), "missing bridge must produce an unavailable state rather than fake results");

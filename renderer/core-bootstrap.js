@@ -28,13 +28,11 @@
   function primeCommercialChrome() {
     const en = saved.locale === "en";
     const workspaceLabel = document.getElementById("workspaceLabel");
-    const workspaceName = document.querySelector(".workspace strong");
     const accountName = document.querySelector('[data-core-placeholder="account-profile"] b');
     const accountStatus = document.querySelector('[data-core-placeholder="account-profile"] span');
     const projectAction = document.getElementById("newProjectLabel");
 
     if (workspaceLabel) workspaceLabel.textContent = en ? "Workspace" : "Khu làm việc";
-    if (workspaceName) workspaceName.textContent = en ? "Video Studio" : "Studio video";
     if (accountName) accountName.textContent = en ? "Cloud account" : "Tài khoản Cloud";
     if (accountStatus) accountStatus.textContent = en ? "Not synced" : "Chưa đồng bộ";
     if (projectAction) projectAction.textContent = en ? "Import video" : "Nhập video";

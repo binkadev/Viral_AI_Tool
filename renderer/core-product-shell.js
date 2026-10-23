@@ -23,7 +23,6 @@
       ? {
           workflow: "Create video",
           manage: "Manage",
-          workspaceName: "Video Studio",
           aiCreate: "Create with AI",
           import: "Import video",
           editor: "Video studio",
@@ -52,7 +51,6 @@
       : {
           workflow: "Tạo video",
           manage: "Quản lý",
-          workspaceName: "Studio video",
           aiCreate: "Tạo bằng AI",
           import: "Nhập video",
           editor: "Studio video",
@@ -115,13 +113,10 @@
       { id: "home", icon: "⌂", label: "startHome.nav" },
       { id: "ai-create", icon: "✦", label: "core-ai-create" },
       { id: "generation-progress", icon: "◷", label: "generationProgress.nav" },
-      { id: "download", icon: "⇩", label: "core-import" },
-      { id: "ai-video", icon: "◫", label: "core-editor" },
       { group: "core-manage" },
       { id: "library", icon: "▦", label: "nav.library" },
-      { id: "accounts", icon: "◎", label: "nav.accounts" },
-      { id: "usage", icon: "◔", label: "nav.usage" },
-      { id: "billing", icon: "◇", label: "nav.billing" },
+      { id: "productions", icon: "▤", label: "productionManager.nav" },
+      { id: "batch-production", icon: "▥", label: "batchProduction.nav" },
       { id: "settings", icon: "⚙", label: "nav.settings" }
     );
 
@@ -203,10 +198,8 @@
     const title = document.getElementById("pageTitle");
     const breadcrumb = document.getElementById("breadcrumb");
     const projectLabel = document.getElementById("newProjectLabel");
-    const workspaceName = document.querySelector(".workspace strong");
 
     if (projectLabel) projectLabel.textContent = c.importAction;
-    if (workspaceName) workspaceName.textContent = c.workspaceName;
 
     if (current.page === "ai-create") {
       if (title) title.textContent = c.aiCreateTitle;

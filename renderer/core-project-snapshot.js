@@ -3,13 +3,14 @@
   if (!mediaModel && typeof module !== "undefined" && module.exports && typeof require === "function") {
     try { mediaModel = require("./core-media-library-model"); } catch {}
   }
-  const api = factory(mediaModel);
+  const audioModel = root?.ViralCoreProjectAudioModel || (typeof module !== "undefined" && module.exports ? require("./core-project-audio-model") : null);
+  const api = factory(mediaModel, audioModel);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreProjectSnapshot = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel) {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreProjectSnapshot(mediaModel, audioModel) {
   "use strict";
 
-  const CURRENT_SCHEMA_VERSION = 2;
+  const CURRENT_SCHEMA_VERSION = 4;
   const SNAPSHOT_KEY = "viral-ai-core-project-snapshot";
   const LEGACY_STATE_KEY = "viral-ai-tool-state";
   const LEGACY_UI_KEYS = Object.freeze({
@@ -101,8 +102,12 @@
 
   function workflowFromState(state) {
     return {
+      // Additive, opt-in references for newly admitted generation jobs only.
+      generationOutputs: generationOutputs(state?.generationOutputs),
       output: String(state?.output || ""),
+      generationBrief: String(state?.generationBrief || "").slice(0, 8000),
       renderOptions: {
+        ...audioModel?.normalizeSettings(state?.renderOptions),
         burnSubtitles: state?.renderOptions?.burnSubtitles !== false,
         mixOriginalAudio: state?.renderOptions?.mixOriginalAudio !== false,
         originalAudioVolume: clamp(state?.renderOptions?.originalAudioVolume, 0, 0.35, 0.12)
@@ -132,6 +137,17 @@
       },
       jobs: safeJobs(state?.jobs)
     };
+  }
+
+  function generationOutputs(input) {
+    const seen = new Set();
+    return (Array.isArray(input) ? input : []).filter(entry => {
+      if (!/^[a-zA-Z0-9_-]{1,160}$/.test(entry?.jobId || "") || seen.has(entry.jobId)) return false;
+      if (entry.sceneId !== null && !/^[a-zA-Z0-9_-]{1,160}$/.test(entry.sceneId || "")) return false;
+      seen.add(entry.jobId);
+      return true;
+    }).map(entry => ({ jobId: entry.jobId, sceneId: entry.sceneId,
+      assetId: entry.assetId === "generation:" + entry.jobId ? entry.assetId : null }));
   }
 
   function normalizeSelection(value) {
@@ -184,28 +200,41 @@
     };
   }
 
-  function normalizeV2(snapshot, options = {}) {
+  function normalizeProject(snapshot, options = {}) {
     if (!snapshot || typeof snapshot !== "object") return null;
     const source = normalizeSource(snapshot.source);
-    if (!source) return null;
+    const aiProject = snapshot.schemaVersion === 4 && snapshot.projectKind === "ai";
+    if (!source && !aiProject) return null;
+    if (aiProject && (!/^[a-zA-Z0-9_-]{1,160}$/.test(snapshot.projectId || "") || !String(snapshot.projectName || "").trim())) return null;
     const workflow = workflowFromState({
       output: snapshot.workflow?.output,
+      generationBrief: snapshot.workflow?.generationBrief,
+      generationOutputs: snapshot.workflow?.generationOutputs,
       renderOptions: snapshot.workflow?.renderOptions,
       speech: snapshot.workflow?.speech,
       translation: snapshot.workflow?.translation,
       voice: snapshot.workflow?.voice,
       jobs: snapshot.workflow?.jobs
     });
+    const media = mediaFromState({ media: snapshot.media || emptyMedia() }, { restartSafe: options.restartSafeMedia === true });
+    if (options.restartSafeMedia) workflow.jobs = workflow.jobs.map(job => job.renderKind === "project" && job.projectId === snapshot.projectId && job.renderInputSignature &&
+      ["validating", "queued", "preparing", "processing", "rendering", "cancelling"].includes(job.status)
+      ? { ...job, status: "interrupted", failureCode: "PROJECT_RENDER_INTERRUPTED" } : job);
+    if (audioModel && !audioModel.resolveBgm({ media, workflow })) workflow.renderOptions.bgmAssetId = null;
+    if (options.restartSafeMedia && workflow.voice.job?.projectId === snapshot.projectId && audioModel?.ACTIVE.includes(workflow.voice.job.status)) {
+      workflow.voice.job = { ...workflow.voice.job, status: "interrupted" };
+    }
+    if (options.restartSafeMedia && workflow.voice.staleJob?.projectId === snapshot.projectId && audioModel?.ACTIVE.includes(workflow.voice.staleJob.status)) {
+      workflow.voice.staleJob = { ...workflow.voice.staleJob, status: "interrupted" };
+    }
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: aiProject ? "ai" : "imported",
       projectId: String(snapshot.projectId || source.identity),
-      projectName: String(snapshot.projectName || source.name || source.identity),
+      projectName: String(snapshot.projectName || source?.name || source?.identity),
       updatedAt: snapshot.updatedAt ? String(snapshot.updatedAt) : null,
       source,
-      media: mediaFromState(
-        { media: snapshot.media || emptyMedia() },
-        { restartSafe: options.restartSafeMedia === true }
-      ),
+      media,
       workflow,
       editor: normalizeEditor(snapshot.editor, source)
     };
@@ -225,7 +254,7 @@
       return { snapshot: null, migrated: false, unsupportedVersion: version };
     }
     if (version === CURRENT_SCHEMA_VERSION) {
-      const snapshot = normalizeV2(input, options);
+      const snapshot = normalizeProject(input, options);
       const migrated = Boolean(
         snapshot &&
         (
@@ -237,16 +266,16 @@
       );
       return { snapshot, migrated, unsupportedVersion: null };
     }
-    if (version === 1 && input.source && input.workflow) {
+    if ([1, 2, 3].includes(version) && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
+        snapshot: normalizeProject({ ...input, projectKind: "imported", schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
     }
     if (version === 0 && input.source && input.workflow) {
       return {
-        snapshot: normalizeV2({ ...input, schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
+        snapshot: normalizeProject({ ...input, projectKind: "imported", schemaVersion: CURRENT_SCHEMA_VERSION, media: input.media || emptyMedia() }, options),
         migrated: true,
         unsupportedVersion: null
       };
@@ -280,6 +309,7 @@
     if (!source) return null;
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: "imported",
       projectId: source.identity,
       projectName: String(legacyState?.projectName || source.name || source.identity),
       updatedAt: new Date(now).toISOString(),
@@ -292,14 +322,16 @@
 
   function buildSnapshot(appState, editorState = {}, previous = null, now = Date.now()) {
     const source = sourceFromState(appState);
-    if (!source) return null;
     const previousSnapshot = migrateSnapshot(previous).snapshot;
+    const aiProject = previousSnapshot?.projectKind === "ai";
+    if (!source && !aiProject) return null;
     const sameProject = Boolean(
       previousSnapshot &&
-      ((source.jobId && previousSnapshot.source?.jobId === source.jobId) || previousSnapshot.source?.identity === source.identity)
+      (aiProject || (source?.jobId && previousSnapshot.source?.jobId === source.jobId) || previousSnapshot.source?.identity === source?.identity)
     );
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      projectKind: aiProject ? "ai" : "imported",
       projectId: sameProject ? previousSnapshot.projectId : source.identity,
       projectName: sameProject
         ? String(previousSnapshot.projectName || source.name || source.identity)
@@ -312,14 +344,23 @@
     };
   }
 
+  function createDraftProject({ projectId, projectName }, appState = {}, editorState = {}, now = Date.now()) {
+    return normalizeProject({ schemaVersion: 4, projectKind: "ai", projectId, projectName,
+      updatedAt: new Date(now).toISOString(), source: null, media: emptyMedia(),
+      workflow: workflowFromState(appState), editor: normalizeEditor(editorState) });
+  }
+
   function toLegacyState(snapshot, existing = {}) {
     const migrated = migrateSnapshot(snapshot).snapshot;
     if (!migrated) return clone(existing, {});
     const workflow = migrated.workflow;
     return {
       ...clone(existing, {}),
-      page: "ai-video",
+      projectId: migrated.projectId,
+      projectName: migrated.projectName,
+      page: migrated.source ? "ai-video" : "ai-create",
       output: workflow.output,
+      generationOutputs: clone(workflow.generationOutputs, []),
       media: clone(migrated.media, emptyMedia()),
       renderOptions: clone(workflow.renderOptions, {}),
       speech: clone(workflow.speech, {}),
@@ -354,6 +395,48 @@
     return JSON.stringify(stable);
   }
 
+  function attachGeneratedOutput(snapshot, job, output, meta) {
+    const entry = snapshot.workflow.generationOutputs?.find(item => item.jobId === job.id);
+    if (!entry || job.projectId !== snapshot.projectId || job.sceneId !== entry.sceneId ||
+        (entry.sceneId && !snapshot.scenePlan?.scenes?.some(scene => scene.id === entry.sceneId))) throw Error("PROJECT_GENERATION_MISMATCH");
+    if (job.status !== "completed" || job.kind !== "video" ||
+        job.asset?.fileName !== job.id + ".mp4" || job.output?.fileName !== job.asset.fileName ||
+        output?.verified !== true || output.jobId !== job.id || output.projectId !== snapshot.projectId ||
+        output.sceneId !== entry.sceneId || output.fileName !== job.output.fileName ||
+        ![meta?.duration, meta?.width, meta?.height].every(value => Number.isFinite(value) && value > 0)) throw Error("GENERATED_OUTPUT_UNVERIFIED");
+    if (entry.assetId) return snapshot;
+    const next = clone(snapshot), assetId = "generation:" + job.id;
+    const localIdentity = value => String(value || "").replace(/\\/g, "/").toLowerCase();
+    if (next.media.assets.some(asset => asset.id !== assetId && asset.localPath &&
+        localIdentity(asset.localPath) === localIdentity(output.path))) throw Error("GENERATED_MEDIA_DUPLICATE");
+    const added = mediaModel.addAssets(next.media, [{ id: assetId, kind: "video", origin: "generated",
+      provider: job.provider, providerAssetId: job.id, name: output.fileName, localPath: output.path,
+      status: "ready", fileState: "available", meta: { ...meta, mime: "video/mp4" } }]);
+    const asset = added.library.assets.find(item => item.id === assetId);
+    if (!asset?.localPath || asset.localPath !== output.path) throw Error("GENERATED_MEDIA_UNAVAILABLE");
+    next.media = added.library;
+    const sourceId = "generation-source:" + job.id;
+    if (!next.workflow.jobs.some(item => item.id === sourceId)) {
+      if (next.workflow.jobs.length >= 100) throw Error("PROJECT_SOURCE_CAPACITY");
+      const source = mediaModel.sourceJob({ name: asset.name, path: asset.localPath }, {
+        id: sourceId, projectId: job.projectId, sceneId: job.sceneId, generationJobId: job.id, assetId, meta });
+      // Keep an existing editor/source selection. An empty AI project selects
+      // its first real video through the very same source path as an import.
+      if (next.source) next.workflow.jobs.push(source);
+      else {
+        next.workflow.jobs.unshift(source);
+        next.source = sourceFromState({ jobs: next.workflow.jobs });
+        next.media.selectedAssetId = asset.id;
+        next.editor = normalizeEditor({ ...next.editor, playback: {
+          position: 0, sourceIdentity: next.source.identity, sourcePath: next.source.path
+        } }, next.source);
+      }
+    }
+    next.workflow.generationOutputs.find(item => item.jobId === job.id).assetId = assetId;
+    next.updatedAt = new Date().toISOString();
+    return next;
+  }
+
   return {
     CURRENT_SCHEMA_VERSION,
     SNAPSHOT_KEY,
@@ -368,8 +451,10 @@
     migrateSnapshot,
     fromLegacy,
     buildSnapshot,
+    createDraftProject,
     toLegacyState,
     legacyUiProjection,
-    semanticSignature
+    semanticSignature,
+    attachGeneratedOutput
   };
 });

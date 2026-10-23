@@ -69,6 +69,7 @@
   }
 
   function stageReason(stage, derived, c) {
+    if (stage.projectRenderReason) return stage.projectRenderReason;
     const r = c.reasons;
     if (stage.id === "import") {
       if (stage.status === "failed") return r.importMissing;
@@ -219,8 +220,10 @@
     applyGate("#speechStart", derived.controls.speech, controlReason("speech", derived, derived.controls.speech, c));
     applyGate("#translationStart", derived.controls.translate, controlReason("translate", derived, derived.controls.translate, c));
     applyGate("#voiceStart", derived.controls.voice, controlReason("voice", derived, derived.controls.voice, c));
-    applyGate("#render", derived.controls.render, controlReason("render", derived, derived.controls.render, c));
-    applyGate("#export", derived.controls.export, controlReason("export", derived, derived.controls.export, c));
+    if (!window.ViralCoreProjectRender?.active()) {
+      applyGate("#render", derived.controls.render, controlReason("render", derived, derived.controls.render, c));
+      applyGate("#export", derived.controls.export, controlReason("export", derived, derived.controls.export, c));
+    }
   }
 
   function wireQuickProject() {
@@ -254,6 +257,10 @@
     refreshQueued = false;
     const saved = savedState();
     const derived = model.derive(saved);
+    if (window.ViralCoreProjectRender?.active()) {
+      const projectRender=window.ViralCoreProjectRender.presentation();
+      if (projectRender) derived.stages=derived.stages.map(stage=>stage.id === "render" ? {...stage,status:projectRender.status,projectRenderReason:projectRender.reason} : stage);
+    }
     ensureWorkflowRail(derived, saved);
     applyControlPolicy(derived);
     annotateJobs(derived);

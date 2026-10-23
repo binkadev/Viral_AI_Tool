@@ -90,7 +90,8 @@ for (const required of [
   "source?.meta?.duration",
   "source?.meta?.width",
   "source?.meta?.height",
-  "if (!video && !source) return"
+  // A canonical image-only Project still has a real Studio media rail.
+  "if (!video && !source && !window.ViralCorePlayer?.projectPreview?.active()) return"
 ]) {
   assert(assets.includes(required), "Assets missing-state support missing: " + required);
 }
