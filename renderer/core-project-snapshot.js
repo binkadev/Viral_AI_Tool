@@ -217,6 +217,9 @@
       jobs: snapshot.workflow?.jobs
     });
     const media = mediaFromState({ media: snapshot.media || emptyMedia() }, { restartSafe: options.restartSafeMedia === true });
+    if (options.restartSafeMedia) workflow.jobs = workflow.jobs.map(job => job.renderKind === "project" && job.projectId === snapshot.projectId && job.renderInputSignature &&
+      ["validating", "queued", "preparing", "processing", "rendering", "cancelling"].includes(job.status)
+      ? { ...job, status: "interrupted", failureCode: "PROJECT_RENDER_INTERRUPTED" } : job);
     if (audioModel && !audioModel.resolveBgm({ media, workflow })) workflow.renderOptions.bgmAssetId = null;
     if (options.restartSafeMedia && workflow.voice.job?.projectId === snapshot.projectId && audioModel?.ACTIVE.includes(workflow.voice.job.status)) {
       workflow.voice.job = { ...workflow.voice.job, status: "interrupted" };

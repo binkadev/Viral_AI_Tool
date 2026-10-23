@@ -107,6 +107,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   preflightLocalizedExport: payload => ipcRenderer.invoke('video:preflight-localized-export', payload),
   renderVideo: payload => ipcRenderer.invoke('video:render', payload),
   renderLocalizedVideo: payload => ipcRenderer.invoke('video:render-localized', payload),
+  preflightProjectRender: payload => ipcRenderer.invoke('video:preflight-project-render', payload),
+  renderProjectVideo: payload => ipcRenderer.invoke('video:render-project', payload),
   cancelRender: jobId => ipcRenderer.invoke('video:cancel-render', jobId),
   setLocale: locale => ipcRenderer.invoke('app:set-locale', locale),
   getAuthStatus: () => ipcRenderer.invoke('auth:status'),

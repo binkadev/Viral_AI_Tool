@@ -3670,6 +3670,7 @@ async function handleJobAction(action, jobId) {
   if (action === "trash") return trashJobFile(job);
   if (action === "cancel-export") return cancelExportJob(job);
   if (action === "retry-export") {
+    if (job.renderKind === "project") return window.ViralCoreProjectRender?.start(job.projectId);
     const source = state.jobs.find(item =>
       !item.isRenderOutput &&
       item.sourcePath === job.sourcePath
@@ -4568,6 +4569,7 @@ async function handleExportBlock(response, source) {
 }
 
 async function cancelExportJob(job) {
+  if (job?.renderKind === "project") return window.ViralCoreProjectRender?.runtime.cancel(job.projectId);
   if (!job || !job.isRenderOutput || normalizeStatus(job.status) !== "processing") return;
 
   const confirmed = await confirmAction({
@@ -5384,7 +5386,7 @@ function bind() {
   });
 
   const renderButton = $("render");
-  if (renderButton) renderButton.onclick = () => startLocalizedRender();
+  if (renderButton) renderButton.onclick = () => window.ViralCoreProjectRender?.active() ? window.ViralCoreProjectRender.start() : startLocalizedRender();
 
   const burnSubtitlesToggle = $("burnSubtitlesToggle");
   if (burnSubtitlesToggle) {
@@ -5408,7 +5410,7 @@ function bind() {
   if (tts) tts.onclick = () => toast(t("voice.generated"));
 
   const exportButton = $("export");
-  if (exportButton) exportButton.onclick = startRealRender;
+  if (exportButton) exportButton.onclick = () => window.ViralCoreProjectRender?.active() ? window.ViralCoreProjectRender.start() : startRealRender();
 
   const addChannel = $("addChannel");
   if (addChannel) addChannel.onclick = () => modal(t("monitor.modalTitle"), t("monitor.modalBody"));
@@ -5704,6 +5706,7 @@ if (window.desktopAPI) {
   if (window.desktopAPI.onRenderProgress) {
     window.desktopAPI.onRenderProgress((payload) => {
       const job = state.jobs.find(item => item.id === payload?.jobId);
+      if (job?.renderKind === "project") return;
       if (!job || ["cancelling", "cancelled"].includes(normalizeStatus(job.status))) return;
       job.progress = Math.max(0, Math.min(100, Number(payload.percent || 0)));
       job.renderPhase = payload.phase || job.renderPhase || "rendering";

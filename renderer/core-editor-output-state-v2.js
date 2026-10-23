@@ -145,6 +145,10 @@
     queued = false;
     const pane = document.querySelector('#page .core-inspector-pane[data-inspector-pane="output"]');
     if (!(pane instanceof HTMLElement)) return;
+    if (window.ViralCoreProjectRender?.active()) {
+      pane.querySelectorAll(".core-output-state-card,.core-output-state-hint").forEach(n => { n.hidden = true; });
+      return;
+    }
     const out = output();
     const c = labels(basename(out?.outputPath));
     const { card, hint } = ensure(pane);

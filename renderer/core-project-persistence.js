@@ -687,10 +687,69 @@
   }
   function projectAudioSnapshot(projectId) { return model.clone(registry.projects.find(p => p.projectId === projectId), null); }
 
+  // Only admit/terminal mutations are allowed across inactive Project ownership.
+  // Job progress stays in the runtime; registry writes happen before publication.
+  function updateProjectRender(projectId, input) {
+    assertWritable();
+    if (projectTransition) throw Error("PROJECT_TRANSITION_PENDING");
+    const stored = registry.projects.find(p => p.projectId === projectId);
+    if (!stored) throw Error("PROJECT_NOT_FOUND");
+    const active = registry.activeProjectId === projectId, current = appState();
+    if (active && current?.projectId !== projectId) throw Error("PROJECT_MISMATCH");
+    const next = active ? model.buildSnapshot(current, editorState(current), currentSnapshot) : model.clone(stored);
+    if (active) next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
+    const jobs = next.workflow.jobs, render = window.ViralCoreProjectRenderModel;
+    if (!render || !input || typeof input !== "object") throw Error("PROJECT_RENDER_INCOMPLETE");
+    const validId = v => typeof v === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(v);
+    if (input.action === "admit") {
+      const j = input.job;
+      if (jobs.length >= 100) throw Error("PROJECT_RENDER_HISTORY_FULL");
+      if (Object.keys(input).some(k => !["action","job","playback"].includes(k)) || !active || !validId(j?.id) || !render.scoped(j) || j.projectId !== projectId || jobs.some(v => v.id === j.id)) throw Error("PROJECT_RENDER_INCOMPLETE");
+      if (jobs.some(v => render.scoped(v) && v.projectId === projectId && v.renderInputSignature === j.renderInputSignature && render.ACTIVE.includes(v.status))) throw Error("PROJECT_RENDER_DUPLICATE");
+      const plan = render.build(next,input.playback);
+      if (!plan.ready || plan.renderInputSignature !== j.renderInputSignature) throw Error(plan.reason || "PROJECT_RENDER_INPUT_CHANGED");
+      jobs.push({ id:j.id,isRenderOutput:true,renderKind:"project",projectId,renderInputSignature:j.renderInputSignature,
+        name:next.projectName,status:"processing",progress:0,renderPhase:"preparing",fileState:"pending",outputPath:null,
+        renderProfile:model.clone(plan.profile),startedAt:new Date().toISOString() });
+    } else {
+      if (input.action !== "terminal" || Object.keys(input).some(k => !["action","jobId","status","result","failureCode"].includes(k)) || !validId(input.jobId) || !["completed","failed","cancelled","interrupted"].includes(input.status)) throw Error("PROJECT_RENDER_INCOMPLETE");
+      const j = jobs.find(v => v.id === input.jobId && v.projectId === projectId && render.scoped(v));
+      if (!j || !render.ACTIVE.includes(j.status)) throw Error("PROJECT_RENDER_OWNERSHIP");
+      if (input.status === "completed") {
+        const r=input.result, m=r?.metadata;
+        if (r?.cancelled !== false || r.projectId !== projectId || r.renderInputSignature !== j.renderInputSignature || typeof r.outputPath !== "string" || !/^(?:[A-Za-z]:[\\/]|\/)/.test(r.outputPath) || r.outputPath.includes("\0") || r.outputPath.length > 32767 || !Number.isSafeInteger(r.sizeBytes) || r.sizeBytes <= 0 || !m || !Number.isFinite(m.duration) || !(m.duration > 0) || m.duration > Number.MAX_SAFE_INTEGER / 48000 || m.width !== j.renderProfile.width || m.height !== j.renderProfile.height || m.fps !== 30 || m.videoCodec !== "h264" || m.audioCodec !== "aac" || !r.pipeline) throw Error("PROJECT_RENDER_VERIFY_FAILED");
+        const summary=r.pipeline;
+        if (!Number.isInteger(summary.sceneCount) || summary.sceneCount < 1 || summary.sceneCount > 2000 || !Number.isFinite(summary.duration) || Math.abs(summary.duration-m.duration) > .08 || summary.profile?.width !== j.renderProfile.width || summary.profile?.height !== j.renderProfile.height || summary.profile?.fps !== 30 ||
+          ["originalAudioMixed","voiceMixed","bgmMixed","bgmLoop","burnSubtitles"].some(k=>typeof summary[k] !== "boolean") || !Number.isInteger(summary.subtitleCount) || summary.subtitleCount < 0 || summary.subtitleCount > 10000 || !Number.isInteger(summary.timingWarningCount) || summary.timingWarningCount < 0 || summary.timingWarningCount > 300) throw Error("PROJECT_RENDER_VERIFY_FAILED");
+        const pipelineKeys=["sceneCount","duration","profile","originalAudioMixed","voiceMixed","bgmMixed","bgmLoop","burnSubtitles","subtitleCount","timingWarningCount"];
+        const pipeline=Object.fromEntries(pipelineKeys.map(k => [k,k === "profile" ? model.clone(j.renderProfile) : r.pipeline[k]]));
+        const metadata=Object.fromEntries(["duration","width","height","fps","videoCodec","audioCodec","sizeBytes"].map(k => [k,m[k]]));
+        Object.assign(j,{outputPath:r.outputPath,outputSizeBytes:r.sizeBytes,fileState:"available",metadata,pipeline,progress:100});
+      }
+      Object.assign(j,{status:input.status,renderPhase:input.status,completedAt:new Date().toISOString()});
+      if (input.failureCode) j.failureCode = /^[A-Z0-9_]{1,80}$/.test(input.failureCode) ? input.failureCode : "PROCESSING_FAILED";
+    }
+    if (active) { const d=Object.getOwnPropertyDescriptor(current,"jobs"); if (d ? !("value" in d) || !d.writable : !Object.isExtensible(current)) throw Error("PROJECT_STATE_UNAVAILABLE"); }
+    next.updatedAt = new Date().toISOString();
+    try { writeRegistry({...registry,projects:registry.projects.map(p => p.projectId === projectId ? next : p)}); }
+    catch(error) { dispatchSaveFailure("project-render",error); throw error; }
+    if (active) {
+      const previousJobs=current.jobs || [];
+      currentSnapshot=next; current.jobs=jobs.map(j=>{
+        const existing=previousJobs.find(v=>v.id===j.id);
+        const persisted=existing ? {...existing} : null;
+        if (persisted) { delete persisted.thumbnail; delete persisted.previewUrl; }
+        return existing && JSON.stringify(persisted)===JSON.stringify(j) ? existing : model.clone(j);
+      }); projectLegacyProjection(next);
+      presentProject("project-render",()=>window.dispatchEvent(new CustomEvent("viral-ai:core-state-changed",{detail:{reason:"project-render",projectId}})));
+    }
+    return model.clone(next);
+  }
+
   function assertSwitchSafe() {
     const current = appState();
     const workflows = [current?.speech?.job, current?.translation?.job, current?.voice?.job?.projectId ? null : current?.voice?.job, current?.scenePlan?.plannerJob,
-      ...(current?.jobs || []).filter(j => j.isRenderOutput)];
+      ...(current?.jobs || []).filter(j => j.isRenderOutput && !(window.ViralCoreProjectRenderModel?.scoped(j) && j.projectId === registry.activeProjectId))];
     const busy = new Set(["validating", "preparing", "uploading", "queued", "processing", "translating", "generating", "downloading", "rendering", "planning", "cancelling"]);
     if (workflows.some(job => busy.has(job?.status))) throw Error("PROJECT_WORK_RUNNING");
     // Scoped GenerationService/media jobs keep their own project identity.
@@ -800,7 +859,14 @@
     if (registry.activeProjectId === projectId) return model.clone(currentSnapshot);
     const stored = registry.projects.find(p => p.projectId === projectId);
     if (!stored) throw Error("PROJECT_NOT_FOUND");
-    return transition(() => model.migrateSnapshot(stored, { restartSafeMedia: true }).snapshot);
+    return transition(() => {
+      const next = model.migrateSnapshot(stored, { restartSafeMedia: true }).snapshot;
+      // These jobs remain owned by the running native service across switches.
+      // Bootstrap still interrupts them after a real application restart.
+      next.workflow.jobs = next.workflow.jobs.map(j => j.renderKind === "project" && j.projectId === projectId && j.renderInputSignature
+        ? model.clone(stored.workflow.jobs.find(v => v.id === j.id) || j) : j);
+      return next;
+    });
   }
 
   function schedule(reason = "semantic-change") {
@@ -962,6 +1028,7 @@
     removeProjectMediaAsset,
     updateProjectAudioSettings,
     updateProjectVoice,
+    updateProjectRender,
     projectAudioSnapshot,
     activeProjectId() { return registry.activeProjectId; },
     createProject,

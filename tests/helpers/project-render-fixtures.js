@@ -1,0 +1,17 @@
+"use strict";
+const fs=require("node:fs"),path=require("node:path"),os=require("node:os"),{spawnSync}=require("node:child_process"),binary=require("ffmpeg-static");
+const model=require("../../renderer/core-project-render-model"),audio=require("../../renderer/core-project-audio-model"),player=require("../../renderer/core-player-model");
+function ff(args){const r=spawnSync(binary,["-hide_banner","-loglevel","error","-nostdin",...args],{windowsHide:true,maxBuffer:8*1024*1024});if(r.error)throw r.error;if(r.status!==0)throw Error(r.stderr.toString());return r.stdout;}
+function create(){
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),"viral-project-render-test-")),voiceRoot=path.join(root,"voice-cache"),output=path.join(root,"output");fs.mkdirSync(voiceRoot);fs.mkdirSync(output);
+  const video=path.join(root,"landscape.mp4"),image=path.join(root,"portrait.png"),square=path.join(root,"square.mp4"),bgm=path.join(root,"music.wav"),long=path.join(voiceRoot,"long.wav"),short=path.join(voiceRoot,"short.wav");
+  for(const [file,color,size,freq]of [[video,"red","160x90",220],[square,"blue","100x100",330]])ff(["-f","lavfi","-i",`color=c=${color}:s=${size}:r=30:d=1`,"-f","lavfi","-i",`sine=frequency=${freq}:sample_rate=48000:duration=1`,"-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac","-t","1",file]);
+  ff(["-f","lavfi","-i","color=c=green:s=60x100","-frames:v","1",image]);
+  for(const [file,duration,freq]of [[bgm,.35,440],[long,1.4,660],[short,.15,880]])ff(["-f","lavfi","-i",`sine=frequency=${freq}:sample_rate=48000:duration=${duration}`,"-c:a","pcm_s16le",file]);
+  const project={projectId:"fixture-project",projectName:"Local fixture",scenePlan:{scenes:[0,1,2].map(i=>({id:"scene-"+i,order:i,start:i,end:i+1,orientation:i===0?"landscape":"any",sourceText:"Scene "+i}))},mediaAssembly:{slots:[0,1,2].map(i=>({sceneId:"scene-"+i,role:"primary",selectedAssetId:"asset-"+i,candidateAssetIds:["asset-"+i]}))},media:{assets:[video,image,square].map((localPath,i)=>({id:"asset-"+i,kind:i===1?"image":"video",localPath,status:"ready",fileState:"available",updatedAt:null,meta:{duration:i===1?null:1,width:[160,60,100][i],height:[90,100,100][i]}})).concat({id:"music",kind:"audio",localPath:bgm,status:"ready",fileState:"available",meta:{duration:.35}})},workflow:{renderOptions:{voiceEnabled:false,burnSubtitles:false,mixOriginalAudio:true,originalAudioVolume:1},voice:{assignments:{"speaker-1":"local"}},jobs:[]}};
+  function payload(p=project,jobId="fixture-render") {const plan=model.build(p);if(!plan.ready)throw Error(plan.reason);return {...model.payload(plan),jobId,outputDir:output};}
+  function withVoice(){const p=JSON.parse(JSON.stringify(project));p.workflow.renderOptions.voiceEnabled=true;const plan=audio.voicePlan(p,player.buildProjectPlayback(p));p.workflow.voice.result={projectId:p.projectId,inputSignature:plan.inputSignature,textSource:plan.requestedSource,language:plan.language,segments:plan.segments.map((c,i)=>({...c,audioPath:i===1?short:long,audioUrl:"file:///fixture.wav",audioDuration:i===1?.15:1.4,timingRisk:true}))};return p;}
+  return {root,voiceRoot,output,project,payload,withVoice,video,image,square,bgm,long,short};
+}
+function rms(file,start,duration=.15){const b=ff(["-ss",String(start),"-i",file,"-t",String(duration),"-vn","-ac","1","-ar","48000","-f","s16le","pipe:1"]);let sum=0;for(let i=0;i<b.length;i+=2)sum+=(b.readInt16LE(i)/32768)**2;return Math.sqrt(sum/(b.length/2));}
+module.exports={create,ff,rms};

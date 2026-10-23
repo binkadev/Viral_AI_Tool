@@ -11,6 +11,9 @@ const {
   preflightLocalizedExport,
   renderVideo,
   renderLocalizedVideo,
+  preflightProjectRender,
+  renderProjectVideo,
+  cleanupProjectRenderWorkspaces,
   cancelRender,
   cancelAllRenders,
   getActiveRenderCount,
@@ -479,6 +482,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  cleanupProjectRenderWorkspaces();
   if (process.platform === 'win32') app.setAppUserModelId('com.viralai.tool');
 
   diagnosticLogger = createDiagnosticLogger({
@@ -1429,6 +1433,22 @@ ipcMain.handle('video:render', async (event, payload) => {
     };
   }
 });
+
+for (const [channel, execute] of [['video:preflight-project-render', preflightProjectRender], ['video:render-project', renderProjectVideo]]) {
+  ipcMain.handle(channel, async (event, payload) => {
+    try {
+      const data = await execute(payload, {
+        allowedAudioRoot: path.join(app.getPath('userData'), 'voice-cache'),
+        onProgress: progress => { if (!event.sender.isDestroyed()) event.sender.send('video:render-progress', progress); }
+      });
+      return { ok: true, data };
+    } catch (error) {
+      const serialized = serializeProcessingError(error);
+      console.error('[ProjectVideoExport]', serialized.code, serialized.technicalMessage);
+      return { ok: false, error: { code: serialized.code } };
+    }
+  });
+}
 
 ipcMain.handle('video:cancel-render', async (_event, jobId) => {
   if (typeof jobId !== 'string' || !jobId.trim()) return { ok: false };

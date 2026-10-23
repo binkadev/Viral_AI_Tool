@@ -3099,6 +3099,38 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     }
   };
 
+  messages.vi.projectRender = {
+    historyFull: "Lịch sử dự án đã đầy. Hãy xóa bớt bản ghi cũ khỏi thư viện rồi xuất lại.",
+    checkingOutput: "Đang kiểm tra tệp đã xuất", outputMissing: "Tệp đã xuất không còn dùng được. Bạn có thể xuất lại.",
+    render: "Xuất video dự án", canRender: "Sẵn sàng xuất video", ready: "Video đã sẵn sàng", previous: "Bản xuất trước",
+    changed: "Dự án đã thay đổi từ lần xuất này", preparing: "Đang chuẩn bị xuất video", validating: "Đang kiểm tra dữ liệu",
+    scenes: "Đang chuẩn bị các cảnh", sceneCount: "Cảnh {index} / {count}", voice: "Đang chuẩn bị giọng đọc", audio: "Đang chuẩn bị âm thanh",
+    composing: "Đang ghép video", finalizing: "Đang xuất video", verifying: "Đang kiểm tra video", processing: "Đang xử lý",
+    completed: "Đã xuất video", failed: "Chưa xuất được video. Hãy kiểm tra dữ liệu và thư mục lưu rồi thử lại.", cancelled: "Đã hủy xuất video",
+    interrupted: "Lần xuất trước bị gián đoạn. Bạn có thể xuất lại.", cancelling: "Đang dừng xuất video", cancel: "Dừng xuất video", show: "Mở thư mục chứa", again: "Xuất lại",
+    incomplete: "Chưa đủ dữ liệu để xuất. Hãy kiểm tra vật liệu của từng cảnh.", mediaMissing: "Thiếu vật liệu hình ảnh. Hãy chọn tệp còn dùng được cho từng cảnh.",
+    profileMissing: "Chưa xác định được khung hình. Hãy kiểm tra hướng của cảnh đầu và kích thước vật liệu.", timingInvalid: "Chưa xác định được thời lượng hoặc mốc lời. Hãy kiểm tra dữ liệu từng cảnh.",
+    inputChanged: "Tệp hoặc dự án đã thay đổi. Hãy kiểm tra vật liệu rồi xuất lại.", voiceRequired: "Chưa có giọng đọc phù hợp. Hãy tạo giọng đọc hoặc tắt giọng đọc cho bản xuất.",
+    voiceStale: "Giọng đọc đã cũ. Hãy tạo lại hoặc tắt giọng đọc cho bản xuất.", bgmUnavailable: "Nhạc nền đã chọn không còn dùng được. Hãy chọn lại trong thư viện.",
+    duplicate: "Dự án đang được xuất. Hãy chờ hoặc dừng lần xuất hiện tại.", outputRequired: "Hãy chọn thư mục lưu video.", lowDisk: "Không đủ dung lượng trống. Hãy giải phóng dung lượng rồi thử lại.",
+    ownerMissing: "Không còn ở đúng dự án. Hãy mở lại dự án của bản xuất này.", cancelFailed: "Chưa dừng được lần xuất. Hãy thử dừng lại."
+  };
+  messages.en.projectRender = {
+    historyFull: "Project history is full. Remove old library records, then render again.",
+    checkingOutput: "Checking exported file", outputMissing: "The exported file is unavailable. You can render again.",
+    render: "Render Project", canRender: "Ready to render", ready: "Video is ready", previous: "Previous render",
+    changed: "Project changed since this render", preparing: "Preparing render", validating: "Checking inputs",
+    scenes: "Preparing scenes", sceneCount: "Scene {index} of {count}", voice: "Preparing voice", audio: "Preparing audio",
+    composing: "Composing video", finalizing: "Exporting video", verifying: "Verifying output", processing: "Processing",
+    completed: "Render complete", failed: "Video could not be exported. Check the inputs and output folder, then try again.", cancelled: "Render cancelled",
+    interrupted: "The previous render was interrupted. You can render again.", cancelling: "Stopping render", cancel: "Cancel render", show: "Show in folder", again: "Render again",
+    incomplete: "Some render inputs are unresolved. Check the materials for each scene.", mediaMissing: "Visual material is missing. Select an available file for each scene.",
+    profileMissing: "Output profile is unavailable. Check the first scene orientation and asset dimensions.", timingInvalid: "Scene duration or cue timing is unresolved. Check each scene's inputs.",
+    inputChanged: "An input file or the Project changed. Review the materials and render again.", voiceRequired: "Current Project Voice is required. Generate it or disable voice for export.",
+    voiceStale: "Voice is outdated. Generate it again or disable voice for export.", bgmUnavailable: "Background music is unavailable. Select an available library asset.",
+    duplicate: "This Project is already rendering. Wait or cancel the active render.", outputRequired: "Choose an output folder.", lowDisk: "There is not enough free disk space. Free some space and try again.",
+    ownerMissing: "The original Project is not active. Open the Project that owns this output.", cancelFailed: "The render could not be stopped. Try cancelling again."
+  };
   const get = (obj, path) => path.split(".").reduce((acc, part) => acc && acc[part], obj);
   const translate = (locale, key, vars = {}) => {
     const fallback = get(messages.en, key);
