@@ -47,6 +47,12 @@ const { createSessionStore } = require('./services/auth/session-store');
 const { AuthClient } = require('./services/auth/auth-client');
 const { BillingClient } = require('./services/billing/billing-client');
 const { createCloudConfigStore } = require('./services/cloud/config-store');
+const { createConfigStore: createTelegramConfigStore } = require('./services/telegram/config-store');
+const { createDeliveryJournal } = require('./services/telegram/delivery-journal');
+const { createTelegramClient } = require('./services/telegram/client');
+const { createNotificationService } = require('./services/telegram/notification-service');
+const { registerTelegramIpc } = require('./services/telegram/ipc');
+let telegramNotifications;
 const {
   checkForUpdate,
   downloadVerifiedInstaller
@@ -482,6 +488,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  telegramNotifications = createNotificationService({
+    config: createTelegramConfigStore({ userDataPath: app.getPath('userData'), safeStorage }),
+    journal: createDeliveryJournal({ userDataPath: app.getPath('userData') }),
+    client: createTelegramClient(), locale: () => uiLocale
+  });
   cleanupProjectRenderWorkspaces();
   if (process.platform === 'win32') app.setAppUserModelId('com.viralai.tool');
 
@@ -1807,6 +1818,12 @@ ipcMain.handle('video:file-url', async (_event, inputPath) => {
 });
 
 require('./services/media/preview-url').registerPreviewIpc({ ipcMain, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+registerTelegramIpc({ ipcMain, service: () => telegramNotifications, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&
     event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)

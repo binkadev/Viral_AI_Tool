@@ -1,0 +1,12 @@
+.telegram-settings { font-size: 13px; line-height: 1.6; margin-block: 18px; min-inline-size: 0; }
+.telegram-settings h3, .telegram-settings p { margin-block: 0 12px; overflow-wrap: anywhere; }
+.telegram-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-block: 18px; }
+.telegram-fields label { display: grid; gap: 7px; min-inline-size: 0; }
+.telegram-fields input { min-inline-size: 0; inline-size: 100%; min-block-size: 40px; padding: 9px 12px; font: inherit; color: var(--text); background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 8px; }
+.telegram-enabled { display: flex; align-items: center; gap: 12px; margin-block: 16px; min-block-size: 36px; }
+.telegram-enabled input { inline-size: 24px; block-size: 24px; accent-color: var(--accent-3); }
+.telegram-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.telegram-actions .button { block-size: auto; min-block-size: 40px; white-space: normal; overflow-wrap: anywhere; font-size: 13px; }
+.telegram-help { margin-block-start: 18px; color: var(--text-soft); font-size: 12px; }
+.telegram-settings :is(button, input):focus-visible { outline: 2px solid var(--accent-3, #5eead4); outline-offset: 3px; }
+@media (max-width: 1000px) { .telegram-fields { grid-template-columns: minmax(0, 1fr); } }

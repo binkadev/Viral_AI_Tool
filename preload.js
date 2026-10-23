@@ -20,6 +20,11 @@ if (typeof ipcRenderer.sendSync === 'function' && ipcRenderer.sendSync('dev:hand
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
+  getTelegramStatus: () => ipcRenderer.invoke('telegram:status'),
+  saveTelegramConfig: payload => ipcRenderer.invoke('telegram:config-save', payload),
+  clearTelegramConfig: () => ipcRenderer.invoke('telegram:config-clear'),
+  testTelegramNotification: () => ipcRenderer.invoke('telegram:test'),
+  notifyTelegram: intent => ipcRenderer.invoke('telegram:notify', intent),
   getDevGenerationFixture: () => ipcRenderer.invoke('dev:generation-fixture'),
   getDevHandoffFixture: (action, payload) => ipcRenderer.invoke('dev:generated-handoff', action, payload),
   onGenerationChanged: callback => {

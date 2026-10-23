@@ -1,0 +1,21 @@
+"use strict";
+const fs=require("node:fs"),path=require("node:path"),os=require("node:os"),crypto=require("node:crypto");
+const model=require("../../renderer/core-telegram-notifications-model"),observer=require("../../renderer/core-telegram-notifications");
+const {createConfigStore}=require("../../services/telegram/config-store"),{createDeliveryJournal}=require("../../services/telegram/delivery-journal"),{createTelegramClient}=require("../../services/telegram/client"),{createNotificationService}=require("../../services/telegram/notification-service");
+const fakeToken=()=>"123456789:"+"unit_fixture_only_".repeat(2);
+const metadata={id:1234,is_bot:true,username:"fixture_bot",first_name:"Fixture Bot"};
+const key=Buffer.alloc(32,7);
+const safeStorage={isEncryptionAvailable:()=>true,encryptString(value){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv("aes-256-gcm",key,iv),data=Buffer.concat([cipher.update(value,"utf8"),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),data]);},decryptString(value){const decipher=crypto.createDecipheriv("aes-256-gcm",key,value.subarray(0,12));decipher.setAuthTag(value.subarray(12,28));return Buffer.concat([decipher.update(value.subarray(28)),decipher.final()]).toString("utf8");}};
+function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
+function batch(status="draft",items=["pending","pending"],id="batch-fixture"){return {batchId:id,status,items:items.map((s,i)=>({projectId:"P"+(i+1),status:s,reason:s==="needs_attention"?"VOICE_REQUIRED":null,completedAt:["completed","needs_attention","skipped_ready","stopped"].includes(s)?"2026-10-23T01:01:00.000Z":null})),startedAt:status==="draft"?null:"2026-10-23T01:00:00.000Z",updatedAt:"2026-10-23T01:01:00.000Z",completedAt:status.startsWith("completed")?"2026-10-23T01:01:00.000Z":null,reason:status==="interrupted"?"OUTPUT_UNAVAILABLE":null};}
+function intent(index=0,type="batch_started",extra={}){const batchId="batch-fixture-"+index,projectId="P1",terminalStatus="completed";return model.validate({type,batchId,eventId:model.eventId(type,batchId,projectId,terminalStatus),occurredAt:new Date(Date.UTC(2026,9,23,1,0,index)).toISOString(),locale:"en",...(["video_completed","needs_attention"].includes(type)?{projectId,projectName:"Fixture Project"}:{counts:{total:2,completed:type==="batch_completed"?2:0,skipped:0,attention:0,stopped:0}}),...(type==="batch_completed"?{terminalStatus}:{}),...extra});}
+function harness(t,options={}){
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),"viral-telegram-test-"));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const calls=[],fail={write:false,rename:false,unlink:false};let response=null,transport=null;
+  const io={...fs,writeFileSync(...args){if(fail.write)throw Error("disk write fixture");return fs.writeFileSync(...args);},renameSync(...args){if(fail.rename)throw Error("disk rename fixture");return fs.renameSync(...args);},rmSync(...args){if(fail.unlink)throw Error("disk unlink fixture");return fs.rmSync(...args);}};
+  const config=createConfigStore({userDataPath:root,safeStorage:options.safeStorage||safeStorage,io}),journal=createDeliveryJournal({userDataPath:root,io});
+  const fetchImpl=async(url,request)=>{const method=url.endsWith("/getMe")?"getMe":"sendMessage";calls.push({method,request:JSON.parse(request.body),signal:request.signal,redirect:request.redirect});if(transport)return transport(url,request);return {ok:!response||response.ok!==false,status:response?.http||200,json:async()=>response||{ok:true,result:method==="getMe"?metadata:{message_id:1}}};};
+  const client=createTelegramClient({fetchImpl}),service=createNotificationService({config,journal,client,locale:()=>"en"});
+  return {root,io,fail,config,journal,client,service,calls,set response(v){response=v;},set transport(v){transport=v;},save:()=>service.save({botToken:fakeToken(),chatId:"-1001234567890123456",enabled:true}),readConfig:()=>fs.readFileSync(path.join(root,"telegram-config.json"),"utf8"),readJournal:()=>JSON.parse(fs.readFileSync(path.join(root,"telegram-notification-state.json"),"utf8"))};
+}
+module.exports={model,observer,createConfigStore,createDeliveryJournal,createTelegramClient,createNotificationService,fakeToken,metadata,safeStorage,deferred,batch,intent,harness};
