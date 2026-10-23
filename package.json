@@ -52,7 +52,7 @@
     "dev:generated-handoff": "node dev/run-generated-handoff.js",
     "test:generated-handoff": "node --test tests/generated-handoff-harness.test.js",
     "test:generated-handoff-desktop": "node dev/run-generated-handoff.js --verify",
-    "test:generation-progress": "node tests/core-generation-progress.test.js && node --test tests/core-generated-media.test.js",
+    "test:generation-progress": "node tests/core-generation-progress.test.js && node --test tests/core-generated-media.test.js tests/core-generation-progress-workspace.test.js",
     "test:muse-manual-recovery": "node --test tests/muse-manual-recovery.test.js tests/muse-manual-recovery-ui.test.js",
     "dev:muse-manual-recovery": "node dev/run-manual-recovery.js",
     "dev:execution-audit": "node dev/run-execution-audit.js",

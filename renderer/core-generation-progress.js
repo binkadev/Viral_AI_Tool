@@ -23,9 +23,21 @@
     const viewport = document.getElementById('page'), top = viewport.scrollTop;
     const focus = document.activeElement?.getAttribute('data-generation-action');
     const focusedRecovery=document.activeElement?.getAttribute('data-recovery-action');
+    const focusedJob=document.activeElement?.getAttribute('data-generation-job');
+    const focusedDetails=document.activeElement?.matches?.('[data-generation-details-trigger]');
+    const focusedSelect=document.activeElement?.matches?.('[data-generation-select]');
+    const detailsOpen=viewport.querySelector('[data-generation-details]')?.open;
+    const sceneScroll=viewport.querySelector('.generation-scenes')?.scrollTop;
     if(focusedRecovery)recoveryFocus={action:focusedRecovery,candidate:document.activeElement.getAttribute('data-candidate')};
     render();
     viewport.scrollTop = top;
+    const details=viewport.querySelector('[data-generation-details]');
+    if(details && detailsOpen!==undefined)details.open=detailsOpen;
+    const sceneList=viewport.querySelector('.generation-scenes');
+    if(sceneList && sceneScroll!==undefined)sceneList.scrollTop=sceneScroll;
+    if(focusedSelect)viewport.querySelector('[data-generation-select]')?.focus({preventScroll:true});
+    if(focusedDetails)viewport.querySelector('[data-generation-details-trigger]')?.focus({preventScroll:true});
+    if(focusedJob)[...viewport.querySelectorAll('[data-generation-job]')].find(n=>n.dataset.generationJob===focusedJob)?.focus({preventScroll:true});
     if (focus) viewport.querySelector('[data-generation-action="'+focus+'"]')?.focus({preventScroll:true});
     if(recoveryFocus && !busy) {
       const selector='[data-recovery-action="'+recoveryFocus.action+'"]'+(recoveryFocus.candidate?'[data-candidate="'+recoveryFocus.candidate+'"]':'');
@@ -72,13 +84,17 @@
     finally { if (version===requestVersion) { loading=false; paint(); } }
   }
   function button(action,label) { return '<button type="button" class="button ghost" data-generation-action="'+action+'"'+((busy && !(confirmingRecovery && action==='cancel')) || (visualFixture && action!=='refresh' && action!=='create')?' disabled':'')+'>'+esc(label)+'</button>'; }
+  function presentButton(action,label,primary=false) {
+    return button(action,label).replace('class="button ghost"','class="button '+(primary?'generation-primary-action':'ghost')+'"');
+  }
   function recoveryPanel(job) {
     if(job?.provider!=='muse' || job.status!=='interrupted' || job.manualRecovery?.version!==1 || job.manualRecovery.eligible!==true)return '';
     const c=recoveryCopy(),session=recovery?.jobId===job.id?recovery:null;
-    return '<section class="generation-recovery" aria-labelledby="recovery-title"><h3 id="recovery-title">'+esc(c.status)+'</h3><p>'+esc(c.explanation)+'</p>'+
+    const recommended=session?.candidates.find(candidate=>candidate.available && session.revealed.has(candidate.candidateId) && Date.now()<session.expiresAt)?.candidateId;
+    return '<div class="generation-recovery" aria-label="'+esc(c.status)+'">'+
       (recoveryError?'<p role="alert">'+esc(c[recoveryError])+'</p>':'')+
-      (session?'<p>'+esc(c.expires)+'</p><div class="generation-recovery-candidates">'+session.candidates.map((candidate,i)=>'<article><h4>'+esc(formatRecovery(c.candidate,{number:i+1}))+'</h4><p>'+esc(formatRecovery(c.details,{width:candidate.width,height:candidate.height,duration:candidate.duration.toFixed(1)}))+'</p><p>'+esc(candidate.available?c.available:c.unavailable)+'</p><div class="generation-actions"><button type="button" class="button ghost" data-recovery-action="view" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !candidate.available?' disabled':'')+'>'+esc(c.view)+'</button><button type="button" class="button primary" data-recovery-action="confirm" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !session.revealed.has(candidate.candidateId) || Date.now()>=session.expiresAt?' disabled':'')+'>'+esc(c.confirm)+'</button></div></article>').join('')+'</div>'+(session.candidates.length?'':'<p>'+esc(c.empty)+'</p>'):'')+
-      '<div class="generation-actions">'+(!session?'<button type="button" class="button ghost" data-recovery-action="list"'+(busy?' disabled':'')+'>'+esc(c.review)+'</button>':'')+'<button type="button" class="button ghost" data-recovery-action="dismiss"'+(busy?' disabled':'')+'>'+esc(c.dismiss)+'</button><button type="button" class="button ghost" data-recovery-action="open"'+(busy?' disabled':'')+'>'+esc(c.open)+'</button></div></section>';
+      (session?'<p>'+esc(c.expires)+'</p><div class="generation-recovery-candidates">'+session.candidates.map((candidate,i)=>'<article><h4>'+esc(formatRecovery(c.candidate,{number:i+1}))+'</h4><p>'+esc(formatRecovery(c.details,{width:candidate.width,height:candidate.height,duration:candidate.duration.toFixed(1)}))+'</p><p>'+esc(candidate.available?c.available:c.unavailable)+'</p><div class="generation-actions"><button type="button" class="button ghost" data-recovery-action="view" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !candidate.available?' disabled':'')+'>'+esc(c.view)+'</button><button type="button" class="button '+(candidate.candidateId===recommended?'generation-primary-action':'ghost')+'" data-recovery-action="confirm" data-candidate="'+esc(candidate.candidateId)+'"'+(busy || !session.revealed.has(candidate.candidateId) || Date.now()>=session.expiresAt?' disabled':'')+'>'+esc(c.confirm)+'</button></div></article>').join('')+'</div>'+(session.candidates.length?'':'<p>'+esc(c.empty)+'</p>'):'')+
+      '<div class="generation-actions">'+(!session?'<button type="button" class="button generation-primary-action" data-recovery-action="list"'+(busy?' disabled':'')+'>'+esc(c.review)+'</button>':'')+'<button type="button" class="button ghost" data-recovery-action="dismiss"'+(busy?' disabled':'')+'>'+esc(c.dismiss)+'</button><button type="button" class="button ghost" data-recovery-action="open"'+(busy?' disabled':'')+'>'+esc(c.open)+'</button></div></div>';
   }
   async function recoveryAction(name,candidateId) {
     const job=selected(),id=job?.id,originalProject=identity();
@@ -121,25 +137,52 @@
     }finally{confirmingRecovery=false;busy=false;paint();}
   }
   function page() {
-    const base=copy(), currentStage=visualFixture ? visualFixture.stage - 1 : 3;
-    const stageCopy=base.workflowCopy[currentStage];
-    // Only presentation changes: fixture completion never supplies an output or provider.
+    const base=copy(), fixtureStage=visualFixture ? visualFixture.stage - 1 : 3;
+    const stageCopy=base.workflowCopy[fixtureStage];
+    // Visual previews remain presentation-only; production uses the original model.
     const c=visualFixture ? {...base,...stageCopy, states:{...base.states,...stageCopy.states},
       help:{...base.help,...stageCopy.help}, verified:stageCopy.states.completed, noMedia:stageCopy.empty} : base;
     const job=projectId===identity()?selected():null, p=plan(), info=model.describe(job,ready,jobs.some(j=>j.id!==job?.id && [...model.active,'interrupted'].includes(j.status)));
     const stageStates=visualFixture ? visualFixture.stageStates : model.stages(job,p,state);
     const rows=model.scenes(p,projectId===identity()?jobs:[]);
-    return '<div class="generation-workspace"><header class="generation-heading"><div><span class="generation-eyebrow">'+esc(c.eyebrow)+'</span><h2>'+esc(base.title)+'</h2><p>'+esc(c.body)+'</p></div>'+button(info.recoveryBlocked?'new-request':'create',info.recoveryBlocked?c.newRequest:c.create)+'</header>'+
-      '<section class="generation-summary" aria-labelledby="generation-status"><div><span class="generation-eyebrow">'+esc(visualFixture?c.workflow:c.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3><span id="generation-status" class="generation-status tone-'+info.tone+'" role="status">'+esc(loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:info.complete&&job.outputResolution?.mode==='user-confirmed'?recoveryCopy().completed:c.states[info.status]):c.empty)+'</span></div><div class="generation-meter"><div><strong>'+esc(info.percent===null?'—':Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100"'+(info.percent===null?'':' value="'+info.percent+'"')+' aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(job?.status==='completed'?(info.complete?c.mediaComplete:c.unverified):(visualFixture?c.help[job?.status]:null)||c.progressNote)+'</p></div><div class="generation-actions">'+(job&&info.cancel?button('cancel',c.cancel):'')+(job&&info.retry?button('retry',c.retry):'')+(job&&info.recover?button('recover',c.recover):'')+button('refresh',c.refresh)+(outputPath&&model.verified(job)?button('studio',c.studio):'')+'</div></section>'+
-      recoveryPanel(job)+
+    const finished=!visualFixture && stageStates.every(value=>value==='done') && rows.length>0 && rows.every(row=>row.media==='verified');
+    const currentStage=visualFixture ? fixtureStage : finished ? 6 : 3;
+    const manual=job?.provider==='muse' && job.status==='interrupted' && job.manualRecovery?.version===1 && job.manualRecovery.eligible===true;
+    const unconfirmed=job?.status==='completed'&&!info.complete;
+    const uncertain=job?.status==='interrupted' || unconfirmed;
+    const otherIssues=rows.filter(row=>row.job && row.job.id!==job?.id && (['failed','interrupted'].includes(row.job.status) || row.job.status==='completed'&&!model.verified(row.job)));
+    const nextIssue=!manual&&!uncertain&&job?.status!=='failed'&&!error ? otherIssues[0] : null;
+    const snapshot=visualFixture ? null : window.ViralCoreProjectPersistence?.snapshot?.();
+    const projectName=snapshot?.projectName || (visualFixture?base.previewProject:base.noProject);
+    const format=(value,fields)=>String(value).replace(/\{(\w+)\}/g,(_,key)=>String(fields[key]??''));
+    const status=loading&&!job?c.loading:job?(job.status==='completed'&&!info.complete?c.unverified:info.complete&&job.outputResolution?.mode==='user-confirmed'?recoveryCopy().completed:c.states[info.status]):c.empty;
+    const headline=visualFixture ? c.states[info.status] : error ? base.needsAttention : finished ? base.projectComplete : manual ? recoveryCopy().status : uncertain ? base.resultUncertain : job?.status==='failed' ? base.needsAttention : job ? status : base.empty;
+    const explanation=visualFixture ? (job?.status==='completed'?c.mediaComplete:c.help[job?.status]||c.progressNote) : manual ? recoveryCopy().explanation : finished ? base.projectCompleteBody : info.recoveryBlocked ? c.acceptanceUnproven : job?.provider==='muse'&&job.status==='interrupted' ? c.museInterrupted : uncertain ? (job.status==='interrupted'?c.help.interrupted:c.unverified) : job?.status==='completed' ? c.mediaComplete : c.help[job?.status] || (job?base.activeBody:base.initialBody);
+    const primary=manual||nextIssue ? null : error ? 'refresh' : info.recoveryBlocked ? 'refresh' : job&&info.retry ? 'retry' : job&&info.recover&&uncertain ? 'recover' : outputPath&&model.verified(job) ? 'studio' : job ? 'refresh' : 'create';
+    const labels={refresh:base.checkStatus,create:c.create,studio:c.studio,retry:c.retry,recover:c.recover};
+    const selectedScene=rows.find(row=>row.scene.id===job?.sceneId);
+    const sceneLabel=selectedScene ? selectedScene.scene.title || format(base.numberedScene,{number:rows.indexOf(selectedScene)+1}) : null;
+    const tone=error?'danger':manual||uncertain?'warning':info.tone;
+    return '<div class="generation-workspace" data-progress-state="'+esc(info.status)+'"><header class="generation-heading"><strong class="generation-project-name" title="'+esc(projectName)+'">'+esc(projectName)+'</strong><div class="generation-actions">'+
+      (outputPath&&model.verified(job)&&primary!=='studio'?presentButton('studio',c.studio):'')+
+      (job?presentButton(info.recoveryBlocked?'new-request':'create',info.recoveryBlocked?c.newRequest:c.create):'')+'</div></header>'+
+      '<ol class="generation-stages" aria-label="'+esc(c.workflow)+'">'+c.stages.map((label,i)=>'<li data-stage-state="'+stageStates[i]+'"'+(i===currentStage?' aria-current="step"':'')+'><span aria-hidden="true"'+(unconfirmed&&i===3?' class="generation-stage-attention"':'')+'>'+((unconfirmed&&i===3)?'!':stageStates[i]==='done'?'&#10003;':['failed','interrupted'].includes(stageStates[i])?'!':i+1)+'</span><strong>'+esc(visualFixture?base.workflowCopy[i].title:label)+'</strong><small>'+esc(unconfirmed&&i===3?base.reviewRequired:c.stageStates[stageStates[i]])+'</small></li>').join('')+'</ol>'+
+      '<section class="generation-summary tone-'+tone+'" aria-labelledby="generation-headline"><div class="generation-stage-label"><span class="generation-eyebrow">'+esc(base.currentStage)+'</span><h3>'+esc(visualFixture?stageCopy.title:c.stages[currentStage])+'</h3></div>'+
+      (nextIssue?'<aside class="generation-project-attention" aria-label="'+esc(base.needsAttention)+'"><div><strong>'+esc(format(otherIssues.length===1?base.otherIssue:base.otherIssues,{count:otherIssues.length}))+'</strong><p>'+esc(nextIssue.scene.title||format(base.numberedScene,{number:rows.indexOf(nextIssue)+1}))+'</p></div><button type="button" class="button generation-primary-action" data-generation-job="'+esc(nextIssue.job.id)+'"'+(busy||visualFixture?' disabled':'')+'>'+esc(base.reviewScene)+'</button></aside>':'')+
+      '<div class="generation-current-copy"><span id="generation-status" class="generation-status tone-'+tone+'">'+esc(unconfirmed||status===headline?base.requestLabel:status)+'</span><h2 id="generation-headline" role="status" aria-live="polite" aria-atomic="true">'+esc(headline)+'</h2>'+
+      (sceneLabel?'<p class="generation-current-scene">'+esc(format(base.followingScene,{scene:sceneLabel}))+'</p>':'')+'<p class="generation-explanation">'+esc(explanation)+'</p></div>'+
+      (error?'<p class="generation-notice tone-danger" role="alert">'+esc(c[error])+'</p>':'')+
+      (manual&&job?.provider==='muse'?'<p class="generation-safety">'+esc(info.recoveryBlocked?c.acceptanceUnproven:c.museInterrupted)+'</p>':'')+
+      '<div class="generation-actions generation-next-action" aria-busy="'+busy+'">'+(primary?presentButton(primary,labels[primary],true):'')+
+      (job&&info.cancel?presentButton('cancel',c.cancel):'')+(job&&info.recover&&primary!=='recover'?presentButton('recover',c.recover):'')+
+      (primary!=='refresh'?presentButton('refresh',c.refresh):'')+'</div>'+recoveryPanel(job)+
+      (info.percent!==null?'<div class="generation-meter"><div><strong>'+esc(Math.round(info.percent)+'%')+'</strong><span>'+esc(c.jobProgress)+'</span></div><progress max="100" value="'+info.percent+'" aria-label="'+esc(c.jobProgress)+'"></progress><p>'+esc(c.progressNote)+'</p></div>':'<p class="generation-state-note">'+esc(base.stateOnly)+'</p>')+'</section>'+
       (visualFixture?'<p class="generation-notice" role="status">'+esc(c.visualNotice)+'</p>':'')+
-      (error?'<p class="generation-notice" role="alert">'+esc(c[error])+'</p>':'')+
-      (job?.provider==='muse' && job.status==='interrupted'?'<p class="generation-notice" role="status">'+esc(info.recoveryBlocked?c.acceptanceUnproven:c.museInterrupted)+'</p>':'')+
-      (job&&!info.recoveryBlocked&&['failed','interrupted','cancelled','cancelling'].includes(job.status)?'<p class="generation-notice tone-'+info.tone+'">'+esc(c.help[job.status])+'</p>':'')+
-      '<ol class="generation-stages" aria-label="'+esc(c.workflow)+'">'+c.stages.map((label,i)=>'<li data-stage-state="'+stageStates[i]+'"'+(i===currentStage?' aria-current="step"':'')+'><span aria-hidden="true">'+(stageStates[i]==='done'?'✓':i+1)+'</span><strong>'+esc(visualFixture?base.workflowCopy[i].title:label)+'</strong><small>'+esc(c.stageStates[stageStates[i]])+'</small></li>').join('')+'</ol>'+
-      '<div class="generation-story-head"><div><h3>'+esc(c.storyboard)+'</h3><p>'+esc(c.sceneNote)+'</p></div><span class="generation-provider">'+esc(ready?c.providerReady:c.providerUnavailable)+'</span></div>'+
+      '<section class="generation-story" aria-labelledby="generation-scenes-title"><div class="generation-story-head"><h3 id="generation-scenes-title">'+esc(c.storyboard)+'</h3><span>'+esc(format(base.sceneCount,{ready:rows.filter(row=>row.media==='verified').length,total:rows.length}))+'</span></div>'+
       (projectId===identity()&&jobs.length>1?'<label class="generation-job-select">'+esc(c.jobLabel)+'<select data-generation-select'+(busy?' disabled':'')+'>'+jobs.map(j=>'<option value="'+esc(j.id)+'"'+(j.id===job?.id?' selected':'')+'>'+esc((j.request?.prompt||c.untitled).slice(0,80))+'</option>').join('')+'</select></label>':'')+
-      (rows.length?'<div class="generation-scenes">'+rows.map(({scene,job:sceneJob,state:sceneState,media},i)=>'<article class="generation-scene"><div class="generation-scene-number">'+String(i+1).padStart(2,'0')+'</div><div class="generation-scene-copy"><h4>'+esc(scene.title||c.scene)+' '+(!scene.title?i+1:'')+'</h4><p>'+esc(scene.visualIntent||scene.sourceText||c.noSummary)+'</p><span>'+esc(scene.duration>0?scene.duration.toFixed(1)+' '+c.seconds:c.unknownDuration)+'</span></div><div class="generation-scene-state"><span class="generation-status tone-'+(sceneJob?model.describe(sceneJob).tone:'muted')+'">'+esc(c.states[sceneState])+'</span><small>'+esc(c[media])+'</small></div></article>').join('')+'</div>':'<section class="generation-empty"><span aria-hidden="true">▤</span><h3>'+esc(c.noScenes)+'</h3><p>'+esc(c.noScenesBody)+'</p></section>')+'</div>';
+      (rows.length?'<div class="generation-scenes">'+rows.map(({scene,job:sceneJob,state:sceneState,media},i)=>'<article class="generation-scene'+(sceneJob?.id===job?.id?' is-current':'')+'"'+(sceneJob?.id===job?.id?' aria-current="true"':'')+'><div class="generation-scene-number">'+String(i+1).padStart(2,'0')+'</div><div class="generation-scene-copy"><h4>'+esc(scene.title||format(base.numberedScene,{number:i+1}))+'</h4><p>'+esc(scene.visualIntent||scene.sourceText||c.noSummary)+'</p><span class="generation-status tone-'+(sceneJob?model.describe(sceneJob).tone:'muted')+'">'+esc(sceneJob?.status==='completed'&&!model.verified(sceneJob)?base.resultUncertain:c.states[sceneState])+'</span><small>'+esc(c[media])+'</small></div>'+
+      (sceneJob?'<button type="button" class="button ghost" data-generation-job="'+esc(sceneJob.id)+'"'+(busy?' disabled':'')+'>'+esc(base.reviewScene)+'</button>':'<span class="generation-scene-waiting">'+esc(base.waitingMedia)+'</span>')+'</article>').join('')+'</div>':'<div class="generation-empty"><h3>'+esc(c.noScenes)+'</h3><p>'+esc(c.noScenesBody)+'</p></div>')+'</section>'+
+      '<details class="generation-details" data-generation-details><summary data-generation-details-trigger>'+esc(base.activityDetails)+'<span aria-hidden="true">&#8964;</span></summary><p>'+esc(c.body)+'</p><p>'+esc(c.sceneNote)+'</p><p>'+esc(ready?c.providerReady:c.providerUnavailable)+'</p><p>'+esc(base.futureNote)+'</p>'+'</details></div>';
   }
   async function action(name) {
     if(name==='new-request') {
@@ -193,6 +236,11 @@
     window.ViralGenerationProgress={open:async id=>{selectedId=id;projectId=identity();state.page='generation-progress';render();document.getElementById('page').scrollTop=0;await refresh();}};
     document.addEventListener('click',e=>{
       const target=e.target instanceof Element?e.target:null;
+      const review=target?.closest('[data-generation-job]');
+      if(review && !review.disabled && !busy && jobs.some(job=>job.id===review.dataset.generationJob && job.projectId===identity())) {
+        selectedId=review.dataset.generationJob;outputPath=null;refresh();
+        document.getElementById('page').scrollTop=0;
+      }
       const recoveryControl=target?.closest('[data-recovery-action]');
       if(recoveryControl && !recoveryControl.disabled)recoveryAction(recoveryControl.dataset.recoveryAction,recoveryControl.dataset.candidate);
       const control=target?.closest('[data-generation-action]');

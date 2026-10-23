@@ -75,7 +75,7 @@ test("all 28 stage/state combinations render in VI/EN without runtime reads, wri
     const c=locale.window.I18N.messages[language].generationProgress;
     assert.equal(sandbox.state.page,"generation-progress");
     const stageCopy=c.workflowCopy[stage-1];
-    const summary=markup.match(/<section class="generation-summary"[\s\S]*?<\/section>/)[0];
+    const summary=markup.match(/<section class="generation-summary\b[^]*?<\/section>/)[0];
     assert(summary.includes(stageCopy.states[status]));
     assert(summary.includes(stageCopy.jobProgress));
     assert(summary.includes('aria-label="'+stageCopy.jobProgress+'"'));
