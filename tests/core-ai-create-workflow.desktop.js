@@ -12,7 +12,7 @@ if (!process.versions.electron) {
 } else {
   const { app, BrowserWindow, session } = require("electron"), { pathToFileURL } = require("node:url");
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "viral-ai-ux3-"));
-  const output = path.join(root, "out", "ux3"); fs.mkdirSync(output, { recursive: true });
+  const output = path.join(root, "out", "ux31", "integration"); fs.mkdirSync(output, { recursive: true });
   app.setPath("userData", profile); app.setPath("sessionData", profile);
   app.disableHardwareAcceleration();
   const fixture = `
@@ -68,7 +68,8 @@ if (!process.versions.electron) {
           const metrics = await run(`(() => {const p=document.querySelector('#page'),c=document.querySelector('.core-ai-composer'),b=document.querySelector('[data-ai-generate]'),t=document.querySelector('[data-ai-brief]');p.scrollTop=0;const cs=getComputedStyle(t);return {width:innerWidth,height:innerHeight,actualLocale:state.locale,actualTheme:document.documentElement.dataset.theme,ctaBottom:b.getBoundingClientRect().bottom,pageBottom:p.getBoundingClientRect().bottom,overflow:p.scrollWidth>p.clientWidth+1,textColor:cs.color,composerBackground:getComputedStyle(c).backgroundImage,textareaBackground:cs.backgroundColor,composerWidth:c.getBoundingClientRect().width,promptSize:cs.fontSize};})()`);
           assert.equal(metrics.actualLocale, locale); assert.equal(metrics.actualTheme, theme);
           assert(!metrics.overflow, JSON.stringify(metrics)); assert(metrics.ctaBottom <= metrics.pageBottom + 1, "CTA must be in the initial workspace: " + JSON.stringify(metrics));
-          assert(metrics.composerWidth <= 1180); assert.equal(metrics.promptSize, "16px");
+          assert(metrics.composerWidth <= 1000); assert.equal(metrics.promptSize, "17px");
+          assert(await run("document.querySelector('[data-ai-brief]').getBoundingClientRect().height>=132"), "The working input must be larger than UX-3");
           layouts.push({ locale, theme, ...metrics });
           fs.writeFileSync(path.join(output, `${width}-${locale}-${theme}.png`), (await wc.capturePage()).toPNG());
         }
@@ -120,6 +121,14 @@ if (!process.versions.electron) {
       await wait("document.querySelectorAll('[data-production-modes]').length===1");
       await run("const s=document.querySelector('[data-production-mode]');s.focus();s.value='auto';s.dispatchEvent(new Event('change',{bubbles:true}));new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
       assert(await run("document.activeElement.matches('[data-production-mode]') && document.activeElement.value==='auto'"));
+      assert(await run("!document.querySelector('[data-production-details]').open && !document.querySelector('[data-production-modes] [role=status]').closest('details') && !document.querySelector('[data-production-action=review]').closest('details') && !document.querySelector('[data-production-action=stop]').closest('details')"));
+      const beforeWorkflowDisclosure = await run("JSON.stringify({...localStorage})");
+      await run("document.querySelector('[data-production-details-trigger]').focus()"); await key("Enter");
+      assert(await run("document.querySelector('[data-production-details]').open"));
+      assert.equal(await run("JSON.stringify({...localStorage})"), beforeWorkflowDisclosure);
+      await run("window.dispatchEvent(new Event('focus'));new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))");
+      assert(await run("document.querySelector('[data-production-details]').open && document.activeElement.matches('[data-production-details-trigger]')"));
+      await run("document.querySelector('[data-production-mode]').focus()");
       await run("window.dispatchEvent(new Event('focus'));new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))");
       assert(await run("document.activeElement.matches('[data-production-mode]') && document.activeElement.value==='auto'"));
       // Muse UI suppresses controls; unavailable AI permits drafting and Settings.
@@ -132,13 +141,14 @@ if (!process.versions.electron) {
       // Long content, text expansion, reduced motion, bounded scene scrolling.
       await run("ViralCoreProjectPersistence.renameProject(ViralCoreProjectPersistence.activeProjectId(),'Long project name '.repeat(100));state.scenePlan.scenes[0].title='Long scene title '.repeat(100);ViralCoreProjectPersistence.flush();const t=document.querySelector('[data-ai-brief]');t.value='x'.repeat(8000);t.dispatchEvent(new Event('input',{bubbles:true}));state.motion='reduced';render();");
       await wait("document.querySelectorAll('[data-production-modes]').length === 1");
-      assert(await run("document.querySelector('[data-ai-brief]').value.length===8000 && document.querySelector('#page').scrollWidth<=document.querySelector('#page').clientWidth+1"));
+      const longContent = await run("({length:document.querySelector('[data-ai-brief]').value.length,scroll:document.querySelector('#page').scrollWidth,width:document.querySelector('#page').clientWidth,overflow:Array.from(document.querySelectorAll('.core-ai-create-workspace *')).filter(n=>n.getBoundingClientRect().right>innerWidth+1).slice(0,8).map(n=>[n.tagName,n.className,n.getBoundingClientRect().width])})");
+      assert(longContent.length===8000 && longContent.scroll<=longContent.width+1, JSON.stringify(longContent));
       const expanded = await run(`(() => {for(const n of document.querySelectorAll('.core-ai-create-workspace button,.core-ai-create-workspace summary,.core-ai-prompt-label'))n.style.letterSpacing='.12em';const p=document.querySelector('#page');return p.scrollWidth<=p.clientWidth+1;})()`);
       assert(expanded);
-      assert.equal(await run("getComputedStyle(document.querySelector('.core-ai-composer')).transitionDuration"), "0s");
+      assert.equal(await run("getComputedStyle(document.querySelector('.core-ai-input-canvas')).transitionDuration"), "0s");
       await run("state.motion='balanced';render()");
       await wc.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
-      assert.equal(await run("getComputedStyle(document.querySelector('.core-ai-composer')).transitionDuration"), "0s");
+      assert.equal(await run("getComputedStyle(document.querySelector('.core-ai-input-canvas')).transitionDuration"), "0s");
       await run("for(const [k,v] of Object.entries(I18N.messages.en.aiCreate))if(typeof v==='string')I18N.messages.en.aiCreate[k]=v+' '+v.slice(0,Math.ceil(v.length*.4));render()");
       assert(await run("document.querySelector('#page').scrollWidth<=document.querySelector('#page').clientWidth+1"), "40% text expansion must fit");
       await run("for(let i=0;i<20;i++)ViralCoreProjectPersistence.addProjectScene({}, {projectId:ViralCoreProjectPersistence.activeProjectId()})");

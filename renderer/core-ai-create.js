@@ -105,13 +105,13 @@
     // Keep presentation-only disclosure/focus across readiness and identity paints.
     const host = document.querySelector(".core-ai-create-workspace");
     const focused = document.activeElement;
-    const hooks = ["data-ai-brief", "data-ai-setting", "data-ai-customize-trigger", "data-ai-recent-trigger", "data-ai-generate", "data-project-name", "data-project-name-rename", "data-production-mode", "data-production-action", "data-project-scene-action"];
+    const hooks = ["data-ai-brief", "data-ai-setting", "data-ai-customize-trigger", "data-ai-recent-trigger", "data-ai-generate", "data-project-name", "data-project-name-rename", "data-production-mode", "data-production-details-trigger", "data-production-action", "data-project-scene-action"];
     const hook = host?.contains(focused) ? hooks.find(key => focused.hasAttribute(key)) : null;
     const value = hook ? focused.getAttribute(hook) : null;
     const sceneId = hook ? focused.dataset.sceneId : undefined;
     const projectId = hook ? projectIdentity().projectId : null;
     const selection = hook === "data-ai-brief" ? [focused.selectionStart, focused.selectionEnd] : null;
-    const open = ["data-ai-customize", "data-ai-recent"].map(key => [key, document.querySelector("details[" + key + "]")?.open]);
+    const open = ["data-ai-customize", "data-ai-recent", "data-production-details"].map(key => [key, document.querySelector("details[" + key + "]")?.open]);
     try {
       render();
       for (const [key, expanded] of open) {
@@ -129,6 +129,10 @@
         // Existing owners inject planning controls after a page paint. Restore
         // only lost focus, after their insertion; never steal a newer focus.
         if (hook.startsWith("data-production-")) requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (appState()?.page === "ai-create" && projectIdentity().projectId === projectId && open.find(([key]) => key === "data-production-details")?.[1]) {
+            const details = document.querySelector("[data-production-details]");
+            if (details) details.open = true;
+          }
           if (document.activeElement === document.body) restore();
         }));
       }
@@ -245,6 +249,13 @@
   function updateSceneContext() {
     const context = document.querySelector("[data-ai-scene-context]");
     if (context) context.textContent = context.title = sceneContext();
+    const count = document.querySelector("[data-ai-plan-count]");
+    if (count) count.textContent = planSceneCount();
+  }
+
+  function planSceneCount() {
+    const count = window.ViralCoreProjectPersistence?.snapshot?.()?.scenePlan?.scenes?.length || 0;
+    return format(count === 1 ? copy().oneScene : copy().sceneCount, { count });
   }
 
   function settingsSummary() {
@@ -276,18 +287,19 @@
     const activeProject = projects.find(item => item.projectId === activeId);
     const projectType = item => item.projectKind === "ai" || (!item.projectKind && !item.hasSource) ? c.aiProject : c.importedProject;
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
-      '<header class="core-ai-create-hero"><div class="core-ai-heading"><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div>' +
+      '<header class="core-ai-create-hero"><div class="core-ai-heading"><h2>' + esc(c.composerTitle) + '</h2></div>' +
       '<div class="core-ai-project-context">' +
       (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '<span>' + esc(projectType(activeProject)) + '</span></div>' : '<p class="core-ai-project-empty">' + esc(c.implicitProject) + '</p>') +
       '<div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button>' +
       (activeProject ? '<button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">&#8599;</span></button>' : '') + '</div></div></header>' +
-      '<section class="core-ai-composer" aria-labelledby="ai-brief-label">' +
-      '<div class="core-ai-scene-context"><span data-ai-scene-context role="status" aria-live="polite" aria-atomic="true" title="' + esc(sceneContext()) + '">' + esc(sceneContext()) + '</span>' +
+      '<section class="core-ai-composer" aria-labelledby="ai-creation-title">' +
+      '<div class="core-ai-creation-heading"><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h3 id="ai-creation-title">' + esc(c.creationQuestion) + '</h3><p>' + esc(c.composerBody) + '</p></div>' +
+      '<div class="core-ai-input-canvas"><div class="core-ai-scene-context"><span data-ai-scene-context role="status" aria-live="polite" aria-atomic="true" title="' + esc(sceneContext()) + '">' + esc(sceneContext()) + '</span>' +
       (activeProject ? '<button type="button" class="button ghost" data-ai-action="change-scene">' + esc(c.changeScene) + ' <span aria-hidden="true">&#8595;</span></button>' : '') + '</div>' +
-      '<label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">&#10022;</span> ' + esc(c.briefLabel) + '</label>' +
-      '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" aria-describedby="ai-brief-hint" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
-      '<p id="ai-brief-hint" class="core-ai-brief-hint">' + esc(c.briefHint) + '</p>' +
-      '<div class="core-ai-examples" role="group" aria-label="' + esc(c.examplesHint) + '"><div class="core-ai-example-row">' + c.examples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '" title="' + esc(sample.detail) + '"><span aria-hidden="true">&#8599;</span><strong>' + esc(sample.title) + '</strong></button>').join('') + '</div></div>' +
+      '<label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label">' + esc(c.briefLabel) + '</label>' +
+      '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" spellcheck="false" aria-describedby="ai-brief-hint" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
+      '<div class="core-ai-canvas-foot"><p id="ai-brief-hint" class="core-ai-brief-hint">' + esc(c.briefHint) + '</p><span class="core-ai-canvas-mark" aria-hidden="true">&#10022;</span></div></div>' +
+      '<div class="core-ai-examples" role="group" aria-label="' + esc(c.examplesHint) + '"><div class="core-ai-example-row">' + c.examples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '" title="' + esc(sample.detail) + '"><strong>' + esc(sample.title) + '</strong></button>').join('') + '</div></div>' +
       '<details class="core-ai-customize" data-ai-customize><summary data-ai-customize-trigger><span class="core-ai-settings-summary" data-ai-settings-summary>' + settingsSummary() + '</span><span class="core-ai-customize-label">' + esc(c.customize) + ' <span class="core-ai-chevron" aria-hidden="true">&#8964;</span></span></summary>' +
       '<div class="core-ai-controls">' +
       (museSession ? '<p class="core-ai-session-note">' + esc(c.museSessionSettings) + '</p>' : '') +
@@ -298,7 +310,7 @@
       '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note"><span class="core-ai-status ' + provider.tone + '" data-ai-readiness role="status" aria-live="polite">' + esc(provider.label) + '</span>' +
       '<button class="button ghost" type="button" data-ai-action="settings">' + esc(c.openSettings) + '</button></div><button type="button" class="button primary" data-ai-generate aria-busy="' + submitting + '" ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '><span class="core-ai-submit-icon" aria-hidden="true">&#10022;</span> <span data-ai-generate-label>' + esc(submitting ? c.submitting : c.generate) + '</span></button></div>' +
       '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
-      (activeProject ? '<section class="core-ai-project-plan" aria-labelledby="ai-plan-title"><div class="core-ai-section-heading"><h3 id="ai-plan-title">' + esc(c.projectPlan) + '</h3><span>' + esc(c.projectPlanHint) + '</span></div>' + (window.ViralCoreProjectScenes?.surface?.() || '') + '</section>' : '') +
+      (activeProject ? '<section class="core-ai-project-plan" aria-labelledby="ai-plan-title"><div class="core-ai-section-heading"><h3 id="ai-plan-title">' + esc(c.projectPlan) + '</h3><span data-ai-plan-count>' + esc(planSceneCount()) + '</span></div>' + (window.ViralCoreProjectScenes?.surface?.() || '') + '</section>' : '') +
       '<details class="core-ai-recent" data-ai-recent><summary data-ai-recent-trigger>' + esc(c.recentTitle) + '<span class="core-ai-chevron" aria-hidden="true">&#8964;</span></summary><div class="core-ai-recent-content"><div class="core-ai-section-heading"><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">&#8599;</span></button></div>' +
       (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><div><strong title="' + esc(item.projectName) + '">' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +
         (item.projectId === activeId ? '' : '<button class="button ghost" type="button" data-ai-open-project="' + esc(item.projectId) + '"' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.openProject) + '</button>') + '</div>').join('') : '<div class="core-ai-recent-empty"><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div>') + '</div></details></div>';

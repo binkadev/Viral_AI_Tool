@@ -20,6 +20,7 @@
         pauseForPreview:"Tạm dừng dự án trước khi nghe thử giọng.", timingRisk:"Một số đoạn âm thanh dài hơn hoặc ngắn hơn cảnh. Phần xem trước chỉ phát trong khoảng lời tương ứng, không đổi tốc độ hay thời lượng cảnh."
       },
       productionModes: {
+        details: "Về quy trình này",
         title: "Chuẩn bị tư liệu dự án", mode: "Chế độ", assisted: "Có kiểm tra", auto: "Tự động",
         assistedDescription: "Hệ thống chuẩn bị tư liệu cho từng cảnh, bạn kiểm tra và chọn kết quả.",
         autoDescription: "Hệ thống tự chuẩn bị và chọn tư liệu cho các cảnh. Các trường hợp không an toàn sẽ yêu cầu bạn xử lý.",
@@ -443,6 +444,9 @@
   "settings": "Cài đặt AI"
 },
       aiCreate: {
+        creationQuestion: "Bạn muốn tạo thước phim nào?",
+        oneScene: "1 cảnh",
+        sceneCount: "{count} cảnh",
         implicitProject: "Dự án sẽ được tạo khi bạn bắt đầu.",
         firstScene: "Cảnh đầu tiên sẽ được tạo tự động",
         sceneUnavailable: "Chọn một cảnh trong kế hoạch dự án",
@@ -462,7 +466,7 @@
           museSessionSettings: "Đang dùng thiết lập hiện tại của Muse",
 composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         composerTitle: "Tạo video bằng AI",
-        composerBody: "Biến ý tưởng của bạn thành thước phim tiếp theo.",
+        composerBody: "Mô tả điều bạn hình dung. Bắt đầu từ một cảnh.",
         composerPlaceholder: "Chủ thể, bối cảnh, ánh sáng, chuyển động máy quay…",
         aspectLabel: "Khung hình",
         portrait: "9:16 · Dọc",
@@ -1593,6 +1597,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         pauseForPreview:"Pause the project before previewing a voice.", timingRisk:"Some audio differs from scene timing. Preview plays only within each narration interval, without changing speed or scene duration."
       },
       productionModes: {
+        details: "About this workflow",
         title: "Prepare project materials", mode: "Mode", assisted: "Assisted", auto: "Auto",
         assistedDescription: "Prepare materials scene by scene while you review and choose the result.",
         autoDescription: "Prepare and select scene materials automatically. Unsafe cases require your attention.",
@@ -2016,6 +2021,9 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
   "settings": "AI settings"
 },
       aiCreate: {
+        creationQuestion: "What will you create next?",
+        oneScene: "1 scene",
+        sceneCount: "{count} scenes",
         implicitProject: "A project will be created when you start.",
         firstScene: "The first scene will be created automatically",
         sceneUnavailable: "Choose a scene in the project plan",
@@ -2034,7 +2042,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         projectPlanHint: "Manage the workflow and scenes for this project",
         composerEyebrow: "YOUR CREATIVE SPACE",
         composerTitle: "Create with AI",
-        composerBody: "Turn your idea into your next film.",
+        composerBody: "Describe the video you have in mind. Start with one scene.",
         composerPlaceholder: "Subject, setting, lighting, camera movement…",
         aspectLabel: "Aspect ratio",
         portrait: "9:16 · Portrait",
