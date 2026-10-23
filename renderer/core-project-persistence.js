@@ -234,6 +234,7 @@
   }
 
   function editorState(current) {
+    if (current?.page === "productions") return model.clone(currentSnapshot?.editor || {});
     const previous = currentSnapshot?.editor || {};
     const scroll = currentTimelineScroll();
     return {

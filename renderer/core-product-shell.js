@@ -117,6 +117,7 @@
       { id: "ai-video", icon: "◫", label: "core-editor" },
       { group: "core-manage" },
       { id: "library", icon: "▦", label: "nav.library" },
+      { id: "productions", icon: "▤", label: "productionManager.nav" },
       { id: "accounts", icon: "◎", label: "nav.accounts" },
       { id: "usage", icon: "◔", label: "nav.usage" },
       { id: "billing", icon: "◇", label: "nav.billing" },

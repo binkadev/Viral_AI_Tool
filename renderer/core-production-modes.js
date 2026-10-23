@@ -70,7 +70,7 @@
     if (["GENERATION_FAILED", "GENERATION_CANCELLED", "SCENE_GENERATION_UNAVAILABLE", "PROVIDER_UNAVAILABLE", "DUPLICATE_JOB"].includes(reason)) return "generationFailed";
     return "operationFailed";
   }
-  function queue() { if (!queued) { queued = true; requestAnimationFrame(refresh); } }
+  function queue() { window.dispatchEvent(new CustomEvent("viral-ai:production-view-changed")); if (!queued) { queued = true; requestAnimationFrame(refresh); } }
   document.addEventListener("change", event => {
     if (!event.target.matches?.("[data-production-mode]")) return;
     const view = runtime.view();

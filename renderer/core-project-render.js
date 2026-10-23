@@ -37,7 +37,7 @@
   window.ViralCoreProjectRender={active,start,runtime,presentation};
   window.desktopAPI?.onRenderProgress?.(runtime.progress);
   const text=(node,value)=>{if(node.textContent !== value)node.textContent=value;};
-  function queue(){if(!queued){queued=true;requestAnimationFrame(refresh);}}
+  function queue(){window.dispatchEvent(new CustomEvent("viral-ai:project-render-view-changed"));if(!queued){queued=true;requestAnimationFrame(refresh);}}
   function refresh(){
     queued=false;
     const pane=document.querySelector('[data-inspector-pane="output"]');
