@@ -150,11 +150,10 @@ html[data-commercial-page] .ambient { animation: none; opacity: .06; }
 html[data-commercial-page] :is(.premium-hud-layer, .hud-reactive-light) { display: none !important; }
 html[data-commercial-page] .is-hud-magnet { translate: none !important; transform: none !important; }
 html[data-viral-motion-zone="workstation"] .ambient-layer { display: none; }
-/* Cancel the old entry choreography only while its explicit entry flag exists;
-   no editor layout, selection, timeline or preview node is animated/changed. */
-html[data-viral-motion-zone="workstation"][data-editor-entry] #page :is(.core-editor-assets-panel, .core-editor-focus-section, .core-editor-inspector, .core-editor-bottom-dock) {
-  translate: none !important; scale: none !important; opacity: 1 !important;
-  transition-property: color, background-color, border-color !important;
+/* Workstation policy also suppresses independent legacy panel keyframes.
+   Entry flags and transition cleanup remain owned by commercial-entry.js. */
+html[data-viral-motion-zone="workstation"] #page :is(.core-editor-assets-panel, .core-editor-focus-section, .core-editor-inspector, .core-editor-bottom-dock) {
+  animation: none;
 }
 html[data-motion="reduced"] {
   --motion-instant: 0ms; --motion-fast: 0ms; --motion-normal: 0ms; --motion-slow: 0ms; --motion-hero: 0ms;

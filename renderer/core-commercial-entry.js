@@ -76,6 +76,10 @@
 
   function activate(kind, key) {
     const token = ++generation;
+    if (kind === "editor" && root.dataset.viralMotionZone === "workstation") {
+      clearEntryState();
+      return;
+    }
     const reduced = reducedMotion();
 
     detachSettleListener();
@@ -94,6 +98,11 @@
         if (token !== generation) return;
         const current = surface();
         if (!current || current.kind !== kind || current.key !== key) return;
+        // A route render can establish workstation policy after entry was queued.
+        if (kind === "editor" && root.dataset.viralMotionZone === "workstation") {
+          clearEntryState();
+          return;
+        }
         if (kind === "home") {
           root.dataset.creatorEntry = "ready";
         } else {
@@ -117,7 +126,9 @@
       return;
     }
 
-    if (current.kind === lastKind && current.key === lastKey) return;
+    const workstationCleanup = current.kind === "editor" && root.dataset.viralMotionZone === "workstation"
+      && (root.dataset.editorEntry !== undefined || settleTarget !== null);
+    if (current.kind === lastKind && current.key === lastKey && !workstationCleanup) return;
     lastKind = current.kind;
     lastKey = current.key;
     activate(current.kind, current.key);
