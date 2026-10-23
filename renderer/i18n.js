@@ -1185,6 +1185,19 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         modalTitle: "Tạo quy trình tự động",
         modalBody: "Chọn điều kiện kích hoạt, các bước xử lý và điểm xuất bản nếu cần."
       },
+      libraryWorkspace: {
+        eyebrow: "TƯ LIỆU CỦA BẠN", title: "Không gian video", body: "Video nguồn và các bản xuất trong khu làm việc hiện tại.",
+        scope: "Tìm theo tên tệp · Khu làm việc hiện tại", searchLabel: "Tìm video trong thư viện", searchPlaceholder: "Tìm theo tên video…",
+        emptyTitle: "Thư viện đã sẵn sàng", emptyBody: "Video bạn nhập và tư liệu AI đã được thêm vào dự án sẽ xuất hiện ở đây, cùng các bản video đã xuất. Bắt đầu từ một ý tưởng hoặc nhập video của bạn.",
+        searchEmptyTitle: "Không tìm thấy video", searchEmptyBody: "Thử một tên tệp hoặc từ khóa khác. Các video trong thư viện vẫn được giữ nguyên.",
+        create: "Tạo bằng AI", import: "Nhập video", media: "Video trong thư viện", results: "{count}/{total} video",
+        video: "Video", imported: "Video đã nhập", generated: "Video tạo bằng AI", exported: "Video đã xuất", unnamed: "Video chưa có tên",
+        noPreview: "Chưa có hình xem trước", unassigned: "Chưa có thông tin dự án", details: "Chi tiết và thao tác", filePath: "Vị trí tệp", dimensions: "Kích thước hình", fileSize: "Dung lượng", recordedTime: "Thời gian đã ghi nhận",
+        locate: "Xem vị trí tệp", relink: "Chọn lại video nguồn", checkResult: "Kiểm tra kết quả", cancelExport: "Dừng xuất video", retryExport: "Xuất lại video",
+        errorTitle: "Chưa đọc được thư viện", errorBody: "Chưa thể hiển thị dữ liệu đã lưu. Các tệp không bị thay đổi. Hãy mở lại ứng dụng; nếu lỗi vẫn còn, kiểm tra quyền truy cập và dung lượng lưu trữ.",
+        states: { ready: "Sẵn sàng", unknown: "Chưa xác nhận tệp", unverified: "Kết quả cần xác nhận", reading: "Đang đọc thông tin video", readError: "Chưa đọc được video", missing: "Không tìm thấy tệp", trashed: "Tệp đã vào Thùng rác", processing: "Đang xuất video", queued: "Chờ xuất video", cancelling: "Đang dừng xuất", cancelled: "Đã dừng xuất", failed: "Chưa xuất được video" },
+        help: { unverified: "Kiểm tra kết quả và dự án nhận tư liệu trước khi dùng.", missing: "Không tìm thấy tệp. Bản ghi vẫn được giữ để chọn lại nguồn.", trashed: "Tệp không còn ở vị trí đã lưu. Bản ghi thư viện vẫn được giữ lại.", readError: "Chưa đọc được thông tin video. Kiểm tra tệp hoặc chọn lại đúng video nguồn." }
+      },
       library: {
         breadcrumb: "Khu làm việc / Thư viện",
         title: "Thư viện video",
@@ -2775,6 +2788,19 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         archiveDesc: "Move sources older than 30 days",
         modalTitle: "New automation",
         modalBody: "Choose a trigger, processing steps and an optional publishing destination."
+      },
+      libraryWorkspace: {
+        eyebrow: "YOUR MEDIA", title: "Your video workspace", body: "Source videos and exports in the current workspace.",
+        scope: "Search by filename · Current workspace", searchLabel: "Search videos in the library", searchPlaceholder: "Search by video name…",
+        emptyTitle: "Your library is ready", emptyBody: "Videos you import and AI media added to your project will appear here, alongside your video exports. Start with an idea or import your own video.",
+        searchEmptyTitle: "No videos found", searchEmptyBody: "Try another filename or keyword. Your library videos are still retained.",
+        create: "Create with AI", import: "Import video", media: "Library videos", results: "{count}/{total} videos",
+        video: "Video", imported: "Imported video", generated: "AI-generated video", exported: "Exported video", unnamed: "Unnamed video",
+        noPreview: "No preview available", unassigned: "Project information unavailable", details: "Details & actions", filePath: "File location", dimensions: "Dimensions", fileSize: "File size", recordedTime: "Recorded time",
+        locate: "Show file location", relink: "Relink source video", checkResult: "Check result", cancelExport: "Cancel export", retryExport: "Export video again",
+        errorTitle: "Your library could not be read", errorBody: "Saved records cannot be displayed yet. Your files have not changed. Reopen the app; if this continues, check storage permissions and free space.",
+        states: { ready: "Ready", unknown: "File not confirmed", unverified: "Result needs confirmation", reading: "Reading video information", readError: "Could not read video", missing: "File not found", trashed: "File moved to Trash", processing: "Exporting video", queued: "Waiting to export", cancelling: "Cancelling export", cancelled: "Export cancelled", failed: "Video export failed" },
+        help: { unverified: "Check this result and its project before using it.", missing: "File not found. This record is retained so you can relink the source.", trashed: "The file is no longer at its saved location. Its library record is retained.", readError: "Video information could not be read. Check the file or relink the correct source video." }
       },
       library: {
         breadcrumb: "Workspace / Library",

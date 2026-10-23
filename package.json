@@ -45,7 +45,7 @@
     "test:production-modes": "node --test tests/core-production-modes.test.js",
     "test:scene-orchestration": "node --test tests/core-scene-orchestration.test.js",
     "test:core-project-persistence": "node tests/core-project-persistence.test.js && node --test tests/core-project-registry.test.js",
-    "test:core-media-library": "node tests/core-media-library-model.test.js",
+    "test:core-media-library": "node tests/core-media-library-model.test.js && node --test tests/core-library-workspace.test.js",
     "test:core-scene-plan": "node tests/core-scene-plan-model.test.js",
     "test:core-scene-plan-persistence": "node tests/core-scene-plan-persistence.test.js",
     "test:generation-visual-harness": "node --test tests/generation-visual-harness.test.js",
