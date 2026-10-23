@@ -82,17 +82,58 @@
     if (button) {
       button.disabled = !canGenerate();
       button.setAttribute("aria-disabled", String(button.disabled));
+      button.setAttribute("aria-busy", String(submitting));
+      const label = button.querySelector?.("[data-ai-generate-label]");
+      if (label) label.textContent = submitting ? copy().submitting : copy().generate;
     }
     document.querySelectorAll?.("[data-ai-new-project], [data-ai-open-project]").forEach(control => {
       control.disabled = submitting || projectActionPending;
     });
     const status = document.querySelector("[data-ai-generation-feedback]");
     if (status) status.textContent = feedback;
+    updateSceneContext();
+    const readiness = document.querySelector("[data-ai-readiness]");
+    if (readiness) {
+      const provider = providerStatus(copy());
+      readiness.textContent = provider.label;
+      readiness.className = "core-ai-status " + provider.tone;
+    }
   }
 
   function renderWorkspace() {
     if (appState()?.page !== "ai-create" || typeof render !== "function") return;
-    try { render(); }
+    // Keep presentation-only disclosure/focus across readiness and identity paints.
+    const host = document.querySelector(".core-ai-create-workspace");
+    const focused = document.activeElement;
+    const hooks = ["data-ai-brief", "data-ai-setting", "data-ai-customize-trigger", "data-ai-recent-trigger", "data-ai-generate", "data-project-name", "data-project-name-rename", "data-production-mode", "data-production-action", "data-project-scene-action"];
+    const hook = host?.contains(focused) ? hooks.find(key => focused.hasAttribute(key)) : null;
+    const value = hook ? focused.getAttribute(hook) : null;
+    const sceneId = hook ? focused.dataset.sceneId : undefined;
+    const projectId = hook ? projectIdentity().projectId : null;
+    const selection = hook === "data-ai-brief" ? [focused.selectionStart, focused.selectionEnd] : null;
+    const open = ["data-ai-customize", "data-ai-recent"].map(key => [key, document.querySelector("details[" + key + "]")?.open]);
+    try {
+      render();
+      for (const [key, expanded] of open) {
+        const disclosure = document.querySelector("details[" + key + "]");
+        if (disclosure && expanded !== undefined) disclosure.open = expanded;
+      }
+      if (hook) {
+        const restore = () => {
+          if (appState()?.page !== "ai-create" || projectIdentity().projectId !== projectId) return;
+          const target = [...document.querySelectorAll("[" + hook + "]")].find(node => node.getAttribute(hook) === value && node.dataset.sceneId === sceneId && !node.disabled);
+          target?.focus({ preventScroll: true });
+          if (selection) target?.setSelectionRange(...selection);
+        };
+        restore();
+        // Existing owners inject planning controls after a page paint. Restore
+        // only lost focus, after their insertion; never steal a newer focus.
+        if (hook.startsWith("data-production-")) requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (document.activeElement === document.body) restore();
+        }));
+      }
+      rename?.restoreFocus(document);
+    }
     catch { console.warn("[AiCreate] Workspace presentation could not refresh"); }
   }
 
@@ -184,52 +225,36 @@
     return VALID_GOALS.has(saved) ? saved : "balanced";
   }
 
-  function projectContext() {
-    const current = appState();
-    const jobs = Array.isArray(current?.jobs) ? current.jobs : [];
-    const source = jobs.find(job => job?.sourcePath && !job?.isRenderOutput) || null;
-    const transcript = current?.translation?.result?.segments || current?.speech?.result?.segments || [];
-    const scenes = Array.isArray(current?.scenePlan?.scenes) ? current.scenePlan.scenes : [];
-    return {
-      source,
-      transcriptCount: Array.isArray(transcript) ? transcript.length : 0,
-      sceneCount: scenes.length
-    };
-  }
-
-  function readiness() {
-    const current = appState();
-    const localReady = current?.speech?.providerStatus?.ready === true || current?.speech?.modelStatus?.state === "installed";
-    const cloudReady = Boolean(current?.cloud?.auth || current?.cloud?.account);
-    const mediaReady = typeof window.desktopAPI?.searchMedia === "function" || typeof window.desktopAPI?.searchMediaAssets === "function";
-    const sceneReady = Boolean(window.ViralCoreScenePlanModel);
-    return { localReady, cloudReady, mediaReady, sceneReady };
-  }
-
-  function statusPill(label, tone) {
-    return '<span class="core-ai-status ' + tone + '">' + esc(label) + '</span>';
-  }
-
-  function strategyCard(goal, title, body, active) {
-    return '<button type="button" class="core-ai-strategy ' + (active ? "is-active" : "") + '" data-ai-goal="' + goal + '" aria-pressed="' + (active ? "true" : "false") + '">' +
-      '<span class="core-ai-strategy-dot" aria-hidden="true"></span>' +
-      '<strong>' + esc(title) + '</strong>' +
-      '<span>' + esc(body) + '</span>' +
-    '</button>';
-  }
-
-  function setupCard(icon, title, body, status, tone, action, actionLabel) {
-    return '<article class="core-ai-setup-card">' +
-      '<div class="core-ai-setup-icon" aria-hidden="true">' + icon + '</div>' +
-      '<div class="core-ai-setup-copy"><div class="core-ai-setup-head"><strong>' + esc(title) + '</strong>' + statusPill(status, tone) + '</div><p>' + esc(body) + '</p></div>' +
-      (action ? '<button type="button" class="button ghost" data-ai-action="' + action + '">' + esc(actionLabel) + '</button>' : '') +
-    '</article>';
-  }
-
   function providerStatus(c) {
-    if (generationState === "ready") return { label: c.ready, tone: "ready" };
-    if (generationState === "checking") return { label: c.foundationOnly, tone: "foundation" };
-    return { label: c.needsProvider, tone: "blocked" };
+    if (generationReady) return { label: c.aiReady, tone: "ready" };
+    if (generationState === "checking") return { label: c.aiChecking, tone: "checking" };
+    if (generationState === "error") return { label: c.aiStatusError, tone: "blocked" };
+    return { label: c.aiNotReady, tone: "blocked" };
+  }
+
+  function sceneContext() {
+    const snapshot = window.ViralCoreProjectPersistence?.snapshot?.();
+    if (!snapshot?.projectId) return copy().firstScene;
+    const scenes = snapshot.scenePlan?.scenes || [];
+    const index = scenes.findIndex(scene => scene.id === snapshot.scenePlan.selectedSceneId);
+    if (index < 0) return copy().sceneUnavailable;
+    const number = String(index + 1).padStart(2, "0");
+    return format(scenes[index].title ? copy().namedScene : copy().sceneNumber, { number, title: scenes[index].title });
+  }
+
+  function updateSceneContext() {
+    const context = document.querySelector("[data-ai-scene-context]");
+    if (context) context.textContent = context.title = sceneContext();
+  }
+
+  function settingsSummary() {
+    const c = copy();
+    const values = museSession ? [c.museSessionSettings] : [
+      selectedOption("aspect", ["9:16", "16:9", "1:1"], "9:16"),
+      selectedOption("duration", ["5", "10"], "5") === "10" ? c.tenSeconds : c.fiveSeconds,
+      c[selectedGoal()], c.automaticProvider
+    ];
+    return values.map(value => '<span class="core-ai-setting-chip">' + esc(value) + '</span>').join("");
   }
 
   function selectedOption(name, values, fallback) {
@@ -245,31 +270,38 @@
   function page() {
     const c = copy();
     const provider = providerStatus(c);
-    const project = projectContext();
-    const samples = c.examples;
     const persistence = window.ViralCoreProjectPersistence;
     const projects = persistence?.listProjects?.() || [];
     const activeId = persistence?.activeProjectId?.();
     const activeProject = projects.find(item => item.projectId === activeId);
     const projectType = item => item.projectKind === "ai" || (!item.projectKind && !item.hasSource) ? c.aiProject : c.importedProject;
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
-      '<header class="core-ai-create-hero"><div><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div><div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button><button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">↗</span></button></div></header>' +
-      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '<span>' + esc(projectType(activeProject)) + '</span></div>' : '') +
-      (activeProject ? window.ViralCoreProjectScenes?.surface?.() || '' : '') +
-      '<section class="core-ai-composer" aria-labelledby="ai-brief-label"><label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">✦</span> ' + esc(c.briefLabel) + '</label>' +
-      '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
-      '<div class="core-ai-controls core-ai-strategy-grid">' +
-      (museSession?'<p>'+esc(c.museSessionSettings)+'</p>':'') +
+      '<header class="core-ai-create-hero"><div class="core-ai-heading"><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h2>' + esc(c.composerTitle) + '</h2><p>' + esc(c.composerBody) + '</p></div>' +
+      '<div class="core-ai-project-context">' +
+      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '<span>' + esc(projectType(activeProject)) + '</span></div>' : '<p class="core-ai-project-empty">' + esc(c.implicitProject) + '</p>') +
+      '<div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button>' +
+      (activeProject ? '<button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">&#8599;</span></button>' : '') + '</div></div></header>' +
+      '<section class="core-ai-composer" aria-labelledby="ai-brief-label">' +
+      '<div class="core-ai-scene-context"><span data-ai-scene-context role="status" aria-live="polite" aria-atomic="true" title="' + esc(sceneContext()) + '">' + esc(sceneContext()) + '</span>' +
+      (activeProject ? '<button type="button" class="button ghost" data-ai-action="change-scene">' + esc(c.changeScene) + ' <span aria-hidden="true">&#8595;</span></button>' : '') + '</div>' +
+      '<label id="ai-brief-label" for="ai-brief" class="core-ai-prompt-label"><span aria-hidden="true">&#10022;</span> ' + esc(c.briefLabel) + '</label>' +
+      '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" aria-describedby="ai-brief-hint" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
+      '<p id="ai-brief-hint" class="core-ai-brief-hint">' + esc(c.briefHint) + '</p>' +
+      '<div class="core-ai-examples" role="group" aria-label="' + esc(c.examplesHint) + '"><div class="core-ai-example-row">' + c.examples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '" title="' + esc(sample.detail) + '"><span aria-hidden="true">&#8599;</span><strong>' + esc(sample.title) + '</strong></button>').join('') + '</div></div>' +
+      '<details class="core-ai-customize" data-ai-customize><summary data-ai-customize-trigger><span class="core-ai-settings-summary" data-ai-settings-summary>' + settingsSummary() + '</span><span class="core-ai-customize-label">' + esc(c.customize) + ' <span class="core-ai-chevron" aria-hidden="true">&#8964;</span></span></summary>' +
+      '<div class="core-ai-controls">' +
+      (museSession ? '<p class="core-ai-session-note">' + esc(c.museSessionSettings) + '</p>' : '') +
       setting('aspect', c.aspectLabel, [['9:16', c.portrait], ['16:9', c.landscape], ['1:1', c.square]], selectedOption('aspect', ['9:16','16:9','1:1'], '9:16')) +
       setting('duration', c.durationLabel, [['5', c.fiveSeconds], ['10', c.tenSeconds]], selectedOption('duration', ['5','10'], '5')) +
       setting('goal', c.qualityLabel, [['economy', c.economy], ['balanced', c.balanced], ['quality', c.quality]], selectedGoal()) +
-      '<div class="core-ai-provider"><span>' + esc(c.providerLabel) + '</span><button class="core-ai-provider-button" type="button" data-ai-action="settings">' + esc(c.automaticProvider) + '<span aria-hidden="true">↗</span></button></div></div>' +
-      '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note">' + statusPill(provider.label, provider.tone) + '<span>' + esc(generationReady ? c.briefHint : c.connectionHint) + '</span></div><button type="button" class="button primary" data-ai-generate ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '><span aria-hidden="true">✦</span> ' + esc(c.generate) + '</button></div>' +
+      '<div class="core-ai-provider"><span>' + esc(c.providerLabel) + '</span><button class="core-ai-provider-button" type="button" data-ai-action="settings">' + esc(c.viewSettings) + '<span aria-hidden="true">&#8599;</span></button></div></div></details>' +
+      '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note"><span class="core-ai-status ' + provider.tone + '" data-ai-readiness role="status" aria-live="polite">' + esc(provider.label) + '</span>' +
+      '<button class="button ghost" type="button" data-ai-action="settings">' + esc(c.openSettings) + '</button></div><button type="button" class="button primary" data-ai-generate aria-busy="' + submitting + '" ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '><span class="core-ai-submit-icon" aria-hidden="true">&#10022;</span> <span data-ai-generate-label>' + esc(submitting ? c.submitting : c.generate) + '</span></button></div>' +
       '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
-      '<section class="core-ai-examples" aria-labelledby="ai-examples-title"><div class="core-ai-section-heading"><h3 id="ai-examples-title">' + esc(c.examplesTitle) + '</h3><span>' + esc(c.examplesHint) + '</span></div><div class="core-ai-example-row">' + samples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '"><span class="core-ai-example-art art-' + i + '" aria-hidden="true"><i></i><b></b><em></em></span><span class="core-ai-example-copy"><strong>' + esc(sample.title) + '</strong><span>' + esc(sample.detail) + '</span></span><span class="core-ai-example-arrow" aria-hidden="true">↗</span></button>').join('') + '</div></section>' +
-      '<section class="core-ai-recent"><div class="core-ai-section-heading"><h3>' + esc(c.recentTitle) + '</h3><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">↗</span></button></div>' +
-      (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><span class="core-ai-recent-icon" aria-hidden="true">↗</span><div><strong title="' + esc(item.projectName) + '">' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +
-        (item.projectId === activeId ? '' : '<button class="button ghost" type="button" data-ai-open-project="' + esc(item.projectId) + '"' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.openProject) + '</button>') + '</div>').join('') : '<div class="core-ai-recent-empty"><span aria-hidden="true">↗</span><div><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div></div>') + '</section></div>';
+      (activeProject ? '<section class="core-ai-project-plan" aria-labelledby="ai-plan-title"><div class="core-ai-section-heading"><h3 id="ai-plan-title">' + esc(c.projectPlan) + '</h3><span>' + esc(c.projectPlanHint) + '</span></div>' + (window.ViralCoreProjectScenes?.surface?.() || '') + '</section>' : '') +
+      '<details class="core-ai-recent" data-ai-recent><summary data-ai-recent-trigger>' + esc(c.recentTitle) + '<span class="core-ai-chevron" aria-hidden="true">&#8964;</span></summary><div class="core-ai-recent-content"><div class="core-ai-section-heading"><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">&#8599;</span></button></div>' +
+      (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><div><strong title="' + esc(item.projectName) + '">' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +
+        (item.projectId === activeId ? '' : '<button class="button ghost" type="button" data-ai-open-project="' + esc(item.projectId) + '"' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.openProject) + '</button>') + '</div>').join('') : '<div class="core-ai-recent-empty"><strong>' + esc(c.noProjects) + '</strong><p>' + esc(c.noProjectsHint) + '</p></div>') + '</div></details></div>';
   }
 
   function route(pageId) {
@@ -351,6 +383,12 @@
       openLocalModelSetup().catch?.(() => {});
       return;
     }
+    if (type === "change-scene") {
+      const surface = document.querySelector("[data-project-scenes]");
+      surface?.focus({ preventScroll: true });
+      surface?.scrollIntoView({ block: "nearest", behavior: "instant" });
+      return;
+    }
     if (type === "settings") route("settings");
   }
 
@@ -383,7 +421,10 @@
         localStorage.setItem('viral-ai-generation-' + name, target.value);
         submissionKey = null;
         updateGenerationControls();
+        const summary = document.querySelector("[data-ai-settings-summary]");
+        if (summary) summary.innerHTML = settingsSummary();
       });
+      window.addEventListener("viral-ai:scene-plan-changed", updateSceneContext);
       window.addEventListener("viral-ai:core-state-changed", event => {
         if (event?.detail?.reason === "project-rename") { renderWorkspace(); return; }
         if (event?.detail?.reason === "project-scene") { updateGenerationControls(); return; }

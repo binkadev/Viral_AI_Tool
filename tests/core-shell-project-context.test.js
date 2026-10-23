@@ -150,7 +150,9 @@ function assertWorkspace(h, name) {
       const name = id === "a" ? "AI campaign &lt;A&gt;" : "Named imported campaign";
       assert(html.includes('title="' + name + '"') && html.includes('>' + name + '</strong>'), "The active identity strip exposes the escaped canonical name and full title");
       assert(html.includes('data-ai-active-project="' + id + '"'));
-      assert(html.includes('<span>' + activeType + '</span></div><section class="core-ai-composer"'));
+      const identity = html.slice(html.indexOf('data-ai-active-project="' + id + '"'), html.indexOf('<div class="core-ai-project-actions">'));
+      assert(identity.includes('<span>' + activeType + '</span></div>'), "The compact Hero retains the active Project type beside canonical identity");
+      assert(html.indexOf('data-ai-active-project="' + id + '"') < html.indexOf('<section class="core-ai-composer"'), "Project identity remains before the creation action");
       assert(html.includes('<span>' + activeType + (locale === "vi" ? " · Đang mở" : " · Open") + '</span>'));
       assert(html.includes('<span>' + (id === "a" ? imported : ai) + '</span>'));
       assert(!html.includes('data-ai-open-project="' + id + '"'));

@@ -29,8 +29,10 @@ for (const required of [
   'sceneId: identity.sceneId',
   'const GOAL_KEY = "viral-ai-generation-goal"',
   'const BRIEF_KEY = "viral-ai-generation-brief"',
-  'window.ViralCoreScenePlanModel',
-  'window.desktopAPI?.searchMedia',
+  'snapshot.scenePlan.selectedSceneId',
+  'data-ai-scene-context',
+  'data-ai-settings-summary',
+  'data-ai-customize',
   'type === "local-ai"',
   'route("settings")',
   'window.I18N.messages[locale()].aiCreate'
@@ -55,11 +57,14 @@ assert(index.indexOf('src="core-ai-create.js"') < index.indexOf('src="core-navig
 
 for (const required of [
   ".core-ai-create-workspace",
-  ".core-ai-strategy-grid",
-  ".core-ai-setup-grid",
-  ".core-ai-generation-lock"
+  ".core-ai-controls",
+  ".core-ai-project-plan",
+  ".core-ai-composer-footer"
 ]) assert(css.includes(required), "Create with AI styling missing: " + required);
 assert(!css.includes("@keyframes"), "Create with AI must not introduce ambient animation loops.");
+for (const selector of [".start-home .core-ai-example-row", ".start-home .core-ai-example-copy", ".start-home .core-ai-example-art", ".start-home .art-0", ".start-home .art-1", ".start-home .art-2"]) {
+  assert(css.includes(selector), "Home's shared suggestion/gallery styling must survive Create CSS cleanup: " + selector);
+}
 assert(!js.includes("MutationObserver"), "Create with AI must not reintroduce renderer observer storms.");
 assert(!js.includes("setInterval("), "Create with AI must not poll the renderer.");
 assert(!/API[_-]?KEY/i.test(js), "Provider secrets must never be embedded in the renderer workspace.");
