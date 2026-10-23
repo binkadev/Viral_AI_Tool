@@ -84,8 +84,8 @@ test('New AI Project retains old project, isolates runtime, and survives restart
  const writes=restarted.writes.length;restarted.api.openProject(created.projectId);assert.equal(restarted.writes.length,writes);
  assert.equal(harness(restarted.data).api.activeProjectId(),created.projectId);
 });
-test('normal Create AI UI has separate New AI Project, coalesces double clicks, and Generate reuses its IDs',async()=>{
- const h=harness(seed());await h.ready();const html=h.page();assert(html.includes('data-ai-new-project'));assert(html.includes('data-ai-route="download"'));assert(html.includes('New AI Project'));
+test('normal Create AI UI has a secondary New project action, coalesces double clicks, and Generate reuses its IDs',async()=>{
+ const h=harness(seed());await h.ready();const html=h.page();assert(html.includes('data-ai-new-project'));assert(html.includes('data-ai-route="download"'));assert(html.includes('+ New project'));
  h.click('[data-ai-new-project]');h.click('[data-ai-new-project]');await h.ready();h.click('[data-ai-new-project]',{},2);await h.ready();
  assert.equal(h.api.listProjects().length,2);const fresh=h.api.snapshot(),ids=h.ids;
  assert(h.page().includes('data-ai-open-project="source-old"'));assert(h.page().includes('Original.mp4'));

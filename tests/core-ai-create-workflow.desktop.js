@@ -12,7 +12,7 @@ if (!process.versions.electron) {
 } else {
   const { app, BrowserWindow, session } = require("electron"), { pathToFileURL } = require("node:url");
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "viral-ai-ux3-"));
-  const output = path.join(root, "out", "ux31", "integration"); fs.mkdirSync(output, { recursive: true });
+  const output = path.join(root, "out", "ux32", "integration"); fs.mkdirSync(output, { recursive: true });
   app.setPath("userData", profile); app.setPath("sessionData", profile);
   app.disableHardwareAcceleration();
   const fixture = `
@@ -58,6 +58,8 @@ if (!process.versions.electron) {
       await wait("document.querySelectorAll('[data-production-modes]').length === 1");
       const hierarchy = await run(`(() => {const p=document.querySelector('.core-ai-project-plan'),c=document.querySelector('.core-ai-composer'),m=document.querySelector('[data-production-modes]'),s=document.querySelector('[data-project-scenes]');return {composerBeforePlan:!!(c.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_FOLLOWING),sharedPlan:p.contains(m)&&p.contains(s),injection:m.nextElementSibling===s};})()`);
       assert.deepEqual(hierarchy, { composerBeforePlan: true, sharedPlan: true, injection: true });
+      assert(await run("document.querySelectorAll('.core-ai-active-project .project-identity-name').length===1 && !document.querySelector('.core-ai-heading')"));
+      assert(await run("['[data-ai-customize]','[data-ai-readiness]','[data-ai-generate]'].every(s=>document.querySelector('.core-ai-creation-controls').contains(document.querySelector(s)))"));
       const layouts = [];
       for (const [width, height] of [[1366, 768], [1920, 1080]]) {
         win.setContentSize(width, height);
@@ -71,6 +73,8 @@ if (!process.versions.electron) {
           assert(metrics.composerWidth <= 1000); assert.equal(metrics.promptSize, "17px");
           assert(await run("document.querySelector('[data-ai-brief]').getBoundingClientRect().height>=132"), "The working input must be larger than UX-3");
           layouts.push({ locale, theme, ...metrics });
+          await wait("getComputedStyle(document.querySelector('#page')).visibility==='visible'");
+          await run("new Promise(r=>setTimeout(r,500))");
           fs.writeFileSync(path.join(output, `${width}-${locale}-${theme}.png`), (await wc.capturePage()).toPNG());
         }
       }
@@ -106,6 +110,12 @@ if (!process.versions.electron) {
       assert(await run("document.querySelector('[data-ai-scene-context]').textContent.includes('02')"));
       await run("document.querySelector('[data-project-scene-action=up]').click()");
       assert.equal(await run("ViralCoreProjectPersistence.snapshot().scenePlan.scenes[0].id"), selected);
+      await run("document.querySelector('[data-project-scene-action=down]').click()");
+      assert.equal(await run("ViralCoreProjectPersistence.snapshot().scenePlan.scenes[1].id"), selected);
+      await run("document.querySelectorAll('[data-project-scene-action=select]')[0].click()");
+      assert(await run("document.querySelector('[data-ai-scene-context]').textContent.includes('01')"));
+      await run("document.querySelectorAll('[data-project-scene-action=select]')[1].click()");
+      assert.equal(await run("ViralCoreProjectPersistence.snapshot().scenePlan.selectedSceneId"), selected);
       await run("document.querySelector('[data-project-scene-action=delete]').click()");
       await wait("ViralCoreProjectPersistence.snapshot().scenePlan.scenes.length===1");
       assert(await run("document.querySelector('[data-project-scene-action=delete]').disabled"));
@@ -121,7 +131,7 @@ if (!process.versions.electron) {
       await wait("document.querySelectorAll('[data-production-modes]').length===1");
       await run("const s=document.querySelector('[data-production-mode]');s.focus();s.value='auto';s.dispatchEvent(new Event('change',{bubbles:true}));new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
       assert(await run("document.activeElement.matches('[data-production-mode]') && document.activeElement.value==='auto'"));
-      assert(await run("!document.querySelector('[data-production-details]').open && !document.querySelector('[data-production-modes] [role=status]').closest('details') && !document.querySelector('[data-production-action=review]').closest('details') && !document.querySelector('[data-production-action=stop]').closest('details')"));
+      assert(await run("!document.querySelector('[data-production-details]').open && !document.querySelector('[data-production-modes] [role=status]').closest('details') && !document.querySelector('[data-production-action=review]').closest('details') && document.querySelector('[data-production-action=stop]').closest('details') === document.querySelector('[data-production-details]')"));
       const beforeWorkflowDisclosure = await run("JSON.stringify({...localStorage})");
       await run("document.querySelector('[data-production-details-trigger]').focus()"); await key("Enter");
       assert(await run("document.querySelector('[data-production-details]').open"));
@@ -131,6 +141,15 @@ if (!process.versions.electron) {
       await run("document.querySelector('[data-production-mode]').focus()");
       await run("window.dispatchEvent(new Event('focus'));new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))");
       assert(await run("document.activeElement.matches('[data-production-mode]') && document.activeElement.value==='auto'"));
+      // Presentation fixtures exercise disclosure safety without executing a run.
+      await run("fixture.productionView=ViralProductionModes.runtime.view;ViralProductionModes.runtime.view=()=>({...fixture.productionView(),state:'running',run:{mode:'auto'},current:ViralCoreProjectPersistence.snapshot().scenePlan.selectedSceneId,phase:'waiting'});document.querySelector('[data-production-details]').open=false;ViralProductionModes.runtime.notify()");
+      await wait("document.querySelector('[data-production-details]').open && !document.querySelector('[data-production-action=pause]').disabled");
+      assert(await run("!document.querySelector('[data-production-modes] [role=status]').closest('details') && !document.querySelector('[data-production-action=stop]').disabled"));
+      await run("ViralProductionModes.runtime.view=()=>{const v=fixture.productionView();return {...v,state:'needs_attention',summary:{...v.summary,scenes:[{sceneId:ViralCoreProjectPersistence.snapshot().scenePlan.selectedSceneId,status:'attention',reason:'RECOVERY_REQUIRED'}]}}};document.querySelector('[data-production-details]').open=false;ViralProductionModes.runtime.notify()");
+      await wait("document.querySelector('[data-production-modes] small')?.textContent===I18N.messages.en.productionModes.recovery");
+      assert(await run("!document.querySelector('[data-production-modes] small').closest('details') && !document.querySelector('[data-production-action=review]').closest('details') && !document.querySelector('[data-production-details]').open"));
+      await run("ViralProductionModes.runtime.view=fixture.productionView;ViralProductionModes.runtime.notify()");
+      await wait("document.querySelector('[data-production-modes] [role=status]').textContent.trim()===I18N.messages.en.productionModes.idle");
       // Muse UI suppresses controls; unavailable AI permits drafting and Settings.
       await run("fixture.muse=true;window.dispatchEvent(new Event('focus'))");
       await wait("!document.querySelector('[data-ai-setting]')");
@@ -149,13 +168,15 @@ if (!process.versions.electron) {
       await run("state.motion='balanced';render()");
       await wc.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
       assert.equal(await run("getComputedStyle(document.querySelector('.core-ai-input-canvas')).transitionDuration"), "0s");
-      await run("for(const [k,v] of Object.entries(I18N.messages.en.aiCreate))if(typeof v==='string')I18N.messages.en.aiCreate[k]=v+' '+v.slice(0,Math.ceil(v.length*.4));render()");
+      await run("for(const group of ['aiCreate','productionModes','sceneActions','projectScenes'])for(const [k,v] of Object.entries(I18N.messages.en[group]))if(typeof v==='string')I18N.messages.en[group][k]=v+' '+v.slice(0,Math.ceil(v.length*.4));render()");
+      await wait("document.querySelectorAll('[data-production-modes]').length === 1");
       assert(await run("document.querySelector('#page').scrollWidth<=document.querySelector('#page').clientWidth+1"), "40% text expansion must fit");
       await run("for(let i=0;i<20;i++)ViralCoreProjectPersistence.addProjectScene({}, {projectId:ViralCoreProjectPersistence.activeProjectId()})");
       assert(await run("document.querySelector('.core-project-scene-list').scrollHeight>document.querySelector('.core-project-scene-list').clientHeight && document.querySelector('.core-project-scene-list').clientHeight<=340"));
       assert.equal(await run("fixture.submissions.length"), 0);
       assert.deepEqual(await run("fixture.errors"), []);
       assert.deepEqual(network, []);
+      const selectedBeforeReload = await run("ViralCoreProjectPersistence.snapshot().scenePlan.selectedSceneId");
       // Same isolated profile, actual renderer reload: existing preferences and
       // draft survive; presentation disclosure is closed without a saved key.
       const loaded = new Promise(resolve => wc.once("did-finish-load", resolve)); wc.reload(); await loaded;
@@ -166,12 +187,13 @@ if (!process.versions.electron) {
       assert.deepEqual(await run("Array.from(document.querySelectorAll('[data-ai-setting]'),n=>[n.dataset.aiSetting,n.value])"), [["aspect", "16:9"], ["duration", "10"], ["goal", "quality"]]);
       assert(await run("!document.querySelector('[data-ai-customize]').open && document.querySelector('[data-ai-brief]').value.length===8000"));
       assert.equal(await run("document.querySelector('[data-production-mode]').value"), "auto");
+      assert.equal(await run("ViralCoreProjectPersistence.snapshot().scenePlan.selectedSceneId"), selectedBeforeReload);
       assert.equal(await run("fixture.submissions.length"), 0);
       assert.deepEqual(await run("fixture.errors"), []);
       wc.debugger.detach();
-      const report = { ok: true, fullRenderer: true, nativeServices: false, networkRequests: network.length, submissions: 0, hierarchy, layouts, checks: ["no-project", "native Customize keyboard", "existing settings keys", "preferences and draft after reload", "focus and selection across readiness", "scene add/select/move/delete/final guard", "rename Enter/Escape/focus", "Muse presentation", "provider blocked", "8000 characters", "long names", "40% text expansion", "text spacing", "app and OS reduced motion", "bounded Scene list scrolling", "no duplicate Production Modes", "Production Mode focus and preference"] };
+      const report = { ok: true, fullRenderer: true, nativeServices: false, networkRequests: network.length, submissions: 0, hierarchy, layouts, checks: ["no-project", "native Customize keyboard", "existing settings keys", "preferences and draft after reload", "focus and selection across readiness", "scene add/select/move/delete/final guard", "rename Enter/Escape/focus", "Muse presentation", "provider blocked", "8000 characters", "long names", "40% text expansion", "text spacing", "app and OS reduced motion", "bounded Scene list scrolling", "no duplicate Production Modes", "Production Mode focus and preference", "single canonical header", "unified creation controls", "active controls auto-open (presentation fixture)", "recovery warning outside disclosure (presentation fixture)", "Scene selection survives reload"] };
       fs.writeFileSync(path.join(output, "desktop-report.json"), JSON.stringify(report, null, 2));
-      console.log("UX-3 desktop acceptance PASS:", path.join(output, "desktop-report.json"));
+      console.log("UX-3.2 desktop acceptance PASS:", path.join(output, "desktop-report.json"));
       win.destroy(); app.exit(0);
     } catch (error) { console.error(error); if (win) fs.writeFileSync(path.join(output, "failure.png"), (await win.webContents.capturePage()).toPNG()); app.exit(1); }
   });

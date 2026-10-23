@@ -33,7 +33,8 @@
       section.hidden = false; section.setAttribute("aria-label", t("title"));
       const plan = model.buildSceneActionPlan(scene), projectId = snapshot.projectId, busy = runtime.busy(projectId, scene.id);
       const status = runtime.state(projectId, scene.id), apiReady = typeof window.desktopAPI?.submitGeneration === "function" && typeof window.desktopAPI?.getGenerationStatus === "function" && !!window.ViralCoreGeneratedMedia;
-      const key = JSON.stringify([projectId, plan, busy, status, apiReady, locale()]);
+      const inCreate = typeof state !== "undefined" && state.page === "ai-create";
+      const key = JSON.stringify([projectId, plan, busy, status, apiReady, locale(), inCreate]);
       if (section.__actionKey === key) continue;
       const focused = document.activeElement === section ? section.__returnFocus : section.contains(document.activeElement) ?
         { action: document.activeElement.dataset.sceneAction, field: document.activeElement.dataset.sceneActionField } : null;
@@ -46,12 +47,15 @@
       const reasonSearch = !plan.search.queries.length ? "noQuery" : "noKind";
       const reasonGenerate = !plan.search.targetKinds.includes("video") ? "videoOnly" : !plan.generation.prompt ? "noPrompt" : "unavailable";
       section.innerHTML = '<h3>' + esc(t("title")) + '</h3>' +
+        (inCreate ? '<p class="core-scene-intro">' + esc(t("createIntro")) + '</p><div class="core-scene-options"><div class="core-scene-option">' : '') +
         (plan.search.available ? '<label><span>' + esc(t("query")) + '</span><select data-scene-action-field="query" aria-label="' + esc(t("query")) + '">' + options(plan.search.queries, query || plan.search.queries[0]) + '</select></label>' +
-          '<label><span>' + esc(t("kind")) + '</span><select data-scene-action-field="kind" aria-label="' + esc(t("kind")) + '">' + options(plan.search.targetKinds, kind || plan.search.targetKinds[0], true) + '</select></label>' : '<p>' + esc(t(reasonSearch)) + '</p>') +
+          '<label><span>' + esc(t("kind")) + '</span><select data-scene-action-field="kind" aria-label="' + esc(t("kind")) + '">' + options(plan.search.targetKinds, kind || plan.search.targetKinds[0], true) + '</select></label>' : '<p>' + esc(t(inCreate && reasonSearch === "noQuery" ? "createNoQuery" : reasonSearch)) + '</p>') +
         '<button type="button" data-scene-action="find"' + (!plan.search.available || busy ? ' disabled' : '') + '>' + esc(t("find")) + '</button>' +
+        (inCreate ? '</div><div class="core-scene-option">' : '') +
         (plan.generation.prompt ? '<details' + (detailsOpen ? ' open' : '') + '><summary>' + esc(t("prompt")) + '</summary><p class="core-scene-prompt">' + esc(plan.generation.prompt) + '</p></details>' : '') +
         '<button type="button" data-scene-action="generate"' + (!plan.generation.available || !apiReady || busy ? ' disabled' : '') + ' aria-busy="' + busy + '">' + esc(t(busy ? "generating" : status.jobId ? "another" : "generate")) + '</button>' +
-        (!plan.generation.available || !apiReady ? '<p>' + esc(t(reasonGenerate)) + '</p>' : '') +
+        (!plan.generation.available || !apiReady ? '<p>' + esc(t(inCreate && reasonGenerate === "noPrompt" ? "createNoPrompt" : reasonGenerate)) + '</p>' : '') +
+        (inCreate ? '</div></div>' : '') +
         '<p data-scene-action-status role="status" aria-live="polite">' + esc(status.state === "idle" ? "" : t(statusKey(status))) + '</p>';
       if (focused) {
         const candidates = [...section.querySelectorAll("button,select")];

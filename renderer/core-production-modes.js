@@ -44,20 +44,22 @@
       (disabled ? ' disabled' : '') + '>' + esc(t(action)) + '</button>';
     const sceneName = id => { const scenes = model.ordered(snapshot), index = scenes.findIndex(s => s.id === id);
       return scenes[index]?.title || t("scene", { number: index + 1 }); };
-    section.innerHTML = '<div class="core-production-heading"><h3>' + esc(t("title")) + '</h3><label><span>' + esc(t("mode")) + '</span>' +
-      '<select data-production-mode' + (active || view.settling ? ' disabled' : '') + '>' + ["assisted", "auto"].map(value =>
-        '<option value="' + value + '"' + (selectedMode === value ? ' selected' : '') + '>' + esc(t(value)) + '</option>').join("") + '</select></label></div>' +
-      '<p role="status" aria-live="polite" aria-atomic="true">' + esc(t(view.state === "completed" ?
-        view.summary.ready === view.summary.total ? "materialsReady" : "reviewReady" : view.state)) + ' ' +
-        esc(t("counts", view.summary)) + (view.current ? ' ' + esc(t(view.phase || "checking", { scene: sceneName(view.current) })) : '') + '</p>' +
+    section.innerHTML =
       (view.summary.scenes.some(s => ["review", "attention"].includes(s.status)) ? '<ul>' + view.summary.scenes.filter(s => ["review", "attention"].includes(s.status)).map(s =>
         '<li><span>' + esc(t(s.status + "Scene", { scene: sceneName(s.sceneId) })) + '</span> ' +
         (s.status === "attention" ? '<small>' + esc(t(reasonKey(s.reason))) + '</small> ' : '') +
         '<button type="button" data-production-action="review" data-scene-id="' + esc(s.sceneId) + '">' + esc(t("review")) + '</button></li>').join("") + '</ul>' : '') +
+      '<p role="status" aria-live="polite" aria-atomic="true">' + esc(t(view.state === "completed" ?
+        view.summary.ready === view.summary.total ? "materialsReady" : "reviewReady" : view.state)) + ' ' +
+        (view.current ? ' ' + esc(t(view.phase || "checking", { scene: sceneName(view.current) })) : '') + '</p>' +
+      '<div class="core-production-heading"><h3>' + esc(t("title")) + '</h3><label><span>' + esc(t("mode")) + '</span>' +
+      '<select data-production-mode' + (active || view.settling ? ' disabled' : '') + '>' + ["assisted", "auto"].map(value =>
+        '<option value="' + value + '"' + (selectedMode === value ? ' selected' : '') + '>' + esc(t(value)) + '</option>').join("") + '</select></label></div>' +
+      '<details class="core-production-details" data-production-details' + (active || view.settling || detailsOpen ? ' open' : '') + '><summary data-production-details-trigger>' + esc(t("details")) +
+      '<span class="core-ai-chevron" aria-hidden="true">&#8964;</span></summary>' +
       '<div class="core-production-controls">' + button("start", active || view.settling) + button("pause", view.state !== "running") +
       button("resume", view.state !== "paused") + button("stop", !active) + '</div>' +
-      '<details class="core-production-details" data-production-details' + (active || detailsOpen ? ' open' : '') + '><summary data-production-details-trigger>' + esc(t("details")) +
-      '<span class="core-ai-chevron" aria-hidden="true">&#8964;</span></summary><p>' + esc(t(selectedMode + "Description")) + '</p><p class="core-production-note">' + esc(t("stopNote")) + '</p></details>';
+      '<p class="core-production-counts">' + esc(t("counts", view.summary)) + '</p><p>' + esc(t(selectedMode + "Description")) + '</p><p class="core-production-note">' + esc(t("stopNote")) + '</p></details>';
     if (focus) {
       const target = [...section.querySelectorAll("button,select,summary")].find(n => !n.disabled && (focus.details ? n.matches("summary") : focus.mode ? n.matches("select") :
         n.dataset.productionAction === focus.action && n.dataset.sceneId === focus.scene));

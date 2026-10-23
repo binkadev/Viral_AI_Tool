@@ -12,6 +12,7 @@
   function markup() {
     const snapshot = api()?.snapshot?.(), projectId = snapshot?.projectId;
     if (!projectId) return "";
+    const inCreate = typeof state !== "undefined" && state.page === "ai-create";
     const scenes = snapshot.scenePlan.scenes;
     const selectedIndex = scenes.findIndex(scene => scene.id === snapshot.scenePlan.selectedSceneId);
     const selectedScene = scenes[selectedIndex];
@@ -25,16 +26,16 @@
       button("delete", selectedScene.id, t("delete"), busy || scenes.length === 1, ' title="' + esc(scenes.length === 1 ? t("lastScene") : t("delete")) + '"') + '</div>' : '';
     return '<div class="core-project-scenes-head"><h3>' + esc(t("title")) + '</h3>' +
       button("add", "", t("add"), busy || scenes.length >= window.ViralCoreScenePlanModel.MAX_SCENES) + '</div>' +
-      toolbar + '<ol class="core-project-scene-list">' + scenes.map((scene, index) => {
+      (inCreate ? '' : toolbar) + '<ol class="core-project-scene-list">' + scenes.map((scene, index) => {
         const slot = snapshot.mediaAssembly.slots.find(item => item.sceneId === scene.id);
         const selected = scene.id === snapshot.scenePlan.selectedSceneId;
         const label = scene.title || t("scene", { number: index + 1 });
         return '<li data-project-scene-row="' + esc(scene.id) + '" class="' + (selected ? 'is-selected' : '') + '">' +
           '<button type="button" class="core-project-scene-select" data-project-scene-action="select"' + attrs(scene.id) + ' aria-pressed="' + selected + '"' + (busy ? ' disabled' : '') + '>' +
           '<span class="core-project-scene-number">' + String(index + 1).padStart(2, "0") + '</span><span><b>' + esc(label) + (selected ? ' <span aria-hidden="true">✓</span>' : '') + '</b><small>' +
-          (scene.end > scene.start ? clock(scene.start) + '–' + clock(scene.end) : esc(t("manual"))) + '</small><small>' + esc(t(slot?.candidateAssetIds.length === 1 ? "materialOne" : "materials", { count: slot?.candidateAssetIds.length || 0 })) +
+          (scene.end > scene.start ? clock(scene.start) + '–' + clock(scene.end) : (inCreate ? "" : esc(t("manual")))) + '</small><small>' + esc(t(inCreate && !slot?.candidateAssetIds.length ? "emptyMaterials" : slot?.candidateAssetIds.length === 1 ? "materialOne" : "materials", { count: slot?.candidateAssetIds.length || 0 })) +
           (slot?.selectedAssetId ? ' · ' + esc(t("inUse")) : '') + '</small></span></button></li>';
-      }).join("") + '</ol>' +
+      }).join("") + '</ol>' + (inCreate ? toolbar : '') +
       (scenes.length === 1 ? '<p>' + esc(t("lastScene")) + '</p>' : '') +
       '<p role="status" aria-live="polite">' + (feedback?.projectId === projectId ? esc(t(feedback.key)) : '') + '</p>';
   }

@@ -151,7 +151,8 @@ function assertWorkspace(h, name) {
       assert(html.includes('title="' + name + '"') && html.includes('>' + name + '</strong>'), "The active identity strip exposes the escaped canonical name and full title");
       assert(html.includes('data-ai-active-project="' + id + '"'));
       const identity = html.slice(html.indexOf('data-ai-active-project="' + id + '"'), html.indexOf('<div class="core-ai-project-actions">'));
-      assert(identity.includes('<span>' + activeType + '</span></div>'), "The compact Hero retains the active Project type beside canonical identity");
+      assert(!identity.includes('<span>' + activeType + '</span>'), "Create header shows one canonical name; Project type remains in Recent Projects");
+      assert(!html.includes('class="core-ai-heading"'), "The shell already owns the Create page title");
       assert(html.indexOf('data-ai-active-project="' + id + '"') < html.indexOf('<section class="core-ai-composer"'), "Project identity remains before the creation action");
       assert(html.includes('<span>' + activeType + (locale === "vi" ? " · Đang mở" : " · Open") + '</span>'));
       assert(html.includes('<span>' + (id === "a" ? imported : ai) + '</span>'));

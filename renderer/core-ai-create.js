@@ -97,6 +97,8 @@
       const provider = providerStatus(copy());
       readiness.textContent = provider.label;
       readiness.className = "core-ai-status " + provider.tone;
+      const hint = document.querySelector("[data-ai-readiness-hint]");
+      if (hint) hint.textContent = provider.hint || "";
     }
   }
 
@@ -232,8 +234,8 @@
   function providerStatus(c) {
     if (generationReady) return { label: c.aiReady, tone: "ready" };
     if (generationState === "checking") return { label: c.aiChecking, tone: "checking" };
-    if (generationState === "error") return { label: c.aiStatusError, tone: "blocked" };
-    return { label: c.aiNotReady, tone: "blocked" };
+    if (generationState === "error") return { label: c.aiStatusError, tone: "blocked", hint: c.statusErrorHint };
+    return { label: c.aiNotReady, tone: "blocked", hint: c.connectionHint };
   }
 
   function sceneContext() {
@@ -287,11 +289,12 @@
     const activeProject = projects.find(item => item.projectId === activeId);
     const projectType = item => item.projectKind === "ai" || (!item.projectKind && !item.hasSource) ? c.aiProject : c.importedProject;
     return '<div class="core-ai-create-workspace" data-generation-execution="runtime" data-generation-status="' + esc(generationState) + '">' +
-      '<header class="core-ai-create-hero"><div class="core-ai-heading"><h2>' + esc(c.composerTitle) + '</h2></div>' +
+      '<header class="core-ai-create-hero">' +
       '<div class="core-ai-project-context">' +
-      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '<span>' + esc(projectType(activeProject)) + '</span></div>' : '<p class="core-ai-project-empty">' + esc(c.implicitProject) + '</p>') +
-      '<div class="core-ai-project-actions"><button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newAiProject) + '</button>' +
-      (activeProject ? '<button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">&#8599;</span></button>' : '') + '</div></div></header>' +
+      (activeProject ? '<div class="core-ai-active-project" data-ai-active-project="' + esc(activeId) + '">' + (rename?.markup(activeId, activeProject.projectName) || '<strong title="' + esc(activeProject.projectName) + '">' + esc(activeProject.projectName) + '</strong>') + '</div>' : '<p class="core-ai-project-empty">' + esc(c.implicitProject) + '</p>') +
+      '<div class="core-ai-project-actions">' +
+      (activeProject ? '<button class="button ghost" type="button" data-ai-route="ai-video">' + esc(c.openStudio) + ' <span aria-hidden="true">&#8599;</span></button>' : '') +
+      '<button class="button ghost" type="button" data-ai-new-project' + (projectActionPending || submitting ? ' disabled' : '') + '>' + esc(c.newProjectAction) + '</button></div></div></header>' +
       '<section class="core-ai-composer" aria-labelledby="ai-creation-title">' +
       '<div class="core-ai-creation-heading"><span class="core-ai-kicker">' + esc(c.composerEyebrow) + '</span><h3 id="ai-creation-title">' + esc(c.creationQuestion) + '</h3><p>' + esc(c.composerBody) + '</p></div>' +
       '<div class="core-ai-input-canvas"><div class="core-ai-scene-context"><span data-ai-scene-context role="status" aria-live="polite" aria-atomic="true" title="' + esc(sceneContext()) + '">' + esc(sceneContext()) + '</span>' +
@@ -300,16 +303,16 @@
       '<textarea id="ai-brief" class="core-ai-brief" data-ai-brief maxlength="8000" rows="4" spellcheck="false" aria-describedby="ai-brief-hint" placeholder="' + esc(c.composerPlaceholder) + '">' + esc(currentBrief()) + '</textarea>' +
       '<div class="core-ai-canvas-foot"><p id="ai-brief-hint" class="core-ai-brief-hint">' + esc(c.briefHint) + '</p><span class="core-ai-canvas-mark" aria-hidden="true">&#10022;</span></div></div>' +
       '<div class="core-ai-examples" role="group" aria-label="' + esc(c.examplesHint) + '"><div class="core-ai-example-row">' + c.examples.map((sample, i) => '<button type="button" class="core-ai-example" data-ai-example="' + i + '" title="' + esc(sample.detail) + '"><strong>' + esc(sample.title) + '</strong></button>').join('') + '</div></div>' +
-      '<details class="core-ai-customize" data-ai-customize><summary data-ai-customize-trigger><span class="core-ai-settings-summary" data-ai-settings-summary>' + settingsSummary() + '</span><span class="core-ai-customize-label">' + esc(c.customize) + ' <span class="core-ai-chevron" aria-hidden="true">&#8964;</span></span></summary>' +
+      '<div class="core-ai-creation-controls" role="group" aria-label="' + esc(c.creationControls) + '"><details class="core-ai-customize" data-ai-customize><summary data-ai-customize-trigger><span class="core-ai-settings-summary" data-ai-settings-summary>' + settingsSummary() + '</span><span class="core-ai-customize-label">' + esc(c.customize) + ' <span class="core-ai-chevron" aria-hidden="true">&#8964;</span></span></summary>' +
       '<div class="core-ai-controls">' +
       (museSession ? '<p class="core-ai-session-note">' + esc(c.museSessionSettings) + '</p>' : '') +
       setting('aspect', c.aspectLabel, [['9:16', c.portrait], ['16:9', c.landscape], ['1:1', c.square]], selectedOption('aspect', ['9:16','16:9','1:1'], '9:16')) +
       setting('duration', c.durationLabel, [['5', c.fiveSeconds], ['10', c.tenSeconds]], selectedOption('duration', ['5','10'], '5')) +
       setting('goal', c.qualityLabel, [['economy', c.economy], ['balanced', c.balanced], ['quality', c.quality]], selectedGoal()) +
       '<div class="core-ai-provider"><span>' + esc(c.providerLabel) + '</span><button class="core-ai-provider-button" type="button" data-ai-action="settings">' + esc(c.viewSettings) + '<span aria-hidden="true">&#8599;</span></button></div></div></details>' +
-      '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note"><span class="core-ai-status ' + provider.tone + '" data-ai-readiness role="status" aria-live="polite">' + esc(provider.label) + '</span>' +
+      '<div class="core-ai-composer-footer core-ai-generation-lock"><div class="core-ai-provider-note"><div class="core-ai-readiness-copy"><span class="core-ai-status ' + provider.tone + '" data-ai-readiness role="status" aria-live="polite">' + esc(provider.label) + '</span><p data-ai-readiness-hint>' + esc(provider.hint || '') + '</p></div>' +
       '<button class="button ghost" type="button" data-ai-action="settings">' + esc(c.openSettings) + '</button></div><button type="button" class="button primary" data-ai-generate aria-busy="' + submitting + '" ' + (!canGenerate() ? 'disabled aria-disabled="true"' : 'aria-disabled="false"') + '><span class="core-ai-submit-icon" aria-hidden="true">&#10022;</span> <span data-ai-generate-label>' + esc(submitting ? c.submitting : c.generate) + '</span></button></div>' +
-      '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></section>' +
+      '<p class="core-ai-feedback" role="status" aria-live="polite" data-ai-generation-feedback>' + esc(feedback) + '</p></div></section>' +
       (activeProject ? '<section class="core-ai-project-plan" aria-labelledby="ai-plan-title"><div class="core-ai-section-heading"><h3 id="ai-plan-title">' + esc(c.projectPlan) + '</h3><span data-ai-plan-count>' + esc(planSceneCount()) + '</span></div>' + (window.ViralCoreProjectScenes?.surface?.() || '') + '</section>' : '') +
       '<details class="core-ai-recent" data-ai-recent><summary data-ai-recent-trigger>' + esc(c.recentTitle) + '<span class="core-ai-chevron" aria-hidden="true">&#8964;</span></summary><div class="core-ai-recent-content"><div class="core-ai-section-heading"><button type="button" class="button ghost" data-ai-route="download">' + esc(c.importVideo) + ' <span aria-hidden="true">&#8599;</span></button></div>' +
       (projects.length ? projects.map(item => '<div class="core-ai-recent-project"><div><strong title="' + esc(item.projectName) + '">' + esc(item.projectName) + '</strong><span>' + esc(item.projectId === activeId ? format(c.currentProject, { projectType: projectType(item) }) : projectType(item)) + '</span></div>' +

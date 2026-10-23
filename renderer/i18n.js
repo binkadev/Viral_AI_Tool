@@ -20,7 +20,7 @@
         pauseForPreview:"Tạm dừng dự án trước khi nghe thử giọng.", timingRisk:"Một số đoạn âm thanh dài hơn hoặc ngắn hơn cảnh. Phần xem trước chỉ phát trong khoảng lời tương ứng, không đổi tốc độ hay thời lượng cảnh."
       },
       productionModes: {
-        details: "Về quy trình này",
+        details: "Điều khiển quy trình",
         title: "Chuẩn bị tư liệu dự án", mode: "Chế độ", assisted: "Có kiểm tra", auto: "Tự động",
         assistedDescription: "Hệ thống chuẩn bị tư liệu cho từng cảnh, bạn kiểm tra và chọn kết quả.",
         autoDescription: "Hệ thống tự chuẩn bị và chọn tư liệu cho các cảnh. Các trường hợp không an toàn sẽ yêu cầu bạn xử lý.",
@@ -39,6 +39,9 @@
         operationFailed: "Chưa xác nhận được tư liệu đã lưu đúng cảnh. Kiểm tra tư liệu cảnh, kết nối và dung lượng trống trước khi tiếp tục."
       },
       sceneActions: {
+        createIntro: "Tư liệu là hình ảnh hoặc video dùng cho cảnh đang chọn. Tìm tư liệu theo kế hoạch, tạo bằng AI hoặc thêm thủ công trong Studio.",
+        createNoQuery: "Chưa có từ khóa tìm kiếm cho cảnh này. Mở Studio để bổ sung kế hoạch hoặc thêm tư liệu thủ công.",
+        createNoPrompt: "Chưa có mô tả tạo video cho cảnh này. Mở Studio để bổ sung kế hoạch hoặc thêm tư liệu thủ công.",
         title: "Tư liệu theo kế hoạch", query: "Truy vấn đã lên kế hoạch", kind: "Loại tư liệu", video: "Video", image: "Ảnh",
         find: "Tìm tư liệu", generate: "Tạo tư liệu AI", another: "Tạo thêm tư liệu AI", prompt: "Prompt tạo video",
         noQuery: "Cảnh này chưa có truy vấn tìm tư liệu. Bạn vẫn có thể nhập hoặc tìm thủ công trong Tư liệu cảnh.",
@@ -83,6 +86,7 @@
         timingPending: "Chờ xác định mốc thời gian", active: "Đang xem trước", projectTimeline: "Trình tự cảnh của dự án"
       },
       projectScenes: {
+        emptyMaterials: "Chưa có tư liệu cho cảnh này",
         selectedActions: "Thao tác với cảnh đang chọn",
         title: "Các cảnh", scene: "Cảnh {number}", add: "Thêm cảnh", up: "Lên", down: "Xuống", delete: "Xóa cảnh",
         manual: "Cảnh tự tạo", materials: "{count} tư liệu", materialOne: "1 tư liệu", inUse: "Đang dùng ✓",
@@ -459,7 +463,10 @@
         aiReady: "AI sẵn sàng",
         aiChecking: "Đang kiểm tra AI…",
         aiNotReady: "AI chưa sẵn sàng",
-        aiStatusError: "Chưa kiểm tra được AI. Mở cài đặt để kiểm tra kết nối.",
+        aiStatusError: "Chưa kiểm tra được kết nối AI",
+        statusErrorHint: "Tạm thời chưa thể tạo video. Mở cài đặt để kiểm tra kết nối.",
+        newProjectAction: "+ Dự án mới",
+        creationControls: "Thiết lập và tạo video",
         submitting: "Đang gửi…",
         projectPlan: "Kế hoạch dự án",
         projectPlanHint: "Quản lý quy trình và các cảnh của dự án",
@@ -1597,7 +1604,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         pauseForPreview:"Pause the project before previewing a voice.", timingRisk:"Some audio differs from scene timing. Preview plays only within each narration interval, without changing speed or scene duration."
       },
       productionModes: {
-        details: "About this workflow",
+        details: "Workflow controls",
         title: "Prepare project materials", mode: "Mode", assisted: "Assisted", auto: "Auto",
         assistedDescription: "Prepare materials scene by scene while you review and choose the result.",
         autoDescription: "Prepare and select scene materials automatically. Unsafe cases require your attention.",
@@ -1616,6 +1623,9 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         operationFailed: "Media could not be confirmed as saved to the right scene. Check scene materials, connection and free disk space before continuing."
       },
       sceneActions: {
+        createIntro: "Materials are images or videos for the selected scene. Find them from its plan, create them with AI, or add them manually in Studio.",
+        createNoQuery: "This scene has no search terms yet. Open Studio to update its plan or add materials manually.",
+        createNoPrompt: "This scene has no video description yet. Open Studio to update its plan or add materials manually.",
         title: "Planned scene materials", query: "Planned query", kind: "Material type", video: "Video", image: "Image",
         find: "Find materials", generate: "Generate AI material", another: "Generate another AI material", prompt: "Video generation prompt",
         noQuery: "This scene does not have a media search query yet. You can still import or search manually in Scene materials.",
@@ -1660,6 +1670,7 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         timingPending: "Timing pending", active: "Previewing", projectTimeline: "Project scene sequence"
       },
       projectScenes: {
+        emptyMaterials: "No materials attached yet",
         selectedActions: "Selected scene actions",
         title: "Scenes", scene: "Scene {number}", add: "Add scene", up: "Move up", down: "Move down", delete: "Delete scene",
         manual: "Manual scene", materials: "{count} materials", materialOne: "1 material", inUse: "In use ✓",
@@ -2036,7 +2047,10 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
         aiReady: "AI ready",
         aiChecking: "Checking AI…",
         aiNotReady: "AI isn't ready",
-        aiStatusError: "AI status could not be checked. Open settings to check the connection.",
+        aiStatusError: "Could not check the AI connection",
+        statusErrorHint: "Video creation is temporarily unavailable. Open settings to check the connection.",
+        newProjectAction: "+ New project",
+        creationControls: "Video settings and creation",
         submitting: "Submitting…",
         projectPlan: "Project plan",
         projectPlanHint: "Manage the workflow and scenes for this project",
