@@ -1,6 +1,50 @@
 "use strict";
 const {test}=require("node:test"),assert=require("node:assert/strict"),crypto=require("node:crypto"),fs=require("node:fs"),vm=require("node:vm");
 const {setup,model,player,asset,clone}=require("./helpers/project-audio-harness");
+
+// Execute the real Registry -> bootstrap -> app state/save path. The older
+// audio harness restores via toLegacyState directly and cannot catch a field
+// discarded by app.js after that projection has already succeeded.
+function restartAudio(data) {
+  const snapshot=require('../renderer/core-project-media-assembly'),renderModel=require('../renderer/core-project-render-model');
+  const writes=[];
+  class Storage {getItem(k){return data.get(k)??null;}setItem(k,v){data.set(k,String(v));writes.push(k);}removeItem(k){data.delete(k);}}
+  const ready=[];
+  const document={readyState:'loading',documentElement:{dataset:{}},head:{appendChild(){}},body:{appendChild(){}},createElement:()=>({remove(){}}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(name,callback){if(name==='DOMContentLoaded')ready.push(callback);}};
+  const window={ViralCoreProjectSnapshot:snapshot,ViralCoreScenePlanModel:require('../renderer/core-scene-plan-model'),ViralCoreProjectAudioModel:model,crypto,addEventListener(){},dispatchEvent(){}};
+  const c={window,document,Storage,localStorage:new Storage(),crypto,console,HTMLElement:class{},HTMLVideoElement:class{},CustomEvent:class{},setTimeout:()=>1,clearTimeout(){},requestAnimationFrame(){}};
+  vm.createContext(c);
+  vm.runInContext(fs.readFileSync('renderer/i18n.js','utf8')+'\n'+fs.readFileSync('renderer/core-project-persistence.js','utf8')+'\n'+fs.readFileSync('renderer/core-bootstrap.js','utf8'),c);
+  c.I18N=window.I18N;
+  const app=fs.readFileSync('renderer/app.js','utf8');assert(app.includes('function toast('));
+  vm.runInContext(app.slice(0,app.indexOf('function toast(')),c);
+  ready.forEach(callback=>callback());
+  return {api:window.ViralCoreProjectPersistence,writes,run:s=>vm.runInContext(s,c),save(){vm.runInContext('save()',c);window.ViralCoreProjectPersistence.flush('test-boot-save');},signature:()=>renderModel.build(window.ViralCoreProjectPersistence.snapshot()).renderInputSignature};
+}
+for(const voiceEnabled of [false,true])test('actual app save/reload preserves explicit Voice '+voiceEnabled+' and all canonical audio fields',()=>{
+  const p=require('./helpers/production-manager-fixtures').project('restore-project',1);
+  Object.assign(p.workflow.renderOptions,{voiceEnabled,voiceVolume:.4,bgmVolume:.3,bgmLoop:true,textSource:'source'});p.editor.page='home';
+  const key='viral-ai-core-project-registry-v1',data=new Map([[key,JSON.stringify({schemaVersion:1,activeProjectId:p.projectId,projects:[p]})]]),first=restartAudio(data);
+  const before=clone(first.api.snapshot()),signature=first.signature();assert.equal(before.workflow.renderOptions.voiceEnabled,voiceEnabled);
+  assert.equal(first.run('state.renderOptions.voiceEnabled'),voiceEnabled);first.save();
+  assert.deepEqual(clone(first.api.snapshot()),before);assert.equal(JSON.parse(data.get('viral-ai-tool-state')).renderOptions.voiceEnabled,voiceEnabled);
+  for(let i=0;i<3;i++){const restarted=restartAudio(data);restarted.save();assert.equal(restarted.run('state.renderOptions.voiceEnabled'),voiceEnabled);assert.deepEqual(clone(restarted.api.snapshot()),before);assert.equal(restarted.signature(),signature);}
+});
+test('legacy missing Voice setting keeps the established true default through actual app hydration and save',()=>{
+  const p=require('./helpers/production-manager-fixtures').project('legacy-project',1);delete p.workflow.renderOptions.voiceEnabled;p.editor.page='home';
+  const key='viral-ai-core-project-registry-v1',data=new Map([[key,JSON.stringify({schemaVersion:1,activeProjectId:p.projectId,projects:[p]})]]),restored=restartAudio(data);
+  assert.equal(model.normalizeSettings().voiceEnabled,true);assert.equal(restored.run('state.renderOptions.voiceEnabled'),true);const before=clone(restored.api.snapshot());restored.save();assert.deepEqual(clone(restored.api.snapshot()),before);assert.equal(restartAudio(data).api.snapshot().workflow.renderOptions.voiceEnabled,true);
+});
+test('explicit Voice mutations still use canonical authority, touch time and survive actual app reload',async()=>{
+  const p=require('./helpers/production-manager-fixtures').project('mutations',1);p.editor.page='home';
+  const data=new Map([['viral-ai-core-project-registry-v1',JSON.stringify({schemaVersion:1,activeProjectId:p.projectId,projects:[p]})]]);let h=restartAudio(data);
+  for(const voiceEnabled of [true,false,true,false]){const before=clone(h.api.snapshot()),signature=h.signature();await new Promise(r=>setTimeout(r,10));h.api.updateProjectAudioSettings(p.projectId,{voiceEnabled});h.save();const edited=clone(h.api.snapshot());assert.equal(edited.workflow.renderOptions.voiceEnabled,voiceEnabled);if(before.workflow.renderOptions.voiceEnabled!==voiceEnabled){assert(Date.parse(edited.updatedAt)>Date.parse(before.updatedAt));assert.notEqual(h.signature(),signature);}assert.deepEqual(edited.scenePlan,before.scenePlan);h=restartAudio(data);h.save();assert.deepEqual(clone(h.api.snapshot()),edited);}
+});
+test('Voice-OFF current render survives actual boot/save without input-signature invalidation',()=>{
+  const f=require('./helpers/publish-fixtures'),p=f.project('render-restore');p.editor.page='home';p.workflow.jobs[0].progress=100;assert.equal(p.workflow.renderOptions.voiceEnabled,false);
+  const renderModel=require('../renderer/core-project-render-model'),key='viral-ai-core-project-registry-v1',data=new Map([[key,JSON.stringify({schemaVersion:1,activeProjectId:p.projectId,projects:[p]})]]),h=restartAudio(data),before=clone(h.api.snapshot()),signature=h.signature();
+  assert.equal(renderModel.outputs(before,renderModel.build(before)).filter(o=>o.current).length,1);h.save();assert.deepEqual(clone(h.api.snapshot()),before);const re=restartAudio(data);re.save();assert.equal(re.signature(),signature);assert.equal(re.api.snapshot().updatedAt,before.updatedAt);assert.equal(renderModel.outputs(re.api.snapshot(),renderModel.build(re.api.snapshot())).filter(o=>o.current).length,1);
+});
 test("neutral additive settings normalize without changing existing original-audio policy",()=>{
   assert.deepEqual(model.normalizeSettings(),{burnSubtitles:true,textSource:"auto",voiceEnabled:true,voiceVolume:1,bgmAssetId:null,bgmVolume:1,bgmLoop:false});
   for(const input of [null,[],0,"invalid"])assert.deepEqual(model.normalizeSettings(input),model.normalizeSettings());

@@ -65,6 +65,7 @@ const state = {
     result: saved.translation?.result || null
   },
   renderOptions: {
+    ...window.ViralCoreProjectAudioModel.normalizeSettings(saved.renderOptions),
     burnSubtitles: saved.renderOptions?.burnSubtitles !== false,
     mixOriginalAudio: saved.renderOptions?.mixOriginalAudio !== false,
     originalAudioVolume: Number.isFinite(Number(saved.renderOptions?.originalAudioVolume))
@@ -148,6 +149,7 @@ function save() {
     page: state.page,
     output: state.output,
     renderOptions: {
+      ...window.ViralCoreProjectAudioModel.normalizeSettings(state.renderOptions),
       burnSubtitles: state.renderOptions.burnSubtitles,
       mixOriginalAudio: state.renderOptions.mixOriginalAudio,
       originalAudioVolume: state.renderOptions.originalAudioVolume
