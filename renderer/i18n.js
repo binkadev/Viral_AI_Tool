@@ -3255,6 +3255,32 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     duplicate: "This Project is already rendering. Wait or cancel the active render.", outputRequired: "Choose an output folder.", lowDisk: "There is not enough free disk space. Free some space and try again.",
     ownerMissing: "The original Project is not active. Open the Project that owns this output.", cancelFailed: "The render could not be stopped. Try cancelling again."
   };
+  messages.vi.productionWorkspace = {
+    eyebrow:"KHU SẢN XUẤT", description:"Ưu tiên dự án cần kiểm tra và tiếp tục công việc trong Studio.",
+    group_attention:"Cần bạn xử lý", group_working:"Đang thực hiện", group_waiting:"Chờ bước tiếp theo", group_completed:"Đã có video", group_drafts:"Đang chuẩn bị",
+    projectCount:"{count} dự án", resultCount:"{count}/{total} dự án", sceneCount:"{count} cảnh", currentScene:"Cảnh đang xử lý: {name}",
+    searchPlaceholder:"Nhập tên dự án…", details:"Chi tiết dự án", openStudio:"Mở Studio", reviewProject:"Kiểm tra dự án",
+    stageMedia:"Tư liệu", stageAudio:"Âm thanh", stageExport:"Xuất video", recovery:"Cần kiểm tra để tiếp tục",
+    activeHint:"Công việc đang diễn ra. Mở Studio để theo dõi và kiểm tra.", pausedHint:"Công việc đã tạm dừng. Kiểm tra trong Studio trước khi tiếp tục.",
+    reviewHint:"Có tư liệu đang chờ bạn chọn cho cảnh.", exportHint:"Tư liệu đã sẵn sàng. Mở Studio để kiểm tra và xuất video.", completedHint:"Video hiện tại đã được kiểm tra và còn dùng được.", draftHint:"Tiếp tục chuẩn bị tư liệu cho các cảnh trong Studio.", checkingOutput:"Đang kiểm tra tệp video đã xuất; chưa xác nhận video sẵn sàng.",
+    renderInterrupted:"Lần xuất video bị gián đoạn. Kiểm tra trong Studio trước khi tiếp tục.", renderFailed:"Chưa xuất được video. Kiểm tra dữ liệu và thử lại trong Studio.", outputMissing:"Không tìm thấy video đã xuất. Kiểm tra tệp hoặc xuất lại trong Studio.",
+    materialsAttention:"Có cảnh thiếu tư liệu còn dùng được. Mở Studio để kiểm tra.", noScenes:"Dự án chưa có cảnh. Mở Studio để thêm nội dung.", voiceRequired:"Cần tạo Giọng AI hoặc tắt giọng đọc trước khi xuất video.", voiceStale:"Giọng AI cần cập nhật theo nội dung hiện tại.", bgmUnavailable:"Nhạc nền không còn dùng được. Chọn lại tệp trong Studio.", profileMissing:"Chưa xác định được khung hình. Kiểm tra cảnh đầu trong Studio.", timingInvalid:"Cần kiểm tra thời lượng hoặc mốc lời trước khi xuất video.", inputChanged:"Nội dung dự án đã thay đổi. Kiểm tra lại trong Studio.", mediaMissing:"Thiếu tư liệu hình ảnh. Chọn lại tệp trong Studio.", incomplete:"Còn dữ liệu cần kiểm tra trước khi xuất video.",
+    emptyTitle:"Bắt đầu dự án đầu tiên", emptyHint:"Các dự án video sẽ xuất hiện ở đây để bạn theo dõi và biết bước cần làm tiếp theo. Bắt đầu từ một ý tưởng trong Tạo bằng AI.", searchEmptyTitle:"Không tìm thấy dự án", searchEmptyHint:"Thử tên dự án khác hoặc chọn lại bộ lọc. Các dự án vẫn được giữ nguyên.",
+    errorTitle:"Chưa đọc được dữ liệu sản xuất", errorHint:"Chưa thể hiển thị các dự án đã lưu. Dữ liệu không bị thay đổi. Hãy mở lại ứng dụng và kiểm tra quyền truy cập hoặc dung lượng lưu trữ."
+  };
+  messages.en.productionWorkspace = {
+    eyebrow:"PRODUCTION WORKSPACE", description:"Find projects that need attention and continue your work in Studio.",
+    group_attention:"Needs your attention", group_working:"In progress", group_waiting:"Next steps", group_completed:"Video ready", group_drafts:"In preparation",
+    projectCount:"{count} projects", resultCount:"{count}/{total} projects", sceneCount:"{count} scenes", currentScene:"Current scene: {name}",
+    searchPlaceholder:"Enter a project name…", details:"Project details", openStudio:"Open Studio", reviewProject:"Review project",
+    stageMedia:"Media", stageAudio:"Audio", stageExport:"Export video", recovery:"Review to continue",
+    activeHint:"Work is in progress. Open Studio to follow and review it.", pausedHint:"Work is paused. Review it in Studio before continuing.",
+    reviewHint:"Some scene materials are waiting for your selection.", exportHint:"Materials are ready. Review and export your video in Studio.", completedHint:"The current video has been checked and is available.", draftHint:"Continue preparing scene materials in Studio.", checkingOutput:"Checking the exported file; video readiness is not confirmed yet.",
+    renderInterrupted:"Video export was interrupted. Review it in Studio before continuing.", renderFailed:"Video export failed. Review the inputs and try again in Studio.", outputMissing:"The exported video was not found. Check the file or export again in Studio.",
+    materialsAttention:"Some scenes need available media. Open Studio to review them.", noScenes:"This project has no scenes. Add content in Studio.", voiceRequired:"Generate AI voice or disable voice before exporting video.", voiceStale:"AI voice needs updating for the current content.", bgmUnavailable:"Background music is unavailable. Select the file again in Studio.", profileMissing:"The frame size is unresolved. Check the first scene in Studio.", timingInvalid:"Check scene duration or cue timing before exporting video.", inputChanged:"Project content changed. Review it in Studio.", mediaMissing:"Visual media is missing. Select the file again in Studio.", incomplete:"Some inputs need checking before exporting video.",
+    emptyTitle:"Start your first project", emptyHint:"Video projects appear here so you can follow production and see what to do next. Start with an idea in Create with AI.", searchEmptyTitle:"No projects found", searchEmptyHint:"Try another project name or change the filter. Your projects are still retained.",
+    errorTitle:"Production data could not be read", errorHint:"Saved projects cannot be displayed yet. Your data has not changed. Reopen the app and check storage permissions or free space."
+  };
   messages.vi.productionManager = {
     materialPhase_checking:"Đang kiểm tra cảnh", materialPhase_sourcing:"Đang chuẩn bị tư liệu", materialPhase_waiting:"Đang chờ tư liệu",
     nav:"Quản lý sản xuất", title:"Quản lý sản xuất", breadcrumb:"Quản lý / Sản xuất", subtitle:"Theo dõi tư liệu và các bản xuất của từng dự án. Mở Studio để tiếp tục công việc.",
