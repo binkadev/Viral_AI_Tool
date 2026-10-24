@@ -20,6 +20,10 @@ if (typeof ipcRenderer.sendSync === 'function' && ipcRenderer.sendSync('dev:hand
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
+  listPublishQueue: () => ipcRenderer.invoke('publish:list'),
+  enqueuePublishOutput: projectId => ipcRenderer.invoke('publish:enqueue', projectId),
+  startPublishItem: itemId => ipcRenderer.invoke('publish:start', itemId),
+  cancelPublishItem: itemId => ipcRenderer.invoke('publish:cancel', itemId),
   getTelegramStatus: () => ipcRenderer.invoke('telegram:status'),
   saveTelegramConfig: payload => ipcRenderer.invoke('telegram:config-save', payload),
   clearTelegramConfig: () => ipcRenderer.invoke('telegram:config-clear'),

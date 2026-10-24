@@ -53,6 +53,7 @@ const { createTelegramClient } = require('./services/telegram/client');
 const { createNotificationService } = require('./services/telegram/notification-service');
 const { registerTelegramIpc } = require('./services/telegram/ipc');
 let telegramNotifications;
+let publishQueue;
 const {
   checkForUpdate,
   downloadVerifiedInstaller
@@ -164,7 +165,7 @@ function getActiveWorkCount() {
     activeTranslationCount() +
     activeVoiceCount() +
     speechModelManager.activeDownloadCount() +
-    Number(mediaDesktopController?.activeAcquisitionCount?.() || 0);
+    Number(mediaDesktopController?.activeAcquisitionCount?.() || 0) + Number(publishQueue?.view().busy || 0);
 }
 
 function authClient() {
@@ -466,6 +467,7 @@ function createWindow() {
 
       if (result.response === 1) {
         forceClose = true;
+        publishQueue?.interrupt();
         await generationService?.shutdown();
         cancelAllRenders();
         await cancelAllSpeech();
@@ -488,6 +490,28 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const publishModel = require('./services/publish/model');
+  publishQueue = require('./services/publish/runtime').create({
+    store: require('./services/publish/store').create({userDataPath: app.getPath('userData')}),
+    inspect: require('./services/publish/source').create({fileStatus: localFileStatus, probe: probeVideo}),
+    readProject: async projectId => {
+      if (!mainWindow || mainWindow.isDestroyed()) throw publishModel.fail('UNAVAILABLE');
+      // Read through the existing canonical owner, never flush/activate/save it.
+      // Pending active render-input edits also invalidate an otherwise old plan.
+      return mainWindow.webContents.executeJavaScript(`(() => {
+        const id = ${JSON.stringify(projectId)}, owner = window.ViralCoreProjectPersistence;
+        if (!owner || owner.storageError() || owner.unsupportedSchemaVersion()) throw Error('UNAVAILABLE');
+        const saved = owner.projectAudioSnapshot(id);
+        if (saved && owner.activeProjectId() === id) {
+          const live = window.ViralCoreProjectSnapshot.buildSnapshot(state, saved.editor, saved);
+          if (!live || window.ViralCoreProjectRenderModel.build(live).renderInputSignature !== window.ViralCoreProjectRenderModel.build(saved).renderInputSignature) throw Error('RENDER_NOT_CURRENT');
+        }
+        return saved;
+      })()`);
+    }
+    // No publisher adapter/account in production. Explicit start remains safe
+    // needs_attention until provider-specific integration is separately added.
+  });
   telegramNotifications = createNotificationService({
     config: createTelegramConfigStore({ userDataPath: app.getPath('userData'), safeStorage }),
     journal: createDeliveryJournal({ userDataPath: app.getPath('userData') }),
@@ -602,6 +626,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  publishQueue?.interrupt();
   museExtensionBridge?.close();
   try { mediaDesktopController?.cancelAll(); } catch {}
   try { diagnosticLogger?.info('app.stopping', { release: releaseInfo() }); } catch {}
@@ -1758,7 +1783,7 @@ ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
   return true;
 });
 
-ipcMain.handle('file:status', async (_event, filePath) => {
+function localFileStatus(filePath) {
   if (typeof filePath !== 'string' || !filePath.trim()) {
     return { exists: false, reason: 'invalid' };
   }
@@ -1775,7 +1800,8 @@ ipcMain.handle('file:status', async (_event, filePath) => {
   } catch {
     return { exists: false, path: resolved, reason: 'missing' };
   }
-});
+}
+ipcMain.handle('file:status', async (_event, filePath) => localFileStatus(filePath));
 
 ipcMain.handle('file:trash', async (_event, filePath) => {
   if (typeof filePath !== 'string' || !filePath.trim()) {
@@ -1824,6 +1850,12 @@ require('./services/media/preview-url').registerPreviewIpc({ ipcMain, trusted: e
 });
 
 registerTelegramIpc({ ipcMain, service: () => telegramNotifications, trusted: event =>
+  Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame &&
+    event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
+});
+
+require('./services/publish/ipc').register({ipcMain, service: () => publishQueue, trusted: event =>
   Boolean(mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
     event.senderFrame === mainWindow.webContents.mainFrame &&
     event.senderFrame.url === pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).href)
