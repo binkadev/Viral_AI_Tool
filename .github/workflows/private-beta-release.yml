@@ -1,0 +1,75 @@
+name: Private Beta Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-beta-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.repository == 'binkadev/Viral_AI_Tool' }}
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate beta workflow and release tooling
+        run: node --test tests/beta-release.test.js
+      - name: Updater and release regression
+        run: npm run test:private-beta-updater
+      - name: Commercial regression
+        run: npm run test:core-commercial
+      - name: Source release preflight
+        run: npm run release:preflight
+      - name: Build and verify unsigned Windows x64 beta
+        id: beta
+        run: node scripts/beta-release.js build $env:GITHUB_REF_NAME release/beta-public
+      - name: Retain only approved public artifacts for publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-public-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            release/beta-public/${{ steps.beta.outputs.installer }}
+            release/beta-public/beta.yml
+            release/beta-public/${{ steps.beta.outputs.installer }}.blockmap
+
+  publish:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked tooling dependencies
+        run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: beta-public-${{ github.sha }}
+          path: release/beta-public
+      - name: Create fresh draft, verify uploaded bytes, publish prerelease, verify anonymous access
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-beta-release.js publish $env:GITHUB_REF_NAME release/beta-public

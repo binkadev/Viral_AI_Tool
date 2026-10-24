@@ -37,7 +37,10 @@ function verify(archive) {
   if (info.source === "private-beta") {
     assert.match(pkg.version, /^\d+\.\d+\.\d+-beta\.\d+$/);
     assert.equal(info.channel, "beta");
-    assert.equal(info.commit, null);
+    if (info.betaTag !== undefined) {
+      assert.equal(info.betaTag, "v" + pkg.version);
+      assert.match(info.commit, /^[a-f0-9]{40}$/);
+    } else assert.equal(info.commit, null);
     assert.equal(info.updateManifestUrl, null);
     assert.equal(info.releasePageUrl, null);
     assert.equal(pkg.dependencies["electron-updater"], "6.6.2");

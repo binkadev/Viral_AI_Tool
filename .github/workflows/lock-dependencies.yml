@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   lock-and-verify:
+    if: ${{ github.ref_type != 'tag' }}
     runs-on: windows-latest
 
     steps:
