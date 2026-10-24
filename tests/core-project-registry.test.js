@@ -53,6 +53,45 @@ function harness(data=new Map(),options={}){
 }
 const seed=()=>new Map([[model.SNAPSHOT_KEY,JSON.stringify(imported())],[BRIEF,'old project prompt']]);
 
+test('route metadata persists across repeated navigation and reload without touching Project content or updatedAt',async()=>{
+ const h=harness(seed());await h.ready();await h.api.createProject({kind:'ai',projectName:'Route metadata'});h.state.page='home';h.api.flush();
+ const before=json(JSON.parse(h.data.get(KEY))),id=h.api.activeProjectId();
+ for(const locale of ['vi','en'])for(const page of ['home','ai-create','generation-progress','library','productions','batch-production','settings','home','settings','batch-production','productions','library','generation-progress','ai-create','home']){
+  await new Promise(r=>setTimeout(r,2));
+  const previous=h.api.snapshot().editor.page;h.state.locale=locale;h.state.page=page;h.api.flush();
+  const persisted=JSON.parse(h.data.get(KEY)),active=persisted.projects.find(p=>p.projectId===id);
+  assert.equal(active.editor.page,['productions','batch-production'].includes(page)?previous:page);
+  assert.equal(active.updatedAt,before.projects.find(p=>p.projectId===id).updatedAt);
+  active.editor.page=before.projects.find(p=>p.projectId===id).editor.page;
+  assert.equal(JSON.stringify(persisted),JSON.stringify(before),'only active editor.page may change; all ownership, Scene, media and workflow bytes remain intact');
+ }
+ h.state.page='settings';h.api.flush();const saved=json(h.api.snapshot());
+ const restarted=harness(h.data);await restarted.ready();assert.deepEqual(json(restarted.api.snapshot()),saved);
+ // Bootstrap and subsequent navigation use the same persistence authority.
+ restarted.state.page='home';restarted.api.flush();assert.equal(restarted.api.snapshot().editor.page,'home');assert.equal(restarted.api.snapshot().updatedAt,saved.updatedAt);
+ assert.equal(restarted.submissions.length,0);
+});
+test('route changes combined with content edits still touch Project time, as do rename and Scene transactions',async()=>{
+ const h=harness(seed());await h.ready();await h.api.createProject({kind:'ai',projectName:'Content mutations'});h.api.flush();
+ async function mutation(change){const before=h.api.snapshot();await new Promise(r=>setTimeout(r,15));await change();const next=h.api.snapshot();assert(Date.parse(next.updatedAt)>Date.parse(before.updatedAt));return next;}
+ const edited=await mutation(()=>{h.state.page='settings';h.localStorage.setItem(BRIEF,'Substantive prompt edit');h.api.flush();});
+ assert.equal(edited.editor.page,'settings');assert.equal(edited.workflow.generationBrief,'Substantive prompt edit');
+ const renamed=await mutation(()=>h.api.renameProject(h.api.activeProjectId(),'Renamed content'));assert.equal(renamed.projectName,'Renamed content');
+ const opts={projectId:h.api.activeProjectId()};
+ const added=await mutation(()=>h.api.addProjectScene({title:'New scene'},opts));assert.equal(added.scenePlan.scenes.length,2);
+ const scene=added.scenePlan.scenes.at(-1).id;
+ await mutation(()=>h.api.moveProjectScene(scene,0,opts));assert.equal(h.api.snapshot().scenePlan.scenes[0].id,scene);
+ await mutation(()=>h.api.removeProjectScene(scene,opts));assert.equal(h.api.snapshot().scenePlan.scenes.length,1);
+ await mutation(()=>{h.state.scenePlan.scenes[0].title='Edited scene';h.api.flush();});assert.equal(h.api.snapshot().scenePlan.scenes[0].title,'Edited scene');
+ // Other editor metadata keeps its existing timestamp semantics.
+ await mutation(()=>{h.localStorage.setItem(model.LEGACY_UI_KEYS.timelineZoom,'3');h.api.flush();});
+});
+test('failed route metadata write retains durable page and timestamp until a successful retry',async()=>{
+ const h=harness(seed());await h.ready();await h.api.createProject({kind:'ai',projectName:'Failed route save'});h.api.flush();const before=h.data.get(KEY),snapshot=json(h.api.snapshot());
+ h.state.page='settings';h.setFail(k=>k===KEY);assert.equal(h.api.flush(),null);assert.equal(h.data.get(KEY),before);assert.deepEqual(json(h.api.snapshot()),snapshot);
+ h.setFail(()=>false);h.api.flush();assert.equal(h.api.snapshot().editor.page,'settings');assert.equal(h.api.snapshot().updatedAt,snapshot.updatedAt);
+});
+
 test('single snapshot migration retains the canonical project exactly once across restarts',()=>{
  const data=seed(),h=harness(data),before=h.api.snapshot();
  assert.equal(h.api.listProjects().length,1);assert.equal(h.api.activeProjectId(),before.projectId);

@@ -294,6 +294,12 @@
     if (!next) return null;
     next.workflow.generationBrief = localStorage.getItem(BRIEF_KEY) || "";
     if (model.semanticSignature(next) === model.semanticSignature(currentSnapshot) && registry.activeProjectId === next.projectId) return currentSnapshot;
+    // Persist route metadata without reporting a Project content modification.
+    // Every other snapshot field must still match, including concurrent edits.
+    if (currentSnapshot?.projectId === next.projectId && registry.activeProjectId === next.projectId &&
+        model.semanticSignature({ ...next, editor: { ...next.editor, page: currentSnapshot.editor.page } }) === model.semanticSignature(currentSnapshot)) {
+      next.updatedAt = currentSnapshot.updatedAt;
+    }
     try {
       saveSnapshot(next);
     } catch (error) {
