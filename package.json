@@ -106,7 +106,7 @@
     "test:private-beta-updater": "node --test tests/private-beta-updater.test.js tests/private-beta-shell.test.js",
     "test:project-render": "node --test tests/core-project-render.test.js tests/core-project-render-runtime.test.js tests/project-render-service.test.js",
     "test:production-manager": "node --test tests/core-production-manager.test.js tests/core-production-workspace.test.js",
-    "test:batch-production": "node --test tests/core-batch-production.test.js",
+    "test:batch-production": "node --test tests/core-batch-production.test.js tests/core-batch-workspace.test.js",
     "test:telegram-notifications": "node --test tests/telegram-notifications.test.js",
     "test:commercial-design-navigation": "node --test tests/core-commercial-design-navigation.test.js",
     "test:project-identity": "node --test tests/core-project-identity.test.js"
