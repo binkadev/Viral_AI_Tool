@@ -10,30 +10,33 @@
     render();
     document.getElementById("page").scrollTop = 0;
   }
-  function thumb(job) {
-    // Only show stored media previews. No stock images stand in for user projects.
-    const url = typeof job.thumbnail === "string" ? job.thumbnail : "";
-    return '<div class="start-project-thumb">' + (url && /^(data:image\/(png|jpeg|webp);|file:|blob:)/i.test(url)
-      ? '<img src="' + esc(url) + '" alt="" data-start-thumb>' : '<span class="start-thumb-fallback"><i aria-hidden="true">▷</i><span>' + esc(copy().noThumb) + '</span></span>') + '</div>';
-  }
-  function duration(job) {
-    const seconds = Number(job?.meta?.duration);
-    if (!Number.isFinite(seconds) || seconds <= 0) return '';
-    const total = Math.floor(seconds);
-    return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
-  }
-  function action(routeId, icon, title, body, disabled = false) {
-    const primary = routeId === 'ai-create';
-    return '<button class="start-action" type="button" data-start-route="' + routeId + '"' + (disabled ? ' disabled' : '') + '><span class="start-action-icon" aria-hidden="true">' + icon + '</span><span class="start-action-copy"><strong>' + esc(title) + '</strong><span>' + esc(body) + '</span></span>' + (primary ? '<span class="start-action-art" aria-hidden="true"><i></i><i></i><i>✦</i></span>' : '') + '<i class="start-action-arrow" aria-hidden="true">↗</i></button>';
-  }
+  const homeCopy = (key, vars) => window.I18N.t(state.locale === 'en' ? 'en' : 'vi', 'homeWorkspace.' + key, vars);
+  const managerCopy = key => window.I18N.t(state.locale === 'en' ? 'en' : 'vi', 'productionManager.' + key);
   function page() {
-    const c = copy(), jobs = sources(), current = jobs[0];
-    const examples = window.I18N.messages[state.locale === "en" ? "en" : "vi"].aiCreate.examples;
-    return '<div class="start-home"><header class="start-heading"><div><span class="start-eyebrow">' + esc(c.eyebrow) + '</span><h2>' + esc(c.title) + '</h2><p>' + esc(c.body) + '</p></div><button class="start-status" type="button" data-start-route="settings" aria-label="' + esc(c.settings) + '"><span data-start-status role="status">' + esc(c[status]) + '</span><span aria-hidden="true">↗</span></button></header>' +
-      '<section class="start-actions">' + action('ai-create','✦',c.ai,c.aiBody) + action('download','⇧',c.import,c.importBody) + action('ai-video','▷',c.continue,current ? (current.name || c.video) : c.noCurrent,!current) + '</section>' +
-      '<section class="start-projects"><div class="start-section-head"><h3>' + esc(c.recent) + '</h3><button type="button" class="button ghost" data-start-route="library">' + esc(c.library) + ' ↗</button></div>' +
-      (current ? '<div class="start-project-grid">' + jobs.map((job,index) => '<button type="button" class="start-project ' + (index === 0 ? 'is-current' : '') + '" data-start-route="' + (index === 0 ? 'ai-video' : 'library') + '">' + '<span class="start-project-media">' + thumb(job) + (index === 0 ? '<small class="start-current-badge">' + esc(c.current) + '</small>' : '') + (duration(job) ? '<span class="start-duration">' + esc(duration(job)) + '</span>' : '') + '</span><span class="start-project-copy">' + '<strong>' + esc(job.name || c.video) + '</strong><span>' + esc(['missing','trashed'].includes(job.fileState) ? c.missing : c.saved) + '</span></span><span class="start-project-open">' + esc(index === 0 ? c.continue : c.library) + ' <i aria-hidden="true">↗</i></span></button>').join('') + '</div>' : '<div class="start-empty"><span aria-hidden="true">▱</span><div><strong>' + esc(c.empty) + '</strong><p>' + esc(c.emptyBody) + '</p></div></div>') + '</section>' +
-      '<section><div class="start-section-head"><h3>' + esc(c.ideas) + '</h3><span>' + esc(c.ideasHint) + '</span></div><div class="core-ai-example-row">' + examples.map((item,index) => '<button type="button" class="core-ai-example" data-start-example="' + index + '"><span class="core-ai-example-art art-' + index + '" aria-hidden="true"><i></i><b></b><em></em></span><span class="core-ai-example-copy"><strong>' + esc(item.title) + '</strong><span>' + esc(item.detail) + '</span></span><span class="core-ai-example-arrow" aria-hidden="true">↗</span></button>').join('') + '</div></section></div>';
+    const persistence = window.ViralCoreProjectPersistence, runtime = window.ViralProductionManager?.runtime;
+    let view, unavailable = false, projects = [];
+    try {
+      view = runtime?.collect();
+      const summaries = new Map((view?.summaries || []).map(s => [s.projectId, s]));
+      projects = (persistence?.listProjects() || []).map(p => summaries.get(p.projectId)).filter(Boolean);
+    } catch { unavailable = true; }
+    const active = projects.find(p => p.projectId === persistence?.activeProjectId());
+    const attention = p => ['needs_attention', 'review'].includes(p.status);
+    const review = projects.find(p => p !== active && attention(p));
+    const recent = projects.filter(p => p !== active && p !== review).slice(0, 3);
+    const disabled = view?.protected || view?.opening;
+    const open = (p, label, primary = false) => '<button type="button" class="home-open' + (primary ? ' home-primary' : '') + '" data-home-project="' + esc(p.projectId) + '"' + (disabled ? ' disabled' : '') + '>' + esc(homeCopy(label)) + '<span aria-hidden="true">↗</span></button>';
+    const routeButton = (id, label, primary = false) => '<button type="button" class="home-open' + (primary ? ' home-primary' : '') + '" data-start-route="' + id + '">' + esc(homeCopy(label)) + '<span aria-hidden="true">↗</span></button>';
+    const meta = p => '<p class="home-project-meta"><span>' + esc(managerCopy(p.status)) + '</span><span>' + esc(homeCopy('scenes', {count:p.materials.total})) + '</span></p>';
+    return '<div class="home-workspace"><header class="home-heading"><span class="home-eyebrow">' + esc(homeCopy('eyebrow')) + '</span><h2>' + esc(homeCopy('title')) + '</h2></header>' +
+      '<section class="home-hero" aria-labelledby="home-next"><div class="home-hero-copy"><span class="home-eyebrow">' + esc(homeCopy(active ? 'current' : 'start')) + '</span><h3 id="home-next">' + esc(homeCopy(active ? 'returnTitle' : projects.length ? 'newTitle' : 'emptyTitle')) + '</h3>' +
+      (active ? '<h4>' + esc(active.name) + '</h4>' + meta(active) + '<p>' + esc(homeCopy(attention(active) ? 'attentionHint' : active.checkingOutput ? 'checkingHint' : 'continueHint')) + '</p>' : '<p>' + esc(homeCopy('emptyBody')) + '</p>') +
+      '<div class="home-actions">' + (active && !view?.protected ? open(active, 'continue', true) : routeButton('ai-create', 'create', true)) + (active ? routeButton('ai-create', 'new') : routeButton('download', 'import')) + '</div></div>' +
+      '<ol class="home-workflow">' + ['idea','materials','export'].map((key, i) => '<li><span aria-hidden="true">0' + (i+1) + '</span><div><strong>' + esc(homeCopy(key)) + '</strong><p>' + esc(homeCopy(key + 'Hint')) + '</p></div></li>').join('') + '</ol></section>' +
+      (unavailable ? '<p class="home-notice" role="alert">' + esc(homeCopy('loadError')) + '</p>' : view?.protected ? '<p class="home-notice" role="alert">' + esc(managerCopy('storageProtected')) + '</p>' : view?.error ? '<p class="home-notice" role="alert">' + esc(managerCopy(view.error)) + '</p>' : '') +
+      (review ? '<section class="home-attention"><div><span class="home-eyebrow">' + esc(homeCopy('attention')) + '</span><h3>' + esc(review.name) + '</h3>' + meta(review) + '</div>' + open(review, 'review') + '</section>' : '') +
+      (recent.length ? '<section class="home-projects"><div class="home-section-heading"><h3>' + esc(homeCopy('projects')) + '</h3><button type="button" class="home-link" data-home-manager>' + esc(homeCopy('allProjects')) + ' ↗</button></div><div class="home-project-grid">' + recent.map(p => '<article class="home-project"><span class="home-project-mark" aria-hidden="true">▱</span><h4>' + esc(p.name) + '</h4>' + meta(p) + open(p, 'open') + '</article>').join('') + '</div></section>' : '') +
+      '<footer class="home-footer"><p><span class="home-status-dot" aria-hidden="true"></span><span data-start-status role="status">' + esc(copy()[status]) + '</span></p><button type="button" class="home-link" data-start-route="settings">' + esc(homeCopy('settings')) + ' ↗</button>' + (active ? routeButton('download', 'import') : '') + '</footer></div>';
   }
   async function refreshStatus() {
     if (pending) return;
@@ -84,6 +87,11 @@
     pageMeta.home = ["startHome.nav", "startHome.breadcrumb"];
     document.addEventListener('click', event => {
       const target = event.target instanceof Element ? event.target : null;
+      const project = target?.closest('[data-home-project]');
+      if (project && !project.disabled) {
+        window.ViralProductionManager?.runtime.open(project.dataset.homeProject).then(opened => { if (!opened && state.page === 'home') render(); });
+      }
+      if (target?.closest('[data-home-manager]')) route('productions');
       const button = target?.closest('[data-start-route]');
       if (button && !button.disabled) {
         const id = button.dataset.startRoute;

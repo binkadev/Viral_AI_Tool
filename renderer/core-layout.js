@@ -23,8 +23,6 @@
       button.id = "coreLeftPanelToggle";
       button.type = "button";
       button.className = "core-panel-toggle core-left-toggle";
-      button.setAttribute("aria-label", "Toggle project panel");
-      button.title = "Thu gọn / mở bảng dự án";
       button.textContent = "☰";
       topbar.prepend(button);
       button.addEventListener("click", () => {
@@ -35,6 +33,10 @@
       });
     }
     const collapsed = boolPref(LEFT_KEY);
+    const chromeCopy = window.I18N.messages[state.locale === "en" ? "en" : "vi"].homeWorkspace;
+    button.setAttribute("aria-label", chromeCopy.toggleNav);
+    button.title = chromeCopy.toggleNav;
+    document.getElementById("nav")?.setAttribute("aria-label", chromeCopy.navigation);
     document.documentElement.classList.toggle("core-left-collapsed", collapsed);
     button.setAttribute("aria-pressed", collapsed ? "true" : "false");
   }

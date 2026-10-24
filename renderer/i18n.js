@@ -436,6 +436,16 @@
     "cancelling": "Đang chờ xác nhận dừng. Không tạo yêu cầu khác cho đến khi trạng thái được xác nhận."
   }
 },
+      homeWorkspace: {
+        eyebrow: "KHU LÀM VIỆC CỦA BẠN", title: "Từ ý tưởng đến video.", loadError: "Chưa đọc được danh sách dự án. Bạn có thể mở Quản lý sản xuất để kiểm tra; dữ liệu đã lưu vẫn được giữ lại.",
+        start: "BẮT ĐẦU SÁNG TẠO", current: "DỰ ÁN ĐANG MỞ", newTitle: "Bắt đầu video tiếp theo", toggleNav: "Thu gọn / mở thanh điều hướng", navigation: "Điều hướng chính",
+        emptyTitle: "Tạo video đầu tiên của bạn", emptyBody: "Lên ý tưởng, chuẩn bị từng cảnh và xuất video — trong cùng một khu làm việc.",
+        returnTitle: "Tiếp tục câu chuyện của bạn", continueHint: "Mở Studio để tiếp tục với các cảnh và tư liệu đã lưu.",
+        attentionHint: "Dự án cần bạn xem lại. Mở Studio để kiểm tra trước khi tiếp tục.", checkingHint: "Video đã xuất chưa được xác nhận. Mở dự án để kiểm tra.",
+        create: "Tạo video bằng AI", new: "Tạo video mới", import: "Nhập video", continue: "Tiếp tục", open: "Mở dự án", review: "Xem lại",
+        attention: "CẦN BẠN XEM LẠI", projects: "Dự án của bạn", allProjects: "Quản lý dự án", scenes: "{count} cảnh", settings: "Mở cài đặt AI",
+        idea: "Bắt đầu từ ý tưởng", ideaHint: "Viết mô tả hoặc nhập video có sẵn.", materials: "Chuẩn bị từng cảnh", materialsHint: "Chọn tư liệu, giọng đọc và phụ đề.", export: "Xuất video", exportHint: "Xem lại và lưu video của bạn."
+      },
       startHome: {
 "activityDetails": "Chi tiết hoạt động",
   "nav": "Trang chủ",
@@ -2054,6 +2064,16 @@ composerEyebrow: "KHÔNG GIAN SÁNG TẠO",
     "cancelling": "Waiting for cancellation confirmation. Avoid another request until the state is confirmed."
   }
 },
+      homeWorkspace: {
+        eyebrow: "YOUR CREATIVE WORKSPACE", title: "From idea to video.", loadError: "The project list could not be read. Open Production Manager to check; your saved data is preserved.",
+        start: "START CREATING", current: "CURRENT PROJECT", newTitle: "Start your next video", toggleNav: "Collapse / expand navigation", navigation: "Primary navigation",
+        emptyTitle: "Create your first video", emptyBody: "Shape your idea, prepare each scene and export your video — in one workspace.",
+        returnTitle: "Continue your story", continueHint: "Open Studio to continue with your saved scenes and media.",
+        attentionHint: "This project needs your review. Open Studio to check before continuing.", checkingHint: "The exported video has not been verified. Open the project to check.",
+        create: "Create with AI", new: "Create a new video", import: "Import video", continue: "Continue", open: "Open project", review: "Review",
+        attention: "NEEDS YOUR REVIEW", projects: "Your projects", allProjects: "Manage projects", scenes: "{count} scenes", settings: "Open AI settings",
+        idea: "Start with an idea", ideaHint: "Write a brief or import an existing video.", materials: "Prepare each scene", materialsHint: "Choose media, voice and subtitles.", export: "Export video", exportHint: "Review and save your video."
+      },
       startHome: {
 "activityDetails": "Activity details",
   "nav": "Home",

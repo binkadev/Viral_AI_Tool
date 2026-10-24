@@ -120,6 +120,17 @@
       { id: "settings", icon: "⚙", label: "nav.settings" }
     );
 
+    const icons = {
+      home: '<path d="m3 10 9-7 9 7v10H6V10m3 10v-6h6v6"/>',
+      'ai-create': '<path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/>',
+      'generation-progress': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      library: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6M16 8h.01"/>',
+      productions: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+      'batch-production': '<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M7 3h10M7 12h10M7 16h6"/>',
+      settings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>'
+    };
+    const navIcon = id => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + icons[id] + '</svg>';
+    const navLabel = value => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
     try {
       navRender = function coreNavRender() {
         const nav = document.getElementById("nav");
@@ -140,8 +151,8 @@
                 ? c.editor
                 : (typeof t === "function" ? t(item.label) : item.label);
 
-          return '<button class="nav-item ' + (appState()?.page === item.id ? "active" : "") + '" data-page="' + item.id + '" type="button">' +
-            '<span class="nav-icon" aria-hidden="true">' + item.icon + '</span>' +
+          return '<button class="nav-item ' + (appState()?.page === item.id ? "active" : "") + '" data-page="' + item.id + '" type="button" aria-label="' + navLabel(label) + '" title="' + navLabel(label) + '"' + (appState()?.page === item.id ? ' aria-current="page"' : '') + '>' +
+            '<span class="nav-icon" aria-hidden="true">' + navIcon(item.id) + '</span>' +
             '<span>' + label + '</span>' +
           '</button>';
         }).join("");

@@ -108,7 +108,7 @@
     "test:production-manager": "node --test tests/core-production-manager.test.js tests/core-production-workspace.test.js",
     "test:batch-production": "node --test tests/core-batch-production.test.js tests/core-batch-workspace.test.js",
     "test:telegram-notifications": "node --test tests/telegram-notifications.test.js",
-    "test:commercial-design-navigation": "node --test tests/core-commercial-design-navigation.test.js",
+    "test:commercial-design-navigation": "node --test tests/core-commercial-design-navigation.test.js tests/core-home-shell.test.js",
     "test:project-identity": "node --test tests/core-project-identity.test.js"
   },
   "devDependencies": {
