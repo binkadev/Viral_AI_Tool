@@ -184,3 +184,23 @@ html[data-motion="reduced"] .core-ai-create-workspace :is(button, textarea, summ
 .start-home .art-2 em{inline-size:12px;block-size:48px;background:#9395bc44;inset:57px auto auto 30px;transform:perspective(20px) rotateX(40deg)}
 @media(max-width:1100px){.start-home .core-ai-example-row{gap:8px}.start-home .core-ai-example-art{flex-basis:48px}}
 @media(max-width:800px){.start-home .core-ai-example-row{grid-template-columns:1fr}}
+.core-ai-content-planning {
+  padding: 12px 16px;
+  border-block-start: 1px solid var(--viral-line-soft);
+  overflow-wrap: anywhere;
+}
+.core-ai-content-planning p,
+.core-ai-script-text {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.core-ai-content-planning .button {
+  min-block-size: 36px;
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.core-ai-content-planning [hidden] { display: none; }
+.core-ai-scene-field { display: grid; gap: 6px; margin-block: 12px; font-size: 13px; line-height: 1.6; }
+.core-ai-scene-field :is(input, textarea) { inline-size: 100%; min-inline-size: 0; font: inherit; }

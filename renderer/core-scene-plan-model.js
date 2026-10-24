@@ -1,8 +1,8 @@
 (function attachCoreScenePlanModel(root, factory) {
-  const api = factory();
+  const api = factory(root?.ViralContentPlan || (typeof module !== "undefined" && module.exports ? require("./core-content-plan") : null));
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.ViralCoreScenePlanModel = api;
-})(typeof window !== "undefined" ? window : globalThis, function createCoreScenePlanModel() {
+})(typeof window !== "undefined" ? window : globalThis, function createCoreScenePlanModel(contentPlan) {
   "use strict";
 
   const SCENE_PLAN_SCHEMA_VERSION = 1;
@@ -185,6 +185,7 @@
       duration: Math.max(0, end - start),
       sourceSegmentIds,
       sourceText: text(input.sourceText, 12000),
+      ...(input.purpose ? { purpose: text(input.purpose, 80) } : {}),
       title: text(input.title, 240) || null,
       visualIntent: text(input.visualIntent, 1200) || null,
       searchQueries: uniqueStrings(input.searchQueries, MAX_SEARCH_QUERIES, MAX_QUERY_LENGTH),
@@ -234,6 +235,7 @@
     const nowIso = new Date(now).toISOString();
     return {
       schemaVersion: SCENE_PLAN_SCHEMA_VERSION,
+      ...(source.authoring ? { authoring: contentPlan.validateAuthoring(source.authoring) } : {}),
       sourceType: text(source.sourceType, 20).toLowerCase() === "script" ? "script" : "transcript",
       sourceIdentity: text(source.sourceIdentity, 512) || null,
       sourceSignature: text(source.sourceSignature, 120) || null,

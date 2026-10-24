@@ -361,6 +361,44 @@
     return model.clone(next);
   }
 
+  // Authoring is admitted only into an empty AI draft. Build all canonical
+  // objects first; the existing registry remains the sole durable authority.
+  function commitContentPlan(authoring, options = {}) {
+    assertWritable();
+    if (projectTransition) throw Error("PLAN_BUSY");
+    assertSwitchSafe();
+    const planner = window.ViralContentPlan, current = appState();
+    if (!planner || !current) throw Error("PLAN_FAILED");
+    const before = currentSnapshot;
+    if ((before?.projectId || null) !== options.projectId ||
+        JSON.stringify(before) !== options.expectedSignature ||
+        (registry.activeProjectId || null) !== options.projectId) throw Error("PLAN_PROJECT_CHANGED");
+    if (!planner.canAuthor(before)) throw Error("PLAN_EXISTING_CONTENT");
+    // Capture pending edits without writing them. They must also be empty.
+    let next = model.buildSnapshot(current, editorState(current), before);
+    if (next && !planner.canAuthor(next)) throw Error("PLAN_EXISTING_CONTENT");
+    const accepted = planner.validateAuthoring(authoring);
+    if (options.idea !== accepted.contentBrief.originalIdea || localStorage.getItem(BRIEF_KEY) !== options.idea) throw Error("PLAN_PROJECT_CHANGED");
+    const freshId = () => {
+      const value = window.crypto?.randomUUID?.();
+      if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(value)) throw Error("PLAN_INVALID_SCENES");
+      return value;
+    };
+    if (!next) {
+      if (before || model.sourceFromState(current)) throw Error("PLAN_PROJECT_CHANGED");
+      const projectId = freshId();
+      if (registry.projects.some(project => project.projectId === projectId)) throw Error("PLAN_FAILED");
+      next = model.createDraftProject({ projectId, projectName: accepted.contentBrief.subject.slice(0, 240) }, current, editorState(current));
+    }
+    next.scenePlan = planner.materialize(accepted, { sceneModel: window.ViralCoreScenePlanModel, id: freshId });
+    next.workflow.generationBrief = options.idea;
+    next.updatedAt = next.scenePlan.updatedAt;
+    const prepared = prepareActivation(next, current);
+    try { saveSnapshot(prepared.snapshot); }
+    catch (error) { dispatchSaveFailure("content-plan", error); throw Error("PLAN_SAVE_FAILED"); }
+    return activate(prepared);
+  }
+
   function listProjects() {
     return registry.projects.map(p => ({ projectId: p.projectId, projectName: p.projectName,
       projectKind: p.projectKind, updatedAt: p.updatedAt, hasSource: !!p.source }));
@@ -554,6 +592,10 @@
     } else if (operation === "moveScene") {
       if (!Number.isInteger(value) || value < 0 || value >= plan.scenes.length) throw Error("PROJECT_SCENE_INDEX_INVALID");
       next.scenePlan = sceneModel.moveScene(plan, sceneId, value, { now });
+    } else if (operation === "updateScene") {
+      if (!value || Object.keys(value).some(key => !["title", "sourceText"].includes(key)) ||
+          Object.entries(value).some(([key, text]) => typeof text !== "string" || text.length > (key === "title" ? 240 : 12000))) throw Error("PROJECT_SCENE_EDIT_INVALID");
+      next.scenePlan = sceneModel.updateScene(plan, sceneId, value, now);
     } else next.scenePlan = sceneModel[operation](plan, sceneId, { now });
     next.mediaAssembly = model.mediaAssemblyModel.normalizeAssembly(next.mediaAssembly,
       { scenes: next.scenePlan.scenes, assets: next.media.assets });
@@ -577,6 +619,7 @@
   function selectProjectScene(sceneId, options = {}) { return mutateProjectScene("selectScene", sceneId, null, options); }
   function removeProjectScene(sceneId, options = {}) { return mutateProjectScene("removeScene", sceneId, null, options); }
   function moveProjectScene(sceneId, targetIndex, options = {}) { return mutateProjectScene("moveScene", sceneId, targetIndex, options); }
+  function updateProjectScene(sceneId, patch, options = {}) { return mutateProjectScene("updateScene", sceneId, patch, options); }
 
   // Manual/local/stock admission is active-project-only. Capture pending brief,
   // workflow/editor/Scene changes through normal snapshot capture, while the
@@ -1060,6 +1103,7 @@
     schemaVersion: model.CURRENT_SCHEMA_VERSION,
     snapshot() { return model.clone(currentSnapshot, null); },
     ensureProject,
+    commitContentPlan,
     registryKey: REGISTRY_KEY,
     registrySchemaVersion: REGISTRY_SCHEMA_VERSION,
     listProjects,
@@ -1074,6 +1118,7 @@
     selectProjectScene,
     removeProjectScene,
     moveProjectScene,
+    updateProjectScene,
     addProjectMediaAssets,
     addProjectMediaAsset,
     updateProjectMediaAsset,
