@@ -547,6 +547,11 @@ app.whenReady().then(() => {
         const barrier = mainWindow.webContents.executeJavaScript(`(() => {
           const api = window.ViralCoreProjectPersistence;
           if (!api || typeof state === 'undefined') return false;
+          // Batch and production coordinators can be active between native jobs.
+          // Reuse their ownership instead of treating a gap as idle.
+          if (window.ViralBatchProduction?.runtime.view().busy) return false;
+          const production = window.ViralProductionModes?.runtime.view();
+          if (production?.settling || ['running', 'paused'].includes(production?.state)) return false;
           const busy = new Set(['validating','preparing','uploading','queued','processing','translating','generating','downloading','rendering','planning','cancelling']);
           if ([state.speech?.job,state.translation?.job,state.voice?.job,state.scenePlan?.plannerJob,...(state.jobs || []).filter(job => job.isRenderOutput)].some(job => busy.has(job?.status))) return false;
           return !api.storageError() && !api.unsupportedSchemaVersion() && (!api.activeProjectId() || !!api.flush('before-update-install'));

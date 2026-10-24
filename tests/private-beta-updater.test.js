@@ -114,6 +114,20 @@ test("install fails closed on native work, failed project save and work appearin
   busy = 0; service.prepareInstall = async () => true;
   await Promise.all([service.install(), service.install()]); assert.equal(native.installs, 1); assert.deepEqual(native.installArgs, [true, true]);
 });
+test("installer launch failure keeps the downloaded update retryable", async t => {
+  const { native, service } = fixture(t);
+  await service.check(); await service.download();
+  native.quitAndInstall = () => { throw Error("SECRET_NATIVE_LAUNCH_ERROR"); };
+  const failed = await service.install();
+  assert.equal(failed.status, "downloaded");
+  assert.equal(failed.errorCode, "UPDATE_INSTALL_FAILED");
+  assert.equal(service.installPending, false);
+  assert(!JSON.stringify(failed).includes("SECRET"));
+  native.quitAndInstall = () => { native.installs++; };
+  assert.equal((await service.install()).status, "installing");
+  assert.equal(native.installs, 1);
+});
+
 test("main install barrier saves Project, ignores passive imported queue rows and vetoes real workflow/render activity", () => {
   const script = fs.readFileSync("main.js", "utf8").match(/const barrier = mainWindow\.webContents\.executeJavaScript\(`([\s\S]*?)`\)/)[1];
   let saved = 0;
@@ -121,6 +135,18 @@ test("main install barrier saves Project, ignores passive imported queue rows an
   const state = { jobs: [{ status: "queued", sourcePath: "fixture.mp4" }], voice: {}, speech: {}, translation: {}, scenePlan: {} };
   const context = { window: { ViralCoreProjectPersistence: api }, state };
   assert.equal(vm.runInNewContext(script, context), true); assert.equal(saved, 1);
+  context.window.ViralBatchProduction = { runtime: { view: () => ({ busy: true }) } };
+  assert.equal(vm.runInNewContext(script, context), false); assert.equal(saved, 1);
+  context.window.ViralBatchProduction.runtime.view = () => ({ busy: false });
+  let production = { state: "running", settling: false };
+  context.window.ViralProductionModes = { runtime: { view: () => production } };
+  assert.equal(vm.runInNewContext(script, context), false);
+  production = { state: "paused", settling: false };
+  assert.equal(vm.runInNewContext(script, context), false);
+  production = { state: "idle", settling: true };
+  assert.equal(vm.runInNewContext(script, context), false);
+  production = { state: "idle", settling: false };
+  assert.equal(vm.runInNewContext(script, context), true); assert.equal(saved, 2);
   state.voice.job = { status: "generating" }; assert.equal(vm.runInNewContext(script, context), false); state.voice.job = null;
   state.jobs.push({ isRenderOutput: true, status: "rendering" }); assert.equal(vm.runInNewContext(script, context), false); state.jobs.pop();
   state.scenePlan.plannerJob = { status: "planning" }; assert.equal(vm.runInNewContext(script, context), false); state.scenePlan.plannerJob = null;
